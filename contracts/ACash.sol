@@ -21,6 +21,7 @@ contract ACash is ERC20, Ownable {
     using AddressQueue for AddressQueue.Queue;
     using BondMinterHelpers for IBondMinter;
     using SafeERC20 for IERC20;
+    using SafeERC20 for ITranche;
 
     // Used for fee and yield values
     uint256 public constant PCT_DECIMALS = 6;
@@ -75,30 +76,31 @@ contract ACash is ERC20, Ownable {
     }
 
     function mint(uint256[] calldata trancheAmts) external returns (uint256, int256) {
+        // "System Error: bond minter not set."
         // assert(bondMinter != address(0));
 
         IBondController mintingBond = IBondController(bondQueue.tail());
         require (address(mintingBond) != address(0), "No active minting bond");
 
         uint256 trancheCount = mintingBond.trancheCount();
-
         require(trancheAmts.length == trancheCount, "Must specify amounts for every bond tranche");
 
         uint256[] storage yields = trancheYields[bondMinter];
         // "System Error: trancheYields size doesn't match bond tranche count."
-        assert(yields.length == trancheCount);
+        // assert(yields.length == trancheCount);
 
         uint256 mintAmt = 0;
         for (uint256 i = 0; i < trancheCount; i++) {
             mintAmt += yields[i] * trancheAmts[i] / (10 ** PCT_DECIMALS);
+
             (ITranche t, ) = mintingBond.tranches(i);
-            IERC20(address(t)).safeTransferFrom(msg.sender, address(this), trancheAmts[i]); // assert or use safe transfer
+            t.safeTransferFrom(msg.sender, address(this), trancheAmts[i]);
         }
 
         // transfer in fee
         int256 fee = mintFeePct * int256(mintAmt) / int256(10 ** PCT_DECIMALS);
         if (fee >= 0) {
-            IERC20(feeToken).safeTransferFrom(msg.sender, address(this), uint256(fee)); // todo: safe versions
+            IERC20(feeToken).safeTransferFrom(msg.sender, address(this), uint256(fee));
         } else {
             // This is very scary!
             IERC20(feeToken).safeTransfer(msg.sender, uint256(-fee));
@@ -132,7 +134,7 @@ contract ACash is ERC20, Ownable {
             // push individual tranches into icebox if they have a balance
             for(uint256 i = 0; i < latestBond.trancheCount(); i++){
                 (ITranche t,) = latestBond.tranches(i);
-                if(ITranche.balanceOf(address(this)) > 0){
+                if(t.balanceOf(address(this)) > 0){
                     trancheIcebox[t] = true;
                 }
             }
