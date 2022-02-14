@@ -28,11 +28,11 @@ library AddressQueue {
         return a;
     }
 
-    function head(Queue storage q) public view returns (address) {
+    function head(Queue storage q) internal view returns (address) {
         return q.queue[q.first];
     }
 
-    function tail(Queue storage q) public view returns (address) {
+    function tail(Queue storage q) internal view returns (address) {
         return q.queue[q.last];
     }
 

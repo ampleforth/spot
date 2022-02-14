@@ -3,9 +3,9 @@ import { ethers } from "hardhat";
 
 describe("ACash", function () {
   it("Should construct with name and symbol", async function () {
-    const ACash = await ethers.getContractFactory("ACash");
+      const ACash = await ethers.getContractFactory("ACash");
       const acash = await ACash.deploy("Spot Cash", "SPOT", "9");
-    await acash.deployed();
+      await acash.deployed();
 
       expect(await acash.name()).to.equal("Spot Cash");
       expect(await acash.symbol()).to.equal("SPOT");

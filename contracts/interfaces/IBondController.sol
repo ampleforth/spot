@@ -17,6 +17,8 @@ interface IBondController {
     event Redeem(address user, uint256[] amounts);
     event FeeUpdate(uint256 newFee);
 
+    function maturityDate() external view returns (uint256);
+
     function collateralToken() external view returns (address);
 
     function tranches(uint256 i) external view returns (ITranche token, uint256 ratio);
