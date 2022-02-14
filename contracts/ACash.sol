@@ -55,17 +55,16 @@ contract ACash is ERC20 {
         address mintingBond = bondQueue.tail();
         require (mintingBond != address(0), "Error: No active minting bond");
         
-        // Ignore the Z-tranche
-        uint256 usableTrancheCount = IBondController(mintingBond).trancheCount() - 1;
+        uint256 trancheCount = IBondController(mintingBond).trancheCount();
 
-        require(trancheAmts.length == usableTrancheCount, "Must specify amounts for every Bond Tranche.");
+        require(trancheAmts.length == trancheCount, "Must specify amounts for every Bond Tranche.");
 
         uint256[] storage yields = trancheYields[bondFactory];
         // "System Error: trancheYields size doesn't match bond tranche count."
-        assert(yields.length == usableTrancheCount);
+        assert(yields.length == trancheCount);
 
         uint256 mintAmt = 0;
-        for (uint256 i = 0; i < usableTrancheCount; i++) {
+        for (uint256 i = 0; i < trancheCount; i++) {
             mintAmt += yields[i] * trancheAmts[i] / (10 ** PCT_DECIMALS);
             (ITranche t, ) = IBondController(mintingBond).tranches(i);
             IERC20(t).transferFrom(msg.sender, address(this), trancheAmts[i]); // assert or use safe transfer
