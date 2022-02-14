@@ -36,5 +36,9 @@
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.4.2"
+  },
+  "scripts": {
+    "compile": "yarn hardhat compile",
+    "test": "yarn hardhat test test/*.ts"
   }
 }

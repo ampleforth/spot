@@ -12,7 +12,7 @@ import "./utils/AddressQueue.sol";
 // 1) Factor fee params and math into external strategy pattern to enable more complex logic in future
 // 2) Implement replaceable fee strategies
 contract ACash is ERC20 {
-    using AddressQueue for *;
+    using AddressQueue for AddressQueue.Queue;
 
     // todo: add setter
     address public feeToken;
@@ -61,22 +61,23 @@ contract ACash is ERC20 {
         require(trancheAmts.length == usableTrancheCount, "Must specify amounts for every Bond Tranche.");
 
         uint256[] storage yields = trancheYields[bondFactory];
-        assert(yields == usableTrancheCount, "System Error: trancheYields size doesn't match bond tranche count.");
+        // "System Error: trancheYields size doesn't match bond tranche count."
+        assert(yields.length == usableTrancheCount);
 
         uint256 mintAmt = 0;
         for (uint256 i = 0; i < usableTrancheCount; i++) {
             mintAmt += yields[i] * trancheAmts[i] / (10 ** PCT_DECIMALS);
             (ITranche t, ) = IBondController(mintingBond).tranches(i);
-            IERC20(t).transferFrom(msg.sender, this, trancheAmts[i]); // assert or use safe transfer
+            IERC20(t).transferFrom(msg.sender, address(this), trancheAmts[i]); // assert or use safe transfer
         }
 
         // transfer in fee
-        int256 fee = mintFeePct * int256(mintAmt) / (10 ** int256(PCT_DECIMALS));
+        int256 fee = mintFeePct * int256(mintAmt) / int256(10 ** PCT_DECIMALS);
         if (fee >= 0) {
-            IERC20(feeToken).transferFrom(msg.sender, this, fee); // todo: safe versions
+            IERC20(feeToken).transferFrom(msg.sender, address(this), uint256(fee));// todo: safe versions
         } else {
             // This is very scary!
-            IERC20(feeToken).transfer(msg.sender, fee);
+            IERC20(feeToken).transfer(msg.sender, uint256(-fee));
         }
         
         // mint spot for user
