@@ -7,19 +7,11 @@ interface IBondMinter {
 
     event BondConfigAdded(BondConfig config);
 
-    event BondConfigRemoved(BondConfig config);
-
-    event BondMinted(address bond, bytes32 configHash);
+    event BondMinted(address bond);
 
     function mintBonds() external;
 
     function isInstance(address bond) external view returns (bool);
 
-    function getConfigHash(address bond) external view returns (bytes32);
-
-    function getConfig(address bond) external view returns (BondConfig memory);
-
-    function numConfigs() external view returns (uint256);
-
-    function bondConfigAt(uint256 index) external view returns (BondConfig memory);
+    function configHash() external view returns (bytes32);
 }

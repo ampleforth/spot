@@ -11,20 +11,21 @@ contract YieldStrategy is Ownable, IYieldStrategy {
 
 	// todo: add setters
 
-	// tranche yield is specific to each unique bond config
-	// config => {collateralToken, trancheRatios, duration}
-	mapping(bytes32 => uint256[]) private _trancheYields;
+	// tranche yield is specific to a bond minter (which mints a specific class of bonds)
+	// a bond class is uniquely identified by {collateralToken, trancheRatios, duration}
+	mapping(IBondMinter => uint256[]) private _trancheYields;
 
 	function computeTrancheYield(IBondMinter minter, IBondController bond, uint256 seniorityIDX, uint256 trancheAmt) external view override returns (uint256) {
 		return trancheAmt * computeTrancheYieldPerc(minter, bond, seniorityIDX) / (10 ** PCT_DECIMALS);
 	}
 
 	function computeTrancheYieldPerc(IBondMinter minter, IBondController bond, uint256 seniorityIDX) public view returns (uint256) {
+		// assert(minter.isInstance(bond));
 		return trancheYields(minter, bond, seniorityIDX) * computeTranchePrice(bond, seniorityIDX) / (10 ** PRICE_DECIMALS);
 	}
 
 	function trancheYields(IBondMinter minter, IBondController bond, uint256 seniorityIDX) public view returns (uint256) {
-		return _trancheYields[minter.getConfigHash(address(bond))][seniorityIDX];
+		return _trancheYields[minter][seniorityIDX];
 	}
 
 	// Tranche pricing function goes here:

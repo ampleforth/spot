@@ -79,22 +79,21 @@ contract ACash is ERC20, Initializable, Ownable {
         uint256 trancheCount = mintingBond.trancheCount();
         require(trancheAmts.length == trancheCount, "Must specify amounts for every bond tranche");
 
-        uint256 totalMintAmt = 0;
+        uint256 mintAmt = 0;
         for (uint256 i = 0; i < trancheCount; i++) {
+            mintAmt += yieldStrategy.computeTrancheYield(bondMinter, mintingBond, i, trancheAmts[i]);
             (ITranche t, ) = mintingBond.tranches(i);
             t.safeTransferFrom(_msgSender(), address(this), trancheAmts[i]);
-
-            totalMintAmt += yieldStrategy.computeTrancheYield(bondMinter, mintingBond, i, trancheAmts[i]);
         }
 
         // using SPOT as the fee token
-        int256 fee = feeStrategy.computeMintFee(totalMintAmt);
-        uint256 mintAmt = 0;
+        int256 fee = feeStrategy.computeMintFee(mintAmt);
         if(fee >= 0) {
-            mintAmt = totalMintAmt - uint256(fee);
+            mintAmt = mintAmt - uint256(fee);
             _mint(address(this), uint256(fee));
         } else {
-            mintAmt = totalMintAmt + uint256(-fee);
+            mintAmt = mintAmt;
+            IERC20(address(this)).safeTransfer(_msgSender(), uint256(-fee));
         }
         _mint(_msgSender(), mintAmt);
 
