@@ -1,48 +1,36 @@
 //SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.0;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {AddressQueue} from "./utils/AddressQueue.sol";
-import {BondMinterHelpers} from "./utils/BondMinterHelpers.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ITranche} from "./interfaces/ITranche.sol";
+import {ITranche} from "./interfaces/button-wood/ITranche.sol";
+import {IBondController} from "./interfaces/button-wood/IBondController.sol";
 import {IBondMinter} from "./interfaces/IBondMinter.sol";
-import {IBondController} from "./interfaces/IBondController.sol";
+import {IFeeStrategy} from "./interfaces/IFeeStrategy.sol";
+import {IYieldStrategy} from "./interfaces/IYieldStrategy.sol";
 
 // TODO:
-// 1) Factor fee params and math into external strategy pattern to enable more complex logic in future
-// 2) Implement replaceable fee strategies
-// 3) log events
-contract ACash is ERC20, Ownable {
+// 1) log events
+contract ACash is ERC20, Initializable, Ownable {
     using AddressQueue for AddressQueue.Queue;
-    using BondMinterHelpers for IBondMinter;
     using SafeERC20 for IERC20;
     using SafeERC20 for ITranche;
 
-    // Used for fee and yield values
-    uint256 public constant PCT_DECIMALS = 6;
-
-    //--- fee strategy parameters
-    // todo: add setter
-    // todo: rethink AMPL fee token, it can rebase up and down, alternatively SPOT as fee?
-    address public feeToken;
-    // Special note: If mint or burn fee is negative, the other must overcompensate in the positive direction.
-    // Otherwise, user could extract from fee reserve by constant mint/burn transactions.
-    int256 public mintFeePct;
-    int256 public burnFeePct;
-    int256 public rolloverRewardPct;
-
-    //---- bond minter parameters
+    // minter stores a preset bond config and frequency and mints new bonds when poked
     IBondMinter public bondMinter;
-    uint256 public bondMinterConfigIDX;
-    mapping (IBondMinter => uint256[]) trancheYields;
 
+    // calculates fees
+    IFeeStrategy public feeStrategy;
+    
+    // calculates tranche yields
+    IYieldStrategy public yieldStrategy;
 
-    //---- bond queue parameters
     // bondQueue is a queue of Bonds, which have an associated number of seniority-based tranches.
     AddressQueue.Queue public bondQueue;
 
@@ -52,20 +40,26 @@ contract ACash is ERC20, Ownable {
     //---- ERC-20 parameters
     uint8 private immutable _decimals;
 
-
     // trancheIcebox is a holding area for tranches that are underwater or tranches which are about to mature.
     // They can only be rolled over and not burnt
     mapping(ITranche => bool) trancheIcebox;
 
-    constructor(
-        string memory name,
-        string memory symbol,
-        uint8 decimals_,
-        IBondMinter bondMinter_,
-        uint256 bondMinterConfigIDX_,
-        uint256[] memory bondTrancheYields) ERC20(name, symbol) {
+    constructor(string memory name, string memory symbol, uint8 decimals_) ERC20(name, symbol)  {
         _decimals = decimals_;
-        setBondMinter(bondMinter_, bondMinterConfigIDX_, bondTrancheYields);
+    }
+
+    function init(
+        IBondMinter bondMinter_,
+        IYieldStrategy yieldStrategy_,
+        IFeeStrategy feeStrategy_
+    ) public initializer {
+        require(address(bondMinter_) != address(0), "Expected new bond minter to be valid");
+        require(address(yieldStrategy_) != address(0), "Expected new yield strategy to be valid");
+        require(address(feeStrategy_) != address(0), "Expected new fee strategy to be valid");
+
+        bondMinter = bondMinter_;
+        yieldStrategy = yieldStrategy_;
+        feeStrategy = feeStrategy_;
 
         bondQueue.init();
     }
@@ -85,49 +79,59 @@ contract ACash is ERC20, Ownable {
         uint256 trancheCount = mintingBond.trancheCount();
         require(trancheAmts.length == trancheCount, "Must specify amounts for every bond tranche");
 
-        uint256[] storage yields = trancheYields[bondMinter];
-        // "System Error: trancheYields size doesn't match bond tranche count."
-        // assert(yields.length == trancheCount);
-
-        uint256 mintAmt = 0;
+        uint256 totalMintAmt = 0;
         for (uint256 i = 0; i < trancheCount; i++) {
-            mintAmt += yields[i] * trancheAmts[i] / (10 ** PCT_DECIMALS);
-
             (ITranche t, ) = mintingBond.tranches(i);
-            t.safeTransferFrom(msg.sender, address(this), trancheAmts[i]);
+            t.safeTransferFrom(_msgSender(), address(this), trancheAmts[i]);
+
+            totalMintAmt += yieldStrategy.computeTrancheYield(bondMinter, mintingBond, i, trancheAmts[i]);
         }
 
-        // transfer in fee
-        int256 fee = mintFeePct * int256(mintAmt) / int256(10 ** PCT_DECIMALS);
-        if (fee >= 0) {
-            IERC20(feeToken).safeTransferFrom(msg.sender, address(this), uint256(fee));
+        // using SPOT as the fee token
+        int256 fee = feeStrategy.computeMintFee(totalMintAmt);
+        uint256 mintAmt = 0;
+        if(fee >= 0) {
+            mintAmt = totalMintAmt - uint256(fee);
+            _mint(address(this), uint256(fee));
         } else {
-            // This is very scary!
-            IERC20(feeToken).safeTransfer(msg.sender, uint256(-fee));
+            mintAmt = totalMintAmt + uint256(-fee);
         }
+        _mint(_msgSender(), mintAmt);
 
-        // mint spot for user
-        _mint(msg.sender, mintAmt);
+        return(mintAmt, fee);
 
-        return (mintAmt, fee);
+        // transfer in fee in non native fee token token
+        // int256 fee = feeStrategy.computeMintFee(mintAmt);
+        // IERC20 feeToken = feeStrategy.feeToken();
+        // if (fee >= 0) {
+        //     feeToken.safeTransferFrom(_msgSender(), address(this), uint256(fee));
+        // } else {
+        //     // This is very scary!
+        //     feeToken.safeTransfer(_msgSender(), uint256(-fee));
+        // }
+        // return (mintAmt, fee);
     }
 
 
     // push new bond into the queue
-    function advanceMintBond(IBondController newBond) public onlyOwner {
-        // checks
-        require(bondMinter.isConfigMatch(bondMinterConfigIDX, newBond), "Expect new bond config to match minter config");
+    function advanceMintBond(IBondController newBond) public {
+        require(address(newBond) != bondQueue.head(), "New bond already in queue");
+        require(bondMinter.isInstance(address(newBond)), "Expect new bond to be minted by the minter");
         require(newBond.maturityDate() > tolarableBondMaturiyDate(), "New bond matures too soon");
 
-        // enqueue empty bond, now minters can use this bond to mint!
         bondQueue.enqueue(address(newBond));
     }
 
-    // todo: make this iterative to continue dequeue till the tail of the queue
+    // continue dequeue till the tail of the queue
     // has a bond which expires sufficiently out into the future
-    function advanceBurnBond() public onlyOwner {
-        IBondController latestBond = IBondController(bondQueue.tail());
-        if(address(latestBond) != address(0) && latestBond.maturityDate() <= tolarableBondMaturiyDate()) {
+    function advanceBurnBond() public {
+        while(true){
+            IBondController latestBond = IBondController(bondQueue.tail());
+
+            if(address(latestBond) == address(0) || latestBond.maturityDate() > tolarableBondMaturiyDate()) {
+                break;
+            }
+
             // pop from queue
             bondQueue.dequeue();
 
@@ -141,45 +145,42 @@ contract ACash is ERC20, Ownable {
         }
     }
 
-    function setBondMinter(IBondMinter bondMinter_, uint256 bondMinterConfigIDX_, uint256[] memory bondTrancheYields) public onlyOwner {
-        // TODO: consider using custom minter rather than button's
-        // the current version does not have a instance check function
-        require(address(bondMinter_) != address(0), "Expected bond minter to be set");
-
-        require(bondMinter_.numConfigs() > bondMinterConfigIDX_, "Expected bond minter to be configured");
-
+    function setBondMinter(IBondMinter bondMinter_) external onlyOwner {
+        require(address(bondMinter_) != address(0), "Expected new bond minter to be valid");
         bondMinter = bondMinter_;
-        bondMinterConfigIDX = bondMinterConfigIDX_;
-
-        require(bondTrancheYields.length == bondMinter_.trancheCount(bondMinterConfigIDX_), "Must specify yields for every bond tranche");
-        trancheYields[bondMinter_] = bondTrancheYields;
     }
+
+    function setYieldStrategy(IYieldStrategy yieldStrategy_) external onlyOwner {
+        require(address(yieldStrategy_) != address(0), "Expected new yield strategy to be valid");
+        yieldStrategy = yieldStrategy_;
+    }
+
+    function setFeeStrategy(IFeeStrategy feeStrategy_) external onlyOwner {
+        require(address(feeStrategy_) != address(0), "Expected new fee strategy to be valid");
+        feeStrategy = feeStrategy_;
+    }
+
+    function setTolarableBondMaturiy(uint256 tolarableBondMaturiy) external onlyOwner {
+        _tolarableBondMaturiy = tolarableBondMaturiy;
+    }
+
 
     function tolarableBondMaturiyDate() public view returns (uint256) {
         return block.timestamp + _tolarableBondMaturiy;
     }
 
     /*
+        function redeem(uint256 spotAmt) public returns () {
 
+        }
 
-    function calcMintFee(uint256[] calldata trancheAmts) view returns (uint256) {
+        function redeemIcebox(address bond, uint256 trancheAmts) returns () {
 
-    }
+        }
 
+        function rollover() public returns () {
 
-    function redeem(uint256 spotAmt) public returns () {
-
-    }
-
-    function redeemIcebox(address bond, uint256 trancheAmts) returns () {
-
-    }
-
-    function rollover() public returns () {
-
-    }
-
-
+        }
     */
     
 }
