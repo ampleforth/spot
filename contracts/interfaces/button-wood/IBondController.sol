@@ -1,4 +1,4 @@
-import {ITranche} from "./ITranche.sol";
+import { ITranche } from "./ITranche.sol";
 
 interface IBondController {
     function collateralToken() external view returns (address);

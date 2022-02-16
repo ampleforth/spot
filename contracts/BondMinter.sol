@@ -1,7 +1,7 @@
 pragma solidity ^0.8.0;
 
-import {IBondFactory} from "./interfaces/button-wood/IBondFactory.sol";
-import {IBondMinter} from "./interfaces/IBondMinter.sol";
+import { IBondFactory } from "./interfaces/button-wood/IBondFactory.sol";
+import { IBondMinter } from "./interfaces/IBondMinter.sol";
 
 // A minter periodically mints a specified class of bonds or config
 // a config is uniquely identified by {collateralToken, trancheRatios and duration}
@@ -27,8 +27,11 @@ contract BondMinter is IBondMinter {
     // mapping of minted bonds
     mapping(address => bool) mintedBonds;
 
-
-    constructor(IBondFactory bondFactory_,  uint256 waitingPeriod_, IBondMinter.BondConfig memory config_) {
+    constructor(
+        IBondFactory bondFactory_,
+        uint256 waitingPeriod_,
+        IBondMinter.BondConfig memory config_
+    ) {
         bondFactory = bondFactory_;
         waitingPeriod = waitingPeriod_;
         config = config_;

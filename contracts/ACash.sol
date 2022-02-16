@@ -1,19 +1,19 @@
 //SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.0;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { Initializable } from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {AddressQueue} from "./utils/AddressQueue.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { AddressQueue } from "./utils/AddressQueue.sol";
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ITranche} from "./interfaces/button-wood/ITranche.sol";
-import {IBondController} from "./interfaces/button-wood/IBondController.sol";
-import {IBondMinter} from "./interfaces/IBondMinter.sol";
-import {IFeeStrategy} from "./interfaces/IFeeStrategy.sol";
-import {IPricingStrategy} from "./interfaces/IPricingStrategy.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { ITranche } from "./interfaces/button-wood/ITranche.sol";
+import { IBondController } from "./interfaces/button-wood/IBondController.sol";
+import { IBondMinter } from "./interfaces/IBondMinter.sol";
+import { IFeeStrategy } from "./interfaces/IFeeStrategy.sol";
+import { IPricingStrategy } from "./interfaces/IPricingStrategy.sol";
 
 // TODO:
 // 1) log events
@@ -27,7 +27,7 @@ contract ACash is ERC20, Initializable, Ownable {
 
     // calculates fees
     IFeeStrategy public feeStrategy;
-    
+
     // calculates bond price
     IPricingStrategy public pricingStrategy;
 
@@ -44,7 +44,11 @@ contract ACash is ERC20, Initializable, Ownable {
     // They can only be rolled over and not burnt
     mapping(ITranche => bool) trancheIcebox;
 
-    constructor(string memory name, string memory symbol, uint8 decimals_) ERC20(name, symbol)  {
+    constructor(
+        string memory name,
+        string memory symbol,
+        uint8 decimals_
+    ) ERC20(name, symbol) {
         _decimals = decimals_;
     }
 
@@ -64,7 +68,6 @@ contract ACash is ERC20, Initializable, Ownable {
         bondQueue.init();
     }
 
-
     function decimals() public view override returns (uint8) {
         return _decimals;
     }
@@ -74,7 +77,7 @@ contract ACash is ERC20, Initializable, Ownable {
         // assert(bondMinter != address(0));
 
         IBondController mintingBond = IBondController(bondQueue.tail());
-        require (address(mintingBond) != address(0), "No active minting bond");
+        require(address(mintingBond) != address(0), "No active minting bond");
 
         uint256 trancheCount = mintingBond.trancheCount();
         require(trancheAmts.length == trancheCount, "Must specify amounts for every bond tranche");
@@ -82,12 +85,7 @@ contract ACash is ERC20, Initializable, Ownable {
         uint256 mintAmt = 0;
         for (uint256 i = 0; i < trancheCount; i++) {
             // get bond price, ie amount of SPOT for trancheAmts[i] bonds
-            mintAmt += pricingStrategy.getTranchePrice(
-                bondMinter, 
-                mintingBond, 
-                i, 
-                trancheAmts[i]
-            );
+            mintAmt += pricingStrategy.getTranchePrice(bondMinter, mintingBond, i, trancheAmts[i]);
 
             (ITranche t, ) = mintingBond.tranches(i);
             t.safeTransferFrom(_msgSender(), address(this), trancheAmts[i]);
@@ -95,7 +93,7 @@ contract ACash is ERC20, Initializable, Ownable {
 
         // using SPOT as the fee token
         int256 fee = feeStrategy.computeMintFee(mintAmt);
-        if(fee >= 0) {
+        if (fee >= 0) {
             mintAmt = mintAmt - uint256(fee);
             _mint(address(this), uint256(fee));
         } else {
@@ -104,7 +102,7 @@ contract ACash is ERC20, Initializable, Ownable {
         }
         _mint(_msgSender(), mintAmt);
 
-        return(mintAmt, fee);
+        return (mintAmt, fee);
 
         // transfer in fee in non native fee token token
         // int256 fee = feeStrategy.computeMintFee(mintAmt);
@@ -118,7 +116,6 @@ contract ACash is ERC20, Initializable, Ownable {
         // return (mintAmt, fee);
     }
 
-
     // push new bond into the queue
     function advanceMintBond(IBondController newBond) public {
         require(address(newBond) != bondQueue.head(), "New bond already in queue");
@@ -131,10 +128,10 @@ contract ACash is ERC20, Initializable, Ownable {
     // continue dequeue till the tail of the queue
     // has a bond which expires sufficiently out into the future
     function advanceBurnBond() public {
-        while(true){
+        while (true) {
             IBondController latestBond = IBondController(bondQueue.tail());
 
-            if(address(latestBond) == address(0) || latestBond.maturityDate() > tolarableBondMaturiyDate()) {
+            if (address(latestBond) == address(0) || latestBond.maturityDate() > tolarableBondMaturiyDate()) {
                 break;
             }
 
@@ -142,9 +139,9 @@ contract ACash is ERC20, Initializable, Ownable {
             bondQueue.dequeue();
 
             // push individual tranches into icebox if they have a balance
-            for(uint256 i = 0; i < latestBond.trancheCount(); i++){
-                (ITranche t,) = latestBond.tranches(i);
-                if(t.balanceOf(address(this)) > 0){
+            for (uint256 i = 0; i < latestBond.trancheCount(); i++) {
+                (ITranche t, ) = latestBond.tranches(i);
+                if (t.balanceOf(address(this)) > 0) {
                     trancheIcebox[t] = true;
                 }
             }
@@ -170,7 +167,6 @@ contract ACash is ERC20, Initializable, Ownable {
         _tolarableBondMaturiy = tolarableBondMaturiy;
     }
 
-
     function tolarableBondMaturiyDate() public view returns (uint256) {
         return block.timestamp + _tolarableBondMaturiy;
     }
@@ -188,5 +184,4 @@ contract ACash is ERC20, Initializable, Ownable {
 
         }
     */
-    
 }

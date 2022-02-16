@@ -12,14 +12,14 @@ library AddressQueue {
         q.first = 1;
         q.last = 0;
     }
-        
+
     function enqueue(Queue storage q, address a) internal {
         q.last += 1;
         q.queue[q.last] = a;
     }
 
     function dequeue(Queue storage q) internal returns (address) {
-        require(q.last >= q.first);  // non-empty queue
+        require(q.last >= q.first); // non-empty queue
 
         address a = q.queue[q.first];
 
@@ -35,5 +35,4 @@ library AddressQueue {
     function tail(Queue storage q) internal view returns (address) {
         return q.queue[q.last];
     }
-
 }

@@ -17,11 +17,11 @@ contract FeeStrategy is Ownable, IFeeStrategy {
     int256 public rolloverRewardPct;
 
     // expected mint token to be have the same number of decimals as the fee token
-    function computeMintFee(uint256 mintAmt) external view override returns(int256) {
-        return int256(mintAmt) * mintFeePct / int256(10 ** PCT_DECIMALS);
+    function computeMintFee(uint256 mintAmt) external view override returns (int256) {
+        return (int256(mintAmt) * mintFeePct) / int256(10**PCT_DECIMALS);
     }
 
-    function computeBurnFee(uint256 burnAmt) external view override returns(int256) {
-        return int256(burnAmt) * burnFeePct / int256(10 ** PCT_DECIMALS);
+    function computeBurnFee(uint256 burnAmt) external view override returns (int256) {
+        return (int256(burnAmt) * burnFeePct) / int256(10**PCT_DECIMALS);
     }
 }
