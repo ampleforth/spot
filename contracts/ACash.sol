@@ -28,7 +28,7 @@ contract ACash is ERC20, Initializable, Ownable {
     // calculates fees
     IFeeStrategy public feeStrategy;
     
-    // calculates tranche yields
+    // calculates bond price
     IPricingStrategy public pricingStrategy;
 
     // bondQueue is a queue of Bonds, which have an associated number of seniority-based tranches.
