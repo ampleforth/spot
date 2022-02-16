@@ -9,7 +9,7 @@ interface IBondMinter {
 
     event BondMinted(address bond);
 
-    function mintBonds() external;
+    function mint() external;
 
     function isInstance(address bond) external view returns (bool);
 

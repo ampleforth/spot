@@ -43,7 +43,7 @@ contract BondMinter is IBondMinter {
         return mintedBonds[bond];
     }
 
-    function mintBonds() external override {
+    function mint() external override {
         require(
             block.timestamp - lastMintTimestamp >= waitingPeriod,
             "BondMinter: Not enough time has passed since last mint timestamp"
