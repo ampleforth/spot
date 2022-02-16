@@ -10,6 +10,8 @@ import {IBondMinter} from "./interfaces/IBondMinter.sol";
 // Minor Modification to button wood's version
 // https://github.com/buttonwood-protocol/tranche/blob/main/contracts/bondMinter/
 // in ours configs are immutable and we limit one config per minter
+// and we have a way of checking the config hash of a given bond
+// This can be extened to multi-config
 contract BondMinter is IBondMinter {
     // bond factory
     IBondFactory public immutable bondFactory;
@@ -20,7 +22,7 @@ contract BondMinter is IBondMinter {
 
     // minter bond config
     IBondMinter.BondConfig public config;
-    bytes32 public immutable override configHash;
+    bytes32 private immutable _configHash;
 
     // mapping of minted bonds
     mapping(address => bool) mintedBonds;
@@ -30,7 +32,7 @@ contract BondMinter is IBondMinter {
         bondFactory = bondFactory_;
         waitingPeriod = waitingPeriod_;
         config = config_;
-        configHash = computeHash(config_);
+        _configHash = computeHash(config_);
         lastMintTimestamp = 0;
 
         emit BondConfigAdded(config);
@@ -57,6 +59,10 @@ contract BondMinter is IBondMinter {
         mintedBonds[bond] = true;
 
         emit BondMinted(bond);
+    }
+
+    function getConfigHash(address bond) external view override returns (bytes32) {
+        return mintedBonds[bond] ? _configHash : bytes32(0);
     }
 
     function computeHash(IBondMinter.BondConfig memory config_) private pure returns (bytes32) {

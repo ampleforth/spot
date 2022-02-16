@@ -13,5 +13,5 @@ interface IBondMinter {
 
     function isInstance(address bond) external view returns (bool);
 
-    function configHash() external view returns (bytes32);
+    function getConfigHash(address bond) external view returns (bytes32);
 }
