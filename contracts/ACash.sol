@@ -13,7 +13,7 @@ import {ITranche} from "./interfaces/button-wood/ITranche.sol";
 import {IBondController} from "./interfaces/button-wood/IBondController.sol";
 import {IBondMinter} from "./interfaces/IBondMinter.sol";
 import {IFeeStrategy} from "./interfaces/IFeeStrategy.sol";
-import {IYieldStrategy} from "./interfaces/IYieldStrategy.sol";
+import {IPricingStrategy} from "./interfaces/IPricingStrategy.sol";
 
 // TODO:
 // 1) log events
@@ -29,7 +29,7 @@ contract ACash is ERC20, Initializable, Ownable {
     IFeeStrategy public feeStrategy;
     
     // calculates tranche yields
-    IYieldStrategy public yieldStrategy;
+    IPricingStrategy public pricingStrategy;
 
     // bondQueue is a queue of Bonds, which have an associated number of seniority-based tranches.
     AddressQueue.Queue public bondQueue;
@@ -50,15 +50,15 @@ contract ACash is ERC20, Initializable, Ownable {
 
     function init(
         IBondMinter bondMinter_,
-        IYieldStrategy yieldStrategy_,
+        IPricingStrategy pricingStrategy_,
         IFeeStrategy feeStrategy_
     ) public initializer {
         require(address(bondMinter_) != address(0), "Expected new bond minter to be valid");
-        require(address(yieldStrategy_) != address(0), "Expected new yield strategy to be valid");
+        require(address(pricingStrategy_) != address(0), "Expected new pricing strategy to be valid");
         require(address(feeStrategy_) != address(0), "Expected new fee strategy to be valid");
 
         bondMinter = bondMinter_;
-        yieldStrategy = yieldStrategy_;
+        pricingStrategy = pricingStrategy_;
         feeStrategy = feeStrategy_;
 
         bondQueue.init();
@@ -81,7 +81,14 @@ contract ACash is ERC20, Initializable, Ownable {
 
         uint256 mintAmt = 0;
         for (uint256 i = 0; i < trancheCount; i++) {
-            mintAmt += yieldStrategy.computeTrancheYield(bondMinter, mintingBond, i, trancheAmts[i]);
+            // get bond price, ie amount of SPOT for trancheAmts[i] bonds
+            mintAmt += pricingStrategy.getTranchePrice(
+                bondMinter, 
+                mintingBond, 
+                i, 
+                trancheAmts[i]
+            );
+
             (ITranche t, ) = mintingBond.tranches(i);
             t.safeTransferFrom(_msgSender(), address(this), trancheAmts[i]);
         }
@@ -149,9 +156,9 @@ contract ACash is ERC20, Initializable, Ownable {
         bondMinter = bondMinter_;
     }
 
-    function setYieldStrategy(IYieldStrategy yieldStrategy_) external onlyOwner {
-        require(address(yieldStrategy_) != address(0), "Expected new yield strategy to be valid");
-        yieldStrategy = yieldStrategy_;
+    function setPricingStrategy(IPricingStrategy pricingStrategy_) external onlyOwner {
+        require(address(pricingStrategy_) != address(0), "Expected new pricing strategy to be valid");
+        pricingStrategy = pricingStrategy_;
     }
 
     function setFeeStrategy(IFeeStrategy feeStrategy_) external onlyOwner {
