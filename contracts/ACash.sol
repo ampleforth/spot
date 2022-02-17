@@ -93,27 +93,11 @@ contract ACash is ERC20, Initializable, Ownable {
 
         // using SPOT as the fee token
         int256 fee = feeStrategy.computeMintFee(mintAmt);
-        if (fee >= 0) {
-            mintAmt = mintAmt - uint256(fee);
-            _mint(address(this), uint256(fee));
-        } else {
-            mintAmt = mintAmt;
-            IERC20(address(this)).safeTransfer(_msgSender(), uint256(-fee));
-        }
+        uint256 mintAmt = fee >= 0 ? mintAmt - uint256(fee) : mintAmt;
         _mint(_msgSender(), mintAmt);
+        _transferFee(_msgSender(), fee);
 
         return (mintAmt, fee);
-
-        // transfer in fee in non native fee token token
-        // int256 fee = feeStrategy.computeMintFee(mintAmt);
-        // IERC20 feeToken = feeStrategy.feeToken();
-        // if (fee >= 0) {
-        //     feeToken.safeTransferFrom(_msgSender(), address(this), uint256(fee));
-        // } else {
-        //     // This is very scary!
-        //     feeToken.safeTransfer(_msgSender(), uint256(-fee));
-        // }
-        // return (mintAmt, fee);
     }
 
     // push new bond into the queue
@@ -146,6 +130,24 @@ contract ACash is ERC20, Initializable, Ownable {
                 }
             }
         }
+    }
+
+    function _transferFee(address payer, int256 fee) internal {
+        if (fee >= 0) {
+            _mint(address(this), uint256(fee));
+        } else {
+            // This is very scary!
+            IERC20(address(this)).safeTransfer(payer, uint256(-fee));
+        }
+
+        // transfer in fee in non native fee token token
+        // IERC20 feeToken = feeStrategy.feeToken();
+        // if (fee >= 0) {
+        //     feeToken.safeTransferFrom(payer, address(this), uint256(fee));
+        // } else {
+        //     // This is very scary!
+        //     feeToken.safeTransfer(payer, uint256(-fee));
+        // }
     }
 
     function setBondMinter(IBondMinter bondMinter_) external onlyOwner {
