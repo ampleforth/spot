@@ -23,7 +23,7 @@ contract ACash is ERC20, Initializable, Ownable {
     using SafeERC20 for ITranche;
 
     // minter stores a preset bond config and frequency and mints new bonds when poked
-    IBondIssuer public BondIssuer;
+    IBondIssuer public bondIssuer;
 
     // calculates fees
     IFeeStrategy public feeStrategy;
@@ -53,15 +53,15 @@ contract ACash is ERC20, Initializable, Ownable {
     }
 
     function init(
-        IBondIssuer BondIssuer_,
+        IBondIssuer bondIssuer_,
         IPricingStrategy pricingStrategy_,
         IFeeStrategy feeStrategy_
     ) public initializer {
-        require(address(BondIssuer_) != address(0), "Expected new bond minter to be valid");
+        require(address(bondIssuer_) != address(0), "Expected new bond minter to be valid");
         require(address(pricingStrategy_) != address(0), "Expected new pricing strategy to be valid");
         require(address(feeStrategy_) != address(0), "Expected new fee strategy to be valid");
 
-        BondIssuer = BondIssuer_;
+        bondIssuer = bondIssuer_;
         pricingStrategy = pricingStrategy_;
         feeStrategy = feeStrategy_;
 
@@ -74,7 +74,7 @@ contract ACash is ERC20, Initializable, Ownable {
 
     function mint(uint256[] calldata trancheAmts) external returns (uint256, int256) {
         // "System Error: bond minter not set."
-        // assert(BondIssuer != address(0));
+        // assert(bondIssuer != address(0));
 
         IBondController mintingBond = IBondController(bondQueue.tail());
         require(address(mintingBond) != address(0), "No active minting bond");
@@ -85,7 +85,7 @@ contract ACash is ERC20, Initializable, Ownable {
         uint256 mintAmt = 0;
         for (uint256 i = 0; i < trancheCount; i++) {
             // get bond price, ie amount of SPOT for trancheAmts[i] bonds
-            mintAmt += pricingStrategy.getTranchePrice(BondIssuer, mintingBond, i, trancheAmts[i]);
+            mintAmt += pricingStrategy.getTranchePrice(bondIssuer, mintingBond, i, trancheAmts[i]);
 
             (ITranche t, ) = mintingBond.tranches(i);
             t.safeTransferFrom(_msgSender(), address(this), trancheAmts[i]);
@@ -102,7 +102,7 @@ contract ACash is ERC20, Initializable, Ownable {
     // push new bond into the queue
     function advanceMintBond(IBondController newBond) public {
         require(address(newBond) != bondQueue.head(), "New bond already in queue");
-        require(BondIssuer.isInstance(address(newBond)), "Expect new bond to be minted by the minter");
+        require(bondIssuer.isInstance(address(newBond)), "Expect new bond to be minted by the minter");
         require(newBond.maturityDate() > tolarableBondMaturiyDate(), "New bond matures too soon");
 
         bondQueue.enqueue(address(newBond));
@@ -152,9 +152,9 @@ contract ACash is ERC20, Initializable, Ownable {
         // }
     }
 
-    function setBondIssuer(IBondIssuer BondIssuer_) external onlyOwner {
-        require(address(BondIssuer_) != address(0), "Expected new bond minter to be valid");
-        BondIssuer = BondIssuer_;
+    function setBondIssuer(IBondIssuer bondIssuer_) external onlyOwner {
+        require(address(bondIssuer_) != address(0), "Expected new bond minter to be valid");
+        bondIssuer = bondIssuer_;
     }
 
     function setPricingStrategy(IPricingStrategy pricingStrategy_) external onlyOwner {
