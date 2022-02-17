@@ -10,8 +10,7 @@ import { IBondIssuer } from "./interfaces/IBondIssuer.sol";
 // Minor Modification to button wood's version
 // https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondIssuer/
 // in ours configs are immutable and we limit one config per minter
-// and we have a way of checking the config hash of a given bond
-// This can be extened to multi-config
+// and we have a way of checking if the given bond was issued by the issuer
 contract BondIssuer is IBondIssuer {
     // bond factory
     IBondFactory public immutable bondFactory;
@@ -22,7 +21,6 @@ contract BondIssuer is IBondIssuer {
 
     // minter bond config
     IBondIssuer.BondConfig public config;
-    bytes32 private immutable _configHash;
 
     // mapping of minted bonds
     mapping(address => bool) mintedBonds;
@@ -35,7 +33,6 @@ contract BondIssuer is IBondIssuer {
         bondFactory = bondFactory_;
         waitingPeriod = waitingPeriod_;
         config = config_;
-        _configHash = computeHash(config_);
         lastIssueTimestamp = 0;
 
         emit BondConfigAdded(config);
@@ -49,7 +46,7 @@ contract BondIssuer is IBondIssuer {
     function issue() external override {
         require(
             block.timestamp - lastIssueTimestamp >= waitingPeriod,
-            "BondIssuer: Not enough time has passed since last mint timestamp"
+            "BondIssuer: Not enough time has passed since last issue timestamp"
         );
         lastIssueTimestamp = block.timestamp;
 
@@ -61,14 +58,6 @@ contract BondIssuer is IBondIssuer {
 
         mintedBonds[bond] = true;
 
-        emit BondMinted(bond);
-    }
-
-    function getConfigHash(address bond) external view override returns (bytes32) {
-        return mintedBonds[bond] ? _configHash : bytes32(0);
-    }
-
-    function computeHash(IBondIssuer.BondConfig memory config_) private pure returns (bytes32) {
-        return keccak256(abi.encode(config_.collateralToken, config_.trancheRatios, config_.duration));
+        emit BondIssued(bond);
     }
 }
