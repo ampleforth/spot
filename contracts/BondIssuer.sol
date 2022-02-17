@@ -1,27 +1,27 @@
 pragma solidity ^0.8.0;
 
 import { IBondFactory } from "./interfaces/button-wood/IBondFactory.sol";
-import { IBondMinter } from "./interfaces/IBondMinter.sol";
+import { IBondIssuer } from "./interfaces/IBondIssuer.sol";
 
 // A minter periodically mints a specified class of bonds or config
 // a config is uniquely identified by {collateralToken, trancheRatios and duration}
 // Based on the provided frequency minter instantiates new bonds with the given config when poked
 //
 // Minor Modification to button wood's version
-// https://github.com/buttonwood-protocol/tranche/blob/main/contracts/bondMinter/
+// https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondIssuer/
 // in ours configs are immutable and we limit one config per minter
 // and we have a way of checking the config hash of a given bond
 // This can be extened to multi-config
-contract BondMinter is IBondMinter {
+contract BondIssuer is IBondIssuer {
     // bond factory
     IBondFactory public immutable bondFactory;
 
     // mint frequency parameters
     uint256 public immutable waitingPeriod;
-    uint256 public lastMintTimestamp;
+    uint256 public lastIssueTimestamp;
 
     // minter bond config
-    IBondMinter.BondConfig public config;
+    IBondIssuer.BondConfig public config;
     bytes32 private immutable _configHash;
 
     // mapping of minted bonds
@@ -30,13 +30,13 @@ contract BondMinter is IBondMinter {
     constructor(
         IBondFactory bondFactory_,
         uint256 waitingPeriod_,
-        IBondMinter.BondConfig memory config_
+        IBondIssuer.BondConfig memory config_
     ) {
         bondFactory = bondFactory_;
         waitingPeriod = waitingPeriod_;
         config = config_;
         _configHash = computeHash(config_);
-        lastMintTimestamp = 0;
+        lastIssueTimestamp = 0;
 
         emit BondConfigAdded(config);
     }
@@ -46,17 +46,17 @@ contract BondMinter is IBondMinter {
         return mintedBonds[bond];
     }
 
-    function mint() external override {
+    function issue() external override {
         require(
-            block.timestamp - lastMintTimestamp >= waitingPeriod,
-            "BondMinter: Not enough time has passed since last mint timestamp"
+            block.timestamp - lastIssueTimestamp >= waitingPeriod,
+            "BondIssuer: Not enough time has passed since last mint timestamp"
         );
-        lastMintTimestamp = block.timestamp;
+        lastIssueTimestamp = block.timestamp;
 
         address bond = bondFactory.createBond(
             config.collateralToken,
             config.trancheRatios,
-            lastMintTimestamp + config.duration
+            lastIssueTimestamp + config.duration
         );
 
         mintedBonds[bond] = true;
@@ -68,7 +68,7 @@ contract BondMinter is IBondMinter {
         return mintedBonds[bond] ? _configHash : bytes32(0);
     }
 
-    function computeHash(IBondMinter.BondConfig memory config_) private pure returns (bytes32) {
+    function computeHash(IBondIssuer.BondConfig memory config_) private pure returns (bytes32) {
         return keccak256(abi.encode(config_.collateralToken, config_.trancheRatios, config_.duration));
     }
 }

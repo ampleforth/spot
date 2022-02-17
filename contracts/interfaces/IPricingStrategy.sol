@@ -1,9 +1,9 @@
-import { IBondMinter } from "./IBondMinter.sol";
+import { IBondIssuer } from "./IBondIssuer.sol";
 import { IBondController } from "./button-wood/IBondController.sol";
 
 interface IPricingStrategy {
     function getTranchePrice(
-        IBondMinter minter,
+        IBondIssuer minter,
         IBondController bond,
         uint256 seniorityIDX,
         uint256 trancheAmt

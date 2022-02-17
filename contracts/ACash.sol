@@ -11,7 +11,7 @@ import { AddressQueue } from "./utils/AddressQueue.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ITranche } from "./interfaces/button-wood/ITranche.sol";
 import { IBondController } from "./interfaces/button-wood/IBondController.sol";
-import { IBondMinter } from "./interfaces/IBondMinter.sol";
+import { IBondIssuer } from "./interfaces/IBondIssuer.sol";
 import { IFeeStrategy } from "./interfaces/IFeeStrategy.sol";
 import { IPricingStrategy } from "./interfaces/IPricingStrategy.sol";
 
@@ -23,7 +23,7 @@ contract ACash is ERC20, Initializable, Ownable {
     using SafeERC20 for ITranche;
 
     // minter stores a preset bond config and frequency and mints new bonds when poked
-    IBondMinter public bondMinter;
+    IBondIssuer public BondIssuer;
 
     // calculates fees
     IFeeStrategy public feeStrategy;
@@ -53,15 +53,15 @@ contract ACash is ERC20, Initializable, Ownable {
     }
 
     function init(
-        IBondMinter bondMinter_,
+        IBondIssuer BondIssuer_,
         IPricingStrategy pricingStrategy_,
         IFeeStrategy feeStrategy_
     ) public initializer {
-        require(address(bondMinter_) != address(0), "Expected new bond minter to be valid");
+        require(address(BondIssuer_) != address(0), "Expected new bond minter to be valid");
         require(address(pricingStrategy_) != address(0), "Expected new pricing strategy to be valid");
         require(address(feeStrategy_) != address(0), "Expected new fee strategy to be valid");
 
-        bondMinter = bondMinter_;
+        BondIssuer = BondIssuer_;
         pricingStrategy = pricingStrategy_;
         feeStrategy = feeStrategy_;
 
@@ -74,7 +74,7 @@ contract ACash is ERC20, Initializable, Ownable {
 
     function mint(uint256[] calldata trancheAmts) external returns (uint256, int256) {
         // "System Error: bond minter not set."
-        // assert(bondMinter != address(0));
+        // assert(BondIssuer != address(0));
 
         IBondController mintingBond = IBondController(bondQueue.tail());
         require(address(mintingBond) != address(0), "No active minting bond");
@@ -85,7 +85,7 @@ contract ACash is ERC20, Initializable, Ownable {
         uint256 mintAmt = 0;
         for (uint256 i = 0; i < trancheCount; i++) {
             // get bond price, ie amount of SPOT for trancheAmts[i] bonds
-            mintAmt += pricingStrategy.getTranchePrice(bondMinter, mintingBond, i, trancheAmts[i]);
+            mintAmt += pricingStrategy.getTranchePrice(BondIssuer, mintingBond, i, trancheAmts[i]);
 
             (ITranche t, ) = mintingBond.tranches(i);
             t.safeTransferFrom(_msgSender(), address(this), trancheAmts[i]);
@@ -102,7 +102,7 @@ contract ACash is ERC20, Initializable, Ownable {
     // push new bond into the queue
     function advanceMintBond(IBondController newBond) public {
         require(address(newBond) != bondQueue.head(), "New bond already in queue");
-        require(bondMinter.isInstance(address(newBond)), "Expect new bond to be minted by the minter");
+        require(BondIssuer.isInstance(address(newBond)), "Expect new bond to be minted by the minter");
         require(newBond.maturityDate() > tolarableBondMaturiyDate(), "New bond matures too soon");
 
         bondQueue.enqueue(address(newBond));
@@ -152,9 +152,9 @@ contract ACash is ERC20, Initializable, Ownable {
         // }
     }
 
-    function setBondMinter(IBondMinter bondMinter_) external onlyOwner {
-        require(address(bondMinter_) != address(0), "Expected new bond minter to be valid");
-        bondMinter = bondMinter_;
+    function setBondIssuer(IBondIssuer BondIssuer_) external onlyOwner {
+        require(address(BondIssuer_) != address(0), "Expected new bond minter to be valid");
+        BondIssuer = BondIssuer_;
     }
 
     function setPricingStrategy(IPricingStrategy pricingStrategy_) external onlyOwner {

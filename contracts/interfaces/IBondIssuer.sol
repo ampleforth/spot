@@ -1,4 +1,4 @@
-interface IBondMinter {
+interface IBondIssuer {
     struct BondConfig {
         address collateralToken;
         uint256[] trancheRatios;
@@ -9,7 +9,7 @@ interface IBondMinter {
 
     event BondMinted(address bond);
 
-    function mint() external;
+    function issue() external;
 
     function isInstance(address bond) external view returns (bool);
 

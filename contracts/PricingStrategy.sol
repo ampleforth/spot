@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { IBondController } from "./interfaces/button-wood/IBondController.sol";
 import { IPricingStrategy } from "./interfaces/IPricingStrategy.sol";
-import { IBondMinter } from "./interfaces/IBondMinter.sol";
+import { IBondIssuer } from "./interfaces/IBondIssuer.sol";
 
 contract PricingStrategy is Ownable, IPricingStrategy {
     uint256 public constant PCT_DECIMALS = 6;
@@ -17,7 +17,7 @@ contract PricingStrategy is Ownable, IPricingStrategy {
 
     // tranche_price => yield * price_fn(tranche) * tranche_amount
     function getTranchePrice(
-        IBondMinter minter,
+        IBondIssuer minter,
         IBondController bond,
         uint256 seniorityIDX,
         uint256 trancheAmt
@@ -28,7 +28,7 @@ contract PricingStrategy is Ownable, IPricingStrategy {
     }
 
     function trancheYields(
-        IBondMinter minter,
+        IBondIssuer minter,
         IBondController bond,
         uint256 seniorityIDX
     ) private view returns (uint256) {
