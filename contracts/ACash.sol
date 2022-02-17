@@ -91,9 +91,8 @@ contract ACash is ERC20, Initializable, Ownable {
             t.safeTransferFrom(_msgSender(), address(this), trancheAmts[i]);
         }
 
-        // using SPOT as the fee token
         int256 fee = feeStrategy.computeMintFee(mintAmt);
-        uint256 mintAmt = fee >= 0 ? mintAmt - uint256(fee) : mintAmt;
+        mintAmt = (fee >= 0) ? mintAmt - uint256(fee) : mintAmt;
         _mint(_msgSender(), mintAmt);
         _transferFee(_msgSender(), fee);
 
@@ -133,6 +132,9 @@ contract ACash is ERC20, Initializable, Ownable {
     }
 
     function _transferFee(address payer, int256 fee) internal {
+        // todo: pick either implementation
+
+        // using SPOT as the fee token
         if (fee >= 0) {
             _mint(address(this), uint256(fee));
         } else {
