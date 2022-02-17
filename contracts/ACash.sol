@@ -42,7 +42,7 @@ contract ACash is ERC20, Initializable, Ownable {
 
     // trancheIcebox is a holding area for tranches that are underwater or tranches which are about to mature.
     // They can only be rolled over and not burnt
-    mapping(ITranche => uint256) trancheIcebox;
+    mapping(ITranche => bool) trancheIcebox;
 
     constructor(
         string memory name,
@@ -124,9 +124,8 @@ contract ACash is ERC20, Initializable, Ownable {
             // push individual tranches into icebox if they have a balance
             for (uint256 i = 0; i < latestBond.trancheCount(); i++) {
                 (ITranche t, ) = latestBond.tranches(i);
-                uint256 trancheBalance = t.balanceOf(address(this));
-                if (trancheBalance > 0) {
-                    trancheIcebox[t] = trancheBalance;
+                if (t.balanceOf(address(this)) > 0) {
+                    trancheIcebox[t] = true;
                 }
             }
         }
