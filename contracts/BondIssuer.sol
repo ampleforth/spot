@@ -15,11 +15,12 @@ contract BondIssuer is IBondIssuer {
     // bond factory
     IBondFactory public immutable bondFactory;
 
-    // mint frequency parameters
-    uint256 public immutable waitingPeriod;
-    uint256 public lastIssueTimestamp;
+    // issue frequency parameters
+    uint256 public immutable minIssueTimeInterval;
+    uint256 public immutable issueWindowOffset;
+    uint256 public immutable bondDuration;
+    uint256 public lastIssueWindowTimestamp;
 
-    // minter bond config
     IBondIssuer.BondConfig public config;
 
     // mapping of minted bonds
@@ -27,15 +28,18 @@ contract BondIssuer is IBondIssuer {
 
     constructor(
         IBondFactory bondFactory_,
-        uint256 waitingPeriod_,
+        uint256 minIssueTimeInterval_,
+        uint256 issueWindowOffset_,
+        uint256 bondDuration_,
         IBondIssuer.BondConfig memory config_
     ) {
         bondFactory = bondFactory_;
-        waitingPeriod = waitingPeriod_;
+        minIssueTimeInterval = minIssueTimeInterval_; // 1 week
+        issueWindowOffset = issueWindowOffset_; // 7200, 2AM UTC
+        bondDuration = bondDuration_; // 4 weeks
         config = config_;
-        lastIssueTimestamp = 0;
 
-        emit BondConfigAdded(config);
+        lastIssueWindowTimestamp = 0;
     }
 
     // checks if bond has been minted using this minter
@@ -45,15 +49,16 @@ contract BondIssuer is IBondIssuer {
 
     function issue() external override {
         require(
-            block.timestamp - lastIssueTimestamp >= waitingPeriod,
+            lastIssueWindowTimestamp + minIssueTimeInterval < block.timestamp,
             "BondIssuer: Not enough time has passed since last issue timestamp"
         );
-        lastIssueTimestamp = block.timestamp;
+
+        lastIssueWindowTimestamp = block.timestamp - (block.timestamp % minIssueTimeInterval);
 
         address bond = bondFactory.createBond(
             config.collateralToken,
             config.trancheRatios,
-            lastIssueTimestamp + config.duration
+            lastIssueWindowTimestamp + bondDuration
         );
 
         mintedBonds[bond] = true;

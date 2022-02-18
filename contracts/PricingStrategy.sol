@@ -23,8 +23,7 @@ contract PricingStrategy is Ownable, IPricingStrategy {
 
     // tranche_price => yield * price_fn(tranche) * tranche_amount
     function getTranchePrice(ITranche t, uint256 trancheAmt) external view override returns (uint256) {
-        uint256 yieldFactor = (getTrancheYield(t) * computeTranchePrice(t)) /
-            (10**PRICE_DECIMALS);
+        uint256 yieldFactor = (getTrancheYield(t) * computeTranchePrice(t)) / (10**PRICE_DECIMALS);
         return (yieldFactor * trancheAmt) / (10**PCT_DECIMALS);
     }
 
