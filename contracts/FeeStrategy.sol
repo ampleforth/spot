@@ -18,6 +18,8 @@ contract FeeStrategy is Ownable, IFeeStrategy {
 
     // expected mint token to be have the same number of decimals as the fee token
     function computeMintFee(uint256 mintAmt) external view override returns (int256) {
+       # TODO use https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/math/SafeCast.sol
+       # Todo: check all math for overflow reverts 
         return (int256(mintAmt) * mintFeePct) / int256(10**PCT_DECIMALS);
     }
 
