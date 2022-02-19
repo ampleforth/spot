@@ -34,7 +34,7 @@ contract ACash is ERC20, Initializable, Ownable {
     // bondQueue is a queue of Bonds, which have an associated number of seniority-based tranches.
     AddressQueue.Queue public bondQueue;
 
-    // system only keeps bonds which further than the `tolarableBondMaturiy` in the queue
+    // system only keeps bonds which mature further out than the `tolarableBondMaturiy` in the queue
     uint256 private _tolarableBondMaturiy;
 
     //---- ERC-20 parameters
