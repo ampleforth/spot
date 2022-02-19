@@ -139,6 +139,7 @@ contract ACash is ERC20, Initializable, Ownable {
             _mint(address(this), uint256(fee));
         } else {
             // This is very scary!
+            // TODO consider minting spot if the reserve runs out?
             IERC20(address(this)).safeTransfer(payer, uint256(-fee));
         }
 
