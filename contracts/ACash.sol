@@ -31,11 +31,20 @@ contract ACash is ERC20, Initializable, Ownable {
     // calculates bond price
     IPricingStrategy public pricingStrategy;
 
+    // Yield applied on each tranche
+    // tranche yields is specific to the parent bond's class identified by its config hash
+    // a bond's class is the combination of the {collateralToken, trancheRatios}
+    // specified as a fixed point number with YIELD_DECIMALS
+    mapping(bytes32 => uint256[]) private _trancheYields;
+
     // bondQueue is a queue of Bonds, which have an associated number of seniority-based tranches.
     AddressQueue.Queue public bondQueue;
 
-    // system only keeps bonds which mature further out than the `tolarableBondMaturiy` in the queue
-    uint256 private _tolarableBondMaturiy;
+    // the minimum maturity time in seconds for a bond below which it gets removed from the bond queue
+    uint256 private _minQueueMaturiySec;
+
+    // the maximum maturity time in seconds for a bond above which it can't get added into the bond queue
+    uint256 private _maxQueueMaturiySec;
 
     //---- ERC-20 parameters
     uint8 private immutable _decimals;
@@ -43,6 +52,9 @@ contract ACash is ERC20, Initializable, Ownable {
     // trancheIcebox is a holding area for tranches that are underwater or tranches which are about to mature.
     // They can only be rolled over and not burnt
     mapping(ITranche => bool) trancheIcebox;
+
+    // constants
+    uint256 public constant YIELD_DECIMALS = 6;
 
     constructor(
         string memory name,
@@ -84,11 +96,16 @@ contract ACash is ERC20, Initializable, Ownable {
 
         uint256 mintAmt = 0;
         for (uint256 i = 0; i < trancheCount; i++) {
+            uint256 trancheYield = _trancheYields[bondIssuer.configHash(mintingBond)][i];
+            if(trancheYield == 0){
+                continue;
+            }
+
             (ITranche t, ) = mintingBond.tranches(i);
             t.safeTransferFrom(_msgSender(), address(this), trancheAmts[i]);
 
             // get bond price, ie amount of SPOT for trancheAmts[i] amount of t tranches
-            mintAmt += pricingStrategy.getTranchePrice(t, trancheAmts[i]);
+            mintAmt += (pricingStrategy.getTranchePrice(t, trancheAmts[i]) * trancheYield) / (10**YIELD_DECIMALS);
         }
 
         int256 fee = feeStrategy.computeMintFee(mintAmt);
@@ -102,8 +119,9 @@ contract ACash is ERC20, Initializable, Ownable {
     // push new bond into the queue
     function advanceMintBond(IBondController newBond) public {
         require(address(newBond) != bondQueue.head(), "New bond already in queue");
-        require(bondIssuer.isInstance(address(newBond)), "Expect new bond to be minted by the minter");
-        require(newBond.maturityDate() > tolarableBondMaturiyDate(), "New bond matures too soon");
+        require(bondIssuer.isInstance(newBond), "Expect new bond to be minted by the minter");
+        require(newBond.maturityDate() > minQueueMaturityDate(), "New bond matures too soon");
+        require(newBond.maturityDate() <= maxQueueMaturityDate(), "New bond matures too late");
 
         bondQueue.enqueue(address(newBond));
     }
@@ -114,7 +132,7 @@ contract ACash is ERC20, Initializable, Ownable {
         while (true) {
             IBondController latestBond = IBondController(bondQueue.tail());
 
-            if (address(latestBond) == address(0) || latestBond.maturityDate() > tolarableBondMaturiyDate()) {
+            if (address(latestBond) == address(0) || latestBond.maturityDate() > minQueueMaturityDate()) {
                 break;
             }
 
@@ -168,12 +186,21 @@ contract ACash is ERC20, Initializable, Ownable {
         feeStrategy = feeStrategy_;
     }
 
-    function setTolarableBondMaturiy(uint256 tolarableBondMaturiy) external onlyOwner {
-        _tolarableBondMaturiy = tolarableBondMaturiy;
+    function setTolarableBondMaturiy(uint256 minQueueMaturiySec, uint256 maxQueueMaturiySec) external onlyOwner {
+        _minQueueMaturiySec = minQueueMaturiySec;
+        _maxQueueMaturiySec = maxQueueMaturiySec;
     }
 
-    function tolarableBondMaturiyDate() public view returns (uint256) {
-        return block.timestamp + _tolarableBondMaturiy;
+    function setTrancheYields(bytes32 configHash, uint256[] memory yields) external onlyOwner {
+        _trancheYields[configHash] = yields;
+    }
+
+    function minQueueMaturityDate() public view returns (uint256) {
+        return block.timestamp + _minQueueMaturiySec;
+    }
+
+    function maxQueueMaturityDate() public view returns (uint256) {
+        return block.timestamp + _maxQueueMaturiySec;
     }
 
     /*

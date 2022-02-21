@@ -2,15 +2,11 @@ pragma solidity ^0.8.0;
 
 import { IBondFactory } from "./interfaces/button-wood/IBondFactory.sol";
 import { IBondIssuer } from "./interfaces/IBondIssuer.sol";
+import { IBondController } from "./interfaces/button-wood/IBondController.sol";
 
-// A minter periodically mints a specified class of bonds or config
-// a config is uniquely identified by {collateralToken, trancheRatios and duration}
-// Based on the provided frequency minter instantiates new bonds with the given config when poked
-//
-// Minor Modification to button wood's version
-// https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondIssuer/
-// in ours configs are immutable and we limit one config per minter
-// and we have a way of checking if the given bond was issued by the issuer
+// A issuer periodically issues a specified class of bonds or config
+// A config is uniquely identified by {collateralToken, trancheRatios}
+// Based on the provided frequency issuer instantiates new bonds with the given config when poked
 contract BondIssuer is IBondIssuer {
     // bond factory
     IBondFactory public immutable bondFactory;
@@ -22,9 +18,10 @@ contract BondIssuer is IBondIssuer {
     uint256 public lastIssueWindowTimestamp;
 
     IBondIssuer.BondConfig public config;
+    bytes32 private _configHash;
 
-    // mapping of minted bonds
-    mapping(address => bool) mintedBonds;
+    // mapping of issued bonds
+    mapping(IBondController => bool) public issuedBonds;
 
     constructor(
         IBondFactory bondFactory_,
@@ -37,16 +34,24 @@ contract BondIssuer is IBondIssuer {
         minIssueTimeInterval = minIssueTimeInterval_; // 1 week
         issueWindowOffset = issueWindowOffset_; // 7200, 2AM UTC
         bondDuration = bondDuration_; // 4 weeks
+
         config = config_;
+        _configHash = keccak256(abi.encode(config_.collateralToken, config_.trancheRatios));
 
         lastIssueWindowTimestamp = 0;
     }
 
-    // checks if bond has been minted using this minter
-    function isInstance(address bond) external view override returns (bool) {
-        return mintedBonds[bond];
+    // checks if bond has been issued using this issuer
+    function isInstance(IBondController bond) external view override returns (bool) {
+        return issuedBonds[bond];
     }
 
+    // returns the config hash of a given bond if issued by this issuer
+    function configHash(IBondController bond) external view override returns (bytes32) {
+        return issuedBonds[bond] ? _configHash : bytes32(0);
+    }
+
+    // issues new bond
     function issue() external override {
         require(
             lastIssueWindowTimestamp + minIssueTimeInterval < block.timestamp,
@@ -61,7 +66,7 @@ contract BondIssuer is IBondIssuer {
             lastIssueWindowTimestamp + bondDuration
         );
 
-        mintedBonds[bond] = true;
+        issuedBonds[IBondController(bond)] = true;
 
         emit BondIssued(bond);
     }

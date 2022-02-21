@@ -1,3 +1,5 @@
+import { IBondController } from "./button-wood/IBondController.sol";
+
 interface IBondIssuer {
     struct BondConfig {
         address collateralToken;
@@ -8,5 +10,7 @@ interface IBondIssuer {
 
     function issue() external;
 
-    function isInstance(address bond) external view returns (bool);
+    function isInstance(IBondController bond) external view returns (bool);
+
+    function configHash(IBondController bond) external view returns (bytes32);
 }

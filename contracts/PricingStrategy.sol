@@ -7,13 +7,7 @@ import { IPricingStrategy } from "./interfaces/IPricingStrategy.sol";
 import { IBondIssuer } from "./interfaces/IBondIssuer.sol";
 
 contract PricingStrategy is Ownable, IPricingStrategy {
-    uint256 public constant PCT_DECIMALS = 6;
     uint256 public constant PRICE_DECIMALS = 18;
-
-    // todo: add setters
-    // tranche yields is specific to the parent bond's class identified by its config hash
-    // a bond's class is the combination of the {collateralToken, trancheRatios}
-    mapping(bytes32 => uint256[]) private _trancheYields;
 
     struct TrancheConfig {
         IBondController bond;
@@ -21,10 +15,9 @@ contract PricingStrategy is Ownable, IPricingStrategy {
         uint256 seniorityIDX;
     }
 
-    // tranche_price => yield * price_fn(tranche) * tranche_amount
+    // tranche_price => price_fn(tranche) * tranche_amount
     function getTranchePrice(ITranche t, uint256 trancheAmt) external view override returns (uint256) {
-        uint256 yieldFactor = (getTrancheYield(t) * computeTranchePrice(t)) / (10**PRICE_DECIMALS);
-        return (yieldFactor * trancheAmt) / (10**PCT_DECIMALS);
+        return (computeTranchePrice(t) * trancheAmt) / (10**PRICE_DECIMALS);
     }
 
     // Tranche pricing function goes here:
@@ -32,11 +25,6 @@ contract PricingStrategy is Ownable, IPricingStrategy {
         // TrancheConfig c = getTrancheConfig(t);
         // based on => c.bond.collateralToken(), c.bond.cdr(), c.bond.maturityDate(), c.seniorityIDX
         return (10**PRICE_DECIMALS);
-    }
-
-    function getTrancheYield(ITranche t) private view returns (uint256) {
-        TrancheConfig memory c = getTrancheConfig(t);
-        return _trancheYields[keccak256(abi.encode(c.bond.collateralToken(), c.trancheRatios))][c.seniorityIDX];
     }
 
     // NOTE: this is very gas intensive
