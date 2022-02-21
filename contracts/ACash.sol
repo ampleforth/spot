@@ -90,13 +90,14 @@ contract ACash is ERC20, Initializable, Ownable {
 
         IBondController mintingBond = IBondController(bondQueue.tail());
         require(address(mintingBond) != address(0), "No active minting bond");
+        bytes32 configHash = bondIssuer.configHash(mintingBond);
 
         uint256 trancheCount = mintingBond.trancheCount();
         require(trancheAmts.length == trancheCount, "Must specify amounts for every bond tranche");
 
         uint256 mintAmt = 0;
         for (uint256 i = 0; i < trancheCount; i++) {
-            uint256 trancheYield = _trancheYields[bondIssuer.configHash(mintingBond)][i];
+            uint256 trancheYield = _trancheYields[configHash][i];
             if(trancheYield == 0){
                 continue;
             }
