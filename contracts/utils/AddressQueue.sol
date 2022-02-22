@@ -38,7 +38,7 @@ library AddressQueue {
         return q.queue[q.last];
     }
 
-    function has(Queue storage q, address a) internal view returns (bool) {
+    function contains(Queue storage q, address a) internal view returns (bool) {
         return q.items[a];
     }
 }
