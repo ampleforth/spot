@@ -186,7 +186,7 @@ contract ACash is ERC20, Initializable, Ownable {
         feeStrategy = feeStrategy_;
     }
 
-    function setTolarableBondMaturiy(uint256 minMaturiySec_, uint256 maxMaturiySec_) external onlyOwner {
+    function setTolerableBondMaturiy(uint256 minMaturiySec_, uint256 maxMaturiySec_) external onlyOwner {
         minMaturiySec = minMaturiySec_;
         maxMaturiySec = maxMaturiySec_;
     }
@@ -198,8 +198,8 @@ contract ACash is ERC20, Initializable, Ownable {
     // bond's maturity is within bounds
     // only active bonds can be added to the queue. If a bond is inactive it gets kicked from the queue ..
     function isActiveBond(IBondController bond) public view returns (bool) {
-        return (bond.maturityDate() > block.timestamp + minMaturiySec &&
-            bond.maturityDate() <= block.timestamp + maxMaturiySec);
+        return (bond.maturityDate() >= block.timestamp + minMaturiySec &&
+            bond.maturityDate() < block.timestamp + maxMaturiySec);
     }
 
     /*
