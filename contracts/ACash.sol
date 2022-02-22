@@ -22,6 +22,11 @@ contract ACash is ERC20, Initializable, Ownable {
     using SafeERC20 for IERC20;
     using SafeERC20 for ITranche;
 
+    // events
+    event TrancheSynced(ITranche t, uint256 balance);
+
+    // parameters
+
     // minter stores a preset bond config and frequency and mints new bonds when poked
     IBondIssuer public bondIssuer;
 
@@ -49,9 +54,9 @@ contract ACash is ERC20, Initializable, Ownable {
     //---- ERC-20 parameters
     uint8 private immutable _decimals;
 
-    // trancheIcebox is a holding area for tranches that are underwater or tranches which are about to mature.
-    // They can only be rolled over and not burnt
-    mapping(ITranche => bool) trancheIcebox;
+    // list of all tranches currently being held by the system
+    // used by off-chain services for indexing
+    mapping(ITranche => bool) public tranches;
 
     // constants
     uint256 public constant YIELD_DECIMALS = 6;
@@ -104,21 +109,44 @@ contract ACash is ERC20, Initializable, Ownable {
 
             (ITranche t, ) = mintingBond.tranches(i);
             t.safeTransferFrom(_msgSender(), address(this), trancheAmts[i]);
+            syncTranche(t);
 
             // get bond price, ie amount of SPOT for trancheAmts[i] amount of t tranches
-            mintAmt += (pricingStrategy.getTranchePrice(t, trancheAmts[i]) * trancheYield) / (10**YIELD_DECIMALS);
+            mintAmt += (pricingStrategy.getBuyPrice(t, trancheAmts[i]) * trancheYield) / (10**YIELD_DECIMALS);
         }
 
         int256 fee = feeStrategy.computeMintFee(mintAmt);
         mintAmt = (fee >= 0) ? mintAmt - uint256(fee) : mintAmt;
         _mint(_msgSender(), mintAmt);
-        _transferFee(_msgSender(), fee);
+        _pullFee(_msgSender(), fee);
 
         return (mintAmt, fee);
     }
 
+    function rollover(
+        ITranche trancheIn,
+        ITranche trancheOut,
+        uint256 trancheInAmt
+    ) external returns (uint256) {
+        require(bondQueue.has(trancheIn.bondController()), "New tranche should of bonds in bond queue");
+        require(!bondQueue.has(trancheOut.bondController()), "Old tranche should NOT of bonds in bond queue");
+
+        trancheIn.safeTransferFrom(_msgSender(), address(this), trancheInAmt);
+        syncTranche(trancheIn);
+
+        uint256 trancheOutAmt = pricingStrategy.getRolloverPrice(trancheIn, trancheOut, trancheInAmt);
+        trancheOut.safeTransfer(_msgSender(), trancheOutAmt);
+        syncTranche(trancheOut);
+
+        // reward is -fee
+        int256 reward = feeStrategy.computeRolloverReward(trancheIn, trancheOut, trancheInAmt, trancheOutAmt);
+        _pullFee(_msgSender(), reward);
+
+        return trancheOutAmt;
+    }
+
     // push new bond into the queue
-    function advanceMintBond(IBondController newBond) public {
+    function advanceMintBond(IBondController newBond) external {
         require(address(newBond) != bondQueue.head(), "New bond already in queue");
         require(bondIssuer.isInstance(newBond), "Expect new bond to be minted by the minter");
         require(isActiveBond(newBond), "New bond not active");
@@ -128,7 +156,7 @@ contract ACash is ERC20, Initializable, Ownable {
 
     // continue dequeue till the tail of the queue
     // has a bond which expires sufficiently out into the future
-    function advanceBurnBond() public {
+    function advanceBurnBond() external {
         while (true) {
             IBondController latestBond = IBondController(bondQueue.tail());
 
@@ -138,37 +166,21 @@ contract ACash is ERC20, Initializable, Ownable {
 
             // pop from queue
             bondQueue.dequeue();
-
-            // push individual tranches into icebox if they have a balance
-            for (uint256 i = 0; i < latestBond.trancheCount(); i++) {
-                (ITranche t, ) = latestBond.tranches(i);
-                if (t.balanceOf(address(this)) > 0) {
-                    trancheIcebox[t] = true;
-                }
-            }
         }
     }
 
-    function _transferFee(address payer, int256 fee) internal {
-        // todo: pick either implementation
-
-        // using SPOT as the fee token
-        if (fee >= 0) {
-            _mint(address(this), uint256(fee));
+    // can be externally called to register tranches transferred into the system out of turn
+    // internally called when tranche balances held by aCASH change
+    // used by off-chain indexers to query tranches currently held by the system
+    function syncTranche(ITranche t) public {
+        // log events
+        uint256 trancheBalance = t.balanceOf(address(this));
+        if (trancheBalance > 0) {
+            tranches[t] = true;
         } else {
-            // This is very scary!
-            // TODO consider minting spot if the reserve runs out?
-            IERC20(address(this)).safeTransfer(payer, uint256(-fee));
+            delete tranches[t];
         }
-
-        // transfer in fee in non native fee token token
-        // IERC20 feeToken = feeStrategy.feeToken();
-        // if (fee >= 0) {
-        //     feeToken.safeTransferFrom(payer, address(this), uint256(fee));
-        // } else {
-        //     // This is very scary!
-        //     feeToken.safeTransfer(payer, uint256(-fee));
-        // }
+        emit TrancheSynced(t, trancheBalance);
     }
 
     function setBondIssuer(IBondIssuer bondIssuer_) external onlyOwner {
@@ -202,16 +214,30 @@ contract ACash is ERC20, Initializable, Ownable {
             bond.maturityDate() < block.timestamp + maxMaturiySec);
     }
 
+    // TODO: pick either implementation
+    // currently using SPOT as the fee token
+    // if the fee is +ve, fee is minted to self
+    // if the fee is -ve, it's a reward back to the payer
+    function _pullFee(address payer, int256 fee) internal {
+        if (fee >= 0) {
+            _mint(address(this), uint256(fee));
+        } else {
+            // This is very scary!
+            // TODO consider minting spot if the reserve runs out?
+            IERC20(address(this)).safeTransfer(payer, uint256(-fee));
+        }
+        // transfer in fee in non native fee token token
+        // IERC20 feeToken = feeStrategy.feeToken();
+        // if (fee >= 0) {
+        //     feeToken.safeTransferFrom(payer, address(this), uint256(fee));
+        // } else {
+        //     // This is very scary!
+        //     feeToken.safeTransfer(payer, uint256(-fee));
+        // }
+    }
+
     /*
         function redeem(uint256 spotAmt) public returns () {
-
-        }
-
-        function redeemIcebox(address bond, uint256 trancheAmts) returns () {
-
-        }
-
-        function rollover() public returns () {
 
         }
     */

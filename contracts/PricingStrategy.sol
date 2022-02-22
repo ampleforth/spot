@@ -15,12 +15,27 @@ contract PricingStrategy is Ownable, IPricingStrategy {
         uint256 seniorityIDX;
     }
 
-    // tranche_price => price_fn(tranche) * tranche_amount
-    function getTranchePrice(ITranche t, uint256 trancheAmt) external view override returns (uint256) {
+    // tranche buy price, number of spot for given tranche amt
+    function getBuyPrice(ITranche t, uint256 trancheAmt) external view override returns (uint256) {
         return (computeTranchePrice(t) * trancheAmt) / (10**PRICE_DECIMALS);
     }
 
+    // tranche sell price, number of tranches for given spot amount
+    function getSellPrice(ITranche t, uint256 spotAmt) external view override returns (uint256) {
+        return (computeTranchePrice(t) * (10**PRICE_DECIMALS)) / spotAmt;
+    }
+
+    // number of trancheOut for given amount of trancheIn
+    function getRolloverPrice(
+        ITranche trancheIn,
+        ITranche trancheOut,
+        uint256 trancheInAmt
+    ) external view override returns (uint256) {
+        return (computeTranchePrice(trancheIn) * trancheInAmt) / computeTranchePrice(trancheOut);
+    }
+
     // Tranche pricing function goes here:
+    // ie number of tranches of type t for 1 collateral token
     function computeTranchePrice(ITranche t) private view returns (uint256) {
         // TrancheConfig c = getTrancheConfig(t);
         // based on => c.bond.collateralToken(), c.bond.cdr(), c.bond.maturityDate(), c.seniorityIDX
