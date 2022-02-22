@@ -9,7 +9,7 @@ contract FeeStrategy is Ownable, IFeeStrategy {
 
     // todo: add setters
     //--- fee strategy parameters
-    // IERC20 public override feeToken;
+    address public override feeToken;
 
     // Special note: If mint or burn fee is negative, the other must overcompensate in the positive direction.
     // Otherwise, user could extract from fee reserve by constant mint/burn transactions.

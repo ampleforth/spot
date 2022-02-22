@@ -115,10 +115,15 @@ contract ACash is ERC20, Initializable, Ownable {
             mintAmt += (pricingStrategy.getBuyPrice(t, trancheAmts[i]) * trancheYield) / (10**YIELD_DECIMALS);
         }
 
+        // fee in native token, withold mint partly as fee
         int256 fee = feeStrategy.computeMintFee(mintAmt);
-        mintAmt = (fee >= 0) ? mintAmt - uint256(fee) : mintAmt;
+        address feeToken = feeStrategy.feeToken();
+        if (feeToken == address(this)) {
+            mintAmt = (fee >= 0) ? mintAmt - uint256(fee) : mintAmt;
+        }
+
         _mint(_msgSender(), mintAmt);
-        _pullFee(_msgSender(), fee);
+        _pullFee(feeToken, _msgSender(), fee);
 
         return (mintAmt, fee);
     }
@@ -138,9 +143,9 @@ contract ACash is ERC20, Initializable, Ownable {
         trancheOut.safeTransfer(_msgSender(), trancheOutAmt);
         syncTranche(trancheOut);
 
-        // reward is -fee
+        // reward is -ve fee
         int256 reward = feeStrategy.computeRolloverReward(trancheIn, trancheOut, trancheInAmt, trancheOutAmt);
-        _pullFee(_msgSender(), reward);
+        _pullFee(feeStrategy.feeToken(), _msgSender(), -reward);
 
         return trancheOutAmt;
     }
@@ -214,26 +219,25 @@ contract ACash is ERC20, Initializable, Ownable {
             bond.maturityDate() < block.timestamp + maxMaturiySec);
     }
 
-    // TODO: pick either implementation
-    // currently using SPOT as the fee token
-    // if the fee is +ve, fee is minted to self
-    // if the fee is -ve, it's a reward back to the payer
-    function _pullFee(address payer, int256 fee) internal {
+    // if the fee is +ve, fee is minted or transfered to self from payer
+    // if the fee is -ve, it's transfered to the payer
+    function _pullFee(
+        address feeToken,
+        address payer,
+        int256 fee
+    ) internal {
         if (fee >= 0) {
-            _mint(address(this), uint256(fee));
+            if (feeToken == address(this)) {
+                _mint(feeToken, uint256(fee));
+            } else {
+                IERC20(feeToken).safeTransferFrom(payer, address(this), uint256(fee));
+            }
         } else {
+            // NOTE: we choose not to mint spot and alter the exchange rate in the case
+            // the fee token is spot
             // This is very scary!
-            // TODO consider minting spot if the reserve runs out?
-            IERC20(address(this)).safeTransfer(payer, uint256(-fee));
+            IERC20(feeToken).safeTransfer(payer, uint256(-fee));
         }
-        // transfer in fee in non native fee token token
-        // IERC20 feeToken = feeStrategy.feeToken();
-        // if (fee >= 0) {
-        //     feeToken.safeTransferFrom(payer, address(this), uint256(fee));
-        // } else {
-        //     // This is very scary!
-        //     feeToken.safeTransfer(payer, uint256(-fee));
-        // }
     }
 
     /*

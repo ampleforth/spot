@@ -1,6 +1,8 @@
 import { ITranche } from "./button-wood/ITranche.sol";
 
 interface IFeeStrategy {
+    function feeToken() external view returns (address);
+
     // amount of spot being mint
     function computeMintFee(uint256 amount) external view returns (int256);
 
