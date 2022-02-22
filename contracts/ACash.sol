@@ -41,10 +41,10 @@ contract ACash is ERC20, Initializable, Ownable {
     AddressQueue.Queue public bondQueue;
 
     // the minimum maturity time in seconds for a bond below which it gets removed from the bond queue
-    uint256 private _minQueueMaturiySec;
+    uint256 public minMaturiySec;
 
     // the maximum maturity time in seconds for a bond above which it can't get added into the bond queue
-    uint256 private _maxQueueMaturiySec;
+    uint256 public maxMaturiySec;
 
     //---- ERC-20 parameters
     uint8 private immutable _decimals;
@@ -98,7 +98,7 @@ contract ACash is ERC20, Initializable, Ownable {
         uint256 mintAmt = 0;
         for (uint256 i = 0; i < trancheCount; i++) {
             uint256 trancheYield = _trancheYields[configHash][i];
-            if(trancheYield == 0){
+            if (trancheYield == 0) {
                 continue;
             }
 
@@ -121,8 +121,7 @@ contract ACash is ERC20, Initializable, Ownable {
     function advanceMintBond(IBondController newBond) public {
         require(address(newBond) != bondQueue.head(), "New bond already in queue");
         require(bondIssuer.isInstance(newBond), "Expect new bond to be minted by the minter");
-        require(newBond.maturityDate() > minQueueMaturityDate(), "New bond matures too soon");
-        require(newBond.maturityDate() <= maxQueueMaturityDate(), "New bond matures too late");
+        require(isActiveBond(newBond), "New bond not active");
 
         bondQueue.enqueue(address(newBond));
     }
@@ -133,7 +132,7 @@ contract ACash is ERC20, Initializable, Ownable {
         while (true) {
             IBondController latestBond = IBondController(bondQueue.tail());
 
-            if (address(latestBond) == address(0) || latestBond.maturityDate() > minQueueMaturityDate()) {
+            if (address(latestBond) == address(0) || isActiveBond(latestBond)) {
                 break;
             }
 
@@ -187,21 +186,20 @@ contract ACash is ERC20, Initializable, Ownable {
         feeStrategy = feeStrategy_;
     }
 
-    function setTolarableBondMaturiy(uint256 minQueueMaturiySec, uint256 maxQueueMaturiySec) external onlyOwner {
-        _minQueueMaturiySec = minQueueMaturiySec;
-        _maxQueueMaturiySec = maxQueueMaturiySec;
+    function setTolarableBondMaturiy(uint256 minMaturiySec_, uint256 maxMaturiySec_) external onlyOwner {
+        minMaturiySec = minMaturiySec_;
+        maxMaturiySec = maxMaturiySec_;
     }
 
     function setTrancheYields(bytes32 configHash, uint256[] memory yields) external onlyOwner {
         _trancheYields[configHash] = yields;
     }
 
-    function minQueueMaturityDate() public view returns (uint256) {
-        return block.timestamp + _minQueueMaturiySec;
-    }
-
-    function maxQueueMaturityDate() public view returns (uint256) {
-        return block.timestamp + _maxQueueMaturiySec;
+    // bond's maturity is within bounds
+    // only active bonds can be added to the queue. If a bond is inactive it gets kicked from the queue ..
+    function isActiveBond(IBondController bond) public view returns (bool) {
+        return (bond.maturityDate() > block.timestamp + minMaturiySec &&
+            bond.maturityDate() <= block.timestamp + maxMaturiySec);
     }
 
     /*
