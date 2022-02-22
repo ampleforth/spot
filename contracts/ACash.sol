@@ -228,7 +228,7 @@ contract ACash is ERC20, Initializable, Ownable {
     ) internal {
         if (fee >= 0) {
             if (feeToken == address(this)) {
-                _mint(feeToken, uint256(fee));
+                _mint(address(this), uint256(fee));
             } else {
                 IERC20(feeToken).safeTransferFrom(payer, address(this), uint256(fee));
             }
