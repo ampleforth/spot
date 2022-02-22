@@ -133,8 +133,8 @@ contract ACash is ERC20, Initializable, Ownable {
         ITranche trancheOut,
         uint256 trancheInAmt
     ) external returns (uint256) {
-        require(bondQueue.contains(trancheIn.bondController()), "New tranche should of bonds in bond queue");
-        require(!bondQueue.contains(trancheOut.bondController()), "Old tranche should NOT of bonds in bond queue");
+        require(bondQueue.contains(trancheIn.bondController()), "New tranche should be of bonds in bond queue");
+        require(!bondQueue.contains(trancheOut.bondController()), "Old tranche should NOT be of bonds in bond queue");
 
         trancheIn.safeTransferFrom(_msgSender(), address(this), trancheInAmt);
         syncTranche(trancheIn);
