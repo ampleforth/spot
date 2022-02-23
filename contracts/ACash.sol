@@ -129,6 +129,11 @@ contract ACash is ERC20, Initializable, Ownable {
         return (mintAmt, fee);
     }
 
+    // incase an altrusic party to increase the collaterlization ratio
+    function burn(uint256 spotAmt) external {
+        _burn(_msgSender(), spotAmt);
+    }
+
     function rollover(
         ITranche trancheIn,
         ITranche trancheOut,
