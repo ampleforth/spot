@@ -118,16 +118,18 @@ contract ACash is ERC20, Initializable, Ownable {
                 (10**PRICE_DECIMALS);
         }
 
-        // fee in native token, withold mint partly as fee
         int256 fee = feeStrategy.computeMintFee(mintAmt);
         address feeToken = feeStrategy.feeToken();
-        if (feeToken == address(this)) {
-            mintAmt = (fee >= 0) ? mintAmt - uint256(fee) : mintAmt;
+
+        // fee in native token and positive, withold mint partly as fee
+        if (feeToken == address(this) && fee >= 0) {
+            mintAmt -= uint256(fee);
+            _mint(address(this), uint256(fee));
+        } else {
+            _pullFee(feeToken, _msgSender(), fee);
         }
 
         _mint(_msgSender(), mintAmt);
-        _pullFee(feeToken, _msgSender(), fee);
-
         return (mintAmt, fee);
     }
 
@@ -230,23 +232,16 @@ contract ACash is ERC20, Initializable, Ownable {
             bond.maturityDate() < block.timestamp + maxMaturiySec);
     }
 
-    // if the fee is +ve, fee is minted or transfered to self from payer
-    // if the fee is -ve, it's transfered to the payer
+    // if the fee is +ve, fee is transfered to self from payer
+    // if the fee is -ve, it's transfered to the payer from self
     function _pullFee(
         address feeToken,
         address payer,
         int256 fee
     ) internal {
         if (fee >= 0) {
-            if (feeToken == address(this)) {
-                _mint(address(this), uint256(fee));
-            } else {
-                IERC20(feeToken).safeTransferFrom(payer, address(this), uint256(fee));
-            }
+            IERC20(feeToken).safeTransferFrom(payer, address(this), uint256(fee));
         } else {
-            // NOTE: we choose not to mint spot and alter the exchange rate in the case
-            // the fee token is spot
-            // This is very scary!
             IERC20(feeToken).safeTransfer(payer, uint256(-fee));
         }
     }
