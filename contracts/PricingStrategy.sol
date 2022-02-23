@@ -7,7 +7,7 @@ import { IPricingStrategy } from "./interfaces/IPricingStrategy.sol";
 import { IBondIssuer } from "./interfaces/IBondIssuer.sol";
 
 contract PricingStrategy is Ownable, IPricingStrategy {
-    uint256 private constant _decimals = 18;
+    uint8 private constant _decimals = 18;
 
     struct TrancheConfig {
         IBondController bond;
@@ -23,7 +23,7 @@ contract PricingStrategy is Ownable, IPricingStrategy {
         return (10**_decimals);
     }
 
-    function decimals() external view override returns (uint256) {
+    function decimals() external view override returns (uint8) {
         return _decimals;
     }
 

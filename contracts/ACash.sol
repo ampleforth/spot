@@ -60,8 +60,8 @@ contract ACash is ERC20, Initializable, Ownable {
     mapping(ITranche => bool) public tranches;
 
     // constants
-    uint256 public constant YIELD_DECIMALS = 6;
-    uint256 public constant PRICE_DECIMALS = 18;
+    uint8 public constant YIELD_DECIMALS = 6;
+    uint8 public constant PRICE_DECIMALS = 18;
 
     constructor(
         string memory name,
