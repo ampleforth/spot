@@ -61,6 +61,7 @@ contract ACash is ERC20, Initializable, Ownable {
 
     // constants
     uint256 public constant YIELD_DECIMALS = 6;
+    uint256 public constant PRICE_DECIMALS = 18;
 
     constructor(
         string memory name,
@@ -112,8 +113,9 @@ contract ACash is ERC20, Initializable, Ownable {
             t.safeTransferFrom(_msgSender(), address(this), trancheAmts[i]);
             syncTranche(t);
 
-            mintAmt += pricingStrategy.getBuyPrice(t,
-                trancheAmts[i] * trancheYield / (10**YIELD_DECIMALS));
+            mintAmt +=
+                (((trancheAmts[i] * trancheYield) / (10**YIELD_DECIMALS)) * pricingStrategy.computeTranchePrice(t)) /
+                (10**PRICE_DECIMALS);
         }
 
         // fee in native token, withold mint partly as fee
@@ -142,10 +144,12 @@ contract ACash is ERC20, Initializable, Ownable {
         require(bondQueue.contains(trancheIn.bondController()), "New tranche should be of bonds in bond queue");
         require(!bondQueue.contains(trancheOut.bondController()), "Old tranche should NOT be of bonds in bond queue");
 
+        uint256 trancheOutAmt = (pricingStrategy.computeTranchePrice(trancheIn) * trancheInAmt) /
+            pricingStrategy.computeTranchePrice(trancheOut);
+
         trancheIn.safeTransferFrom(_msgSender(), address(this), trancheInAmt);
         syncTranche(trancheIn);
 
-        uint256 trancheOutAmt = pricingStrategy.getRolloverPrice(trancheIn, trancheOut, trancheInAmt);
         trancheOut.safeTransfer(_msgSender(), trancheOutAmt);
         syncTranche(trancheOut);
 
@@ -186,7 +190,7 @@ contract ACash is ERC20, Initializable, Ownable {
     function syncTranche(ITranche t) public {
         // log events
         uint256 trancheBalance = t.balanceOf(address(this));
-        if(trancheBalance > 0 && !tranches[t]){
+        if (trancheBalance > 0 && !tranches[t]) {
             tranches[t] = true;
         } else if (trancheBalance == 0) {
             delete tranches[t];
@@ -201,6 +205,7 @@ contract ACash is ERC20, Initializable, Ownable {
 
     function setPricingStrategy(IPricingStrategy pricingStrategy_) external onlyOwner {
         require(address(pricingStrategy_) != address(0), "Expected new pricing strategy to be valid");
+        require(pricingStrategy_.decimals() == PRICE_DECIMALS, "Expected new pricing stragey to use same decimals");
         pricingStrategy = pricingStrategy_;
     }
 
