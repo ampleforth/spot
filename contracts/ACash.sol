@@ -40,6 +40,7 @@ contract ACash is ERC20, Initializable, Ownable {
     // tranche yields is specific to the parent bond's class identified by its config hash
     // a bond's class is the combination of the {collateralToken, trancheRatios}
     // specified as a fixed point number with YIELD_DECIMALS
+    // yield is applied on the tranche amounts
     mapping(bytes32 => uint256[]) private _trancheYields;
 
     // bondQueue is a queue of Bonds, which have an associated number of seniority-based tranches.
@@ -111,8 +112,8 @@ contract ACash is ERC20, Initializable, Ownable {
             t.safeTransferFrom(_msgSender(), address(this), trancheAmts[i]);
             syncTranche(t);
 
-            // get bond price, ie amount of SPOT for trancheAmts[i] amount of t tranches
-            mintAmt += (pricingStrategy.getBuyPrice(t, trancheAmts[i]) * trancheYield) / (10**YIELD_DECIMALS);
+            mintAmt += pricingStrategy.getBuyPrice(t,
+                trancheAmts[i] * trancheYield / (10**YIELD_DECIMALS));
         }
 
         // fee in native token, withold mint partly as fee
