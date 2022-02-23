@@ -54,7 +54,7 @@ contract ACash is ERC20, Initializable, Ownable {
     //---- ERC-20 parameters
     uint8 private immutable _decimals;
 
-    // list of all tranches currently being held by the system
+    // record of all tranches currently being held by the system
     // used by off-chain services for indexing
     mapping(ITranche => bool) public tranches;
 
