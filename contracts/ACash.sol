@@ -180,9 +180,9 @@ contract ACash is ERC20, Initializable, Ownable {
     function syncTranche(ITranche t) public {
         // log events
         uint256 trancheBalance = t.balanceOf(address(this));
-        if (trancheBalance > 0) {
+        if(trancheBalance > 0 && !tranches[t]){
             tranches[t] = true;
-        } else {
+        } else if (trancheBalance == 0) {
             delete tranches[t];
         }
         emit TrancheSynced(t, trancheBalance);
