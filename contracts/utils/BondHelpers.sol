@@ -13,7 +13,7 @@ struct BondInfo {
 
 library BondHelpers {
     // NOTE: this is very gas intensive
-    // Optimize calls
+    // Optimize calls?
     function getInfo(IBondController b) internal returns (BondInfo memory) {
         BondInfo memory bInfo;
         bInfo.collateralToken = b.collateralToken();
@@ -25,5 +25,16 @@ library BondHelpers {
         }
         bInfo.configHash = keccak256(abi.encode(bInfo.collateralToken, bInfo.trancheRatios));
         return bInfo;
+    }
+}
+
+library BondInfoHelpers {
+    function getTrancheIndex(BondInfo memory bInfo, ITranche t) internal returns (uint256) {
+        for (uint256 i = 0; i < bInfo.trancheCount; i++) {
+            if (bInfo.tranches[i] == t) {
+                return i;
+            }
+        }
+        require(false, "BondInfoHelpers: Tranche NOT part of bond");
     }
 }

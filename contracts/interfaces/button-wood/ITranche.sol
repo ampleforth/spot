@@ -5,6 +5,4 @@ interface ITranche is IERC20 {
 
     // TODO: wait till these have been merged
     function bond() external view returns (address);
-
-    function seniority() external view returns (uint256);
 }

@@ -7,7 +7,7 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { AddressQueue } from "./utils/AddressQueue.sol";
-import { BondInfo, BondHelpers } from "./utils/BondHelpers.sol";
+import { BondInfo, BondInfoHelpers, BondHelpers } from "./utils/BondHelpers.sol";
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ITranche } from "./interfaces/button-wood/ITranche.sol";
@@ -23,6 +23,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
     using SafeERC20 for IERC20;
     using SafeERC20 for ITranche;
     using BondHelpers for IBondController;
+    using BondInfoHelpers for BondInfo;
 
     // events
     event TrancheSynced(ITranche t, uint256 balance);
@@ -153,8 +154,8 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
         BondInfo memory bondInInfo = bondIn.getInfo();
         BondInfo memory bondOutInfo = bondOut.getInfo();
 
-        uint256 trancheInYield = _trancheYields[bondInInfo.configHash][trancheIn.seniority()];
-        uint256 trancheOutYield = _trancheYields[bondOutInfo.configHash][trancheOut.seniority()];
+        uint256 trancheInYield = _trancheYields[bondInInfo.configHash][bondInInfo.getTrancheIndex(trancheIn)];
+        uint256 trancheOutYield = _trancheYields[bondOutInfo.configHash][bondOutInfo.getTrancheIndex(trancheOut)];
         uint256 trancheOutAmt = (((trancheInAmt * trancheInYield) / trancheOutYield) *
             pricingStrategy.computeTranchePrice(trancheIn)) / pricingStrategy.computeTranchePrice(trancheOut);
 
