@@ -7,7 +7,7 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { AddressQueue } from "./utils/AddressQueue.sol";
-import { TrancheInfo, TrancheHelpers } from "./utils/TrancheHelpers.sol";
+import { BondInfo, BondHelpers } from "./utils/BondHelpers.sol";
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ITranche } from "./interfaces/button-wood/ITranche.sol";
@@ -22,7 +22,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
     using AddressQueue for AddressQueue.Queue;
     using SafeERC20 for IERC20;
     using SafeERC20 for ITranche;
-    using TrancheHelpers for ITranche;
+    using BondHelpers for IBondController;
 
     // events
     event TrancheSynced(ITranche t, uint256 balance);
@@ -99,19 +99,18 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
 
         IBondController mintingBond = IBondController(bondQueue.tail());
         require(address(mintingBond) != address(0), "No active minting bond");
-        bytes32 configHash = bondIssuer.configHash(mintingBond);
 
-        uint256 trancheCount = mintingBond.trancheCount();
-        require(trancheAmts.length == trancheCount, "Must specify amounts for every bond tranche");
+        BondInfo memory mintingBondInfo = mintingBond.getInfo();
+        require(trancheAmts.length == mintingBondInfo.trancheCount, "Must specify amounts for every bond tranche");
 
         uint256 mintAmt = 0;
-        for (uint256 i = 0; i < trancheCount; i++) {
-            uint256 trancheYield = _trancheYields[configHash][i];
+        for (uint256 i = 0; i < mintingBondInfo.trancheCount; i++) {
+            uint256 trancheYield = _trancheYields[mintingBondInfo.configHash][i];
             if (trancheYield == 0) {
                 continue;
             }
 
-            (ITranche t, ) = mintingBond.tranches(i);
+            ITranche t = mintingBondInfo.tranches[i];
             t.safeTransferFrom(_msgSender(), address(this), trancheAmts[i]);
             syncTranche(t);
 
@@ -145,16 +144,17 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
         ITranche trancheOut,
         uint256 trancheInAmt
     ) external returns (uint256) {
-        TrancheInfo memory trancheInInfo = trancheIn.getInfo();
-        TrancheInfo memory trancheOutInfo = trancheOut.getInfo();
+        IBondController bondIn = IBondController(trancheIn.bond());
+        IBondController bondOut = IBondController(trancheOut.bond());
 
-        require(address(trancheInInfo.bond) == bondQueue.tail(), "Tranche in should be of minting bond");
-        require(!bondQueue.contains(address(trancheOutInfo.bond)), "Tranche out should NOT be of bonds in bond queue");
+        require(address(bondIn) == bondQueue.tail(), "Tranche in should be of minting bond");
+        require(!bondQueue.contains(address(bondOut)), "Tranche out should NOT be of bonds in bond queue");
 
-        uint256 trancheInYield = _trancheYields[bondIssuer.configHash(trancheInInfo.bond)][trancheInInfo.seniorityIDX];
-        uint256 trancheOutYield = _trancheYields[bondIssuer.configHash(trancheOutInfo.bond)][
-            trancheOutInfo.seniorityIDX
-        ];
+        BondInfo memory bondInInfo = bondIn.getInfo();
+        BondInfo memory bondOutInfo = bondOut.getInfo();
+
+        uint256 trancheInYield = _trancheYields[bondInInfo.configHash][trancheIn.seniority()];
+        uint256 trancheOutYield = _trancheYields[bondOutInfo.configHash][trancheOut.seniority()];
         uint256 trancheOutAmt = (((trancheInAmt * trancheInYield) / trancheOutYield) *
             pricingStrategy.computeTranchePrice(trancheIn)) / pricingStrategy.computeTranchePrice(trancheOut);
 

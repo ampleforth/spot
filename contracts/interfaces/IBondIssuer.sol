@@ -11,6 +11,4 @@ interface IBondIssuer {
     function issue() external;
 
     function isInstance(IBondController bond) external view returns (bool);
-
-    function configHash(IBondController bond) external view returns (bytes32);
 }

@@ -10,8 +10,6 @@ contract PricingStrategy is Ownable, IPricingStrategy {
     // Tranche pricing function goes here:
     // ie number of tranches of type t for 1 collateral token
     function computeTranchePrice(ITranche t) public view override returns (uint256) {
-        // TrancheConfig c = getTrancheConfig(t);
-        // based on => c.bond.collateralToken(), c.bond.cdr(), c.bond.maturityDate(), c.seniorityIDX
         return (10**_decimals);
     }
 
