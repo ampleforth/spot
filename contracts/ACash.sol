@@ -7,6 +7,7 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { AddressQueue } from "./utils/AddressQueue.sol";
+import { TrancheInfo, TrancheHelpers } from "./utils/TrancheHelpers.sol";
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ITranche } from "./interfaces/button-wood/ITranche.sol";
@@ -17,10 +18,11 @@ import { IPricingStrategy } from "./interfaces/IPricingStrategy.sol";
 
 // TODO:
 // 1) log events
-contract ACash is ERC20, Initializable, Ownable {
+contract PerpetualTranche is ERC20, Initializable, Ownable {
     using AddressQueue for AddressQueue.Queue;
     using SafeERC20 for IERC20;
     using SafeERC20 for ITranche;
+    using TrancheHelpers for ITranche;
 
     // events
     event TrancheSynced(ITranche t, uint256 balance);
@@ -133,9 +135,9 @@ contract ACash is ERC20, Initializable, Ownable {
         return (mintAmt, fee);
     }
 
-    // incase an altrusic party to increase the collaterlization ratio
-    function burn(uint256 spotAmt) external {
-        _burn(_msgSender(), spotAmt);
+    // in case an altruistic party wants to increase the collateralization ratio
+    function burn(uint256 amount) external {
+        _burn(_msgSender(), amount);
     }
 
     function rollover(
@@ -143,11 +145,18 @@ contract ACash is ERC20, Initializable, Ownable {
         ITranche trancheOut,
         uint256 trancheInAmt
     ) external returns (uint256) {
-        require(bondQueue.contains(trancheIn.bondController()), "New tranche should be of bonds in bond queue");
-        require(!bondQueue.contains(trancheOut.bondController()), "Old tranche should NOT be of bonds in bond queue");
+        TrancheInfo memory trancheInInfo = trancheIn.getInfo();
+        TrancheInfo memory trancheOutInfo = trancheOut.getInfo();
 
-        uint256 trancheOutAmt = (pricingStrategy.computeTranchePrice(trancheIn) * trancheInAmt) /
-            pricingStrategy.computeTranchePrice(trancheOut);
+        require(address(trancheInInfo.bond) == bondQueue.tail(), "Tranche in should be of minting bond");
+        require(!bondQueue.contains(address(trancheOutInfo.bond)), "Tranche out should NOT be of bonds in bond queue");
+
+        uint256 trancheInYield = _trancheYields[bondIssuer.configHash(trancheInInfo.bond)][trancheInInfo.seniorityIDX];
+        uint256 trancheOutYield = _trancheYields[bondIssuer.configHash(trancheOutInfo.bond)][
+            trancheOutInfo.seniorityIDX
+        ];
+        uint256 trancheOutAmt = (((trancheInAmt * trancheInYield) / trancheOutYield) *
+            pricingStrategy.computeTranchePrice(trancheIn)) / pricingStrategy.computeTranchePrice(trancheOut);
 
         trancheIn.safeTransferFrom(_msgSender(), address(this), trancheInAmt);
         syncTranche(trancheIn);
@@ -187,7 +196,7 @@ contract ACash is ERC20, Initializable, Ownable {
     }
 
     // can be externally called to register tranches transferred into the system out of turn
-    // internally called when tranche balances held by aCASH change
+    // internally called when tranche balances held by this contract change
     // used by off-chain indexers to query tranches currently held by the system
     function syncTranche(ITranche t) public {
         // log events
