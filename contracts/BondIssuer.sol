@@ -36,7 +36,7 @@ contract BondIssuer is IBondIssuer {
         bondDuration = bondDuration_; // 4 weeks
 
         config = config_;
-        _configHash = keccak256(abi.encode(config_.collateralToken, config_.trancheRatios));
+        _configHash = keccak256(abi.encode(config_.collateralToken, config_.trancheRatios, bondDuration_));
 
         lastIssueWindowTimestamp = 0;
     }
@@ -47,6 +47,7 @@ contract BondIssuer is IBondIssuer {
     }
 
     // returns the config hash of a given bond if issued by this issuer
+    // todo compute this from the bond
     function configHash(IBondController bond) external view override returns (bytes32) {
         return issuedBonds[bond] ? _configHash : bytes32(0);
     }
