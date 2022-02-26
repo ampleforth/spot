@@ -1,8 +1,9 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import { IBondFactory } from "./interfaces/button-wood/IBondFactory.sol";
-import { IBondIssuer } from "./interfaces/IBondIssuer.sol";
-import { IBondController } from "./interfaces/button-wood/IBondController.sol";
+import { IBondFactory } from "./_interfaces/button-wood/IBondFactory.sol";
+import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
+import { IBondController } from "./_interfaces/button-wood/IBondController.sol";
 
 // A issuer periodically issues a specified class of bonds or config
 // A config is uniquely identified by {collateralToken, trancheRatios}
@@ -47,7 +48,7 @@ contract BondIssuer is IBondIssuer {
     function issue() external override {
         require(
             lastIssueWindowTimestamp + minIssueTimeInterval < block.timestamp,
-            "BondIssuer: Not enough time has passed since last issue timestamp"
+            "BondIssuer: Expected enough time to pass since last issue"
         );
 
         lastIssueWindowTimestamp = block.timestamp - (block.timestamp % minIssueTimeInterval);

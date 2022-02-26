@@ -1,7 +1,8 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import { IBondController } from "../interfaces/button-wood/IBondController.sol";
-import { ITranche } from "../interfaces/button-wood/ITranche.sol";
+import { IBondController } from "../_interfaces/button-wood/IBondController.sol";
+import { ITranche } from "../_interfaces/button-wood/ITranche.sol";
 
 struct BondInfo {
     address collateralToken;
@@ -35,6 +36,6 @@ library BondInfoHelpers {
                 return i;
             }
         }
-        require(false, "BondInfoHelpers: Tranche NOT part of bond");
+        require(false, "BondInfoHelpers: Expected tranche to be part of bond");
     }
 }

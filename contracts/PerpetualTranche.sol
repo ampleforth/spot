@@ -1,4 +1,4 @@
-//SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
@@ -6,15 +6,15 @@ import { Initializable } from "@openzeppelin/contracts/proxy/utils/Initializable
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { AddressQueue } from "./utils/AddressQueue.sol";
-import { BondInfo, BondInfoHelpers, BondHelpers } from "./utils/BondHelpers.sol";
+import { AddressQueue } from "./_utils/AddressQueue.sol";
+import { BondInfo, BondInfoHelpers, BondHelpers } from "./_utils/BondHelpers.sol";
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { ITranche } from "./interfaces/button-wood/ITranche.sol";
-import { IBondController } from "./interfaces/button-wood/IBondController.sol";
-import { IBondIssuer } from "./interfaces/IBondIssuer.sol";
-import { IFeeStrategy } from "./interfaces/IFeeStrategy.sol";
-import { IPricingStrategy } from "./interfaces/IPricingStrategy.sol";
+import { ITranche } from "./_interfaces/button-wood/ITranche.sol";
+import { IBondController } from "./_interfaces/button-wood/IBondController.sol";
+import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
+import { IFeeStrategy } from "./_interfaces/IFeeStrategy.sol";
+import { IPricingStrategy } from "./_interfaces/IPricingStrategy.sol";
 
 // TODO:
 // 1) log events
@@ -120,9 +120,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
         trancheIn.safeTransferFrom(_msgSender(), address(this), trancheInAmt);
         syncTranche(trancheIn);
 
-        m.amount =
-            (((trancheInAmt * trancheYield) / (10**YIELD_DECIMALS)) * pricingStrategy.computeTranchePrice(trancheIn)) /
-            (10**PRICE_DECIMALS);
+        m.amount = _fromUnderlying(trancheInAmt, trancheYield, pricingStrategy.computeTranchePrice(trancheIn));
         m.fee = feeStrategy.computeMintFee(m.amount);
         m.amount = _settleFee(m.amount, m.fee);
         _mint(_msgSender(), m.amount);
@@ -166,16 +164,14 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
                 }
 
                 uint256 tranchePrice = pricingStrategy.computeTranchePrice(t);
-                // Ie) the tranche amount required for burning the all the remainder
-                uint256 trancheAmtForRemainder = (((r.remainder * (10**YIELD_DECIMALS)) / trancheYield) *
-                    (10**PRICE_DECIMALS)) / tranchePrice;
+                uint256 trancheAmtForRemainder = _toUnderlying(r.remainder, trancheYield, tranchePrice);
 
                 // If tranche balance doesn't cover the tranche amount required
                 // burn the entire tranche balance and continue to the next tranche.
                 uint256 trancheAmtUsed = (trancheAmtForRemainder < trancheBalance) ? trancheAmtForRemainder: trancheBalance;
                 t.safeTransferFrom(address(this), _msgSender(), trancheAmtUsed);
                 syncTranche(t);
-                
+
                 r.tranches[r.burntTrancheCount] = t;
                 r.trancheAmts[r.burntTrancheCount] = trancheAmtUsed;
                 // NOTE: we assume that tranche to burnAmt back to tranche will be lossless
@@ -220,8 +216,17 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
 
         uint256 trancheInYield = _trancheYields[bondInInfo.configHash][bondInInfo.getTrancheIndex(trancheIn)];
         uint256 trancheOutYield = _trancheYields[bondOutInfo.configHash][bondOutInfo.getTrancheIndex(trancheOut)];
-        uint256 trancheOutAmt = (((trancheInAmt * trancheInYield) / trancheOutYield) *
-            pricingStrategy.computeTranchePrice(trancheIn)) / pricingStrategy.computeTranchePrice(trancheOut);
+
+        uint256 rolloverAmount = _fromUnderlying(
+            trancheInAmt,
+            trancheInYield,
+            pricingStrategy.computeTranchePrice(trancheIn)
+        );
+        uint256 trancheOutAmt = _toUnderlying(
+            rolloverAmount,
+            trancheOutYield,
+            pricingStrategy.computeTranchePrice(trancheOut)
+        );
 
         trancheIn.safeTransferFrom(_msgSender(), address(this), trancheInAmt);
         syncTranche(trancheIn);
@@ -229,9 +234,8 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
         trancheOut.safeTransfer(_msgSender(), trancheOutAmt);
         syncTranche(trancheOut);
 
-        // reward is -ve fee
-        int256 reward = feeStrategy.computeRolloverReward(trancheIn, trancheOut, trancheInAmt, trancheOutAmt);
-        _pullFee(feeStrategy.feeToken(), _msgSender(), -reward);
+        int256 reward = feeStrategy.computeRolloverReward(rolloverAmount);
+        _pullFee(feeStrategy.feeToken(), _msgSender(), -reward); // reward is -ve fee
 
         return trancheOutAmt;
     }
@@ -310,9 +314,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
     // if the fee is +ve, fee is transfered to self from payer
     // if the fee is -ve, it's transfered to the payer from self
     function _settleFee(uint256 amount, int256 fee) internal returns (uint256) {
-        address feeToken = feeStrategy.feeToken();
+        IERC20 feeToken = feeStrategy.feeToken();
         // fee in native token and positive, withold amount partly as fee
-        if (feeToken == address(this) && fee >= 0) {
+        if (address(feeToken) == address(this) && fee >= 0) {
             amount -= uint256(fee);
             _mint(address(this), uint256(fee));
         } else {
@@ -321,17 +325,31 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
         return amount;
     }
 
-
     function _pullFee(
-        address feeToken,
+        IERC20 feeToken,
         address payer,
         int256 fee
     ) internal {
         if (fee >= 0) {
-            IERC20(feeToken).safeTransferFrom(payer, address(this), uint256(fee));
+            feeToken.safeTransferFrom(payer, address(this), uint256(fee));
         } else {
-            // Dev note: This is a very dangerous operation
-            IERC20(feeToken).safeTransfer(payer, uint256(-fee));
+            feeToken.safeTransfer(payer, uint256(-fee));
         }
+    }
+
+    function _fromUnderlying(
+        uint256 trancheAmt,
+        uint256 yield,
+        uint256 price
+    ) private pure returns (uint256) {
+        return (((trancheAmt * yield) / (10**YIELD_DECIMALS)) * price) / (10**PRICE_DECIMALS);
+    }
+
+    function _toUnderlying(
+        uint256 amount,
+        uint256 yield,
+        uint256 price
+    ) private pure returns (uint256) {
+        return (((amount * (10**PRICE_DECIMALS)) / price) * (10**YIELD_DECIMALS)) / yield;
     }
 }
