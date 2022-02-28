@@ -252,6 +252,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
         if (fee >= 0) {
             IERC20(feeToken).safeTransferFrom(payer, address(this), uint256(fee));
         } else {
+            // Dev note: This is a very dangerous operation
             IERC20(feeToken).safeTransfer(payer, uint256(-fee));
         }
     }
