@@ -6,66 +6,89 @@ import { Initializable } from "@openzeppelin/contracts/proxy/utils/Initializable
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { AddressQueue } from "./_utils/AddressQueue.sol";
-import { BondInfo, BondInfoHelpers, BondHelpers } from "./_utils/BondHelpers.sol";
+import { AddressQueue, AddressQueueHelpers } from "./_utils/AddressQueueHelpers.sol";
+import { TrancheData, TrancheDataHelpers, BondHelpers } from "./_utils/BondHelpers.sol";
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ITranche } from "./_interfaces/button-wood/ITranche.sol";
 import { IBondController } from "./_interfaces/button-wood/IBondController.sol";
+
+import { MintData, BurnData, RolloverData, IPerpetualTranche } from "./_interfaces/IPerpetualTranche.sol";
 import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
 import { IFeeStrategy } from "./_interfaces/IFeeStrategy.sol";
 import { IPricingStrategy } from "./_interfaces/IPricingStrategy.sol";
 
-// TODO:
-// 1) log events
-contract PerpetualTranche is ERC20, Initializable, Ownable {
-    using AddressQueue for AddressQueue.Queue;
+/*
+ *  @title PerpetualTranche
+ *
+ *  @notice An opinionated implementation of a perpetual tranche ERC-20 token contract.
+ *          Perp tokens are backed by tranche tokens. Users can mint perp tokens by depositing tranches.
+ *          They can redeem tranches by burning their perp tokens.
+ *
+ *          The PerpetualTranche contract enforces tranche deposits/redemption through a FIFO bond queue.
+ *          The queue is ordered by the bond's maturity date, the tail of the queue has the newest bond
+ *          ie) the one that matures furthest out into the future.
+ *          Incentivized parties can "rollover" tranches which are approaching maturity for
+ *          tranches at tail of the bond queue.
+ *
+ */
+contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     using SafeERC20 for IERC20;
     using SafeERC20 for ITranche;
+    using AddressQueueHelpers for AddressQueue;
     using BondHelpers for IBondController;
-    using BondInfoHelpers for BondInfo;
+    using TrancheDataHelpers for TrancheData;
 
-    // events
-    event TrancheSynced(ITranche t, uint256 balance);
-
-    // parameters
-
-    // minter stores a preset bond config and frequency and mints new bonds when poked
-    IBondIssuer public bondIssuer;
-
-    // calculates fees
-    IFeeStrategy public feeStrategy;
-
-    // calculates bond price
-    IPricingStrategy public pricingStrategy;
-
-    // Yield applied on each tranche
-    // tranche yields is specific to the parent bond's class identified by its config hash
-    // a bond's class is the combination of the {collateralToken, trancheRatios}
-    // specified as a fixed point number with YIELD_DECIMALS
-    // yield is applied on the tranche amounts
-    mapping(bytes32 => uint256[]) private _trancheYields;
-
-    // bondQueue is a queue of Bonds, which have an associated number of seniority-based tranches.
-    AddressQueue.Queue public bondQueue;
-
-    // the minimum maturity time in seconds for a bond below which it gets removed from the bond queue
-    uint256 public minMaturiySec;
-
-    // the maximum maturity time in seconds for a bond above which it can't get added into the bond queue
-    uint256 public maxMaturiySec;
-
-    //---- ERC-20 parameters
-    uint8 private immutable _decimals;
-
-    // record of all tranches currently being held by the system
-    // used by off-chain services for indexing
-    mapping(ITranche => bool) public tranches;
-
-    // constants
+    //-------------------------------------------------------------------------
+    // Constants & Immutables
     uint8 public constant YIELD_DECIMALS = 6;
     uint8 public constant PRICE_DECIMALS = 18;
 
+    // @dev Number of ERC-20 decimal places to get the perp token amount for user representation.
+    uint8 private immutable _decimals;
+
+    //-------------------------------------------------------------------------
+    // Data
+
+    // @notice Issuer stores a pre-defined bond config and frequency, then issues new bonds when poked
+    // @dev Only tranches of bonds issued by the whitelisted issuer are accepted by the system.
+    IBondIssuer public bondIssuer;
+
+    // @notice External contract points to the fee token and computes mint, burn fees and rollover rewards.
+    IFeeStrategy public feeStrategy;
+
+    // @notice External contract that computes a given tranche's price.
+    // @dev The computed price is expected to be a fixed point unsigned integer with {PRICE_DECIMALS} decimals.
+    IPricingStrategy public pricingStrategy;
+
+    // @notice Yield factor applied on tranches transferred into or out of the system.
+    // @dev A given tranche's yield is specific to it's parent bond's class
+    //      ie) the unique combination of the bond's {collateralToken, trancheRatios}.
+    //      The yield is specified as a fixed point unsigned integer with {YIELD_DECIMALS} decimals.
+    mapping(bytes32 => uint256[]) private _trancheYields;
+
+    // @notice A FIFO queue of bonds, each of which has an associated number of seniority-based tranches.
+    // @dev The system only accepts tranches from bond at the tail of the queue to mint perpetual tokens.
+    //      The system burns perpetual tokens for tranches from bonds at the head of the queue.
+    AddressQueue public bondQueue;
+
+    // @notice A record of all tokens currently being held by the reserve.
+    // @dev Used by off-chain services for indexing tokens and their balances held by the reserve.
+    mapping(IERC20 => bool) public reserveAssets;
+
+    // @notice Bonds maturing less than this many seconds in the future are removed from the bond queue.
+    uint256 public minMaturiySec;
+
+    // @notice Bonds maturing more than this many seconds in the future can't get added into the bond queue.
+    uint256 public maxMaturiySec;
+
+    //--------------------------------------------------------------------------
+    // Construction & Initialization
+
+    // @notice Constructor to create the contract.
+    // @param name ERC-20 Name of the Perp token.
+    // @param symbol ERC-20 Symbol of the Perp token.
+    // @param decimals_ Number of ERC-20 decimal places.
     constructor(
         string memory name,
         string memory symbol,
@@ -74,6 +97,10 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
         _decimals = decimals_;
     }
 
+    // @notice Contract state initialization.
+    // @param bondIssuer_ Address of the bond issuer contract.
+    // @param pricingStrategy_ Address of the pricing strategy contract.
+    // @param feeStrategy_ Address of the fee strategy contract.
     function init(
         IBondIssuer bondIssuer_,
         IPricingStrategy pricingStrategy_,
@@ -90,76 +117,101 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
         bondQueue.init();
     }
 
-    function decimals() public view override returns (uint8) {
-        return _decimals;
+    //--------------------------------------------------------------------------
+    // ADMIN only methods
+
+    // @notice Update the reference to the bond issuer contract.
+    // @param bondIssuer_ New bond issuer address.
+    function updateBondIssuer(IBondIssuer bondIssuer_) external onlyOwner {
+        require(address(bondIssuer_) != address(0), "Expected new bond minter to be valid");
+        bondIssuer = bondIssuer_;
+        emit BondIssuerUpdated(bondIssuer_);
     }
 
-    struct MintData {
-        uint256 amount;
-        int256 fee;
+    // @notice Update the reference to the fee strategy contract.
+    // @param feeStrategy_ New strategy address.
+    function updateFeeStrategy(IFeeStrategy feeStrategy_) external onlyOwner {
+        require(address(feeStrategy_) != address(0), "Expected new fee strategy to be valid");
+        feeStrategy = feeStrategy_;
+        emit FeeStrategyUpdated(feeStrategy_);
     }
 
-    function deposit(ITranche trancheIn, uint256 trancheInAmt) external returns (MintData memory) {
-        // "System Error: bond minter not set."
-        // assert(bondIssuer != address(0));
+    // @notice Update the reference to the pricing strategy contract.
+    // @param pricingStrategy_ New strategy address.
+    function updatePricingStrategy(IPricingStrategy pricingStrategy_) external onlyOwner {
+        require(address(pricingStrategy_) != address(0), "Expected new pricing strategy to be valid");
+        require(pricingStrategy_.decimals() == PRICE_DECIMALS, "Expected new pricing stragey to use same decimals");
+        pricingStrategy = pricingStrategy_;
+        emit PricingStrategyUpdated(pricingStrategy_);
+    }
+
+    // @notice Update the maturity tolerance parameters.
+    // @param minMaturiySec_ New minimum maturity time.
+    // @param maxMaturiySec_ New maximum maturity time.
+    function updateTolerableBondMaturiy(uint256 minMaturiySec_, uint256 maxMaturiySec_) external onlyOwner {
+        minMaturiySec = minMaturiySec_;
+        maxMaturiySec = maxMaturiySec_;
+        emit TolerableBondMaturiyUpdated(minMaturiySec_, maxMaturiySec_);
+    }
+
+    // @notice Update the tranche yield parameter.
+    // @param hash The bond class.
+    // @param yields The yield for each tranche.
+    function updateTrancheYields(bytes32 hash, uint256[] memory yields) external onlyOwner {
+        _trancheYields[hash] = yields;
+        emit TrancheYieldsUpdated(hash, yields);
+    }
+
+    //--------------------------------------------------------------------------
+    // External methods
+
+    /// @inheritdoc IPerpetualTranche
+    function deposit(ITranche trancheIn, uint256 trancheInAmt) external override returns (MintData memory) {
+        // assert(bondIssuer != address(0)); "System Error: bond minter not set."
 
         MintData memory m;
 
-        IBondController mintingBond = IBondController(bondQueue.tail());
+        IBondController mintingBond = _mintingBond();
         require(address(mintingBond) != address(0), "No active minting bond");
 
-        BondInfo memory mintingBondInfo = mintingBond.getInfo();
+        TrancheData memory mintingBondTrancheData = mintingBond.getTrancheData();
 
-        // reverts if tranche NOT part of minting bond
-        uint256 trancheIDX = mintingBondInfo.getTrancheIndex(trancheIn);
-        uint256 trancheYield = _trancheYields[mintingBondInfo.configHash][trancheIDX];
+        // NOTE: `getTrancheIndex` reverts if trancheIn is NOT part of the minting bond
+        uint256 trancheIDX = mintingBondTrancheData.getTrancheIndex(trancheIn);
+        uint256 trancheYield = getTrancheYield(mintingBondTrancheData.getClass(), trancheIDX);
         if (trancheYield == 0) {
             return m;
         }
 
         trancheIn.safeTransferFrom(_msgSender(), address(this), trancheInAmt);
-        syncTranche(trancheIn);
+        syncReserve(trancheIn);
 
         m.amount = _fromUnderlying(trancheInAmt, trancheYield, pricingStrategy.computeTranchePrice(trancheIn));
         m.fee = feeStrategy.computeMintFee(m.amount);
-        m.amount = _settleFee(m.amount, m.fee);
+        m.amount = _settleFee(_msgSender(), m.amount, m.fee);
         _mint(_msgSender(), m.amount);
 
         return m;
     }
 
-    // in case an altruistic party wants to increase the collateralization ratio
-    function burn(uint256 amount) external {
-        _burn(_msgSender(), amount);
-    }
 
-    struct BurnData {
-        uint256 amount;
-        int256 fee;
-        uint256 remainder;
-        ITranche[] tranches;
-        uint256[] trancheAmts;
-        uint256 burntTrancheCount;
-    }
-
-    // TODO: Redeem from queue, or icebox when queue is empty
-    function redeem(uint256 requestedAmount) public returns (BurnData memory) {
+    /// @inheritdoc IPerpetualTranche
+    function redeem(uint256 requestedAmount) external override returns (BurnData memory) {
         BurnData memory r;
         r.remainder = requestedAmount;
 
-        IBondController latestBond = IBondController(bondQueue.head());
-        BondInfo memory latestBondInfo = latestBond.getInfo();
+        IBondController burningBond = _burningBond();
+        TrancheData memory burningBondTrancheData = burningBond.getTrancheData();
 
-        // Continue till the queue is empty or everything is burnt
-        while (address(latestBond) != address(0) && r.remainder > 0) {
-            for (uint256 i = 0; i < latestBondInfo.trancheCount && r.remainder > 0; i++) {
-                ITranche t = latestBondInfo.tranches[i];
-                uint256 trancheYield = _trancheYields[latestBondInfo.configHash][i];
+        while (address(burningBond) != address(0) && r.remainder > 0) {
+            for (uint256 i = 0; i < burningBondTrancheData.trancheCount; i++) {
+                ITranche t = burningBondTrancheData.tranches[i];
+                uint256 trancheYield = getTrancheYield(burningBondTrancheData.getClass(), i);
                 if (trancheYield == 0) {
                     continue;
                 }
 
-                uint256 trancheBalance = t.balanceOf(address(this));
+                uint256 trancheBalance = t.balanceOf(_reserve());
                 if (trancheBalance == 0) {
                     continue;
                 }
@@ -169,14 +221,16 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
 
                 // If tranche balance doesn't cover the tranche amount required
                 // burn the entire tranche balance and continue to the next tranche.
-                uint256 trancheAmtUsed = (trancheAmtForRemainder < trancheBalance) ? trancheAmtForRemainder: trancheBalance;
+                uint256 trancheAmtUsed = (trancheAmtForRemainder < trancheBalance)
+                    ? trancheAmtForRemainder
+                    : trancheBalance;
                 t.safeTransferFrom(address(this), _msgSender(), trancheAmtUsed);
-                syncTranche(t);
+                syncReserve(t);
 
                 r.tranches[r.burntTrancheCount] = t;
                 r.trancheAmts[r.burntTrancheCount] = trancheAmtUsed;
                 // NOTE: we assume that tranche to burnAmt back to tranche will be lossless
-                r.remainder = r.remainder * (trancheAmtForRemainder - trancheAmtUsed) / trancheAmtForRemainder;
+                r.remainder = (r.remainder * (trancheAmtForRemainder - trancheAmtUsed)) / trancheAmtForRemainder;
                 r.burntTrancheCount++;
             }
 
@@ -186,159 +240,184 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
 
             // we've burned through all the bond tranches and now can move to the next one
             bondQueue.dequeue();
-            latestBond = IBondController(bondQueue.head());
-            latestBondInfo = latestBond.getInfo();
+            burningBond = _burningBond();
+            burningBondTrancheData = burningBond.getTrancheData();
         }
 
         r.amount = requestedAmount - r.remainder;
         r.fee = feeStrategy.computeBurnFee(r.amount);
-        r.amount = _settleFee(r.amount, r.fee);
+        r.amount = _settleFee(_msgSender(), r.amount, r.fee);
         _burn(_msgSender(), r.amount);
 
         return r;
     }
 
+    /// @inheritdoc IPerpetualTranche
     function rollover(
         ITranche trancheIn,
         ITranche trancheOut,
         uint256 trancheInAmt
-    ) external returns (uint256) {
+    ) external override returns (RolloverData memory) {
+        RolloverData memory r;
+
         IBondController bondIn = IBondController(trancheIn.bond());
         IBondController bondOut = IBondController(trancheOut.bond());
 
-        require(address(bondIn) == bondQueue.tail(), "Tranche in should be of minting bond");
-        require(
-            !bondQueue.contains(address(bondOut)),
-            "Expected tranche out to NOT be of bond in the queue"
+        require(bondIn == _mintingBond(), "Tranche in should be of minting bond");
+        require(!bondQueue.contains(address(bondOut)), "Expected tranche out to NOT be of bond in the queue");
+
+        TrancheData memory bondInTrancheData = bondIn.getTrancheData();
+        TrancheData memory bondOutTrancheData = bondOut.getTrancheData();
+
+        uint256 trancheInYield = getTrancheYield(
+            bondInTrancheData.getClass(),
+            bondInTrancheData.getTrancheIndex(trancheIn)
+        );
+        uint256 trancheOutYield = getTrancheYield(
+            bondOutTrancheData.getClass(),
+            bondOutTrancheData.getTrancheIndex(trancheOut)
         );
 
-        BondInfo memory bondInInfo = bondIn.getInfo();
-        BondInfo memory bondOutInfo = bondOut.getInfo();
+        r.amount = _fromUnderlying(trancheInAmt, trancheInYield, pricingStrategy.computeTranchePrice(trancheIn));
+        r.trancheAmt = _toUnderlying(r.amount, trancheOutYield, pricingStrategy.computeTranchePrice(trancheOut));
 
-        uint256 trancheInYield = _trancheYields[bondInInfo.configHash][bondInInfo.getTrancheIndex(trancheIn)];
-        uint256 trancheOutYield = _trancheYields[bondOutInfo.configHash][bondOutInfo.getTrancheIndex(trancheOut)];
+        trancheIn.safeTransferFrom(_msgSender(), _reserve(), trancheInAmt);
+        syncReserve(trancheIn);
 
-        uint256 rolloverAmount = _fromUnderlying(
-            trancheInAmt,
-            trancheInYield,
-            pricingStrategy.computeTranchePrice(trancheIn)
-        );
-        uint256 trancheOutAmt = _toUnderlying(
-            rolloverAmount,
-            trancheOutYield,
-            pricingStrategy.computeTranchePrice(trancheOut)
-        );
+        trancheOut.safeTransfer(_msgSender(), r.trancheAmt);
+        syncReserve(trancheOut);
 
-        trancheIn.safeTransferFrom(_msgSender(), address(this), trancheInAmt);
-        syncTranche(trancheIn);
+        r.reward = feeStrategy.computeRolloverReward(r.amount);
+        _pullFee(feeToken(), _msgSender(), -r.reward); // reward is negative fee
 
-        trancheOut.safeTransfer(_msgSender(), trancheOutAmt);
-        syncTranche(trancheOut);
-
-        int256 reward = feeStrategy.computeRolloverReward(rolloverAmount);
-        _pullFee(feeStrategy.feeToken(), _msgSender(), -reward); // reward is -ve fee
-
-        return trancheOutAmt;
+        return r;
     }
 
-    // push new bond into the queue
-    function advanceMintBond(IBondController newBond) external {
-        require(address(newBond) != bondQueue.head(), "New bond already in queue");
+    /// @inheritdoc IPerpetualTranche
+    // @dev Used in case an altruistic party intends to increase the collaterlization ratio
+    function burn(uint256 amount) external override returns (bool) {
+        _burn(_msgSender(), amount);
+        return true;
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    function advanceMintBond(IBondController newBond) external override returns (bool) {
         require(bondIssuer.isInstance(newBond), "Expect new bond to be minted by the minter");
         require(isActiveBond(newBond), "New bond not active");
+        require(!bondQueue.contains(address(newBond)), "New bond already in queue");
 
+        // NOTE: The new bond is pushed to the tail of the queue.
         bondQueue.enqueue(address(newBond));
+        emit BondEnqueued(newBond);
+        // assert(newBond == _mintingBond());
+
+        return true;
     }
 
-    // continue dequeue till the tail of the queue
-    // has a bond which expires sufficiently out into the future
+    /// @inheritdoc IPerpetualTranche
     // TODO: run this lazily
-    function advanceBurnBond() external {
+    function advanceBurnBond() external override returns (bool) {
         while (true) {
-            IBondController latestBond = IBondController(bondQueue.tail());
-
-            if (address(latestBond) == address(0) || isActiveBond(latestBond)) {
+            IBondController oldestBond = _burningBond();
+            if (address(oldestBond) == address(0) || isActiveBond(oldestBond)) {
                 break;
             }
 
-            // pop from queue
+            // NOTE: The oldest bond is removed from the head of the queue.
             bondQueue.dequeue();
+            emit BondDequeued(oldestBond);
+            // assert(oldestBond != _burningBond());
         }
+
+        return true;
     }
 
-    // can be externally called to register tranches transferred into the system out of turn
-    // internally called when tranche balances held by this contract change
-    // used by off-chain indexers to query tranches currently held by the system
-    function syncTranche(ITranche t) public {
+    // @notice Emits the reserve balance of the given token so that it can be picked up by off-chain indexers.
+    // @dev Can be called externally to register tranches transferred into the reserve out of turn.
+    // @param t The address of the token held by the reserve.
+    function syncReserve(IERC20 t) public {
         // log events
-        uint256 trancheBalance = t.balanceOf(address(this));
-        if (trancheBalance > 0 && !tranches[t]) {
-            tranches[t] = true;
-        } else if (trancheBalance == 0) {
-            delete tranches[t];
+        uint256 balance = t.balanceOf(_reserve());
+        if (balance > 0 && !reserveAssets[t]) {
+            reserveAssets[t] = true;
+        } else if (balance == 0) {
+            delete reserveAssets[t];
         }
-        emit TrancheSynced(t, trancheBalance);
+        emit ReserveSynced(t, balance);
     }
 
-    function setBondIssuer(IBondIssuer bondIssuer_) external onlyOwner {
-        require(address(bondIssuer_) != address(0), "Expected new bond minter to be valid");
-        bondIssuer = bondIssuer_;
+    //--------------------------------------------------------------------------
+    // Public view methods
+
+    /**
+     * @dev Returns the number of decimals used to get its user representation.
+     *      For example, if `decimals` equals `2`, a balance of `505` tokens should
+     *      be displayed to a user as `5.05` (`505 / 10 ** 2`).
+     */
+    function decimals() public view override returns (uint8) {
+        return _decimals;
     }
 
-    function setPricingStrategy(IPricingStrategy pricingStrategy_) external onlyOwner {
-        require(address(pricingStrategy_) != address(0), "Expected new pricing strategy to be valid");
-        require(pricingStrategy_.decimals() == PRICE_DECIMALS, "Expected new pricing stragey to use same decimals");
-        pricingStrategy = pricingStrategy_;
+    /// @inheritdoc IPerpetualTranche
+    function feeToken() public view override returns (IERC20) {
+        return feeStrategy.feeToken();
     }
 
-    function setFeeStrategy(IFeeStrategy feeStrategy_) external onlyOwner {
-        require(address(feeStrategy_) != address(0), "Expected new fee strategy to be valid");
-        feeStrategy = feeStrategy_;
+    /// @inheritdoc IPerpetualTranche
+    function getTrancheYield(bytes32 hash, uint256 index) public view override returns (uint256) {
+        return _trancheYields[hash][index];
     }
 
-    function setTolerableBondMaturiy(uint256 minMaturiySec_, uint256 maxMaturiySec_) external onlyOwner {
-        minMaturiySec = minMaturiySec_;
-        maxMaturiySec = maxMaturiySec_;
-    }
+    //--------------------------------------------------------------------------
+    // Private/Internal helper methods
 
-    function setTrancheYields(bytes32 configHash, uint256[] memory yields) external onlyOwner {
-        _trancheYields[configHash] = yields;
-    }
-
-    // bond's maturity is within bounds
-    // only active bonds can be added to the queue. If a bond is inactive it gets kicked from the queue ..
-    function isActiveBond(IBondController bond) public view returns (bool) {
+    // @notice Checks if the bond's maturity is within acceptable bounds.
+    // @dev Only "active" bonds can be added to the queue.
+    //      If a bond becomes "inactive" it can get removed from the queue.
+    // @param The address of the bond to check.
+    // @return True if the bond is "active".
+    function isActiveBond(IBondController bond) private view returns (bool) {
         return (bond.maturityDate() >= block.timestamp + minMaturiySec &&
             bond.maturityDate() < block.timestamp + maxMaturiySec);
     }
 
-    // TODO: restructure this, it's weird that handle fee mints spot
-    // if the fee is +ve, fee is transfered to self from payer
-    // if the fee is -ve, it's transfered to the payer from self
-    function _settleFee(uint256 amount, int256 fee) internal returns (uint256) {
-        IERC20 feeToken = feeStrategy.feeToken();
-        // fee in native token and positive, withold amount partly as fee
-        if (address(feeToken) == address(this) && fee >= 0) {
+    // @dev Handles fee settlement (mints or pulls).
+    //      If the fee token is the native perp token and the fee is positive,
+    //          it withholds the fee from the perp amount.
+    //      If not, pulls fee from the payer.
+    function _settleFee(
+        address payer,
+        uint256 amount,
+        int256 fee
+    ) internal returns (uint256) {
+        IERC20 feeToken_ = feeStrategy.feeToken();
+        // fee in native token and positive, withhold amount partly as fee
+        if (address(feeToken_) == address(this) && fee >= 0) {
             amount -= uint256(fee);
-            _mint(address(this), uint256(fee));
+            _mint(_reserve(), uint256(fee));
         } else {
-            _pullFee(feeToken, _msgSender(), fee);
+            _pullFee(feeToken_, payer, fee);
         }
         return amount;
     }
 
+    // @dev If the fee is +ve, fee is transferred to the reserve from payer
+    //      else it's transferred to the payer from the reserve.
     function _pullFee(
-        IERC20 feeToken,
+        IERC20 feeToken_,
         address payer,
         int256 fee
     ) internal {
         if (fee >= 0) {
-            feeToken.safeTransferFrom(payer, address(this), uint256(fee));
+            feeToken_.safeTransferFrom(payer, _reserve(), uint256(fee));
         } else {
-            feeToken.safeTransfer(payer, uint256(-fee));
+            feeToken_.safeTransfer(payer, uint256(-fee));
         }
+        syncReserve(feeToken_);
     }
 
+    // @dev Calculates perp token amount from tranche amount.
+    //      perp = (tranche * yield) * price
     function _fromUnderlying(
         uint256 trancheAmt,
         uint256 yield,
@@ -347,11 +426,32 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
         return (((trancheAmt * yield) / (10**YIELD_DECIMALS)) * price) / (10**PRICE_DECIMALS);
     }
 
+    // @dev Calculates tranche token amount from perp amount.
+    //      tranche = perp / (price * yield)
     function _toUnderlying(
         uint256 amount,
         uint256 yield,
         uint256 price
     ) private pure returns (uint256) {
         return (((amount * (10**PRICE_DECIMALS)) / price) * (10**YIELD_DECIMALS)) / yield;
+    }
+
+    // @dev Address of the reserve.
+    function _reserve() internal view returns (address) {
+        return address(this);
+    }
+
+    // @dev Address of the mintingBond
+    //      Newest bond in the queue (ie the one with the furthest out maturity)
+    //      will be at the tail of the queue.
+    function _mintingBond() internal view returns (IBondController) {
+        return IBondController(bondQueue.tail());
+    }
+
+    // @dev Address of the burningBond
+    //      Oldest bond in the queue (ie the one with the most immediate maturity)
+    //      will be at the head of the queue.
+    function _burningBond() internal view returns (IBondController) {
+        return IBondController(bondQueue.head());
     }
 }
