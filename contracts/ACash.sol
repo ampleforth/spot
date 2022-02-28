@@ -128,7 +128,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
             mintAmt -= uint256(fee);
             _mint(address(this), uint256(fee));
         } else {
-            _pullFee(feeToken, _msgSender(), fee);
+            _settleFee(feeToken, _msgSender(), fee);
         }
 
         _mint(_msgSender(), mintAmt);
@@ -149,7 +149,10 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
         IBondController bondOut = IBondController(trancheOut.bond());
 
         require(address(bondIn) == bondQueue.tail(), "Tranche in should be of minting bond");
-        require(!bondQueue.contains(address(bondOut)), "Tranche out should NOT be of bonds in bond queue");
+        require(
+            address(bondOut) == bondQueue.head() || !bondQueue.contains(address(bondOut)),
+            "Expected tranche out to be of bond from the head of the queue or icebox"
+        );
 
         BondInfo memory bondInInfo = bondIn.getInfo();
         BondInfo memory bondOutInfo = bondOut.getInfo();
@@ -167,7 +170,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
 
         // reward is -ve fee
         int256 reward = feeStrategy.computeRolloverReward(trancheIn, trancheOut, trancheInAmt, trancheOutAmt);
-        _pullFee(feeStrategy.feeToken(), _msgSender(), -reward);
+        _settleFee(feeStrategy.feeToken(), _msgSender(), -reward);
 
         return trancheOutAmt;
     }
@@ -244,7 +247,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
 
     // if the fee is +ve, fee is transfered to self from payer
     // if the fee is -ve, it's transfered to the payer from self
-    function _pullFee(
+    function _settleFee(
         address feeToken,
         address payer,
         int256 fee
