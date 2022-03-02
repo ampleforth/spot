@@ -18,7 +18,6 @@ contract BondIssuer is IBondIssuer {
     uint256 public lastIssueWindowTimestamp;
 
     IBondIssuer.BondConfig public config;
-    bytes32 private _configHash;
 
     // mapping of issued bonds
     mapping(IBondController => bool) public issuedBonds;
@@ -36,7 +35,6 @@ contract BondIssuer is IBondIssuer {
         bondDuration = bondDuration_; // 4 weeks
 
         config = config_;
-        _configHash = keccak256(abi.encode(config_.collateralToken, config_.trancheRatios));
 
         lastIssueWindowTimestamp = 0;
     }
@@ -44,11 +42,6 @@ contract BondIssuer is IBondIssuer {
     // checks if bond has been issued using this issuer
     function isInstance(IBondController bond) external view override returns (bool) {
         return issuedBonds[bond];
-    }
-
-    // returns the config hash of a given bond if issued by this issuer
-    function configHash(IBondController bond) external view override returns (bytes32) {
-        return issuedBonds[bond] ? _configHash : bytes32(0);
     }
 
     // issues new bond

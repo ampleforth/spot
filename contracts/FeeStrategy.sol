@@ -2,13 +2,14 @@
 pragma solidity ^0.8.0;
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { IFeeStrategy } from "./interfaces/IFeeStrategy.sol";
+import { ITranche } from "./interfaces/button-wood/ITranche.sol";
 
 contract FeeStrategy is Ownable, IFeeStrategy {
     uint256 public constant PCT_DECIMALS = 6;
 
     // todo: add setters
     //--- fee strategy parameters
-    // IERC20 public override feeToken;
+    address public override feeToken;
 
     // Special note: If mint or burn fee is negative, the other must overcompensate in the positive direction.
     // Otherwise, user could extract from fee reserve by constant mint/burn transactions.
@@ -25,5 +26,15 @@ contract FeeStrategy is Ownable, IFeeStrategy {
 
     function computeBurnFee(uint256 burnAmt) external view override returns (int256) {
         return (int256(burnAmt) * burnFeePct) / int256(10**PCT_DECIMALS);
+    }
+
+    function computeRolloverReward(
+        ITranche trancheIn,
+        ITranche trancheOut,
+        uint256 trancheInAmt,
+        uint256 trancheOutAmt
+    ) external view override returns (int256) {
+        // TODO
+        return 0;
     }
 }

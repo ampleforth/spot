@@ -5,6 +5,8 @@ interface IBondController {
 
     function maturityDate() external view returns (uint256);
 
+    function creationDate() external view returns (uint256);
+
     function tranches(uint256 i) external view returns (ITranche token, uint256 ratio);
 
     function trancheCount() external view returns (uint256 count);
