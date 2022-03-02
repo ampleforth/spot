@@ -94,50 +94,112 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
         return _decimals;
     }
 
-    function mint(uint256[] calldata trancheAmts) external returns (uint256, int256) {
+    struct MintData {
+        uint256 amount;
+        int256 fee;
+    }
+
+    function deposit(ITranche trancheIn, uint256 trancheInAmt) external returns (MintData memory) {
         // "System Error: bond minter not set."
         // assert(bondIssuer != address(0));
+
+        MintData memory m;
 
         IBondController mintingBond = IBondController(bondQueue.tail());
         require(address(mintingBond) != address(0), "No active minting bond");
 
         BondInfo memory mintingBondInfo = mintingBond.getInfo();
-        require(trancheAmts.length == mintingBondInfo.trancheCount, "Must specify amounts for every bond tranche");
 
-        uint256 mintAmt = 0;
-        for (uint256 i = 0; i < mintingBondInfo.trancheCount; i++) {
-            uint256 trancheYield = _trancheYields[mintingBondInfo.configHash][i];
-            if (trancheYield == 0) {
-                continue;
-            }
-
-            ITranche t = mintingBondInfo.tranches[i];
-            t.safeTransferFrom(_msgSender(), address(this), trancheAmts[i]);
-            syncTranche(t);
-
-            mintAmt +=
-                (((trancheAmts[i] * trancheYield) / (10**YIELD_DECIMALS)) * pricingStrategy.computeTranchePrice(t)) /
-                (10**PRICE_DECIMALS);
+        // reverts if tranche NOT part of minting bond
+        uint256 trancheIDX = mintingBondInfo.getTrancheIndex(trancheIn);
+        uint256 trancheYield = _trancheYields[mintingBondInfo.configHash][trancheIDX];
+        if (trancheYield == 0) {
+            return m;
         }
 
-        int256 fee = feeStrategy.computeMintFee(mintAmt);
-        address feeToken = feeStrategy.feeToken();
+        trancheIn.safeTransferFrom(_msgSender(), address(this), trancheInAmt);
+        syncTranche(trancheIn);
 
-        // fee in native token and positive, withold mint partly as fee
-        if (feeToken == address(this) && fee >= 0) {
-            mintAmt -= uint256(fee);
-            _mint(address(this), uint256(fee));
-        } else {
-            _settleFee(feeToken, _msgSender(), fee);
-        }
+        m.amount =
+            (((trancheInAmt * trancheYield) / (10**YIELD_DECIMALS)) * pricingStrategy.computeTranchePrice(trancheIn)) /
+            (10**PRICE_DECIMALS);
+        m.fee = feeStrategy.computeMintFee(m.amount);
+        m.amount = _settleFee(m.amount, m.fee);
+        _mint(_msgSender(), m.amount);
 
-        _mint(_msgSender(), mintAmt);
-        return (mintAmt, fee);
+        return m;
     }
 
-    // in case an altruistic party wants to increase the collateralization ratio
+    // in case an altruistic party to increase the collaterlization ratio
     function burn(uint256 amount) external {
         _burn(_msgSender(), amount);
+    }
+
+    struct BurnData {
+        uint256 amount;
+        int256 fee;
+        uint256 remainder;
+        ITranche[] tranches;
+        uint256[] trancheAmts;
+        uint256 burntTrancheCount;
+    }
+
+    function redeem(uint256 requestedAmount) public returns (BurnData memory) {
+        BurnData memory r;
+        r.remainder = requestedAmount;
+
+        IBondController latestBond = IBondController(bondQueue.head());
+        BondInfo memory latestBondInfo = latestBond.getInfo();
+
+        // Continue till the queue is empty or everything is burnt
+        while (address(latestBond) != address(0) && r.remainder > 0) {
+            for (uint256 i = 0; i < latestBondInfo.trancheCount && r.remainder > 0; i++) {
+                ITranche t = latestBondInfo.tranches[i];
+                uint256 trancheYield = _trancheYields[latestBondInfo.configHash][i];
+                if (trancheYield == 0) {
+                    continue;
+                }
+
+                uint256 trancheBalance = t.balanceOf(address(this));
+                if (trancheBalance == 0) {
+                    continue;
+                }
+
+                uint256 tranchePrice = pricingStrategy.computeTranchePrice(t);
+                uint256 trancheAmtRequired = (((r.remainder * (10**YIELD_DECIMALS)) / trancheYield) *
+                    (10**PRICE_DECIMALS)) / tranchePrice;
+
+                // If tranche balance doesn't cover the tranche amount required
+                // burn the entire tranche balance and continue to the next tranche.
+                uint256 trancheAmtUsed = (trancheAmtRequired <= trancheBalance) ? trancheAmtRequired : trancheBalance;
+                t.safeTransferFrom(address(this), _msgSender(), trancheAmtUsed);
+                syncTranche(t);
+                r.tranches[r.burntTrancheCount] = t;
+                r.trancheAmts[r.burntTrancheCount] = trancheAmtUsed;
+                // NOTE we assume that tranche to burnAmt back to tranche will be lossless
+                // TODO: check numeric stability here.
+                r.remainder -=
+                    (((trancheAmtUsed * trancheYield) / (10**YIELD_DECIMALS)) * tranchePrice) /
+                    (10**PRICE_DECIMALS);
+                r.burntTrancheCount++;
+            }
+
+            if (r.remainder == 0) {
+                break;
+            }
+
+            // we've burned through all the bond tranches and now can move to the next one
+            bondQueue.dequeue();
+            latestBond = IBondController(bondQueue.head());
+            latestBondInfo = latestBond.getInfo();
+        }
+
+        r.amount = requestedAmount - r.remainder;
+        r.fee = feeStrategy.computeBurnFee(r.amount);
+        r.amount = _settleFee(r.amount, r.fee);
+        _burn(_msgSender(), r.amount);
+
+        return r;
     }
 
     function rollover(
@@ -170,7 +232,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
 
         // reward is -ve fee
         int256 reward = feeStrategy.computeRolloverReward(trancheIn, trancheOut, trancheInAmt, trancheOutAmt);
-        _settleFee(feeStrategy.feeToken(), _msgSender(), -reward);
+        _pullFee(feeStrategy.feeToken(), _msgSender(), -reward);
 
         return trancheOutAmt;
     }
@@ -245,9 +307,23 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
             bond.maturityDate() < block.timestamp + maxMaturiySec);
     }
 
+    // TODO: restructure this, it's weird that handle fee mints spot
     // if the fee is +ve, fee is transfered to self from payer
     // if the fee is -ve, it's transfered to the payer from self
-    function _settleFee(
+    function _settleFee(uint256 amount, int256 fee) internal returns (uint256) {
+        address feeToken = feeStrategy.feeToken();
+        // fee in native token and positive, withold amount partly as fee
+        if (feeToken == address(this) && fee >= 0) {
+            amount -= uint256(fee);
+            _mint(address(this), uint256(fee));
+        } else {
+            _pullFee(feeToken, _msgSender(), fee);
+        }
+        return amount;
+    }
+
+
+    function _pullFee(
         address feeToken,
         address payer,
         int256 fee
@@ -259,10 +335,4 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
             IERC20(feeToken).safeTransfer(payer, uint256(-fee));
         }
     }
-
-    /*
-        function redeem(uint256 spotAmt) public returns () {
-
-        }
-    */
 }

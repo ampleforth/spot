@@ -35,7 +35,6 @@ contract BondIssuer is IBondIssuer {
         bondDuration = bondDuration_; // 4 weeks
 
         config = config_;
-
         lastIssueWindowTimestamp = 0;
     }
 
