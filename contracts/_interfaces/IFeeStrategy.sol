@@ -7,6 +7,9 @@ interface IFeeStrategy {
     // @notice Address of the fee token.
     function feeToken() external view returns (IERC20);
 
+    // @notice Address of the reward token.
+    function rewardToken() external view returns (IERC20);
+
     // @notice Computes the fee to mint given amount of perp tokens.
     // @dev Fee can be either positive or negative. When positive it's paid by the minting users to the system.
     //      When negative its paid to the minting users by the system.

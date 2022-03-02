@@ -106,8 +106,14 @@ interface IPerpetualTranche is IERC20 {
     // @return True if successful.
     function advanceBurnBond() external returns (bool);
 
-    // @notice The fee token currently used to pay fees or get rewards in.
+    // @notice The address of the reserve where the protocol holds funds.
+    function reserve() external view returns (address);
+
+    // @notice The fee token currently used to receive fees in.
     function feeToken() external view returns (IERC20);
+
+    // @notice The fee token currently used to pay rewards in.
+    function rewardToken() external view returns (IERC20);
 
     // @notice The yield to be applied given the tranche's parent bond class and it's seniority.
     // @param hash The bond class.
