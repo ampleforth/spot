@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { Initializable } from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { SignedMath } from "@openzeppelin/contracts/utils/math/SignedMath.sol";
 
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { AddressQueue, AddressQueueHelpers } from "./_utils/AddressQueueHelpers.sol";
@@ -33,6 +34,7 @@ import { IPricingStrategy } from "./_interfaces/IPricingStrategy.sol";
  *
  */
 contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
+    using SignedMath for int256;
     using SafeERC20 for IERC20;
     using SafeERC20 for ITranche;
     using AddressQueueHelpers for AddressQueue;
@@ -188,8 +190,10 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
         m.amount = _fromUnderlying(trancheInAmt, trancheYield, pricingStrategy.computeTranchePrice(trancheIn));
         m.fee = feeStrategy.computeMintFee(m.amount);
-        m.amount = _settleFee(_msgSender(), m.amount, m.fee);
+
+        // NOTE: user approves fee in advance, in case the fee is paid in the native token
         _mint(_msgSender(), m.amount);
+        _settleFee(_msgSender(), m.fee);
 
         return m;
     }
@@ -210,7 +214,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
                     continue;
                 }
 
-                uint256 trancheBalance = t.balanceOf(_reserve());
+                uint256 trancheBalance = t.balanceOf(reserve());
                 if (trancheBalance == 0) {
                     continue;
                 }
@@ -245,8 +249,10 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
         r.amount = requestedAmount - r.remainder;
         r.fee = feeStrategy.computeBurnFee(r.amount);
-        r.amount = _settleFee(_msgSender(), r.amount, r.fee);
+
+        // NOTE: user approves burn amount + fee in case the fee is paid in the native token
         _burn(_msgSender(), r.amount);
+        _settleFee(_msgSender(), r.fee);
 
         return r;
     }
@@ -280,14 +286,14 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         r.amount = _fromUnderlying(trancheInAmt, trancheInYield, pricingStrategy.computeTranchePrice(trancheIn));
         r.trancheAmt = _toUnderlying(r.amount, trancheOutYield, pricingStrategy.computeTranchePrice(trancheOut));
 
-        trancheIn.safeTransferFrom(_msgSender(), _reserve(), trancheInAmt);
+        trancheIn.safeTransferFrom(_msgSender(), reserve(), trancheInAmt);
         syncReserve(trancheIn);
 
         trancheOut.safeTransfer(_msgSender(), r.trancheAmt);
         syncReserve(trancheOut);
 
         r.reward = feeStrategy.computeRolloverReward(r.amount);
-        _pullFee(feeToken(), _msgSender(), -r.reward); // reward is negative fee
+        _settleReward(_msgSender(), r.reward);
 
         return r;
     }
@@ -336,7 +342,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @param t The address of the token held by the reserve.
     function syncReserve(IERC20 t) public {
         // log events
-        uint256 balance = t.balanceOf(_reserve());
+        uint256 balance = t.balanceOf(reserve());
         if (balance > 0 && !reserveAssets[t]) {
             reserveAssets[t] = true;
         } else if (balance == 0) {
@@ -358,8 +364,18 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     }
 
     /// @inheritdoc IPerpetualTranche
+    function reserve() public view override returns (address) {
+        return address(this);
+    }
+
+    /// @inheritdoc IPerpetualTranche
     function feeToken() public view override returns (IERC20) {
         return feeStrategy.feeToken();
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    function rewardToken() public view override returns (IERC20) {
+        return feeStrategy.rewardToken();
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -370,49 +386,56 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     //--------------------------------------------------------------------------
     // Private/Internal helper methods
 
+    // @dev If the fee is positive, fee is transferred to the reserve from payer
+    //      else it's transferred to the payer from the reserve.
+    function _settleFee(address payer, int256 fee) internal {
+        IERC20 feeToken_ = feeToken();
+        uint256 fee_ = fee.abs();
+
+        if (fee >= 0) {
+            feeToken_.safeTransferFrom(payer, reserve(), fee_);
+        } else {
+            feeToken_.safeTransfer(payer, fee_);
+        }
+        syncReserve(feeToken_);
+    }
+
+    // @dev If the reward is positive, reward is transferred from the reserve to the payer
+    //      else it's transferred from the payer to the reserve.
+    function _settleReward(address payer, int256 reward) internal {
+        IERC20 rewardToken_ = rewardToken();
+        uint256 reward_ = reward.abs();
+
+        if (reward >= 0) {
+            rewardToken_.safeTransfer(payer, reward_);
+        } else {
+            rewardToken_.safeTransferFrom(payer, reserve(), reward_);
+        }
+        syncReserve(rewardToken_);
+    }
+
     // @notice Checks if the bond's maturity is within acceptable bounds.
     // @dev Only "active" bonds can be added to the queue.
     //      If a bond becomes "inactive" it can get removed from the queue.
     // @param The address of the bond to check.
     // @return True if the bond is "active".
-    function isActiveBond(IBondController bond) private view returns (bool) {
+    function isActiveBond(IBondController bond) internal view returns (bool) {
         return (bond.maturityDate() >= block.timestamp + minMaturiySec &&
             bond.maturityDate() < block.timestamp + maxMaturiySec);
     }
 
-    // @dev Handles fee settlement (mints or pulls).
-    //      If the fee token is the native perp token and the fee is positive,
-    //          it withholds the fee from the perp amount.
-    //      IF not pulls fee from the payer.
-    function _settleFee(
-        address payer,
-        uint256 amount,
-        int256 fee
-    ) internal returns (uint256) {
-        IERC20 feeToken_ = feeStrategy.feeToken();
-        // fee in native token and positive, withhold amount partly as fee
-        if (address(feeToken_) == address(this) && fee >= 0) {
-            amount -= uint256(fee);
-            _mint(_reserve(), uint256(fee));
-        } else {
-            _pullFee(feeToken_, payer, fee);
-        }
-        return amount;
+    // @dev Address of the mintingBond
+    //      Newest bond in the queue (ie the one with the furthest out maturity)
+    //      will be at the tail of the queue.
+    function _mintingBond() internal view returns (IBondController) {
+        return IBondController(bondQueue.tail());
     }
 
-    // @dev If the fee is +ve, fee is transferred to the reserve from payer
-    //      else it's transferred to the payer from the reserve.
-    function _pullFee(
-        IERC20 feeToken_,
-        address payer,
-        int256 fee
-    ) internal {
-        if (fee >= 0) {
-            feeToken_.safeTransferFrom(payer, _reserve(), uint256(fee));
-        } else {
-            feeToken_.safeTransfer(payer, uint256(-fee));
-        }
-        syncReserve(feeToken_);
+    // @dev Address of the burningBond
+    //      Oldest bond in the queue (ie the one with the most immediate maturity)
+    //      will be at the head of the queue.
+    function _burningBond() internal view returns (IBondController) {
+        return IBondController(bondQueue.head());
     }
 
     // @dev Calculates perp token amount from tranche amount.
@@ -433,24 +456,5 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         uint256 price
     ) private pure returns (uint256) {
         return (((amount * (10**PRICE_DECIMALS)) / price) * (10**YIELD_DECIMALS)) / yield;
-    }
-
-    // @dev Address of the reserve.
-    function _reserve() internal view returns (address) {
-        return address(this);
-    }
-
-    // @dev Address of the mintingBond
-    //      Newest bond in the queue (ie the one with the furthest out maturity)
-    //      will be at the tail of the queue.
-    function _mintingBond() internal view returns (IBondController) {
-        return IBondController(bondQueue.tail());
-    }
-
-    // @dev Address of the burningBond
-    //      Oldest bond in the queue (ie the one with the most immediate maturity)
-    //      will be at the head of the queue.
-    function _burningBond() internal view returns (IBondController) {
-        return IBondController(bondQueue.head());
     }
 }
