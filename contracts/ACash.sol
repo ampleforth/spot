@@ -130,7 +130,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
         return m;
     }
 
-    // in case an altruistic party to increase the collaterlization ratio
+    // in case an altruistic party wants to increase the collateralization ratio
     function burn(uint256 amount) external {
         _burn(_msgSender(), amount);
     }
