@@ -166,21 +166,20 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
                 }
 
                 uint256 tranchePrice = pricingStrategy.computeTranchePrice(t);
-                uint256 trancheAmtRequired = (((r.remainder * (10**YIELD_DECIMALS)) / trancheYield) *
+                // Ie) the tranche amount required for burning the all the remainder
+                uint256 trancheAmtForRemainder = (((r.remainder * (10**YIELD_DECIMALS)) / trancheYield) *
                     (10**PRICE_DECIMALS)) / tranchePrice;
 
                 // If tranche balance doesn't cover the tranche amount required
                 // burn the entire tranche balance and continue to the next tranche.
-                uint256 trancheAmtUsed = (trancheAmtRequired <= trancheBalance) ? trancheAmtRequired : trancheBalance;
+                uint256 trancheAmtUsed = (trancheAmtForRemainder < trancheBalance) ? trancheAmtForRemainder: trancheBalance;
                 t.safeTransferFrom(address(this), _msgSender(), trancheAmtUsed);
                 syncTranche(t);
+                
                 r.tranches[r.burntTrancheCount] = t;
                 r.trancheAmts[r.burntTrancheCount] = trancheAmtUsed;
-                // NOTE we assume that tranche to burnAmt back to tranche will be lossless
-                // TODO: check numeric stability here.
-                r.remainder -=
-                    (((trancheAmtUsed * trancheYield) / (10**YIELD_DECIMALS)) * tranchePrice) /
-                    (10**PRICE_DECIMALS);
+                // NOTE: we assume that tranche to burnAmt back to tranche will be lossless
+                r.remainder = r.remainder * (trancheAmtForRemainder - trancheAmtUsed) / trancheAmtForRemainder;
                 r.burntTrancheCount++;
             }
 
