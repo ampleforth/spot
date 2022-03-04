@@ -207,8 +207,8 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
 
         require(address(bondIn) == bondQueue.tail(), "Tranche in should be of minting bond");
         require(
-            address(bondOut) == bondQueue.head() || !bondQueue.contains(address(bondOut)),
-            "Expected tranche out to be of bond from the head of the queue or icebox"
+            !bondQueue.contains(address(bondOut)),
+            "Expected tranche out to NOT be of bond in the queue"
         );
 
         BondInfo memory bondInInfo = bondIn.getInfo();
@@ -251,6 +251,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
 
     // continue dequeue till the tail of the queue
     // has a bond which expires sufficiently out into the future
+    // TODO: run this lazily
     function advanceBurnBond() external {
         while (true) {
             IBondController latestBond = IBondController(bondQueue.tail());
