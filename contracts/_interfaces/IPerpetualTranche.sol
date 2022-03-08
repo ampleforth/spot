@@ -120,11 +120,11 @@ interface IPerpetualTranche is IERC20 {
     // @return True if burn is successful.
     function burn(uint256 amount) external returns (bool);
 
-    // @notice Address of the parent bond who's tranches are currently accepted to mint perp tokens.
+    // @notice Address of the parent bond whose tranches are currently accepted to mint perp tokens.
     // @return Address of the minting bond.
     function getMintingBond() external returns (IBondController);
 
-    // @notice Address of the parent bond who's tranches are currently redeemed for burning perp tokens.
+    // @notice Address of the parent bond whose tranches are currently redeemed for burning perp tokens.
     // @return Address of the burning bond.
     function getBurningBond() external returns (IBondController);
 
@@ -140,9 +140,9 @@ interface IPerpetualTranche is IERC20 {
     // @return Address of the reward token.
     function rewardToken() external view returns (IERC20);
 
-    // @notice The yield to be applied given the tranche's parent bond class and it's seniority.
+    // @notice The yield to be applied given the tranche bond's class and it's seniority.
     // @param hash The bond class.
-    // @param seniorityIndex The tranche's seniority in the given bond.
+    // @param seniorityIndex The tranche seniority in the given bond.
     // @return The yield applied.
     function trancheYield(bytes32 hash, uint256 seniorityIndex) external view returns (uint256);
 
@@ -151,13 +151,13 @@ interface IPerpetualTranche is IERC20 {
     // @return The computed price.
     function tranchePrice(ITranche t) external view returns (uint256);
 
-    // @notice Comptues the amount of perp token amount that can be exchanged for given tranche and amount.
+    // @notice Computes the amount of perp token amount that can be exchanged for given tranche and amount.
     // @param t The address of the tranche token.
     // @param trancheAmt The amount of tranche tokens.
     // @return The perp token amount.
     function tranchesToPerps(ITranche t, uint256 trancheAmt) external view returns (uint256);
 
-    // @notice Comptues the amount of tranche tokens amount that can be exchanged for given perp token amount.
+    // @notice Computes the amount of tranche tokens amount that can be exchanged for given perp token amount.
     // @param t The address of the tranche token.
     // @param trancheAmt The amount of perp tokens.
     // @return The tranche token amount.

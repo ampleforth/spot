@@ -66,7 +66,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @notice Yield factor applied on tranches transferred into or out of the system.
     // @dev A given tranche's yield is specific to it's parent bond's class
     //      ie) the unique combination of the bond's {collateralToken, trancheRatios}.
-    //      The yeild is specified as a fixed point unsigned integer with {YIELD_DECIMALS} decimals.
+    //      The yield is specified as a fixed point unsigned integer with {YIELD_DECIMALS} decimals.
     mapping(bytes32 => uint256[]) private _trancheYields;
 
     // @notice A FIFO queue of bonds, each of which have an associated number of seniority-based tranches.
@@ -336,7 +336,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     /// @inheritdoc IPerpetualTranche
     // @dev Newest bond in the queue (ie the one with the furthest out maturity)
     //      will be at the tail of the queue.
-    //      Laziliy pushes a new acceptable bond into the queue so that the tail is up to date.
+    //      Lazily pushes a new acceptable bond into the queue so that the tail is up to date.
     function getMintingBond() public override returns (IBondController mintingBond) {
         mintingBond = IBondController(bondQueue.tail());
         IBondController newBond = bondIssuer.getLastBond();
@@ -359,7 +359,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     /// @inheritdoc IPerpetualTranche
     // @dev Oldest bond in the queue (ie the one with the most immediate maturity)
     //      will be at the head of the queue.
-    //      Laziliy dequeues bonds till the head of the queue has an acceptable bond.
+    //      Lazily dequeues bonds till the head of the queue has an acceptable bond.
     function getBurningBond() public override returns (IBondController burningBond) {
         burningBond = IBondController(bondQueue.head());
 

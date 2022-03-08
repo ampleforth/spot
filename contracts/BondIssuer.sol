@@ -8,9 +8,9 @@ import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
 /*
  *  @title BondIssuer
  *
- *  @notice A issuer periodically issues bonds based on a pre-defined a configuration.
+ *  @notice A issuer periodically issues bonds based on a predefined a configuration.
  *
- *  @dev Based on the provided frequency issuer instantiates new bond(s) with the config when poked.
+ *  @dev Based on the provided frequency issuer instantiates a new bond with the config when poked.
  *
  */
 contract BondIssuer is IBondIssuer {
@@ -74,9 +74,9 @@ contract BondIssuer is IBondIssuer {
     }
 
     /// @inheritdoc IBondIssuer
-    function issue() public override returns (IBondController) {
+    function issue() public override {
         if (lastIssueWindowTimestamp + minIssueTimeIntervalSec < block.timestamp) {
-            return _lastBond;
+            return;
         }
 
         // Set to the timestamp of the most recent issue window opening
@@ -95,13 +95,12 @@ contract BondIssuer is IBondIssuer {
         _lastBond = bond;
 
         emit BondIssued(bond);
-
-        return bond;
     }
 
     /// @inheritdoc IBondIssuer
     // @dev Lazily issues a new bond when the time is right.
     function getLastBond() external override returns (IBondController) {
-        return issue();
+        issue();
+        return _lastBond;
     }
 }

@@ -25,7 +25,7 @@ contract SpotRouterV1 {
 
     // @notice Given collateral amount the function calculates the amount of SPOT
     //  that can be minted and fees for the operation.
-    // @dev Used by offchain services to estimate a batch tranche, deposit operation.
+    // @dev Used by off-chain services to estimate a batch tranche, deposit operation.
     // @param b The address of the bond contract.
     // @return The amount minted and fee charged.
     function trancheAndDepositPreview(IPerpetualTranche spot, uint256 collateralAmount)
@@ -50,7 +50,7 @@ contract SpotRouterV1 {
     //         transaction sender along with, any unused tranches and fees.
     // @param spot Address of the SPOT (perpetual tranche) contract.
     // @param collateralAmount The amount of collateral the user wants to tranche.
-    // @param fee The fee paid to the pereptual tranche contract to mint spot.
+    // @param fee The fee paid to the perpetual tranche contract to mint spot.
     function trancheAndDeposit(
         IPerpetualTranche spot,
         uint256 collateralAmount,
@@ -63,7 +63,7 @@ contract SpotRouterV1 {
         IERC20 collateralToken = IERC20(bond.collateralToken());
         IERC20 feeToken = spot.feeToken();
 
-        // transfer colltaeral & fee to router
+        // transfer collateral & fee to router
         collateralToken.safeTransferFrom(msg.sender, address(this), collateralAmount);
         if (fee > 0) {
             feeToken.safeTransferFrom(msg.sender, address(this), fee);
@@ -100,7 +100,7 @@ contract SpotRouterV1 {
             spot.deposit(t, mintedTranches);
         }
 
-        // transfer remaning fee back if overpaid
+        // transfer remaining fee back if overpaid
         feeToken.safeTransfer(msg.sender, feeToken.balanceOf(address(this)));
 
         // transfer spot back
@@ -109,7 +109,7 @@ contract SpotRouterV1 {
 
     // @notice Given the spot amount, calculates the tranches that can be redeemed
     //         and fees for the operation.
-    // @dev Used by offchain services to dry-run a redeem operation.
+    // @dev Used by off chain services to dry-run a redeem operation.
     // @param spot Address of the SPOT (perpetual tranche) contract.
     // @return The amount burnt, tranches redeemed and fee charged.
     function redeemTranchesPreview(IPerpetualTranche spot, uint256 amount) external returns (BurnData memory) {
@@ -120,7 +120,7 @@ contract SpotRouterV1 {
     //         tranches. If the burn is incomplete, it transfers the remainder back.
     // @param spot Address of the SPOT (perpetual tranche) contract.
     // @param amount The amount of SPOT tokens the user wants to burn.
-    // @param fee The fee paid to the pereptual tranche contract to burn spot.
+    // @param fee The fee paid to the perpetual tranche contract to burn spot.
     function redeemTranches(
         IPerpetualTranche spot,
         uint256 amount,
@@ -147,7 +147,7 @@ contract SpotRouterV1 {
             b.tranches[i].safeTransfer(msg.sender, b.trancheAmts[i]);
         }
 
-        // transfer remaning fee back if overpaid
+        // transfer remaining fee back if overpaid
         feeToken.safeTransfer(msg.sender, feeToken.balanceOf(address(this)));
 
         // transfer remainder back

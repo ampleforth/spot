@@ -9,8 +9,7 @@ interface IBondIssuer {
     event BondIssued(IBondController bond);
 
     // @notice Issues a new bond if sufficient time has elapsed since the last issue.
-    // @return The address of the most recently issued bond.
-    function issue() external returns (IBondController);
+    function issue() external;
 
     // @notice Checks if a given bond has been issued by the issuer.
     // @param Address of the bond to check.

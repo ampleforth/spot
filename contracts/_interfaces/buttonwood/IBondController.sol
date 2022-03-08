@@ -20,11 +20,9 @@ interface IBondController {
 
     function deposit(uint256 amount) external;
 
-    // immature redemption
     function redeem(uint256[] memory amounts) external;
 
     function mature() external;
 
-    // redemption after maturity
     function redeemMature(address tranche, uint256 amount) external;
 }
