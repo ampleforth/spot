@@ -142,6 +142,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
         uint256 burntTrancheCount;
     }
 
+    // TODO: Redeem from queue, or icebox when queue is empty
     function redeem(uint256 requestedAmount) public returns (BurnData memory) {
         BurnData memory r;
         r.remainder = requestedAmount;
@@ -207,8 +208,8 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
 
         require(address(bondIn) == bondQueue.tail(), "Tranche in should be of minting bond");
         require(
-            !bondQueue.contains(address(bondOut)),
-            "Expected tranche out to NOT be of bond in the queue"
+            address(bondOut) == bondQueue.head() || !bondQueue.contains(address(bondOut)),
+            "Expected tranche out to be the burning bond or in the ice box"
         );
 
         BondInfo memory bondInInfo = bondIn.getInfo();
