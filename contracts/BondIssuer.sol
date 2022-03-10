@@ -8,7 +8,7 @@ import { IBondController } from "./_interfaces/button-wood/IBondController.sol";
 /*
  *  @title BondIssuer
  *
- *  @notice A issuer periodically issues bonds based on a pre-defined a configuration.
+ *  @notice An issuer periodically issues bonds based on a pre-defined configuration.
  *
  *  @dev A config is uniquely identified by {collateralToken, trancheRatios, maxMaturityDuration}
  *       Based on the provided frequency issuer instantiates new bond(s) with the config when poked.
