@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// solhint-disable-next-line compiler-version
 import { IBondController } from "./button-wood/IBondController.sol";
 
 interface IBondIssuer {

@@ -1,3 +1,4 @@
+// solhint-disable-next-line compiler-version
 interface IBondFactory {
     function createBond(
         address _collateralToken,

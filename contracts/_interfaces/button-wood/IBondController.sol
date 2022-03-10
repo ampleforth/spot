@@ -1,3 +1,4 @@
+// solhint-disable-next-line compiler-version
 import { ITranche } from "./ITranche.sol";
 
 interface IBondController {

@@ -1,4 +1,6 @@
-//SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: Unlicense
+// https://github.com/chriseth/solidity-examples/blob/master/queue.sol
+
 pragma solidity ^0.8.0;
 
 library AddressQueue {
@@ -22,7 +24,7 @@ library AddressQueue {
     }
 
     function dequeue(Queue storage q) internal returns (address) {
-        require(q.last >= q.first); // non-empty queue
+        require(q.last >= q.first, "AddressQueue: Expected non-empty queue");
         address a = q.queue[q.first];
         delete q.queue[q.first];
         delete q.items[a];
