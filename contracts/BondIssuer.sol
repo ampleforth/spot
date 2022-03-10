@@ -37,7 +37,7 @@ contract BondIssuer is IBondIssuer {
         uint256[] trancheRatios;
         // @notice The maximum maturity duration for the issued bonds.
         // @dev In practice, bonds issued by this issuer won't have a constant duration as
-        //      block.timestamp when the issue function is invoked can varie.
+        //      block.timestamp when the issue function is invoked can vary.
         //      Rather these bonds are designed to have a predictable maturity date.
         uint256 maxMaturityDuration;
     }
