@@ -13,6 +13,7 @@ contract BasicPricingStrategy is IPricingStrategy {
     uint8 private constant DECIMALS = 18;
 
     /// @inheritdoc IPricingStrategy
+    // solhint-disable-next-line no-unused-vars
     function computeTranchePrice(ITranche t) external pure override returns (uint256) {
         return (10**DECIMALS);
     }

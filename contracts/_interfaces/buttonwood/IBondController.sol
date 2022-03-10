@@ -14,6 +14,8 @@ interface IBondController {
 
     function feeBps() external view returns (uint256);
 
+    function isMature() external view returns (bool);
+
     function tranches(uint256 i) external view returns (ITranche token, uint256 ratio);
 
     function trancheCount() external view returns (uint256 count);
