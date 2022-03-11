@@ -171,7 +171,10 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     function deposit(ITranche trancheIn, uint256 trancheInAmt) external override returns (MintData memory m) {
         // assert(bondIssuer != address(0)); // bond minter not set
 
-        m = depositPreview(trancheIn, trancheInAmt);
+        m = previewDeposit(trancheIn, trancheInAmt);
+        if (m.amount == 0) {
+            return m;
+        }
 
         trancheIn.safeTransferFrom(_msgSender(), address(this), trancheInAmt);
         syncReserve(trancheIn);
@@ -184,19 +187,14 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     }
 
     /// @inheritdoc IPerpetualTranche
-    function depositPreview(ITranche trancheIn, uint256 trancheInAmt) public override returns (MintData memory m) {
-        IBondController mintingBond = getMintingBond();
-        require(address(mintingBond) != address(0), "Expected minting bond to be set");
+    function previewDeposit(ITranche trancheIn, uint256 trancheInAmt) public override returns (MintData memory m) {
+        IBondController bond = getMintingBond();
+        require(address(bond) != address(0), "Expected minting bond to be set");
 
-        TrancheData memory mintingBondTrancheData = mintingBond.getTrancheData();
+        TrancheData memory td = bond.getTrancheData();
 
         // NOTE: `getTrancheIndex` reverts if trancheIn is NOT part of the minting bond
-        uint256 yield = _trancheYields[mintingBondTrancheData.computeClassHash()][
-            mintingBondTrancheData.getTrancheIndex(trancheIn)
-        ];
-        if (yield == 0) {
-            return m;
-        }
+        uint256 yield = _trancheYields[td.computeClassHash()][td.getTrancheIndex(trancheIn)];
 
         m.amount = _tranchesToPerps(trancheInAmt, yield, pricingStrategy.computeTranchePrice(trancheIn));
         m.fee = feeStrategy.computeMintFee(m.amount);
@@ -206,7 +204,10 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
     /// @inheritdoc IPerpetualTranche
     function redeem(uint256 requestedAmount) external override returns (BurnData memory b) {
-        b = redeemPreview(requestedAmount);
+        b = previewRedeem(requestedAmount);
+        if (b.amount == 0) {
+            return b;
+        }
 
         for (uint8 i = 0; i < b.trancheCount; i++) {
             b.tranches[i].safeTransfer(_msgSender(), b.trancheAmts[i]);
@@ -221,41 +222,28 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     }
 
     /// @inheritdoc IPerpetualTranche
-    function redeemPreview(uint256 requestedAmount) public override returns (BurnData memory b) {
+    function previewRedeem(uint256 requestedAmount) public override returns (BurnData memory b) {
+        IBondController bond = getBurningBond();
+        TrancheData memory td = bond.getTrancheData();
+
         b.remainder = requestedAmount;
+        while (address(bond) != address(0) && b.remainder > 0) {
+            for (uint8 i = 0; i < td.trancheCount; i++) {
+                ITranche t = td.tranches[i];
 
-        IBondController burningBond = getBurningBond();
-        TrancheData memory burningBondTrancheData = burningBond.getTrancheData();
-
-        while (address(burningBond) != address(0) && b.remainder > 0) {
-            for (uint8 i = 0; i < burningBondTrancheData.trancheCount; i++) {
-                ITranche t = burningBondTrancheData.tranches[i];
-                uint256 yield = _trancheYields[burningBondTrancheData.computeClassHash()][i];
-                if (yield == 0) {
-                    continue;
-                }
-
-                uint256 trancheBalance = t.balanceOf(reserve());
-                if (trancheBalance == 0) {
-                    continue;
-                }
-
-                uint256 trancheAmtForRemainder = _perpsToTranches(
+                uint256 trancheAmt;
+                (trancheAmt, b.remainder) = _perpsToTranchesWithRemainder(
+                    t,
                     b.remainder,
-                    yield,
+                    _trancheYields[td.computeClassHash()][i],
                     pricingStrategy.computeTranchePrice(t)
                 );
+                if (trancheAmt == 0) {
+                    continue;
+                }
 
-                // If tranche balance doesn't cover the tranche amount required
-                // burn the entire tranche balance and continue to the next tranche.
-                uint256 trancheAmtUsed = (trancheAmtForRemainder < trancheBalance)
-                    ? trancheAmtForRemainder
-                    : trancheBalance;
-
+                b.trancheAmts[i] = trancheAmt;
                 b.tranches[b.trancheCount] = t;
-                b.trancheAmts[b.trancheCount] = trancheAmtUsed;
-                // NOTE: we assume that tranche to burnAmt back to tranche will be lossless
-                b.remainder = (b.remainder * (trancheAmtForRemainder - trancheAmtUsed)) / trancheAmtForRemainder;
                 b.trancheCount++;
             }
 
@@ -265,8 +253,8 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
             // we've burned through all the bond tranches and now can move to the next one
             bondQueue.dequeue();
-            burningBond = getBurningBond();
-            burningBondTrancheData = burningBond.getTrancheData();
+            bond = getBurningBond();
+            td = bond.getTrancheData();
         }
 
         b.amount = requestedAmount - b.remainder;
@@ -276,8 +264,12 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         return b;
     }
 
-    function redeemIcebox(ITranche trancheOut, uint256 trancheOutAmt) external override returns (BurnData memory b) {
-        b = redeemIceboxPreview(requestedAmount);
+    /// @inheritdoc IPerpetualTranche
+    function redeemIcebox(ITranche trancheOut, uint256 requestedAmount) external override returns (BurnData memory b) {
+        b = previewRedeemIcebox(trancheOut, requestedAmount);
+        if (b.amount == 0) {
+            return b;
+        }
 
         b.tranches[0].safeTransfer(_msgSender(), b.trancheAmts[0]);
         syncReserve(b.tranches[0]);
@@ -288,22 +280,34 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         return b;
     }
 
-    function redeemIceboxPreview(ITranche trancheOut, uint256 trancheOutAmt) public override returns (BurnData memory b) {
-
+    /// @inheritdoc IPerpetualTranche
+    function previewRedeemIcebox(ITranche trancheOut, uint256 requestedAmount)
+        public
+        override
+        returns (BurnData memory b)
+    {
         require(bondQueue.length() == 0, "Expected bond queue to be empty");
 
-        IBondController bondOut = IBondController(trancheOut.bond());
-        TrancheData memory bondOutTrancheData = bondOut.getTrancheData();
-        uint256 yield = _trancheYields[bondOutTrancheData.computeClassHash()][
-            bondOutTrancheData.getTrancheIndex(trancheOut)
-        ];
+        IBondController bond = IBondController(trancheOut.bond());
+        TrancheData memory td = bond.getTrancheData();
 
-        b.amount = _tranchesToPerps(trancheOut, yield, pricingStrategy.computeTranchePrice(trancheOut));
-        b.fee = feeStrategy.computeMintFee(b.amount);
+        uint256 trancheAmt;
+        (trancheAmt, b.remainder) = _perpsToTranchesWithRemainder(
+            trancheOut,
+            requestedAmount,
+            _trancheYields[td.computeClassHash()][td.getTrancheIndex(trancheOut)],
+            pricingStrategy.computeTranchePrice(trancheOut)
+        );
+        if (trancheAmt == 0) {
+            return b;
+        }
+
+        b.trancheAmts[0] = trancheAmt;
         b.tranches[0] = trancheOut;
-        b.trancheAmts[0] = trancheOutAmt;
-        b.remainder = 0;
-        b.trancheCount=1;
+        b.trancheCount = 1;
+
+        b.amount = requestedAmount - b.remainder;
+        b.fee = feeStrategy.computeBurnFee(b.amount);
 
         return b;
     }
@@ -314,7 +318,10 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         ITranche trancheOut,
         uint256 trancheInAmt
     ) external override returns (RolloverData memory r) {
-        r = rolloverPreview(trancheIn, trancheOut, trancheInAmt);
+        r = previewRollover(trancheIn, trancheOut, trancheInAmt);
+        if (r.amount == 0) {
+            return r;
+        }
 
         trancheIn.safeTransferFrom(_msgSender(), reserve(), trancheInAmt);
         syncReserve(trancheIn);
@@ -328,7 +335,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     }
 
     /// @inheritdoc IPerpetualTranche
-    function rolloverPreview(
+    function previewRollover(
         ITranche trancheIn,
         ITranche trancheOut,
         uint256 trancheInAmt
@@ -339,15 +346,11 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         require(bondIn == getMintingBond(), "Expected trancheIn bond to be minting bond");
         require(!bondQueue.contains(address(bondOut)), "Expected trancheOut bond NOT to be in the queue");
 
-        TrancheData memory bondInTrancheData = bondIn.getTrancheData();
-        TrancheData memory bondOutTrancheData = bondOut.getTrancheData();
+        TrancheData memory bondInTD = bondIn.getTrancheData();
+        TrancheData memory bondOutTD = bondOut.getTrancheData();
 
-        uint256 trancheInYield = _trancheYields[bondInTrancheData.computeClassHash()][
-            bondInTrancheData.getTrancheIndex(trancheIn)
-        ];
-        uint256 trancheOutYield = _trancheYields[bondOutTrancheData.computeClassHash()][
-            bondOutTrancheData.getTrancheIndex(trancheOut)
-        ];
+        uint256 trancheInYield = _trancheYields[bondInTD.computeClassHash()][bondInTD.getTrancheIndex(trancheIn)];
+        uint256 trancheOutYield = _trancheYields[bondOutTD.computeClassHash()][bondOutTD.getTrancheIndex(trancheOut)];
 
         r.amount = _tranchesToPerps(trancheInAmt, trancheInYield, pricingStrategy.computeTranchePrice(trancheIn));
         r.trancheAmt = _perpsToTranches(r.amount, trancheOutYield, pricingStrategy.computeTranchePrice(trancheOut));
@@ -524,6 +527,25 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     function _isAcceptableBond(IBondController bond) internal view returns (bool) {
         return (bond.maturityDate() >= block.timestamp + minMaturiySec &&
             bond.maturityDate() < block.timestamp + maxMaturiySec);
+    }
+
+    // @dev Calculates the tranche token amount for requested perp amount.
+    //      If the reserve's tranche balance doesn't cover the exchange, it returns the remainder.
+    function _perpsToTranchesWithRemainder(
+        ITranche t,
+        uint256 requestedAmount,
+        uint256 yield,
+        uint256 price
+    ) private view returns (uint256 trancheAmtUsed, uint256 remainder) {
+        uint256 trancheBalance = t.balanceOf(reserve());
+        uint256 trancheAmtForRequested = _perpsToTranches(requestedAmount, yield, price);
+        trancheAmtUsed = (trancheAmtForRequested < trancheBalance) ? trancheAmtForRequested : trancheBalance;
+        remainder = requestedAmount;
+        if (trancheAmtUsed > 0) {
+            // NOTE: we assume that tranche to burnAmt back to tranche will be lossless
+            remainder = (requestedAmount * (trancheAmtForRequested - trancheAmtUsed)) / trancheAmtForRequested;
+        }
+        return (trancheAmtUsed, remainder);
     }
 
     // @dev Calculates perp token amount from tranche amount.

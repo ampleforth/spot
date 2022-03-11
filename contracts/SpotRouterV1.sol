@@ -37,7 +37,7 @@ contract SpotRouterV1 {
 
         for (uint8 i = 0; i < td.trancheCount; i++) {
             ITranche t = td.tranches[i];
-            MintData memory trancheMintData = spot.depositPreview(t, trancheAmts[i]);
+            MintData memory trancheMintData = spot.previewDeposit(t, trancheAmts[i]);
             totalMintData.amount += trancheMintData.amount;
             totalMintData.fee += trancheMintData.fee;
         }
@@ -113,7 +113,7 @@ contract SpotRouterV1 {
     // @param spot Address of the SPOT (perpetual tranche) contract.
     // @return The amount burnt, tranches redeemed and fee charged.
     function redeemTranchesPreview(IPerpetualTranche spot, uint256 amount) external returns (BurnData memory) {
-        return spot.redeemPreview(amount);
+        return spot.previewRedeem(amount);
     }
 
     // @notice Given spot tokens and fees, the function burns spot and redeems

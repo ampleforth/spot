@@ -81,7 +81,7 @@ interface IPerpetualTranche is IERC20 {
     // @param trancheIn The address of the tranche token to be deposited.
     // @param trancheInAmt The amount of tranche tokens deposited.
     // @return The amount of perp tokens minted and the fee charged.
-    function depositPreview(ITranche trancheIn, uint256 trancheInAmt) external returns (MintData memory);
+    function previewDeposit(ITranche trancheIn, uint256 trancheInAmt) external returns (MintData memory);
 
     // @notice Redeem perp tokens for tranche tokens.
     // @param requestedAmount The amount of perp tokens requested to be burnt.
@@ -91,7 +91,19 @@ interface IPerpetualTranche is IERC20 {
     // @notice Dry-run a redemption operation (without any transfers).
     // @param requestedAmount The amount of perp tokens requested to be burnt.
     // @return The actual amount of perp tokens burnt, fees and the list of tranches and amounts redeemed.
-    function redeemPreview(uint256 requestedAmount) external returns (BurnData memory);
+    function previewRedeem(uint256 requestedAmount) external returns (BurnData memory);
+
+    // @notice Redeem perp tokens for tranche tokens from icebox when the bond queue is empty.
+    // @param trancheOut The tranche token to be redeemed.
+    // @param requestedAmount The amount of perp tokens requested to be burnt.
+    // @return The amount of perp tokens burnt, fees.
+    function redeemIcebox(ITranche trancheOut, uint256 requestedAmount) external returns (BurnData memory);
+
+    // @notice Dry-run a redemption from icebox operation (without any transfers).
+    // @param trancheOut The tranche token to be redeemed.
+    // @param requestedAmount The amount of perp tokens requested to be burnt.
+    // @return The amount of perp tokens burnt, fees.
+    function previewRedeemIcebox(ITranche trancheOut, uint256 requestedAmount) external returns (BurnData memory);
 
     // @notice Rotates newer tranches in for older tranches.
     // @param trancheIn The tranche token deposited.
@@ -109,7 +121,7 @@ interface IPerpetualTranche is IERC20 {
     // @param trancheOut The tranche token to be redeemed.
     // @param trancheInAmt The amount of trancheIn tokens deposited.
     // @return The amount of perp tokens rolled over, trancheOut tokens redeemed and reward awarded for rolling over.
-    function rolloverPreview(
+    function previewRollover(
         ITranche trancheIn,
         ITranche trancheOut,
         uint256 trancheInAmt
