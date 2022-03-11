@@ -69,4 +69,10 @@ library AddressQueueHelpers {
     function contains(AddressQueue storage q, address a) internal view returns (bool) {
         return q.items[a];
     }
+    // @notice Calculates the number of items in the queue.
+    // @param q Queue storage.
+    // @return The queue size.
+    function length(AddressQueue storage q) internal view returns (bool) {
+        return q.last - q.first + 1;
+    }
 }

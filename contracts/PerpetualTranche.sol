@@ -276,6 +276,38 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         return b;
     }
 
+    function redeemIcebox(ITranche trancheOut, uint256 trancheOutAmt) external override returns (BurnData memory b) {
+        b = redeemIceboxPreview(requestedAmount);
+
+        b.tranches[0].safeTransfer(_msgSender(), b.trancheAmts[0]);
+        syncReserve(b.tranches[0]);
+
+        _burn(_msgSender(), b.amount);
+        _settleFee(_msgSender(), b.fee);
+
+        return b;
+    }
+
+    function redeemIceboxPreview(ITranche trancheOut, uint256 trancheOutAmt) public override returns (BurnData memory b) {
+
+        require(bondQueue.length() == 0, "Expected bond queue to be empty");
+
+        IBondController bondOut = IBondController(trancheOut.bond());
+        TrancheData memory bondOutTrancheData = bondOut.getTrancheData();
+        uint256 yield = _trancheYields[bondOutTrancheData.computeClassHash()][
+            bondOutTrancheData.getTrancheIndex(trancheOut)
+        ];
+
+        b.amount = _tranchesToPerps(trancheOut, yield, pricingStrategy.computeTranchePrice(trancheOut));
+        b.fee = feeStrategy.computeMintFee(b.amount);
+        b.tranches[0] = trancheOut;
+        b.trancheAmts[0] = trancheOutAmt;
+        b.remainder = 0;
+        b.trancheCount=1;
+
+        return b;
+    }
+
     /// @inheritdoc IPerpetualTranche
     function rollover(
         ITranche trancheIn,
