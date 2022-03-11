@@ -152,11 +152,10 @@ interface IPerpetualTranche is IERC20 {
     // @return Address of the reward token.
     function rewardToken() external view returns (IERC20);
 
-    // @notice The yield to be applied given the tranche bond's class and it's seniority.
-    // @param hash The bond class.
-    // @param seniorityIndex The tranche seniority in the given bond.
+    // @notice The yield to be applied given the tranche based on its bond's class and it's seniority.
+    // @param t The address of the tranche token.
     // @return The yield applied.
-    function trancheYield(bytes32 hash, uint256 seniorityIndex) external view returns (uint256);
+    function trancheYield(ITranche t) external view returns (uint256);
 
     // @notice The price of the given tranche.
     // @param t The address of the tranche token.

@@ -11,33 +11,33 @@ import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "./_interfaces/buttonwood/ITranche.sol";
 
 /*
- *  @title SpotRouterV1
+ *  @title RouterV1
  *
- *  @notice Router contract which batches multiple operations.
+ *  @notice Contract to batch multiple operations.
  *
  */
-contract SpotRouterV1 {
+contract RouterV1 {
     using SafeERC20 for IERC20;
     using SafeERC20 for ITranche;
     using SafeERC20 for IPerpetualTranche;
     using BondHelpers for IBondController;
     using TrancheDataHelpers for TrancheData;
 
-    // @notice Given collateral amount the function calculates the amount of SPOT
+    // @notice Given collateral amount the function calculates the amount of perp tokens
     //  that can be minted and fees for the operation.
     // @dev Used by off-chain services to estimate a batch tranche, deposit operation.
     // @param b The address of the bond contract.
     // @return The amount minted and fee charged.
-    function trancheAndDepositPreview(IPerpetualTranche spot, uint256 collateralAmount)
+    function trancheAndDepositPreview(IPerpetualTranche perp, uint256 collateralAmount)
         external
         returns (MintData memory totalMintData)
     {
-        IBondController bond = spot.getMintingBond();
-        (TrancheData memory td, uint256[] memory trancheAmts, ) = bond.tranchePreview(collateralAmount);
+        IBondController bond = perp.getMintingBond();
+        (TrancheData memory td, uint256[] memory trancheAmts, ) = bond.previewDeposit(collateralAmount);
 
         for (uint8 i = 0; i < td.trancheCount; i++) {
             ITranche t = td.tranches[i];
-            MintData memory trancheMintData = spot.previewDeposit(t, trancheAmts[i]);
+            MintData memory trancheMintData = perp.previewDeposit(t, trancheAmts[i]);
             totalMintData.amount += trancheMintData.amount;
             totalMintData.fee += trancheMintData.fee;
         }
@@ -46,22 +46,21 @@ contract SpotRouterV1 {
 
     // @notice Given collateral and fees, the function tranches the collateral
     //         using the current minting bond and then deposits individual tranches
-    //         to mint SPOT. It transfers the SPOT back to the
+    //         to mint perp tokens. It transfers the perp tokens back to the
     //         transaction sender along with, any unused tranches and fees.
-    // @param spot Address of the SPOT (perpetual tranche) contract.
+    // @param perp Address of the perpetual tranche contract.
     // @param collateralAmount The amount of collateral the user wants to tranche.
-    // @param fee The fee paid to the perpetual tranche contract to mint spot.
+    // @param fee The fee paid to the perpetual tranche contract to mint perp.
     function trancheAndDeposit(
-        IPerpetualTranche spot,
+        IPerpetualTranche perp,
         uint256 collateralAmount,
         uint256 fee
     ) external {
-        IBondController bond = spot.getMintingBond();
+        IBondController bond = perp.getMintingBond();
         TrancheData memory td = bond.getTrancheData();
-        bytes32 bondHash = td.computeClassHash();
 
         IERC20 collateralToken = IERC20(bond.collateralToken());
-        IERC20 feeToken = spot.feeToken();
+        IERC20 feeToken = perp.feeToken();
 
         // transfer collateral & fee to router
         collateralToken.safeTransferFrom(msg.sender, address(this), collateralAmount);
@@ -74,74 +73,70 @@ contract SpotRouterV1 {
 
         // approve fee
         if (fee > 0) {
-            feeToken.approve(address(spot), fee);
+            feeToken.approve(address(perp), fee);
         }
 
-        // use tranches to mint spot
+        // use tranches to mint perp
         for (uint8 i = 0; i < td.trancheCount; i++) {
             ITranche t = td.tranches[i];
             uint256 mintedTranches = t.balanceOf(address(this));
 
-            // approve tranches to deposit into spot
-            uint256 yield = spot.trancheYield(bondHash, td.getTrancheIndex(t));
-            uint256 price = spot.tranchePrice(t);
+            uint256 mintedSpot = perp.tranchesToPerps(t, mintedTranches);
+            if (mintedSpot > 0) {
+                // approve perp to use tranche tokens
+                t.approve(address(perp), mintedTranches);
 
-            if (yield == 0 || price == 0) {
+                // Mint perp tokens
+                perp.deposit(t, mintedTranches);
+            } else {
                 // tranche unused for minting
                 // transfer remaining tranches back to user
-                t.safeTransfer(msg.sender, t.balanceOf(address(this)));
-                continue;
+                t.safeTransfer(msg.sender, mintedTranches);
             }
-
-            // approve spot to use tranche tokens
-            t.approve(address(spot), mintedTranches);
-
-            // Mint spot
-            spot.deposit(t, mintedTranches);
         }
 
         // transfer remaining fee back if overpaid
         feeToken.safeTransfer(msg.sender, feeToken.balanceOf(address(this)));
 
-        // transfer spot back
-        spot.safeTransfer(msg.sender, spot.balanceOf(address(this)));
+        // transfer perp back
+        perp.safeTransfer(msg.sender, perp.balanceOf(address(this)));
     }
 
-    // @notice Given the spot amount, calculates the tranches that can be redeemed
+    // @notice Given the perp amount, calculates the tranches that can be redeemed
     //         and fees for the operation.
     // @dev Used by off chain services to dry-run a redeem operation.
-    // @param spot Address of the SPOT (perpetual tranche) contract.
+    // @param perp Address of the perpetual tranche contract.
     // @return The amount burnt, tranches redeemed and fee charged.
-    function redeemTranchesPreview(IPerpetualTranche spot, uint256 amount) external returns (BurnData memory) {
-        return spot.previewRedeem(amount);
+    function redeemTranchesPreview(IPerpetualTranche perp, uint256 amount) external returns (BurnData memory) {
+        return perp.previewRedeem(amount);
     }
 
-    // @notice Given spot tokens and fees, the function burns spot and redeems
+    // @notice Given perp tokens and fees, the function burns perp and redeems
     //         tranches. If the burn is incomplete, it transfers the remainder back.
-    // @param spot Address of the SPOT (perpetual tranche) contract.
-    // @param amount The amount of SPOT tokens the user wants to burn.
-    // @param fee The fee paid to the perpetual tranche contract to burn spot.
+    // @param perp Address of the perpetual tranche contract.
+    // @param amount The amount of perp tokens the user wants to burn.
+    // @param fee The fee paid to the perpetual tranche contract to burn perp tokens.
     function redeemTranches(
-        IPerpetualTranche spot,
+        IPerpetualTranche perp,
         uint256 amount,
         uint256 fee
     ) external {
-        IERC20 feeToken = spot.feeToken();
+        IERC20 feeToken = perp.feeToken();
 
-        // transfer spot & fee to router
-        spot.safeTransferFrom(msg.sender, address(this), amount);
+        // transfer perp tokens & fee to router
+        perp.safeTransferFrom(msg.sender, address(this), amount);
         if (fee > 0) {
             feeToken.safeTransferFrom(msg.sender, address(this), fee);
         }
 
-        // approve spot & fees
-        spot.approve(address(spot), amount);
+        // approve perp tokens & fees
+        perp.approve(address(perp), amount);
         if (fee > 0) {
-            feeToken.approve(address(spot), fee);
+            feeToken.approve(address(perp), fee);
         }
 
-        // burn spot
-        BurnData memory b = spot.redeem(amount);
+        // burn perp tokens
+        BurnData memory b = perp.redeem(amount);
         for (uint256 i = 0; i < b.trancheCount; i++) {
             // transfer redeemed tranches back
             b.tranches[i].safeTransfer(msg.sender, b.trancheAmts[i]);
@@ -151,6 +146,6 @@ contract SpotRouterV1 {
         feeToken.safeTransfer(msg.sender, feeToken.balanceOf(address(this)));
 
         // transfer remainder back
-        spot.safeTransfer(msg.sender, b.remainder);
+        perp.safeTransfer(msg.sender, b.remainder);
     }
 }

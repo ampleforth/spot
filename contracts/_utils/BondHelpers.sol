@@ -6,7 +6,6 @@ import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 
 struct TrancheData {
-    address collateralToken;
     ITranche[] tranches;
     uint256[] trancheRatios;
     uint256 trancheCount;
@@ -40,11 +39,10 @@ library BondHelpers {
         return b.maturityDate() - b.creationDate();
     }
 
-    // @notice Given a bond, retrives all of the bond's tranche related data.
+    // @notice Given a bond, retrieves all of the bond's tranche related data.
     // @param b The address of the bond contract.
     // @return The tranche data.
     function getTrancheData(IBondController b) internal view returns (TrancheData memory td) {
-        td.collateralToken = b.collateralToken();
         td.trancheCount = b.trancheCount();
         // Max tranches per bond < 2**8 - 1
         for (uint8 i = 0; i < td.trancheCount; i++) {
@@ -55,13 +53,13 @@ library BondHelpers {
         return td;
     }
 
-    // TODO: move offchain helpers to a different file?
+    // TODO: move off-chain helpers to a different file?
     // @notice Helper function to estimate the amount of tranches minted when a given amount of collateral
     //         is deposited into the bond.
-    // @dev This function is used offchain services (using callStatic) to preview tranches minted after
+    // @dev This function is used off-chain services (using callStatic) to preview tranches minted after
     // @param b The address of the bond contract.
     // @return The tranche data and an array of tranche amounts.
-    function tranchePreview(IBondController b, uint256 collateralAmount)
+    function previewDeposit(IBondController b, uint256 collateralAmount)
         internal
         view
         returns (
@@ -73,7 +71,7 @@ library BondHelpers {
         td = getTrancheData(b);
 
         uint256 totalDebt = b.totalDebt();
-        uint256 collateralBalance = IERC20(td.collateralToken).balanceOf(address(b));
+        uint256 collateralBalance = IERC20(b.collateralToken()).balanceOf(address(b));
         uint256 feeBps = b.feeBps();
 
         for (uint256 i = 0; i < td.trancheCount; i++) {
@@ -91,7 +89,7 @@ library BondHelpers {
         return (td, trancheAmts, fee);
     }
 
-    // @notice Given a bond, retrives the collateral currently redeemable for
+    // @notice Given a bond, retrieves the collateral currently redeemable for
     //         each tranche held by the given address.
     // @param b The address of the bond contract.
     // @param u The address to check balance for.
@@ -105,13 +103,13 @@ library BondHelpers {
 
         if (b.isMature()) {
             for (uint8 i = 0; i < td.trancheCount; i++) {
-                uint256 trancheCollaterBalance = IERC20(td.collateralToken).balanceOf(address(td.tranches[i]));
+                uint256 trancheCollaterBalance = IERC20(b.collateralToken()).balanceOf(address(td.tranches[i]));
                 balances[i] = (td.tranches[i].balanceOf(u) * trancheCollaterBalance) / td.tranches[i].totalSupply();
             }
             return (td, balances);
         }
 
-        uint256 bondCollateralBalance = IERC20(td.collateralToken).balanceOf(address(b));
+        uint256 bondCollateralBalance = IERC20(b.collateralToken()).balanceOf(address(b));
         for (uint8 i = 0; i < td.trancheCount - 1; i++) {
             uint256 trancheSupply = td.tranches[i].totalSupply();
             uint256 trancheCollaterBalance = trancheSupply <= bondCollateralBalance
@@ -128,7 +126,7 @@ library BondHelpers {
 /*
  *  @title TrancheDataHelpers
  *
- *  @notice Library with helper functions the bond's retrived tranche data.
+ *  @notice Library with helper functions the bond's retrieved tranche data.
  *
  */
 library TrancheDataHelpers {
@@ -144,13 +142,5 @@ library TrancheDataHelpers {
         }
         require(false, "TrancheDataHelpers: Expected tranche to be part of bond");
         return type(uint256).max;
-    }
-
-    // @notice Generates the hash which uniquely identifies bonds with the same class ie) {collateralToken, trancheRatio}.
-    // @param td The tranche data object.
-    // @return unique hash for each bond class.
-    // TODO: this should be hash{collateralToken, trancheIndex, ratios[trancheIndex]}
-    function computeClassHash(TrancheData memory t) internal pure returns (bytes32) {
-        return keccak256(abi.encode(t.collateralToken, t.trancheRatios));
     }
 }
