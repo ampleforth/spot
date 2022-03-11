@@ -174,4 +174,11 @@ interface IPerpetualTranche is IERC20 {
     // @param trancheAmt The amount of perp tokens.
     // @return The tranche token amount.
     function perpsToTranches(ITranche t, uint256 amount) external view returns (uint256);
+
+    // @notice Number of tranche tokens held in the reserve.
+    function trancheCount() external view returns (uint256);
+
+    // @notice The tranche address from the tranche list at a given index.
+    // @param i The index of the tranche list.
+    function trancheAt(uint256 i) external view returns (address);
 }

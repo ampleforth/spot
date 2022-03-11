@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { Initializable } from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { EnumerableSet } from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import { SignedMath } from "@openzeppelin/contracts/utils/math/SignedMath.sol";
 
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -37,6 +38,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     using SignedMath for int256;
     using SafeERC20 for IERC20;
     using SafeERC20 for ITranche;
+    using EnumerableSet for EnumerableSet.AddressSet;
     using AddressQueueHelpers for AddressQueue;
     using BondHelpers for IBondController;
     using TrancheDataHelpers for TrancheData;
@@ -74,9 +76,8 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     //      The system burns perpetual tokens for tranches from bonds at the head of the queue.
     AddressQueue public bondQueue;
 
-    // @notice A record of all tokens currently being held by the reserve.
-    // @dev Used by off-chain services for indexing tokens and their balances held by the reserve.
-    mapping(IERC20 => bool) public reserveAssets;
+    // @notice A record of all tranches with a balance held in the reserve.
+    EnumerableSet.AddressSet private _tranches;
 
     // @notice The minimum maturity time in seconds for a bond below which can get removed from the bond queue.
     uint256 public minMaturiySec;
@@ -410,16 +411,14 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         return burningBond;
     }
 
-    // @notice Emits the reserve balance of the given token so that it can be picked up by off-chain indexers.
-    // @dev Can be called externally to register tranches transferred into the reserve out of turn.
-    // @param t The address of the token held by the reserve.
-    function syncReserve(IERC20 t) public {
-        // log events
+    // @notice Keeps the tranche list up to date.
+    // @param t The address of the tranche token.
+    function syncReserve(ITranche t) public {
         uint256 balance = t.balanceOf(reserve());
-        if (balance > 0 && !reserveAssets[t]) {
-            reserveAssets[t] = true;
+        if (balance > 0 && !_tranches.contains(address(t))) {
+            _tranches.add(address(t));
         } else if (balance == 0) {
-            delete reserveAssets[t];
+            _tranches.remove(address(t));
         }
         emit ReserveSynced(t, balance);
     }
@@ -471,6 +470,16 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
             );
     }
 
+    /// @inheritdoc IPerpetualTranche
+    function trancheCount() external view override returns (uint256) {
+        return _tranches.length();
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    function trancheAt(uint256 i) external view override returns (address) {
+        return _tranches.at(i);
+    }
+
     //--------------------------------------------------------------------------
     // Public view methods
 
@@ -502,7 +511,6 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         } else {
             feeToken_.safeTransfer(payer, fee_);
         }
-        syncReserve(feeToken_);
     }
 
     // @dev If the reward is positive, reward is transferred from the reserve to the payer
@@ -516,7 +524,6 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         } else {
             rewardToken_.safeTransferFrom(payer, reserve(), reward_);
         }
-        syncReserve(rewardToken_);
     }
 
     // @notice Checks if the bond's maturity is within acceptable bounds.
