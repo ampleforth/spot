@@ -416,9 +416,10 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @param t The address of the tranche token.
     function syncReserve(ITranche t) public {
         uint256 balance = t.balanceOf(reserve());
-        if (balance > 0 && !_tranches.contains(address(t))) {
+        bool inReserve = _tranches.contains(address(t));
+        if (balance > 0 && !inReserve) {
             _tranches.add(address(t));
-        } else if (balance == 0) {
+        } else if (balance == 0 && inReserve) {
             _tranches.remove(address(t));
         }
         emit ReserveSynced(t, balance);
