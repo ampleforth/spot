@@ -63,7 +63,7 @@ contract RolloverVault is ERC20 {
     // @notice The system only rolls over bonds which are about to mature within this amount of time.
     // @dev This reduces any volatility risk the system takes on by controlling the time
     //      it obtains the bonds, to the time it matures.
-    uint256 public minTimeToMaturitySec;
+    uint256 public maxTimeToMaturitySec;
 
     // @notice Constructor to create the contract.
     // solhint-disable-next-line no-empty-blocks
@@ -104,7 +104,7 @@ contract RolloverVault is ERC20 {
         TrancheData memory bondInTrancheData = bondIn.getTrancheData();
         TrancheData memory bondOutTrancheData = bondOut.getTrancheData();
 
-        require(bondOut.timeToMaturity() <= minTimeToMaturitySec, "Expected bondOut maturity to be closer");
+        require(bondOut.timeToMaturity() <= maxTimeToMaturitySec, "Expected bondOut maturity to be closer");
 
         trancheIn.approve(address(perp), trancheInAmt);
         if (reward < 0) {
