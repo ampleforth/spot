@@ -230,7 +230,7 @@ contract RolloverVault is ERC20, Ownable {
         }
     }
 
-    // @dev Approves the spender to spend all of the reserve's token.
+    // @dev Approves the spender to spend an infinite tokens from the reserve's balance.
     // NOTE: Only audited & immutable spender contracts should have infinite approvals.
     function _approveAll(IERC20 token, address spender) private {
         if (token.allowance(_reserve(), spender) != type(uint256).max) {

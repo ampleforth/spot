@@ -68,13 +68,15 @@ contract RouterV1 {
             feeToken.safeTransferFrom(msg.sender, address(this), fee);
         }
 
+        // NOTE: we use _checkAndApproveMax instead of _approveAll here as AMPL
+        // does not support infinite approvals.
+        _checkAndApproveMax(collateralToken, address(bond), collateralAmount);
+
         // tranche collateral
         bond.deposit(collateralAmount);
 
         // approve fee
-        if (fee > 0) {
-            feeToken.approve(address(perp), fee);
-        }
+        _approveAll(feeToken, address(perp));
 
         // use tranches to mint perp
         for (uint8 i = 0; i < td.trancheCount; i++) {
@@ -84,7 +86,7 @@ contract RouterV1 {
             uint256 mintedSpot = perp.tranchesToPerps(t, mintedTranches);
             if (mintedSpot > 0) {
                 // approve perp to use tranche tokens
-                t.approve(address(perp), mintedTranches);
+                _approveAll(t, address(perp));
 
                 // Mint perp tokens
                 perp.deposit(t, mintedTranches);
@@ -130,10 +132,8 @@ contract RouterV1 {
         }
 
         // approve perp tokens & fees
-        perp.approve(address(perp), amount);
-        if (fee > 0) {
-            feeToken.approve(address(perp), fee);
-        }
+        _approveAll(perp, address(perp));
+        _approveAll(feeToken, address(perp));
 
         // burn perp tokens
         BurnData memory b = perp.redeem(amount);
@@ -147,5 +147,22 @@ contract RouterV1 {
 
         // transfer remainder back
         perp.safeTransfer(msg.sender, b.remainder);
+    }
+
+    // @dev Approves the spender to spend an infinite tokens from the router's balance.
+    function _approveAll(IERC20 token, address spender) private {
+        _checkAndApproveMax(token, spender, type(uint256).max);
+    }
+
+    // @dev Checks if the spender has sufficient allowance if not approves the maximum possible amount.
+    function _checkAndApproveMax(
+        IERC20 token,
+        address spender,
+        uint256 amount
+    ) private {
+        uint256 allowance = token.allowance(address(this), spender);
+        if (allowance < amount) {
+            token.approve(spender, type(uint256).max);
+        }
     }
 }
