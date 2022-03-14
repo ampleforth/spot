@@ -385,19 +385,22 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // Public methods
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Newest bond in the queue (ie the one with the furthest out maturity)
+    // @dev Newest bond in the queue (i.e the one with the furthest out maturity)
     //      will be at the tail of the queue.
     //      Lazily pushes a new acceptable bond into the queue so that the tail is up to date.
     function getMintingBond() public override returns (IBondController mintingBond) {
         mintingBond = IBondController(bondQueue.tail());
         IBondController newBond = bondIssuer.getLastBond();
-        if (mintingBond == newBond) {
+
+        if (mintingBond == newBond || !_isAcceptableBond(newBond)) {
             return mintingBond;
         }
 
-        require(bondIssuer.isInstance(mintingBond), "Expected new bond be issued by issuer");
-        require(!bondQueue.contains(address(mintingBond)), "Expected new bond to be in the queue");
-        require(_isAcceptableBond(mintingBond), "Expected new bond to be acceptable");
+        // assert(newBond != address(0));
+        // assert(bondIssuer.isInstance(newBond));
+        // assert(!bondQueue.contains(address(newBond)));
+
+        mintingBond = newBond;
 
         // NOTE: The new bond is pushed to the tail of the queue.
         bondQueue.enqueue(address(mintingBond));
@@ -534,14 +537,16 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         }
     }
 
-    // @notice Checks if the bond's maturity is within acceptable bounds.
+    // @notice Checks if the bond can be accepted into the system based on the following conditions.
+    //         * If maturity is within defined bounds
     // @dev Only "acceptable" bonds can be added to the queue.
     //      If a bond becomes "unacceptable" it can get removed from the queue.
     // @param The address of the bond to check.
     // @return True if the bond is "acceptable".
     function _isAcceptableBond(IBondController bond) internal view returns (bool) {
-        return (bond.maturityDate() >= block.timestamp + minMaturiySec &&
-            bond.maturityDate() < block.timestamp + maxMaturiySec);
+        return
+            (bond.maturityDate() >= block.timestamp + minMaturiySec) &&
+            (bond.maturityDate() < block.timestamp + maxMaturiySec);
     }
 
     // @dev Fetches the tranche yield from storage.
