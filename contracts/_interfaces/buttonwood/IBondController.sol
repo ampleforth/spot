@@ -6,8 +6,6 @@ import { ITranche } from "./ITranche.sol";
 interface IBondController {
     function collateralToken() external view returns (address);
 
-    function isMature() external view returns (bool);
-
     function maturityDate() external view returns (uint256);
 
     function creationDate() external view returns (uint256);

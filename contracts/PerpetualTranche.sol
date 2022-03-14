@@ -585,7 +585,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     }
 
     // @notice Computes the bond's class hash.
-    function _bondClass(address collateralToken, TrancheData memory td) private pure  returns (bytes32) {
+    function _bondClass(address collateralToken, TrancheData memory td) private pure returns (bytes32) {
         return keccak256(abi.encode(collateralToken, td.trancheRatios));
     }
 }

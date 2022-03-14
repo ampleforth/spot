@@ -80,7 +80,7 @@ contract RolloverVault is ERC20 {
         TrancheData memory td = bond.getTrancheData();
 
         require(
-            td.collateralToken == address(underlying),
+            bond.collateralToken() == address(underlying),
             "Expected bond collateral to be the vault's underlying token"
         );
 
