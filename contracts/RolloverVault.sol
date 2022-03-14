@@ -81,7 +81,7 @@ contract RolloverVault is ERC20 {
             "Expected bond collateral to be the vault's underlying token"
         );
 
-        underlying.approve(address(perp), uAmount);
+        underlying.approve(address(bond), uAmount);
         bond.deposit(uAmount);
         _syncReserve(bond, td);
 
