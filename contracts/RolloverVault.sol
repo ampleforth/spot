@@ -40,6 +40,9 @@ contract RolloverVault is ERC20 {
     // Constants & Immutables
     uint8 public constant PERC_DECIMALS = 6;
 
+    // @dev Initial exchange rate between vault shares and underlying tokens.
+    uint256 private constant INITIAL_RATE = 10**6;
+
     //-------------------------------------------------------------------------
     // Data
 
@@ -257,7 +260,8 @@ contract RolloverVault is ERC20 {
         uint256 totalAssets_,
         uint256 totalSupply_
     ) private pure returns (uint256) {
-        return (uAmount * totalSupply_) / totalAssets_;
+        // TODO: alternatively can make a mico-deposit on construction
+        return totalSupply_ > 0 ? ((uAmount * totalSupply_) / totalAssets_) : uAmount * INITIAL_RATE;
     }
 
     // @dev Computes the amount of underlying tokens that can be exchanged for a given amount of vault shares.
