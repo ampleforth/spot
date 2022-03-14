@@ -169,7 +169,11 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @param token The token address.
     // @param to The destination address.
     // @param amount The amount of tokens to be transferred.
-    function transferERC20(IERC20 token, address to, uint256 amount) external onlyOwner {
+    function transferERC20(
+        IERC20 token,
+        address to,
+        uint256 amount
+    ) external onlyOwner {
         require(!_tranches.contains(address(token)), "Expected token to not be reserve asset");
         token.safeTransfer(to, amount);
     }

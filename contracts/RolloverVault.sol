@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { EnumerableSet } from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import { SignedMath } from "@openzeppelin/contracts/utils/math/SignedMath.sol";
@@ -14,7 +15,6 @@ import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "./_interfaces/buttonwood/ITranche.sol";
 
 // TODO: Vault to Implement I4626
-// TODO: emit events
 /*
  *  @title RolloverVault
  *
@@ -30,14 +30,22 @@ import { ITranche } from "./_interfaces/buttonwood/ITranche.sol";
  *          which is distributed to LPs of this vault as yield.
  *
  */
-contract RolloverVault is ERC20 {
+contract RolloverVault is ERC20, Ownable {
     using SignedMath for int256;
     using EnumerableSet for EnumerableSet.AddressSet;
     using SafeERC20 for IERC20;
     using BondHelpers for IBondController;
 
     //-------------------------------------------------------------------------
-    // Constants & Immutables
+    // Events
+
+    // @notice Event emitted the reserve's current token balance is recorded after change.
+    // @param t Address of token.
+    // @param balance The recorded ERC-20 balance of the token held by the reserve.
+    event ReserveSynced(IERC20 t, uint256 balance);
+
+    //-------------------------------------------------------------------------
+    // Constants
     uint8 public constant PERC_DECIMALS = 6;
 
     // @dev Initial micro-deposit into the vault so that the totalSupply is never zero.
@@ -69,7 +77,11 @@ contract RolloverVault is ERC20 {
     // @param name ERC-20 Name of the Perp token.
     // @param symbol ERC-20 Symbol of the Perp token.
     // @param initialRate Initial exchange rate between vault shares and underlying tokens for micro-deposit.
-    constructor(string memory name, string memory symbol, uint256 initialRate) ERC20(name, symbol) {
+    constructor(
+        string memory name,
+        string memory symbol,
+        uint256 initialRate
+    ) ERC20(name, symbol) {
         // First mint
         uint256 shares = initialRate * INITIAL_DEPOSIT;
         underlying.safeTransferFrom(_msgSender(), _reserve(), INITIAL_DEPOSIT);
@@ -80,6 +92,7 @@ contract RolloverVault is ERC20 {
     // External methods
 
     // @notice Mints tranches by depositing the underlying token into the perp contract's active minting bond.
+    // @param uAmount The amount of underlying tokens to be tranched.
     // TODO: can we run into a spam when someone just keep tranching assets held in the _reserve()?
     //       they can be un-tranched using the redeem method if this happens.
     function mintTranches(uint256 uAmount) external {
@@ -91,7 +104,8 @@ contract RolloverVault is ERC20 {
             "Expected bond collateral to be the vault's underlying token"
         );
 
-        underlying.approve(address(bond), uAmount);
+        _approveAll(underlying, address(bond));
+
         bond.deposit(uAmount);
         _syncReserve(bond, td);
 
@@ -99,29 +113,26 @@ contract RolloverVault is ERC20 {
     }
 
     // @notice Rolls over older tranches held by the perp contract for more recently tranched ones.
+    // @param trancheDeposited The tranche to be deposited into the perp contract.
+    // @param trancheWithdrawn The tranche to be withdrawn from the perp contract.
+    // @param trancheDepositAmt The amount of tokens deposited.
     function rolloverTranches(
-        ITranche trancheIn,
-        ITranche trancheOut,
-        uint256 trancheInAmt,
-        int256 reward
+        ITranche trancheDeposited,
+        ITranche trancheWithdrawn,
+        uint256 trancheDepositAmt
     ) external {
-        IBondController bondIn = IBondController(trancheIn.bond());
-        IBondController bondOut = IBondController(trancheOut.bond());
+        IBondController bondDeposited = IBondController(trancheDeposited.bond());
+        IBondController bondWithdrawn = IBondController(trancheWithdrawn.bond());
 
-        TrancheData memory bondInTrancheData = bondIn.getTrancheData();
-        TrancheData memory bondOutTrancheData = bondOut.getTrancheData();
+        require(bondWithdrawn.timeToMaturity() <= maxTimeToMaturitySec, "Expected bondWithdrawn maturity to be closer");
 
-        require(bondOut.timeToMaturity() <= maxTimeToMaturitySec, "Expected bondOut maturity to be closer");
+        _approveAll(trancheDeposited, address(perp));
+        _approveAll(perp.rewardToken(), address(perp));
 
-        trancheIn.approve(address(perp), trancheInAmt);
-        if (reward < 0) {
-            // if a fee is to be paid
-            perp.rewardToken().approve(address(perp), reward.abs());
-        }
-        perp.rollover(trancheIn, trancheOut, trancheInAmt);
+        perp.rollover(trancheDeposited, trancheWithdrawn, trancheDepositAmt);
 
-        _syncReserve(bondIn, bondInTrancheData);
-        _syncReserve(bondOut, bondOutTrancheData);
+        _syncReserve(bondDeposited, bondDeposited.getTrancheData());
+        _syncReserve(bondWithdrawn, bondWithdrawn.getTrancheData());
     }
 
     // @notice Redeems tranches held by the reserve for the underlying token.
@@ -204,7 +215,10 @@ contract RolloverVault is ERC20 {
     function _syncReserve(IBondController bond, TrancheData memory td) private {
         bool hasTrancheBalance = false;
         for (uint8 i = 0; i < td.trancheCount && !hasTrancheBalance; i++) {
-            hasTrancheBalance = hasTrancheBalance || (td.tranches[i].balanceOf(_reserve()) > 0);
+            uint256 trancheBalance = td.tranches[i].balanceOf(_reserve());
+            hasTrancheBalance = hasTrancheBalance || (trancheBalance > 0);
+
+            emit ReserveSynced(td.tranches[i], trancheBalance);
         }
 
         if (hasTrancheBalance && !_reserveBonds.contains(address(bond))) {
@@ -214,8 +228,14 @@ contract RolloverVault is ERC20 {
         if (!hasTrancheBalance && _reserveBonds.contains(address(bond))) {
             _reserveBonds.remove(address(bond));
         }
+    }
 
-        // emit event
+    // @dev Approves the spender to spend all of the reserve's token.
+    // NOTE: Only audited & immutable spender contracts should have infinite approvals.
+    function _approveAll(IERC20 token, address spender) private {
+        if (token.allowance(_reserve(), spender) != type(uint256).max) {
+            token.approve(spender, type(uint256).max);
+        }
     }
 
     // @dev The reserve holds underling tokens as cash and tranches positions
@@ -278,5 +298,4 @@ contract RolloverVault is ERC20 {
     ) private pure returns (uint256) {
         return (shares * totalIncome_) / totalSupply_;
     }
-
 }
