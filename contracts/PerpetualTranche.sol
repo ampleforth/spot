@@ -77,7 +77,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     AddressQueue public bondQueue;
 
     // @notice A record of all tranches with a balance held in the reserve which backs spot supply.
-    EnumerableSet.AddressSet private _tranches;
+    EnumerableSet.AddressSet private _reserveTranches;
 
     // @notice The minimum maturity time in seconds for a bond below which can get removed from the bond queue.
     uint256 public minMaturiySec;
@@ -174,7 +174,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         address to,
         uint256 amount
     ) external onlyOwner {
-        require(!_tranches.contains(address(token)), "Expected token to not be reserve asset");
+        require(!_reserveTranches.contains(address(token)), "Expected token to not be reserve asset");
         token.safeTransfer(to, amount);
     }
 
@@ -467,12 +467,12 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
     /// @inheritdoc IPerpetualTranche
     function trancheCount() external view override returns (uint256) {
-        return _tranches.length();
+        return _reserveTranches.length();
     }
 
     /// @inheritdoc IPerpetualTranche
     function trancheAt(uint256 i) external view override returns (address) {
-        return _tranches.at(i);
+        return _reserveTranches.at(i);
     }
 
     //--------------------------------------------------------------------------
@@ -499,11 +499,11 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     //      Spot is backed by tranches in this list.
     function _syncReserve(ITranche t) internal {
         uint256 balance = t.balanceOf(reserve());
-        bool inReserve = _tranches.contains(address(t));
+        bool inReserve = _reserveTranches.contains(address(t));
         if (balance > 0 && !inReserve) {
-            _tranches.add(address(t));
+            _reserveTranches.add(address(t));
         } else if (balance == 0 && inReserve) {
-            _tranches.remove(address(t));
+            _reserveTranches.remove(address(t));
         }
         emit ReserveSynced(t, balance);
     }
