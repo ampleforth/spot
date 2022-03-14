@@ -89,6 +89,26 @@ contract RolloverVault is ERC20, Ownable {
     }
 
     //--------------------------------------------------------------------------
+    // ADMIN only methods
+
+    // @notice Allows the owner to transfer non-core assets out of the system if required.
+    // @param token The token address.
+    // @param to The destination address.
+    // @param amount The amount of tokens to be transferred.
+    function transferERC20(
+        IERC20 token,
+        address to,
+        uint256 amount
+    ) external onlyOwner {
+        bool isReserveAsset = false;
+        try ITranche(address(token)).bond() returns (address trancheBond) {
+            isReserveAsset = _reserveBonds.contains(trancheBond);
+        } catch {} // solhint-disable no-empty-blocks
+        require(!isReserveAsset && token != _incomeAsset(), "Expected token to not be reserve asset or income asset");
+        token.safeTransfer(to, amount);
+    }
+
+    //--------------------------------------------------------------------------
     // External methods
 
     // @notice Mints tranches by depositing the underlying token into the perp contract's active minting bond.
@@ -127,7 +147,7 @@ contract RolloverVault is ERC20, Ownable {
         require(bondWithdrawn.timeToMaturity() <= maxTimeToMaturitySec, "Expected bondWithdrawn maturity to be closer");
 
         _approveAll(trancheDeposited, address(perp));
-        _approveAll(perp.rewardToken(), address(perp));
+        _approveAll(_incomeAsset(), address(perp));
 
         perp.rollover(trancheDeposited, trancheWithdrawn, trancheDepositAmt);
 
@@ -136,6 +156,8 @@ contract RolloverVault is ERC20, Ownable {
     }
 
     // @notice Redeems tranches held by the reserve for the underlying token.
+    // @param bond The address of the bond to redeem into underlying token.
+    // @param trancheAmts The amount of tranches of each type,
     // @dev Expected the reserve to hold all the tranches in the parent bond's desired ratio
     //      to reconstruct the collateral completely.
     function redeem(IBondController bond, uint256[] memory trancheAmts) external {
@@ -144,6 +166,7 @@ contract RolloverVault is ERC20, Ownable {
     }
 
     // @notice Redeems the mature tranches held by the reserve for the underlying token.
+    // @param bond The address of the bond to redeem into underlying token.
     // @dev Reverts if tranche's parent bond is not mature.
     function redeemMature(IBondController bond) external {
         if (!bond.isMature()) {
@@ -157,8 +180,10 @@ contract RolloverVault is ERC20, Ownable {
     }
 
     // @notice Deposits the underlying token into the vault to mint vault shares.
-    function deposit(uint256 uAmount) external returns (uint256) {
-        uint256 shares = _uAmountToShares(uAmount, _getTotalAssets(), totalSupply());
+    // @param uAmount The amount of underlying tokens to be deposited into the vault.
+    // @return shares The amount of vault shares minted.
+    function deposit(uint256 uAmount) external returns (uint256 shares) {
+        shares = _uAmountToShares(uAmount, _getTotalAssets(), totalSupply());
 
         underlying.safeTransferFrom(_msgSender(), _reserve(), uAmount);
 
@@ -168,16 +193,19 @@ contract RolloverVault is ERC20, Ownable {
     }
 
     // @notice Withdraws the underlying token and reward from the vault by burning shares.
-    function withdraw(uint256 uAmount) external returns (uint256, uint256) {
+    // @param uAmount The amount of underlying tokens to be withdrawn from the vault.
+    // @return shares The amount of vault shares burnt.
+    // @return reward The total reward awarded to the user for providing vault liquidity.
+    function withdraw(uint256 uAmount) external returns (uint256 shares, uint256 reward) {
         uint256 totalSupply_ = totalSupply();
-        uint256 shares = _uAmountToShares(uAmount, _getTotalAssets(), totalSupply_);
 
-        uint256 reward = _rewardShare(shares, _getTotalIncome(), totalSupply_);
+        shares = _uAmountToShares(uAmount, _getTotalAssets(), totalSupply_);
+        reward = _rewardShare(shares, _getTotalIncome(), totalSupply_);
 
         _burn(_msgSender(), shares);
 
-        perp.rewardToken().safeTransfer(_msgSender(), reward);
         underlying.safeTransfer(_msgSender(), uAmount);
+        _incomeAsset().safeTransfer(_msgSender(), reward);
 
         _validateReserve();
 
@@ -259,7 +287,7 @@ contract RolloverVault is ERC20, Ownable {
 
     // @dev The total rotation reward held by the reserve.
     function _getTotalIncome() private view returns (uint256) {
-        return perp.rewardToken().balanceOf(_reserve());
+        return _incomeAsset().balanceOf(_reserve());
     }
 
     // @dev Computes the percentage of the reserve held as "cash", i.e) the underlying token.
@@ -270,6 +298,11 @@ contract RolloverVault is ERC20, Ownable {
     // @dev Address of the reserve where all the vault funds are held.
     function _reserve() private view returns (address) {
         return address(this);
+    }
+
+    // @dev Address of the asset in which rewards are paid out.
+    function _incomeAsset() private view returns (IERC20) {
+        return perp.rewardToken();
     }
 
     // @dev Computes the amount of vault shares can be exchanged for a given amount of underlying tokens.
