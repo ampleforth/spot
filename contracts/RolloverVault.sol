@@ -40,8 +40,8 @@ contract RolloverVault is ERC20 {
     // Constants & Immutables
     uint8 public constant PERC_DECIMALS = 6;
 
-    // @dev Initial exchange rate between vault shares and underlying tokens.
-    uint256 private constant INITIAL_RATE = 10**6;
+    // @dev Initial micro-deposit into the vault so that the totalSupply is never zero.
+    uint256 public constant INITIAL_DEPOSIT = 10**3;
 
     //-------------------------------------------------------------------------
     // Data
@@ -66,8 +66,15 @@ contract RolloverVault is ERC20 {
     uint256 public maxTimeToMaturitySec;
 
     // @notice Constructor to create the contract.
-    // solhint-disable-next-line no-empty-blocks
-    constructor(string memory name, string memory symbol) ERC20(name, symbol) {}
+    // @param name ERC-20 Name of the Perp token.
+    // @param symbol ERC-20 Symbol of the Perp token.
+    // @param initialRate Initial exchange rate between vault shares and underlying tokens for micro-deposit.
+    constructor(string memory name, string memory symbol, uint256 initialRate) ERC20(name, symbol) {
+        // First mint
+        uint256 shares = initialRate * INITIAL_DEPOSIT;
+        underlying.safeTransferFrom(_msgSender(), _reserve(), INITIAL_DEPOSIT);
+        _mint(_reserve(), shares);
+    }
 
     //--------------------------------------------------------------------------
     // External methods
@@ -184,7 +191,7 @@ contract RolloverVault is ERC20 {
     // Private/Internal helper methods
 
     // @dev Runs check to ensure that the reserve has enough cash holdings.
-    function _validateReserve() private {
+    function _validateReserve() private view {
         // NOTE: this is expensive, recomputing _getTotalAssets()
         // This can be optimized.
         require(
@@ -240,15 +247,6 @@ contract RolloverVault is ERC20 {
         return (underlying.balanceOf(_reserve()) * (10**PERC_DECIMALS)) / totalAssets_;
     }
 
-    // @dev Computes the share of the reward balance.
-    function _rewardShare(
-        uint256 shares,
-        uint256 totalIncome_,
-        uint256 totalSupply_
-    ) private view returns (uint256) {
-        return (shares * totalIncome_) / totalSupply_;
-    }
-
     // @dev Address of the reserve where all the vault funds are held.
     function _reserve() private view returns (address) {
         return address(this);
@@ -260,8 +258,7 @@ contract RolloverVault is ERC20 {
         uint256 totalAssets_,
         uint256 totalSupply_
     ) private pure returns (uint256) {
-        // TODO: alternatively can make a mico-deposit on construction
-        return totalSupply_ > 0 ? ((uAmount * totalSupply_) / totalAssets_) : uAmount * INITIAL_RATE;
+        return (uAmount * totalSupply_) / totalAssets_;
     }
 
     // @dev Computes the amount of underlying tokens that can be exchanged for a given amount of vault shares.
@@ -272,4 +269,14 @@ contract RolloverVault is ERC20 {
     ) private pure returns (uint256) {
         return (shares * totalAssets_) / totalSupply_;
     }
+
+    // @dev Computes the share of the reward balance.
+    function _rewardShare(
+        uint256 shares,
+        uint256 totalIncome_,
+        uint256 totalSupply_
+    ) private pure returns (uint256) {
+        return (shares * totalIncome_) / totalSupply_;
+    }
+
 }
