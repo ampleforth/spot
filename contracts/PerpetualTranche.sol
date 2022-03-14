@@ -29,7 +29,7 @@ import { IPricingStrategy } from "./_interfaces/IPricingStrategy.sol";
  *
  *          The PerpetualTranche contract enforces tranche deposits/redemption through a FIFO bond queue.
  *          The queue is ordered by the bond's maturity date, the tail of the queue has the newest bond
- *          ie) the one that matures furthest out into the future.
+ *          i.e) the one that matures furthest out into the future.
  *          Incentivized parties can "rollover" tranches which are approaching maturity for
  *          tranches at tail of the bond queue.
  *
@@ -54,7 +54,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     //-------------------------------------------------------------------------
     // Data
 
-    // @notice Issuer stores a pre-defined bond config and frequency and issues new bonds when poked
+    // @notice Issuer stores a predefined bond config and frequency and issues new bonds when poked
     // @dev Only tranches of bonds issued by the whitelisted issuer are accepted by the system.
     IBondIssuer public bondIssuer;
 
@@ -76,7 +76,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     //      The system burns perpetual tokens for tranches from bonds at the head of the queue.
     AddressQueue public bondQueue;
 
-    // @notice A record of all tranches with a balance held in the reserve.
+    // @notice A record of all tranches with a balance held in the reserve which backs spot supply.
     EnumerableSet.AddressSet private _tranches;
 
     // @notice The minimum maturity time in seconds for a bond below which can get removed from the bond queue.
@@ -165,6 +165,15 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         emit TrancheYieldsUpdated(hash, yields);
     }
 
+    // @notice Allows the owner to transfer non-reserve assets out of the system if required.
+    // @param token The token address.
+    // @param to The destination address.
+    // @param amount The amount of tokens to be transferred.
+    function transferERC20(IERC20 token, address to, uint256 amount) external onlyOwner {
+        require(!_tranches.contains(address(token)), "Expected token to not be reserve asset");
+        token.safeTransfer(to, amount);
+    }
+
     //--------------------------------------------------------------------------
     // External methods
 
@@ -178,7 +187,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         }
 
         trancheIn.safeTransferFrom(_msgSender(), address(this), trancheInAmt);
-        syncReserve(trancheIn);
+        _syncReserve(trancheIn);
 
         // NOTE: user approves fee in advance, in case the fee is paid in the native token
         _mint(_msgSender(), m.amount);
@@ -211,7 +220,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
         for (uint8 i = 0; i < b.trancheCount; i++) {
             b.tranches[i].safeTransfer(_msgSender(), b.trancheAmts[i]);
-            syncReserve(b.tranches[i]);
+            _syncReserve(b.tranches[i]);
         }
 
         // NOTE: user approves burn amount + fee in case the fee is paid in the native token
@@ -272,7 +281,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         }
 
         b.tranches[0].safeTransfer(_msgSender(), b.trancheAmts[0]);
-        syncReserve(b.tranches[0]);
+        _syncReserve(b.tranches[0]);
 
         _burn(_msgSender(), b.amount);
         _settleFee(_msgSender(), b.fee);
@@ -283,6 +292,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     /// @inheritdoc IPerpetualTranche
     function previewRedeemIcebox(ITranche trancheOut, uint256 requestedAmount)
         public
+        view
         override
         returns (BurnData memory b)
     {
@@ -324,10 +334,10 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         }
 
         trancheIn.safeTransferFrom(_msgSender(), reserve(), trancheInAmt);
-        syncReserve(trancheIn);
+        _syncReserve(trancheIn);
 
         trancheOut.safeTransfer(_msgSender(), r.trancheAmt);
-        syncReserve(trancheOut);
+        _syncReserve(trancheOut);
 
         _settleReward(_msgSender(), r.reward);
 
@@ -394,7 +404,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Oldest bond in the queue (ie the one with the most immediate maturity)
+    // @dev Oldest bond in the queue (i.e the one with the most immediate maturity)
     //      will be at the head of the queue.
     //      Lazily dequeues bonds till the head of the queue has an acceptable bond.
     function getBurningBond() public override returns (IBondController burningBond) {
@@ -410,19 +420,6 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
         // assert(burningBond == IBondController(bondQueue.head()));
         return burningBond;
-    }
-
-    // @notice Keeps the tranche list up to date.
-    // @param t The address of the tranche token.
-    function syncReserve(ITranche t) public {
-        uint256 balance = t.balanceOf(reserve());
-        bool inReserve = _tranches.contains(address(t));
-        if (balance > 0 && !inReserve) {
-            _tranches.add(address(t));
-        } else if (balance == 0 && inReserve) {
-            _tranches.remove(address(t));
-        }
-        emit ReserveSynced(t, balance);
     }
 
     //--------------------------------------------------------------------------
@@ -494,6 +491,19 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     //--------------------------------------------------------------------------
     // Private/Internal helper methods
 
+    // @dev Keeps the list of tranches held in the reserve up to date.
+    //      Spot is backed by tranches in this list.
+    function _syncReserve(ITranche t) internal {
+        uint256 balance = t.balanceOf(reserve());
+        bool inReserve = _tranches.contains(address(t));
+        if (balance > 0 && !inReserve) {
+            _tranches.add(address(t));
+        } else if (balance == 0 && inReserve) {
+            _tranches.remove(address(t));
+        }
+        emit ReserveSynced(t, balance);
+    }
+
     // @dev If the fee is positive, fee is transferred to the reserve from payer
     //      else it's transferred to the payer from the reserve.
     function _settleFee(address payer, int256 fee) internal {
@@ -537,7 +547,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         ITranche t
     ) internal view returns (uint256) {
         // NOTE: `getTrancheIndex` reverts if trancheIn is NOT part of the minting bond
-        return _trancheYields[_bondClass(bond.collateralToken(), td)][td.getTrancheIndex(t)];
+        return _trancheYields[_bondClass(bond.collateralToken(), td.trancheRatios)][td.getTrancheIndex(t)];
     }
 
     // @notice Queries the pricing strategy for the given tranche's price.
@@ -585,7 +595,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     }
 
     // @notice Computes the bond's class hash.
-    function _bondClass(address collateralToken, TrancheData memory td) private pure returns (bytes32) {
-        return keccak256(abi.encode(collateralToken, td.trancheRatios));
+    function _bondClass(address collateralToken, uint256[] memory trancheRatios) private pure returns (bytes32) {
+        return keccak256(abi.encode(collateralToken, trancheRatios));
     }
 }
