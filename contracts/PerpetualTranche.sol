@@ -208,8 +208,8 @@ contract PerpetualTranche is ERC20, Initializable, Ownable {
 
         require(address(bondIn) == bondQueue.tail(), "Tranche in should be of minting bond");
         require(
-            address(bondOut) == bondQueue.head() || !bondQueue.contains(address(bondOut)),
-            "Expected tranche out to be the burning bond or in the ice box"
+            !bondQueue.contains(address(bondOut)),
+            "Expected tranche out to NOT be of bond in the queue"
         );
 
         BondInfo memory bondInInfo = bondIn.getInfo();
