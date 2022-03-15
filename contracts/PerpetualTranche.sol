@@ -102,20 +102,20 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
     // @notice Contract state initialization.
     // @param bondIssuer_ Address of the bond issuer contract.
-    // @param pricingStrategy_ Address of the pricing strategy contract.
     // @param feeStrategy_ Address of the fee strategy contract.
+    // @param pricingStrategy_ Address of the pricing strategy contract.
     function init(
         IBondIssuer bondIssuer_,
         IPricingStrategy pricingStrategy_,
         IFeeStrategy feeStrategy_
     ) public initializer {
         require(address(bondIssuer_) != address(0), "Expected new bond minter to be set");
-        require(address(pricingStrategy_) != address(0), "Expected new pricing strategy to be set");
         require(address(feeStrategy_) != address(0), "Expected new fee strategy to be set");
+        require(address(pricingStrategy_) != address(0), "Expected new pricing strategy to be set");
 
         bondIssuer = bondIssuer_;
-        pricingStrategy = pricingStrategy_;
         feeStrategy = feeStrategy_;
+        pricingStrategy = pricingStrategy_;
 
         bondQueue.init();
     }
@@ -255,7 +255,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
                     continue;
                 }
 
-                b.trancheAmts[i] = trancheAmt;
+                b.trancheAmts[b.trancheCount] = trancheAmt;
                 b.tranches[b.trancheCount] = t;
                 b.trancheCount++;
             }
@@ -392,7 +392,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         mintingBond = IBondController(bondQueue.tail());
         IBondController newBond = bondIssuer.getLastBond();
 
-        if (mintingBond == newBond || !_isAcceptableBond(newBond)) {
+        if (mintingBond == newBond || !isAcceptable(newBond)) {
             return mintingBond;
         }
 
@@ -417,7 +417,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     function getBurningBond() public override returns (IBondController burningBond) {
         burningBond = IBondController(bondQueue.head());
 
-        while (address(burningBond) != address(0) && !_isAcceptableBond(burningBond)) {
+        while (address(burningBond) != address(0) && !isAcceptable(burningBond)) {
             // NOTE: The oldest bond is removed from the head of the queue.
             bondQueue.dequeue();
             emit BondDequeued(burningBond);
@@ -495,6 +495,17 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         return address(this);
     }
 
+    // @notice Checks if the bond can be accepted into the system based on the following conditions.
+    //         * If maturity is within defined bounds
+    // @dev Only "acceptable" bonds can be added to the queue.
+    //      If a bond becomes "unacceptable" it can get removed from the queue.
+    // @param The address of the bond to check.
+    // @return True if the bond is "acceptable".
+    function isAcceptable(IBondController bond) public view returns (bool) {
+        uint256 timeToMaturity = bond.timeToMaturity();
+        return ((timeToMaturity >= minMaturiySec) && (timeToMaturity < maxMaturiySec));
+    }
+
     //--------------------------------------------------------------------------
     // Private/Internal helper methods
 
@@ -535,18 +546,6 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         } else {
             rewardToken_.safeTransferFrom(payer, reserve(), reward_);
         }
-    }
-
-    // @notice Checks if the bond can be accepted into the system based on the following conditions.
-    //         * If maturity is within defined bounds
-    // @dev Only "acceptable" bonds can be added to the queue.
-    //      If a bond becomes "unacceptable" it can get removed from the queue.
-    // @param The address of the bond to check.
-    // @return True if the bond is "acceptable".
-    function _isAcceptableBond(IBondController bond) internal view returns (bool) {
-        return
-            (bond.maturityDate() >= block.timestamp + minMaturiySec) &&
-            (bond.maturityDate() < block.timestamp + maxMaturiySec);
     }
 
     // @dev Fetches the tranche yield from storage.

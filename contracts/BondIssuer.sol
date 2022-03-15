@@ -17,7 +17,7 @@ contract BondIssuer is IBondIssuer {
     // @notice Address of the bond factory.
     IBondFactory public immutable bondFactory;
 
-    // @notice Time to elapse since last issue, after which a new bond can be issued.
+    // @notice Time to elapse since last issue window start, after which a new bond can be issued.
     //         AKA, issue frequency.
     uint256 public immutable minIssueTimeIntervalSec;
 
@@ -32,19 +32,11 @@ contract BondIssuer is IBondIssuer {
     //      Rather these bonds are designed to have a predictable maturity date.
     uint256 public immutable maxMaturityDuration;
 
-    // @notice The timestamp when the issue window opened during the last issue.
-    uint256 public lastIssueWindowTimestamp;
+    // @notice The underlying rebasing token used to be tranched.
+    address public immutable collateralToken;
 
-    struct BondConfig {
-        // @notice The underlying rebasing token used to be tranched.
-        address collateralToken;
-        // @notice The tranche ratios.
-        uint256[] trancheRatios;
-    }
-
-    // @notice The configuration of the bond to be issued.
-    // @dev A bond's config is defined by it's {collateralToken, trancheRatios}
-    BondConfig public config;
+    // @notice The tranche ratios.
+    uint256[] public trancheRatios;
 
     // @notice A private mapping to keep track of bonds issued by this issuer.
     mapping(IBondController => bool) private _issuedBonds;
@@ -52,19 +44,25 @@ contract BondIssuer is IBondIssuer {
     // @notice The address of the most recently issued bond.
     IBondController private _lastBond;
 
+    // @notice The timestamp when the issue window opened during the last issue.
+    uint256 public lastIssueWindowTimestamp;
+
     constructor(
         IBondFactory bondFactory_,
         uint256 minIssueTimeIntervalSec_,
         uint256 issueWindowOffsetSec_,
         uint256 maxMaturityDuration_,
-        BondConfig memory config_
+        address collateralToken_,
+        uint256[] memory trancheRatios_
     ) {
         bondFactory = bondFactory_;
         minIssueTimeIntervalSec = minIssueTimeIntervalSec_;
         issueWindowOffsetSec = issueWindowOffsetSec_;
         maxMaturityDuration = maxMaturityDuration_;
 
-        config = config_;
+        collateralToken = collateralToken_;
+        trancheRatios = trancheRatios_;
+
         lastIssueWindowTimestamp = 0;
     }
 
@@ -75,19 +73,15 @@ contract BondIssuer is IBondIssuer {
 
     /// @inheritdoc IBondIssuer
     function issue() public override {
-        if (lastIssueWindowTimestamp + minIssueTimeIntervalSec < block.timestamp) {
+        if (lastIssueWindowTimestamp + minIssueTimeIntervalSec >= block.timestamp) {
             return;
         }
 
-        // Set to the timestamp of the most recent issue window opening
+        // Set to the timestamp of the most recent issue window start
         lastIssueWindowTimestamp = block.timestamp - (block.timestamp % minIssueTimeIntervalSec) + issueWindowOffsetSec;
 
         IBondController bond = IBondController(
-            bondFactory.createBond(
-                config.collateralToken,
-                config.trancheRatios,
-                lastIssueWindowTimestamp + maxMaturityDuration
-            )
+            bondFactory.createBond(collateralToken, trancheRatios, lastIssueWindowTimestamp + maxMaturityDuration)
         );
 
         _issuedBonds[bond] = true;

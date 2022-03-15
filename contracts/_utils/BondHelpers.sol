@@ -44,6 +44,8 @@ library BondHelpers {
     // @return The tranche data.
     function getTrancheData(IBondController b) internal view returns (TrancheData memory td) {
         td.trancheCount = b.trancheCount();
+        td.tranches = new ITranche[](td.trancheCount);
+        td.trancheRatios = new uint256[](td.trancheCount);
         // Max tranches per bond < 2**8 - 1
         for (uint8 i = 0; i < td.trancheCount; i++) {
             (ITranche t, uint256 ratio) = b.tranches(i);
@@ -74,6 +76,7 @@ library BondHelpers {
         uint256 collateralBalance = IERC20(b.collateralToken()).balanceOf(address(b));
         uint256 feeBps = b.feeBps();
 
+        trancheAmts = new uint256[](td.trancheCount);
         for (uint256 i = 0; i < td.trancheCount; i++) {
             uint256 trancheValue = (collateralAmount * td.trancheRatios[i]) / TRANCHE_RATIO_GRANULARITY;
             if (collateralBalance > 0) {
@@ -100,6 +103,8 @@ library BondHelpers {
         returns (TrancheData memory td, uint256[] memory balances)
     {
         td = getTrancheData(b);
+
+        balances = new uint256[](td.trancheCount);
 
         if (b.isMature()) {
             for (uint8 i = 0; i < td.trancheCount; i++) {

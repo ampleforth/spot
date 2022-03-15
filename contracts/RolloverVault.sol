@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { Initializable } from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { EnumerableSet } from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import { SignedMath } from "@openzeppelin/contracts/utils/math/SignedMath.sol";
@@ -30,7 +31,7 @@ import { ITranche } from "./_interfaces/buttonwood/ITranche.sol";
  *          which is distributed to LPs of this vault as yield.
  *
  */
-contract RolloverVault is ERC20, Ownable {
+contract RolloverVault is ERC20, Ownable, Initializable {
     using SignedMath for int256;
     using EnumerableSet for EnumerableSet.AddressSet;
     using SafeERC20 for IERC20;
@@ -54,15 +55,11 @@ contract RolloverVault is ERC20, Ownable {
     //-------------------------------------------------------------------------
     // Data
 
-    // @notice List of bonds whose tranches are currently held by the system.
-    // @dev Updated when a new tranche is added or removed or during rollovers.
-    EnumerableSet.AddressSet private _reserveBonds;
-
     // @notice Address of the underlying token accepted by this vault.
-    IERC20 public underlying;
+    IERC20 public immutable underlying;
 
     // @notice Address of the perpetual tranche contract on which roll over operations are to be performed.
-    IPerpetualTranche public perp;
+    IPerpetualTranche public immutable perp;
 
     // @notice The percentage of the reserve's assets to be held as naked collateral
     //         the rest are held as tranches.
@@ -73,16 +70,38 @@ contract RolloverVault is ERC20, Ownable {
     //      it obtains the bonds, to the time it matures.
     uint256 public maxTimeToMaturitySec;
 
+    // @notice List of bonds whose tranches are currently held by the system.
+    // @dev Updated when a new tranche is added or removed or during rollovers.
+    EnumerableSet.AddressSet private _reserveBonds;
+
     // @notice Constructor to create the contract.
-    // @param name ERC-20 Name of the Perp token.
-    // @param symbol ERC-20 Symbol of the Perp token.
-    // @param initialRate Initial exchange rate between vault shares and underlying tokens for micro-deposit.
+    // @param perp_ ERC-20 address of the perp token.
+    // @param underlying_ ERC-20 address of the underlying token that can be deposited into the vault.
+    // @param name ERC-20 Name of the vault token.
+    // @param symbol ERC-20 Symbol of the vault token.
     constructor(
+        IPerpetualTranche perp_,
+        IERC20 underlying_,
         string memory name,
-        string memory symbol,
-        uint256 initialRate
+        string memory symbol
     ) ERC20(name, symbol) {
-        // First mint
+        perp = perp_;
+        underlying = underlying_;
+    }
+
+    // @notice Contract state initialization.
+    // @param initialRate Initial exchange rate between vault shares and underlying tokens for micro-deposit.
+    // @param targetCashPerc_ Percentage of reserve to be held as cash.
+    // @param maxTimeToMaturitySec_ Max time to hold bonds till maturity.
+    function init(
+        uint256 initialRate,
+        uint256 targetCashPerc_,
+        uint256 maxTimeToMaturitySec_
+    ) public initializer {
+        targetCashPerc = targetCashPerc_;
+        maxTimeToMaturitySec = maxTimeToMaturitySec_;
+
+        // first mint
         uint256 shares = initialRate * INITIAL_DEPOSIT;
         underlying.safeTransferFrom(_msgSender(), _reserve(), INITIAL_DEPOSIT);
         _mint(_reserve(), shares);

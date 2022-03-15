@@ -155,24 +155,24 @@ interface IPerpetualTranche is IERC20 {
     // @notice The yield to be applied given the tranche based on its bond's class and it's seniority.
     // @param t The address of the tranche token.
     // @return The yield applied.
-    function trancheYield(ITranche t) external view returns (uint256);
+    function trancheYield(ITranche tranche) external view returns (uint256);
 
     // @notice The price of the given tranche.
     // @param t The address of the tranche token.
     // @return The computed price.
-    function tranchePrice(ITranche t) external view returns (uint256);
+    function tranchePrice(ITranche tranche) external view returns (uint256);
 
     // @notice Computes the amount of perp token amount that can be exchanged for given tranche and amount.
     // @param t The address of the tranche token.
     // @param trancheAmt The amount of tranche tokens.
     // @return The perp token amount.
-    function tranchesToPerps(ITranche t, uint256 trancheAmt) external view returns (uint256);
+    function tranchesToPerps(ITranche tranche, uint256 trancheAmt) external view returns (uint256);
 
     // @notice Computes the amount of tranche tokens amount that can be exchanged for given perp token amount.
     // @param t The address of the tranche token.
     // @param trancheAmt The amount of perp tokens.
     // @return The tranche token amount.
-    function perpsToTranches(ITranche t, uint256 amount) external view returns (uint256);
+    function perpsToTranches(ITranche tranche, uint256 amount) external view returns (uint256);
 
     // @notice Number of tranche tokens held in the reserve.
     function trancheCount() external view returns (uint256);
