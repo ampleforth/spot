@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // solhint-disable-next-line compiler-version
 import { ITranche } from "./ITranche.sol";
 
