@@ -409,6 +409,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
     // @dev If the reward is positive, reward is transferred from the reserve to the payer
     //      else it's transferred from the payer to the reserve.
+    // TODO: rename rollover reward to a rollover fee to simplify this function
     function _settleReward(
         IERC20 rewardToken_,
         address payer,
