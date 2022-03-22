@@ -15,7 +15,7 @@ import { IPerpetualTranche } from "../_interfaces/IPerpetualTranche.sol";
  *  @notice Basic fee strategy using fixed percentage of perpetual ERC-20 token amounts.
  *
  *  @dev If mint or burn fee is negative, the other must overcompensate in the positive direction.
- *       Otherwise, user could extract from fee reserve by constant mint/burn transactions.
+ *       Otherwise, user could extract from the fee collector by constant mint/burn transactions.
  */
 contract BasicFeeStrategy is IFeeStrategy {
     using SignedMath for int256;
@@ -39,7 +39,7 @@ contract BasicFeeStrategy is IFeeStrategy {
     // @notice Fixed percentage of the burn amount to be used as fee.
     int256 public immutable burnFeePct;
 
-    // @notice Fixed percentage of the reserve's balance to be used as the reward,
+    // @notice Fixed percentage of the fee collector's balance to be used as the reward,
     //         for rolling over the entire supply of the perp tokens.
     int256 public immutable rolloverRewardPct;
 
@@ -80,7 +80,7 @@ contract BasicFeeStrategy is IFeeStrategy {
 
     /// @inheritdoc IFeeStrategy
     function computeRolloverReward(uint256 rolloverAmt) external view override returns (int256) {
-        uint256 rewardShare = (rewardToken.balanceOf(perp.reserve()) * rolloverAmt) / perp.totalSupply();
+        uint256 rewardShare = (rewardToken.balanceOf(perp.feeCollector()) * rolloverAmt) / perp.totalSupply();
         uint256 absoluteReward = (rolloverRewardPct.abs() * rewardShare) / (10**PCT_DECIMALS);
         return rolloverRewardPct.sign() * absoluteReward.toInt256();
     }
