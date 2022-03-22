@@ -52,14 +52,14 @@ library AddressQueueHelpers {
     // @param q Queue storage.
     // @return The address at the head of the queue.
     function head(AddressQueue storage q) internal view returns (address) {
-        return q.queue[q.first];
+        return q.queue[q.first]; // at(0)
     }
 
     // @notice Fetches the address at the tail of the queue.
     // @param q Queue storage.
     // @return The address at the tail of the queue.
     function tail(AddressQueue storage q) internal view returns (address) {
-        return q.queue[q.last];
+        return q.queue[q.last]; // at(length-1)
     }
 
     // @notice Checks if the given address is in the queue.
@@ -68,5 +68,20 @@ library AddressQueueHelpers {
     // @return True if address is present and False if not.
     function contains(AddressQueue storage q, address a) internal view returns (bool) {
         return q.items[a];
+    }
+
+    // @notice Calculates the number of items in the queue.
+    // @param q Queue storage.
+    // @return The queue size.
+    function length(AddressQueue storage q) internal view returns (uint256) {
+        return q.last - q.first + 1;
+    }
+
+    // @notice Fetches the item at a given index (indexed from 0 to length-1).
+    // @param q Queue storage.
+    // @param i Index to look up.
+    // @return The item at given index.
+    function at(AddressQueue storage q, uint256 index) internal view returns (address) {
+        return q.queue[q.first + index];
     }
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // solhint-disable-next-line compiler-version
-import { ITranche } from "./button-wood/ITranche.sol";
+import { ITranche } from "./buttonwood/ITranche.sol";
 
 interface IPricingStrategy {
     // @notice Computes the price of a given tranche.

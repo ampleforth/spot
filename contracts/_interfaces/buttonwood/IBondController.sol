@@ -10,17 +10,21 @@ interface IBondController {
 
     function creationDate() external view returns (uint256);
 
+    function totalDebt() external view returns (uint256);
+
+    function feeBps() external view returns (uint256);
+
+    function isMature() external view returns (bool);
+
     function tranches(uint256 i) external view returns (ITranche token, uint256 ratio);
 
     function trancheCount() external view returns (uint256 count);
 
     function deposit(uint256 amount) external;
 
-    // immature redemption
     function redeem(uint256[] memory amounts) external;
 
     function mature() external;
 
-    // redemption after maturity
     function redeemMature(address tranche, uint256 amount) external;
 }
