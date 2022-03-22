@@ -56,7 +56,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @dev Only tranches of bonds issued by the whitelisted issuer are accepted by the system.
     IBondIssuer public bondIssuer;
 
-    // @notice External contract points to the fee token and computes mint, burn fees and rollover rewards.
+    // @notice External contract points to the fee token and computes mint, burn and rollover fees.
     IFeeStrategy public feeStrategy;
 
     // @notice External contract that computes a given tranche's price.
@@ -192,7 +192,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         m.fee = feeStrategy.computeMintFee(m.amount);
 
         _mint(_msgSender(), m.amount);
-        _settleFee(feeToken(), _msgSender(), m.fee);
+        _settleFee(_msgSender(), m.fee);
 
         return m;
     }
@@ -249,8 +249,8 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         r.amount = requestedAmount - r.remainder;
         r.fee = feeStrategy.computeBurnFee(r.amount);
 
-        _settleFee(feeToken(), _msgSender(), r.fee);
         _burn(_msgSender(), r.amount);
+        _settleFee(_msgSender(), r.fee);
 
         return r;
     }
@@ -290,8 +290,8 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         trancheOut.safeTransfer(_msgSender(), r.trancheAmt);
         syncReserve(trancheOut);
 
-        r.reward = feeStrategy.computeRolloverReward(r.amount);
-        _settleReward(rewardToken(), _msgSender(), r.reward);
+        r.fee = feeStrategy.computeRolloverFee(r.amount);
+        _settleFee(_msgSender(), r.fee);
 
         return r;
     }
@@ -366,7 +366,6 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         return address(this);
     }
 
-
     /// @inheritdoc IPerpetualTranche
     function feeCollector() public view override returns (address) {
         return address(this);
@@ -378,11 +377,6 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     }
 
     /// @inheritdoc IPerpetualTranche
-    function rewardToken() public view override returns (IERC20) {
-        return feeStrategy.rewardToken();
-    }
-
-    /// @inheritdoc IPerpetualTranche
     function getTrancheYield(bytes32 hash, uint256 index) public view override returns (uint256) {
         return _trancheYields[hash][index];
     }
@@ -390,18 +384,15 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     //--------------------------------------------------------------------------
     // Private/Internal helper methods
 
-    // @dev If the fee is positive, fee is transferred to the reserve from payer
-    //      else it's transferred to the payer from the reserve.
-    function _settleFee(
-        IERC20 feeToken_,
-        address payer,
-        int256 fee
-    ) internal {
+    // @dev If the fee is positive, fee is transferred to the fee collector from payer
+    //      else it's transferred to the payer from the fee collector.
+    function _settleFee(address payer, int256 fee) internal {
+        IERC20 feeToken_ = feeToken();
         uint256 fee_ = fee.abs();
 
         if (fee >= 0) {
             if (address(feeToken_) == address(this)) {
-                // NOTE: {msg.sender} here should be address which triggered 
+                // NOTE: {msg.sender} here should be address which triggered
                 //       the smart contract call.
                 transfer(feeCollector(), fee_);
             } else {
@@ -410,18 +401,6 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         } else {
             feeToken_.safeTransfer(payer, fee_);
         }
-    }
-
-    // @dev If the reward is positive, reward is transferred from the reserve to the payer
-    //      else it's transferred from the payer to the reserve.
-    // TODO: rename rollover reward to a rollover fee to simplify this function
-    function _settleReward(
-        IERC20 rewardToken_,
-        address payer,
-        int256 reward
-    ) internal {
-        // NOTE: reward is essentially negative fee
-        _settleFee(rewardToken_, payer, -reward);
     }
 
     // @notice Checks if the bond's maturity is within acceptable bounds.

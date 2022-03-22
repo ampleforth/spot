@@ -24,7 +24,7 @@ struct BurnData {
 
 struct RolloverData {
     uint256 amount;
-    int256 reward;
+    int256 fee;
     uint256 trancheAmt;
 }
 
@@ -85,7 +85,7 @@ interface IPerpetualTranche is IERC20 {
     // @param trancheIn The tranche token deposited.
     // @param trancheOut The tranche token to be redeemed.
     // @param trancheInAmt The amount of trancheIn tokens deposited.
-    // @return The amount of perp tokens rolled over, trancheOut tokens redeemed and reward awarded for rolling over.
+    // @return The amount of perp tokens rolled over, trancheOut tokens redeemed and fee charged for rolling over.
     function rollover(
         ITranche trancheIn,
         ITranche trancheOut,
@@ -114,9 +114,6 @@ interface IPerpetualTranche is IERC20 {
 
     // @notice The fee token currently used to receive fees in.
     function feeToken() external view returns (IERC20);
-
-    // @notice The fee token currently used to pay rewards in.
-    function rewardToken() external view returns (IERC20);
 
     // @notice The yield to be applied given the tranche's parent bond class and it's seniority.
     // @param hash The bond class.
