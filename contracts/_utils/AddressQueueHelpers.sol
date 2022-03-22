@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 struct AddressQueue {
     // @notice Mapping between queue index and address.
     mapping(uint256 => address) queue;
-    // @notice Mapping to check address existance.
+    // @notice Mapping to check address existence.
     mapping(address => bool) items;
     // @notice Index of the first address.
     uint256 first;
@@ -15,7 +15,7 @@ struct AddressQueue {
 /*
  *  @title AddressQueueHelpers
  *
- *  @notice Library to handle a queue of addresses and basic operations like enqueue and dequeue.
+ *  @notice Library to handle a queue of unique addresses and basic operations like enqueue and dequeue.
  *          It also supports O(1) existence check, and head, tail retrieval.
  *
  *  @dev Original implementation: https://github.com/chriseth/solidity-examples/blob/master/queue.sol
@@ -32,6 +32,7 @@ library AddressQueueHelpers {
     // @param q Queue storage.
     // @param a Address to be added to the queue.
     function enqueue(AddressQueue storage q, address a) internal {
+        require(!q.items[a], "AddressQueueHelpers: Expected item to NOT be in queue");
         q.last += 1;
         q.queue[q.last] = a;
         q.items[a] = true;
@@ -74,7 +75,7 @@ library AddressQueueHelpers {
     // @param q Queue storage.
     // @return The queue size.
     function length(AddressQueue storage q) internal view returns (uint256) {
-        return q.last - q.first + 1;
+        return q.last >= q.first ? q.last - q.first + 1 : 0;
     }
 
     // @notice Fetches the item at a given index (indexed from 0 to length-1).

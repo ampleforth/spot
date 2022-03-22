@@ -12,6 +12,8 @@
     "@types/node": "^12.0.0",
     "@typescript-eslint/eslint-plugin": "^4.29.1",
     "@typescript-eslint/parser": "^4.29.1",
+    "button-token": "https://github.com/buttonwood-protocol/button-wrappers",
+    "button-tranche": "https://github.com/buttonwood-protocol/tranche",
     "chai": "^4.2.0",
     "dotenv": "^10.0.0",
     "eslint": "^7.29.0",
