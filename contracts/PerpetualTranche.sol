@@ -185,7 +185,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
             return m;
         }
 
-        trancheIn.safeTransferFrom(_msgSender(), address(this), trancheInAmt);
+        trancheIn.safeTransferFrom(_msgSender(), reserve(), trancheInAmt);
         syncReserve(trancheIn);
 
         m.amount = _fromUnderlying(trancheInAmt, trancheYield, pricingStrategy.computeTranchePrice(trancheIn));
@@ -226,7 +226,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
                 uint256 trancheAmtUsed = (trancheAmtForRemainder < trancheBalance)
                     ? trancheAmtForRemainder
                     : trancheBalance;
-                t.safeTransferFrom(address(this), _msgSender(), trancheAmtUsed);
+                t.safeTransfer(_msgSender(), trancheAmtUsed);
                 syncReserve(t);
 
                 r.tranches[r.burntTrancheCount] = t;
@@ -366,6 +366,12 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         return address(this);
     }
 
+
+    /// @inheritdoc IPerpetualTranche
+    function feeCollector() public view override returns (address) {
+        return address(this);
+    }
+
     /// @inheritdoc IPerpetualTranche
     function feeToken() public view override returns (IERC20) {
         return feeStrategy.feeToken();
@@ -397,14 +403,13 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
             if (address(feeToken_) == address(this)) {
                 // NOTE: {msg.sender} here should be address which triggered 
                 //       the smart contract call.
-                transfer(reserve(), fee_);
+                transfer(feeCollector(), fee_);
             } else {
-                feeToken_.safeTransferFrom(payer, reserve(), fee_);
+                feeToken_.safeTransferFrom(payer, feeCollector(), fee_);
             }
         } else {
             feeToken_.safeTransfer(payer, fee_);
         }
-        syncReserve(feeToken_);
     }
 
     // @dev If the reward is positive, reward is transferred from the reserve to the payer

@@ -106,8 +106,11 @@ interface IPerpetualTranche is IERC20 {
     // @return True if successful.
     function advanceBurnBond() external returns (bool);
 
-    // @notice The address of the reserve where the protocol holds funds.
+    // @notice The address of the contract where the protocol holds funds which back the perp token supply.
     function reserve() external view returns (address);
+
+    // @notice The address of the contract where the protocol holds the cash from fees.
+    function feeCollector() external view returns (address);
 
     // @notice The fee token currently used to receive fees in.
     function feeToken() external view returns (IERC20);
