@@ -10,12 +10,13 @@ import { IPricingStrategy } from "../_interfaces/IPricingStrategy.sol";
  *
  */
 contract BasicPricingStrategy is IPricingStrategy {
-    uint8 private constant DECIMALS = 18;
+    uint8 private constant DECIMALS = 8;
+    uint256 private constant ONE = 10**DECIMALS;
 
     /// @inheritdoc IPricingStrategy
     // solhint-disable-next-line no-unused-vars
     function computeTranchePrice(ITranche t) external pure override returns (uint256) {
-        return (10**DECIMALS);
+        return ONE;
     }
 
     /// @inheritdoc IPricingStrategy

@@ -11,7 +11,7 @@ import {
   rebase,
   depositIntoBond,
   getTrancheBalances,
-} from "./helpers";
+} from "../helpers";
 
 let bondFactory: Contract,
   collateralToken: Contract,
