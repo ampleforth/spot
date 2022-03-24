@@ -20,31 +20,31 @@ export const TimeHelpers = {
 };
 
 export interface ButtonTokenContracts {
-  token: Contract;
-  oracle: Contract;
-  buttonToken: Contract;
+  underlyingToken: Contract;
+  rebaseOracle: Contract;
+  collateralToken: Contract;
 }
 
 const BASE_PRICE = BigNumber.from("100000000");
 
-export const setupButtonToken = async (name: string, symbol: string): Promise<ButtonTokenContracts> => {
+export const setupCollateralToken = async (name: string, symbol: string): Promise<ButtonTokenContracts> => {
   const ERC20 = await ethers.getContractFactory("MockERC20");
-  const token = await ERC20.deploy(name, symbol);
-  await token.deployed();
+  const underlyingToken = await ERC20.deploy(name, symbol);
+  await underlyingToken.deployed();
 
   const MockOracle = await ethers.getContractFactory("MockOracle");
-  const oracle = await MockOracle.deploy();
-  await oracle.deployed();
-  await oracle.setData(BASE_PRICE, true);
+  const rebaseOracle = await MockOracle.deploy();
+  await rebaseOracle.deployed();
+  await rebaseOracle.setData(BASE_PRICE, true);
 
   const ButtonToken = await ethers.getContractFactory("ButtonToken");
-  const buttonToken = await ButtonToken.deploy();
-  await buttonToken.initialize(token.address, `Button ${name}`, `btn-${symbol}`, oracle.address);
+  const collateralToken = await ButtonToken.deploy();
+  await collateralToken.initialize(underlyingToken.address, `Button ${name}`, `btn-${symbol}`, rebaseOracle.address);
 
   return {
-    token,
-    oracle,
-    buttonToken,
+    underlyingToken,
+    rebaseOracle,
+    collateralToken,
   };
 };
 
@@ -72,14 +72,17 @@ export const createBondWithFactory = async (
   bondFactory: Contract,
   collateralToken: Contract,
   trancheRatios: number[],
-  maturityDate: number,
+  bondLength: number,
 ): Promise<Contract> => {
-  const bondAddress = await bondFactory.callStatic.createBond(collateralToken.address, trancheRatios, maturityDate);
+  const timeNow = await TimeHelpers.secondsFromNow(0);
+  const maturityDate = timeNow + bondLength;
 
+  const bondAddress = await bondFactory.callStatic.createBond(collateralToken.address, trancheRatios, maturityDate);
   await bondFactory.createBond(collateralToken.address, trancheRatios, maturityDate);
 
   const BondController = await ethers.getContractFactory("BondController");
   const bond = await BondController.attach(bondAddress);
+
   return bond;
 };
 
@@ -118,14 +121,24 @@ export const depositIntoBond = async (bond: Contract, amount: BigNumber, from: S
   return depositEvent;
 };
 
-export const getTrancheBalances = async (bond: Contract, user: string): Promise<BigNumber[]> => {
+export const getTranches = async (bond: Contract): Promise<Contract[]> => {
   const count = await bond.trancheCount();
-  const balances: BigNumber[] = [];
+  const tranches: Contract[] = [];
   for (let i = 0; i < count; i++) {
     const Tranche = await ethers.getContractFactory("Tranche");
     const t = await bond.tranches(i);
-    const trancheToken = await Tranche.attach(t[0]);
-    balances.push(await trancheToken.balanceOf(user));
+    tranches.push(await Tranche.attach(t[0]));
+  }
+  return tranches;
+};
+
+export const getTrancheBalances = async (bond: Contract, user: string): Promise<BigNumber[]> => {
+  const tranches = await getTranches(bond);
+  const balances: BigNumber[] = [];
+  for (let i = 0; i < tranches.length; i++) {
+    balances.push(await tranches[i].balanceOf(user));
   }
   return balances;
 };
+
+export const toYieldFixedPtAmt = (a: string): BigNumber => ethers.utils.parseUnits(a, 18);

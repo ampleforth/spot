@@ -4,12 +4,12 @@ import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { IPricingStrategy } from "../_interfaces/IPricingStrategy.sol";
 
 /*
- *  @title BasicPricingStrategy
+ *  @title UnitPricingStrategy
  *
  *  @notice Basic pricing strategy, prices tranches 1:1 with the underlying collateral.
  *
  */
-contract BasicPricingStrategy is IPricingStrategy {
+contract UnitPricingStrategy is IPricingStrategy {
     uint8 private constant DECIMALS = 8;
     uint256 private constant ONE = 10**DECIMALS;
 
