@@ -37,7 +37,7 @@ async function setupContracts() {
   await bondHelpers.deployed();
 }
 
-describe.only("BondHelpers", function () {
+describe("BondHelpers", function () {
   beforeEach(async () => {
     await setupContracts();
   });
