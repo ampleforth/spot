@@ -87,7 +87,7 @@ describe("PerpetualTranche", function () {
     describe("when set address is NOT valid", function () {
       it("should revert", async function () {
         await expect(perp.updateBondIssuer(constants.AddressZero)).to.be.revertedWith(
-          "Expected new bond minter to be set",
+          "Expected new bond issuer to be set",
         );
       });
     });

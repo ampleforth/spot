@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { network, ethers } from "hardhat";
 import { Contract, Signer, constants } from "ethers";
 
 import {
@@ -38,6 +38,10 @@ async function setupContracts() {
 describe("BondHelpers", function () {
   beforeEach(async () => {
     await setupContracts();
+  });
+
+  afterEach(async function () {
+    await network.provider.send("hardhat_reset");
   });
 
   describe("#timeToMatirity & #duration", function () {
