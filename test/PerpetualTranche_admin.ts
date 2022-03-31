@@ -62,11 +62,11 @@ describe("PerpetualTranche", function () {
 
     it("should initialize lists", async function () {
       expect(await perp.reserveCount()).to.eq(0);
-      expect(await perp.redemptionQueueCount()).to.eq(0);
+      expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(0);
     });
 
     it("should set hyper parameters", async function () {
-      expect(await perp.minTrancheMaturiySec()).to.eq(0);
+      expect(await perp.minTrancheMaturiySec()).to.eq(1);
       expect(await perp.maxTrancheMaturiySec()).to.eq(constants.MaxUint256);
     });
   });
@@ -85,7 +85,7 @@ describe("PerpetualTranche", function () {
     describe("when set address is NOT valid", function () {
       it("should revert", async function () {
         await expect(perp.updateBondIssuer(constants.AddressZero)).to.be.revertedWith(
-          "Expected new bond minter to be set",
+          "Expected new bond issuer to be set",
         );
       });
     });
