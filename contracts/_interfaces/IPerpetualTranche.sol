@@ -74,12 +74,12 @@ interface IPerpetualTranche is IERC20 {
     // @param trancheOut The tranche token to be redeemed.
     // @param trancheInAmt The amount of trancheIn tokens deposited.
     // @return trancheOutAmt The amount of trancheOut tokens redeemed.
-    // @return fee The fee paid by the caller.
+    // @return rolloverFee The fee paid by the caller.
     function rollover(
         ITranche trancheIn,
         ITranche trancheOut,
         uint256 trancheInAmt
-    ) external returns (uint256 trancheOutAmt, int256 fee);
+    ) external returns (uint256 trancheOutAmt, int256 rolloverFee);
 
     // @notice Burn perp tokens without redemption.
     // @param amount Amount of perp tokens to be burnt.

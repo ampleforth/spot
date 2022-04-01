@@ -104,7 +104,7 @@ describe("PerpetualTranche", function () {
         await pricingStrategy.setPrice(toPriceFixedPtAmt("0.5"));
       });
 
-      it("should mint the correct amount", async function () {
+      it("should burn the correct amount", async function () {
         const r = await perp.callStatic.redeem(initialDepositTranche.address, toFixedPtAmt("500"));
         expect(r[0]).to.eq(toFixedPtAmt("250"));
       });

@@ -324,14 +324,18 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     }
 
     /// @inheritdoc IPerpetualTranche
-    // TODO: This will fail if the trancheOutAmt isn't covered.
+    // @dev This will revert if the trancheOutAmt isn't covered.
     function rollover(
         ITranche trancheIn,
         ITranche trancheOut,
         uint256 trancheInAmt
-    ) external override returns (uint256 trancheOutAmt, int256 fee) {
+    ) external override returns (uint256 trancheOutAmt, int256 rolloverFee) {
+        IBondController depositBond = getDepositBond();
         IBondController bondIn = IBondController(trancheIn.bond());
-        require(bondIn == getDepositBond(), "Expected tranche to be of deposit bond");
+        IBondController bondOut = IBondController(trancheOut.bond());
+
+        require(bondIn == depositBond, "Expected trancheIn to be of deposit bond");
+        require(bondOut != depositBond, "Expected trancheOut to NOT be of deposit bond");
         require(!_redemptionQueue.contains(address(trancheOut)), "Expected trancheOut to NOT be in the queue");
 
         // calculates the perp denominated amount rolled over
@@ -345,7 +349,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         );
 
         // calculates the fee to rollover `rolloverAmt` of perp token
-        fee = feeStrategy.computeRolloverFee(rolloverAmt);
+        rolloverFee = feeStrategy.computeRolloverFee(rolloverAmt);
 
         // transfers tranche tokens from the sender to the reserve
         _transferIntoReserve(_msgSender(), trancheIn, trancheInAmt);
@@ -358,9 +362,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         _transferOutOfReserve(_msgSender(), trancheOut, trancheOutAmt);
 
         // settles fees
-        _settleFee(_msgSender(), fee);
+        _settleFee(_msgSender(), rolloverFee);
 
-        return (trancheOutAmt, fee);
+        return (trancheOutAmt, rolloverFee);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -549,7 +553,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
             // the payer, since this is still an internal call {msg.sender} will still point to the payer
             // and we can just "transfer" from the payer's wallet.
             if (isNativeFeeToken) {
-                require(transfer(_self(), fee_), "Native fee token transfer failed");
+                transfer(_self(), fee_);
             } else {
                 feeToken_.safeTransferFrom(payer, _self(), fee_);
             }
