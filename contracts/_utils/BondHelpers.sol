@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 struct TrancheData {
     ITranche[] tranches;
@@ -44,7 +45,7 @@ library BondHelpers {
     // @return The tranche data.
     function getTrancheData(IBondController b) internal view returns (TrancheData memory td) {
         // Max tranches per bond < 2**8 - 1
-        td.trancheCount = uint8(b.trancheCount());
+        td.trancheCount = SafeCast.toUint8(b.trancheCount());
         td.tranches = new ITranche[](td.trancheCount);
         td.trancheRatios = new uint256[](td.trancheCount);
         for (uint8 i = 0; i < td.trancheCount; i++) {

@@ -171,6 +171,8 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
     // @notice Update the reference to the bond issuer contract.
     // @param bondIssuer_ New bond issuer address.
+    // @dev CATION: While updating the issuer, immediately set the defined
+    //      yields for the new issuer's tranche config.
     function updateBondIssuer(IBondIssuer bondIssuer_) external onlyOwner {
         require(address(bondIssuer_) != address(0), "Expected new bond minter to be set");
         bondIssuer = bondIssuer_;
@@ -282,16 +284,16 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         );
 
         uint256 trancheOutAmt = 0;
-        uint256 remainder = requestedAmount;
+        uint256 perpRemainder = requestedAmount;
 
-        // calculates the amount of tranche tokens covered to burn `remainder` perp tokens
-        (trancheOutAmt, remainder) = perpsToCoveredTranches(trancheOut, remainder);
+        // calculates the amount of tranche tokens covered to burn `perpRemainder` perp tokens
+        (trancheOutAmt, perpRemainder) = perpsToCoveredTranches(trancheOut, perpRemainder);
         if (trancheOutAmt == 0) {
             return (burnAmt, burnFee);
         }
 
         // calculates the covered burn amount
-        burnAmt = requestedAmount - remainder;
+        burnAmt = requestedAmount - perpRemainder;
 
         // calculates the fee to burn `burnAmt` of perp token
         burnFee = feeStrategy.computeBurnFee(burnAmt);
@@ -308,7 +310,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         // NOTE: Inferring that the tranche balance was burnt fully,
         //       as it did not cover the requested amount.
         //       Dequeuing the tranche
-        if (!isTrancheQueueEmpty && remainder > 0) {
+        if (!isTrancheQueueEmpty && perpRemainder > 0) {
             _dequeueTranche();
         }
 
@@ -366,13 +368,12 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @dev Lazily queries the bond issuer to get the most recently issued bond
     //      and updates the active mintingBond if it's "acceptable".
     function getMintingBond() public override returns (IBondController) {
-        IBondController newBond = bondIssuer.getLatestBond();
+        IBondController latestBond = bondIssuer.getLatestBond();
 
         // new bond has been issued by the issuer and is "acceptable"
         // update the mintingBond
-        if (_mintingBond != newBond && _isAcceptable(newBond)) {
-            _mintingBond = newBond;
-            return newBond;
+        if (_mintingBond != latestBond && _isAcceptableForRedemptionQueue(latestBond)) {
+            _mintingBond = latestBond;
         }
 
         // use the minting bond in storage
@@ -382,10 +383,11 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     /// @inheritdoc IPerpetualTranche
     // @dev Lazily dequeues tranches from the tranche queue till the head of the
     //      queue is an "acceptable" tranche.
+    //      NOTE: When no tranche in the queue is "acceptable", it returns `address(0)`.
     function getBurningTranche() public override returns (ITranche tranche) {
         tranche = ITranche(_redemptionQueue.head());
 
-        while (address(tranche) != address(0) && !_isAcceptable(IBondController(tranche.bond()))) {
+        while (address(tranche) != address(0) && !_isAcceptableForRedemptionQueue(IBondController(tranche.bond()))) {
             _dequeueTranche();
             tranche = ITranche(_redemptionQueue.head());
         }
@@ -571,7 +573,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @dev Checks if the bond's tranches can be accepted into the tranche queue.
     //      * Expects the bond's maturity to be within expected bounds.
     // @return True if the bond is "acceptable".
-    function _isAcceptable(IBondController bond) internal view returns (bool) {
+    function _isAcceptableForRedemptionQueue(IBondController bond) internal view returns (bool) {
         uint256 timeToMaturity = bond.timeToMaturity();
         return (timeToMaturity >= minTrancheMaturiySec && timeToMaturity < maxTrancheMaturiySec);
     }
@@ -583,15 +585,15 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         uint256 requestedAmount,
         uint256 yield,
         uint256 price
-    ) private view returns (uint256 trancheAmtUsed, uint256 remainder) {
+    ) private view returns (uint256 trancheAmtUsed, uint256 perpRemainder) {
         uint256 trancheBalance = t.balanceOf(_self());
         uint256 trancheAmtForRequested = _perpsToTranches(requestedAmount, yield, price);
         trancheAmtUsed = Math.min(trancheAmtForRequested, trancheBalance);
-        remainder = requestedAmount;
+        perpRemainder = requestedAmount;
         if (trancheAmtUsed > 0) {
-            remainder = (requestedAmount * (trancheAmtForRequested - trancheAmtUsed)) / trancheAmtForRequested;
+            perpRemainder = (requestedAmount * (trancheAmtForRequested - trancheAmtUsed)) / trancheAmtForRequested;
         }
-        return (trancheAmtUsed, remainder);
+        return (trancheAmtUsed, perpRemainder);
     }
 
     // @dev Alias to self.

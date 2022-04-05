@@ -36,13 +36,16 @@ contract BondIssuer is IBondIssuer {
     address public immutable collateralToken;
 
     // @notice The tranche ratios.
+    // @dev Each tranche ratio is expressed as a fixed point number
+    //      such that the sum of all the tranche ratios is exactly 1000.
+    //      https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol#L20
     uint256[] public trancheRatios;
 
     // @notice A private mapping to keep track of bonds issued by this issuer.
     mapping(IBondController => bool) private _issuedBonds;
 
     // @notice The address of the most recently issued bond.
-    IBondController private _lastBond;
+    IBondController private _latestBond;
 
     // @notice The timestamp when the issue window opened during the last issue.
     uint256 public lastIssueWindowTimestamp;
@@ -73,7 +76,7 @@ contract BondIssuer is IBondIssuer {
 
     /// @inheritdoc IBondIssuer
     function issue() public override {
-        if (lastIssueWindowTimestamp + minIssueTimeIntervalSec < block.timestamp) {
+        if (block.timestamp < lastIssueWindowTimestamp + minIssueTimeIntervalSec) {
             return;
         }
 
@@ -86,7 +89,7 @@ contract BondIssuer is IBondIssuer {
 
         _issuedBonds[bond] = true;
 
-        _lastBond = bond;
+        _latestBond = bond;
 
         emit BondIssued(bond);
     }
@@ -95,6 +98,6 @@ contract BondIssuer is IBondIssuer {
     // @dev Lazily issues a new bond when the time is right.
     function getLatestBond() external override returns (IBondController) {
         issue();
-        return _lastBond;
+        return _latestBond;
     }
 }
