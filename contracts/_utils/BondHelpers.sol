@@ -32,9 +32,9 @@ library BondHelpers {
     }
 
     // @notice Given a bond, calculates the bond duration ie
-    //         difference between creation time and matuirty time.
+    //         difference between creation time and maturity time.
     // @param b The address of the bond contract.
-    // @return The duration in seconds .
+    // @return The duration in seconds.
     function duration(IBondController b) internal view returns (uint256) {
         return b.maturityDate() - b.creationDate();
     }

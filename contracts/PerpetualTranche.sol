@@ -440,7 +440,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Gets the applied yield for the given tranche if it's set set,
+    // @dev Gets the applied yield for the given tranche if it's set,
     //      if NOT gets the defined tranche yield based on tranche's computed class,
     //      i.e) hash(collteralToken, trancheRatios, seniority).
     function trancheYield(ITranche t) public view override returns (uint256) {

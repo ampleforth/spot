@@ -8,9 +8,9 @@ import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
 /*
  *  @title BondIssuer
  *
- *  @notice A issuer periodically issues bonds based on a predefined a configuration.
+ *  @notice An issuer periodically issues bonds based on a predefined configuration.
  *
- *  @dev Based on the provided frequency issuer instantiates a new bond with the config when poked.
+ *  @dev Based on the provided frequency, issuer instantiates a new bond with the config when poked.
  *
  */
 contract BondIssuer is IBondIssuer {
@@ -28,11 +28,11 @@ contract BondIssuer is IBondIssuer {
 
     // @notice The maximum maturity duration for the issued bonds.
     // @dev In practice, bonds issued by this issuer won't have a constant duration as
-    //      block.timestamp when the issue function is invoked can varie.
+    //      block.timestamp when the issue function is invoked can vary.
     //      Rather these bonds are designed to have a predictable maturity date.
     uint256 public immutable maxMaturityDuration;
 
-    // @notice The underlying rebasing token used to be tranched.
+    // @notice The underlying rebasing token used for tranching.
     address public immutable collateralToken;
 
     // @notice The tranche ratios.
