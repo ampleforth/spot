@@ -1,24 +1,23 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import { IBondFactory } from "./_interfaces/button-wood/IBondFactory.sol";
+import { IBondFactory } from "./_interfaces/buttonwood/IBondFactory.sol";
+import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
 import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
-import { IBondController } from "./_interfaces/button-wood/IBondController.sol";
 
 /*
  *  @title BondIssuer
  *
- *  @notice An issuer periodically issues bonds based on a pre-defined configuration.
+ *  @notice An issuer periodically issues bonds based on a predefined configuration.
  *
- *  @dev A config is uniquely identified by {collateralToken, trancheRatios, maxMaturityDuration}
- *       Based on the provided frequency issuer instantiates new bond(s) with the config when poked.
+ *  @dev Based on the provided frequency, issuer instantiates a new bond with the config when poked.
  *
  */
 contract BondIssuer is IBondIssuer {
     // @notice Address of the bond factory.
     IBondFactory public immutable bondFactory;
 
-    // @notice Time to elapse since last issue, after which a new bond can be issued.
+    // @notice Time to elapse since last issue window start, after which a new bond can be issued.
     //         AKA, issue frequency.
     uint256 public immutable minIssueTimeIntervalSec;
 
@@ -27,39 +26,46 @@ contract BondIssuer is IBondIssuer {
     //      then the issue window opens at Friday 2AM GMT every week.
     uint256 public immutable issueWindowOffsetSec;
 
-    // @notice The timestamp when the issue window opened during the last issue.
-    uint256 public lastIssueWindowTimestamp;
+    // @notice The maximum maturity duration for the issued bonds.
+    // @dev In practice, bonds issued by this issuer won't have a constant duration as
+    //      block.timestamp when the issue function is invoked can vary.
+    //      Rather these bonds are designed to have a predictable maturity date.
+    uint256 public immutable maxMaturityDuration;
 
-    struct BondConfig {
-        // @notice The underlying rebasing token used to be tranched.
-        address collateralToken;
-        // @notice The tranche ratios.
-        uint256[] trancheRatios;
-        // @notice The maximum maturity duration for the issued bonds.
-        // @dev In practice, bonds issued by this issuer won't have a constant duration as
-        //      block.timestamp when the issue function is invoked can vary.
-        //      Rather these bonds are designed to have a predictable maturity date.
-        uint256 maxMaturityDuration;
-    }
+    // @notice The underlying rebasing token used for tranching.
+    address public immutable collateralToken;
 
-    // @notice The configuration of the bond to be issued.
-    // @dev A bond's config is defined by it's {collateralToken, trancheRatios, maxMaturityDuration}
-    BondConfig public config;
+    // @notice The tranche ratios.
+    // @dev Each tranche ratio is expressed as a fixed point number
+    //      such that the sum of all the tranche ratios is exactly 1000.
+    //      https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol#L20
+    uint256[] public trancheRatios;
 
     // @notice A private mapping to keep track of bonds issued by this issuer.
     mapping(IBondController => bool) private _issuedBonds;
+
+    // @notice The address of the most recently issued bond.
+    IBondController private _latestBond;
+
+    // @notice The timestamp when the issue window opened during the last issue.
+    uint256 public lastIssueWindowTimestamp;
 
     constructor(
         IBondFactory bondFactory_,
         uint256 minIssueTimeIntervalSec_,
         uint256 issueWindowOffsetSec_,
-        BondConfig memory config_
+        uint256 maxMaturityDuration_,
+        address collateralToken_,
+        uint256[] memory trancheRatios_
     ) {
         bondFactory = bondFactory_;
         minIssueTimeIntervalSec = minIssueTimeIntervalSec_;
         issueWindowOffsetSec = issueWindowOffsetSec_;
+        maxMaturityDuration = maxMaturityDuration_;
 
-        config = config_;
+        collateralToken = collateralToken_;
+        trancheRatios = trancheRatios_;
+
         lastIssueWindowTimestamp = 0;
     }
 
@@ -69,25 +75,29 @@ contract BondIssuer is IBondIssuer {
     }
 
     /// @inheritdoc IBondIssuer
-    function issue() external override {
-        require(
-            lastIssueWindowTimestamp + minIssueTimeIntervalSec < block.timestamp,
-            "BondIssuer: Expected enough time to elapse since last issue"
-        );
+    function issue() public override {
+        if (block.timestamp < lastIssueWindowTimestamp + minIssueTimeIntervalSec) {
+            return;
+        }
 
-        // Set to the timestamp of the most recent issue window opening
+        // Set to the timestamp of the most recent issue window start
         lastIssueWindowTimestamp = block.timestamp - (block.timestamp % minIssueTimeIntervalSec) + issueWindowOffsetSec;
 
         IBondController bond = IBondController(
-            bondFactory.createBond(
-                config.collateralToken,
-                config.trancheRatios,
-                lastIssueWindowTimestamp + config.maxMaturityDuration
-            )
+            bondFactory.createBond(collateralToken, trancheRatios, lastIssueWindowTimestamp + maxMaturityDuration)
         );
 
         _issuedBonds[bond] = true;
 
+        _latestBond = bond;
+
         emit BondIssued(bond);
+    }
+
+    /// @inheritdoc IBondIssuer
+    // @dev Lazily issues a new bond when the time is right.
+    function getLatestBond() external override returns (IBondController) {
+        issue();
+        return _latestBond;
     }
 }

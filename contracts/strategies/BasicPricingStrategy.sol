@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
-import { ITranche } from "../_interfaces/button-wood/ITranche.sol";
+import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { IPricingStrategy } from "../_interfaces/IPricingStrategy.sol";
 
 /*
@@ -13,6 +13,7 @@ contract BasicPricingStrategy is IPricingStrategy {
     uint8 private constant DECIMALS = 18;
 
     /// @inheritdoc IPricingStrategy
+    // solhint-disable-next-line no-unused-vars
     function computeTranchePrice(ITranche t) external pure override returns (uint256) {
         return (10**DECIMALS);
     }
