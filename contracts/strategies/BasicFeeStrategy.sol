@@ -22,6 +22,7 @@ contract BasicFeeStrategy is IFeeStrategy {
     using SignedMathHelpers for int256;
     using SafeCast for uint256;
 
+    // @dev {10 ** PCT_DECIMALS} is considered 100%
     uint256 public constant PCT_DECIMALS = 6;
 
     // @notice Address of the parent perpetual ERC-20 token contract which uses this strategy.

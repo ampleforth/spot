@@ -64,8 +64,8 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
     //-------------------------------------------------------------------------
     // Constants & Immutables
-    uint8 public constant YIELD_DECIMALS = 6;
-    uint8 public constant PRICE_DECIMALS = 18;
+    uint8 public constant YIELD_DECIMALS = 18;
+    uint8 public constant PRICE_DECIMALS = 8;
 
     // @dev Number of ERC-20 decimal places to get the perp token amount for user representation.
     uint8 private immutable _decimals;
