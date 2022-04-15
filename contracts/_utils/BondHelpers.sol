@@ -32,7 +32,7 @@ library BondHelpers {
         return maturityDate > block.timestamp ? maturityDate - block.timestamp : 0;
     }
 
-    // @notice Given a bond, calculates the bond duration ie
+    // @notice Given a bond, calculates the bond duration i.e)
     //         difference between creation time and maturity time.
     // @param b The address of the bond contract.
     // @return The duration in seconds.
@@ -61,14 +61,14 @@ library BondHelpers {
     //         is deposited into the bond.
     // @dev This function is used off-chain services (using callStatic) to preview tranches minted after
     // @param b The address of the bond contract.
-    // @return The tranche data and an array of tranche amounts.
+    // @return The tranche data, an array of tranche amounts and fees.
     function previewDeposit(IBondController b, uint256 collateralAmount)
         internal
         view
         returns (
             TrancheData memory td,
             uint256[] memory trancheAmts,
-            uint256 fee
+            uint256[] memory fees
         )
     {
         td = getTrancheData(b);
@@ -78,19 +78,20 @@ library BondHelpers {
         uint256 feeBps = b.feeBps();
 
         trancheAmts = new uint256[](td.trancheCount);
+        fees = new uint256[](td.trancheCount);
         for (uint256 i = 0; i < td.trancheCount; i++) {
             uint256 trancheValue = (collateralAmount * td.trancheRatios[i]) / TRANCHE_RATIO_GRANULARITY;
             if (collateralBalance > 0) {
                 trancheValue = (trancheValue * totalDebt) / collateralBalance;
             }
-            fee = (trancheValue * feeBps) / BPS;
-            if (fee > 0) {
-                trancheValue -= fee;
+            fees[i] = (trancheValue * feeBps) / BPS;
+            if (fees[i] > 0) {
+                trancheValue -= fees[i];
             }
             trancheAmts[i] = trancheValue;
         }
 
-        return (td, trancheAmts, fee);
+        return (td, trancheAmts, fees);
     }
 
     // @notice Given a bond, retrieves the collateral currently redeemable for
