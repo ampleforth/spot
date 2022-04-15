@@ -113,6 +113,12 @@ interface IPerpetualTranche is IERC20 {
     // @return The yield applied.
     function trancheYield(ITranche tranche) external view returns (uint256);
 
+    // @notice The computes the class hash of a given tranche.
+    // @dev This is used to identify different tranche tokens instances of the same class.
+    // @param tranche The address of the tranche token.
+    // @return The class hash.
+    function trancheClass(ITranche t) external view returns (bytes32);
+
     // @notice The price of the given tranche.
     // @param tranche The address of the tranche token.
     // @return The computed price.

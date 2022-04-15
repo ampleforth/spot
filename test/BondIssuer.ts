@@ -53,7 +53,7 @@ describe("BondIssuer", function () {
         await TimeHelpers.setNextBlockTimestamp(2500005720);
         await expect(issuer.issue()).to.emit(issuer, "BondIssued");
 
-        await TimeHelpers.setNextBlockTimestamp(2500007520);
+        await TimeHelpers.setNextBlockTimestamp(2500009310);
         await expect(issuer.issue()).not.to.emit(issuer, "BondIssued");
 
         await TimeHelpers.setNextBlockTimestamp(2500009320);

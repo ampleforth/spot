@@ -4,7 +4,7 @@ import { Contract, Signer, constants } from "ethers";
 
 import {
   TimeHelpers,
-  setupButtonToken,
+  setupCollateralToken,
   setupBondFactory,
   createBondWithFactory,
   toFixedPtAmt,
@@ -28,9 +28,7 @@ async function setupContracts() {
 
   bondFactory = await setupBondFactory();
 
-  const { oracle, buttonToken } = await setupButtonToken("Bitcoin", "BTC");
-  collateralToken = buttonToken;
-  rebaseOracle = oracle;
+  ({ collateralToken, rebaseOracle } = await setupCollateralToken("Bitcoin", "BTC"));
 
   const BondHelpersTester = await ethers.getContractFactory("BondHelpersTester");
   bondHelpers = await BondHelpersTester.deploy();
@@ -45,10 +43,9 @@ describe("BondHelpers", function () {
   describe("#timeToMatirity & #duration", function () {
     let maturityDate: number, bondLength: number, bond: Contract;
     beforeEach(async function () {
-      const timeNow = await TimeHelpers.secondsFromNow(0);
       bondLength = 86400;
-      maturityDate = timeNow + bondLength;
-      bond = await createBondWithFactory(bondFactory, collateralToken, [1000], maturityDate);
+      bond = await createBondWithFactory(bondFactory, collateralToken, [1000], bondLength);
+      maturityDate = (await bond.maturityDate()).toNumber();
     });
 
     describe("when bond is NOT mature", function () {
@@ -71,10 +68,7 @@ describe("BondHelpers", function () {
   describe("#getTrancheData", function () {
     let bond: Contract;
     beforeEach(async function () {
-      const timeNow = await TimeHelpers.secondsFromNow(0);
-      const bondLength = 86400;
-      const maturityDate = timeNow + bondLength;
-      bond = await createBondWithFactory(bondFactory, collateralToken, [201, 301, 498], maturityDate);
+      bond = await createBondWithFactory(bondFactory, collateralToken, [201, 301, 498], 86400);
     });
 
     it("should return the tranche data", async function () {
@@ -93,15 +87,7 @@ describe("BondHelpers", function () {
 
   describe("#getTrancheIndex", function () {
     it("should return the tranche index", async function () {
-      const timeNow = await TimeHelpers.secondsFromNow(0);
-      const bondLength = 86400;
-      const maturityDate = timeNow + bondLength;
-      const bond = await createBondWithFactory(
-        bondFactory,
-        collateralToken,
-        [100, 100, 100, 100, 100, 500],
-        maturityDate,
-      );
+      const bond = await createBondWithFactory(bondFactory, collateralToken, [100, 100, 100, 100, 100, 500], 86400);
       const td = await bondHelpers.getTrancheData(bond.address);
 
       for (const t in td.tranches) {
@@ -123,10 +109,7 @@ describe("BondHelpers", function () {
   describe("#previewDeposit", function () {
     let bond: Contract;
     beforeEach(async function () {
-      const timeNow = await TimeHelpers.secondsFromNow(0);
-      const bondLength = 86400;
-      const maturityDate = timeNow + bondLength;
-      bond = await createBondWithFactory(bondFactory, collateralToken, [500, 500], maturityDate);
+      bond = await createBondWithFactory(bondFactory, collateralToken, [500, 500], 86400);
     });
 
     describe("fee = 0", function () {
@@ -317,10 +300,8 @@ describe("BondHelpers", function () {
   describe("#getTrancheCollateralBalances", function () {
     let bond: Contract, bondLength: number;
     beforeEach(async function () {
-      const timeNow = await TimeHelpers.secondsFromNow(0);
       bondLength = 86400;
-      const maturityDate = timeNow + bondLength;
-      bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], maturityDate);
+      bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], bondLength);
       await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
     });
 

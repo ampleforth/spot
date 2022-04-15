@@ -152,16 +152,15 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @param pricingStrategy_ Address of the pricing strategy contract.
     function init(
         IBondIssuer bondIssuer_,
-        IPricingStrategy pricingStrategy_,
-        IFeeStrategy feeStrategy_
+        IFeeStrategy feeStrategy_,
+        IPricingStrategy pricingStrategy_
     ) public initializer {
-        require(address(bondIssuer_) != address(0), "Expected new bond minter to be set");
-        require(address(feeStrategy_) != address(0), "Expected new fee strategy to be set");
-        require(address(pricingStrategy_) != address(0), "Expected new pricing strategy to be set");
+        updateBondIssuer(bondIssuer_);
+        updateFeeStrategy(feeStrategy_);
+        updatePricingStrategy(pricingStrategy_);
 
-        bondIssuer = bondIssuer_;
-        feeStrategy = feeStrategy_;
-        pricingStrategy = pricingStrategy_;
+        minTrancheMaturiySec = 0;
+        maxTrancheMaturiySec = type(uint256).max;
 
         _redemptionQueue.init();
     }
@@ -171,9 +170,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
     // @notice Update the reference to the bond issuer contract.
     // @param bondIssuer_ New bond issuer address.
-    // @dev CATION: While updating the issuer, immediately set the defined
+    // @dev CAUTION: While updating the issuer, immediately set the defined
     //      yields for the new issuer's tranche config.
-    function updateBondIssuer(IBondIssuer bondIssuer_) external onlyOwner {
+    function updateBondIssuer(IBondIssuer bondIssuer_) public onlyOwner {
         require(address(bondIssuer_) != address(0), "Expected new bond minter to be set");
         bondIssuer = bondIssuer_;
         emit UpdatedBondIssuer(bondIssuer_);
@@ -181,7 +180,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
     // @notice Update the reference to the fee strategy contract.
     // @param feeStrategy_ New strategy address.
-    function updateFeeStrategy(IFeeStrategy feeStrategy_) external onlyOwner {
+    function updateFeeStrategy(IFeeStrategy feeStrategy_) public onlyOwner {
         require(address(feeStrategy_) != address(0), "Expected new fee strategy to be set");
         feeStrategy = feeStrategy_;
         emit UpdatedFeeStrategy(feeStrategy_);
@@ -189,9 +188,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
     // @notice Update the reference to the pricing strategy contract.
     // @param pricingStrategy_ New strategy address.
-    function updatePricingStrategy(IPricingStrategy pricingStrategy_) external onlyOwner {
+    function updatePricingStrategy(IPricingStrategy pricingStrategy_) public onlyOwner {
         require(address(pricingStrategy_) != address(0), "Expected new pricing strategy to be set");
-        require(pricingStrategy_.decimals() == PRICE_DECIMALS, "Expected new pricing stragey to use same decimals");
+        require(pricingStrategy_.decimals() == PRICE_DECIMALS, "Expected new pricing strategy to use same decimals");
         pricingStrategy = pricingStrategy_;
         emit UpdatedPricingStrategy(pricingStrategy_);
     }
@@ -203,6 +202,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         external
         onlyOwner
     {
+        require(minTrancheMaturiySec_ <= maxTrancheMaturiySec_, "Expected max to be greater than min");
         minTrancheMaturiySec = minTrancheMaturiySec_;
         maxTrancheMaturiySec = maxTrancheMaturiySec_;
         emit UpdatedTolerableTrancheMaturiy(minTrancheMaturiySec_, maxTrancheMaturiySec_);
@@ -211,9 +211,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @notice Updates the tranche class's yields.
     // @param classHash The tranche class (hash(collteralToken, trancheRatios, seniority)).
     // @param yields The yield factor.
-    function updateDefinedYield(bytes32 chassHash, uint256 yield) external onlyOwner {
-        _definedTrancheYields[chassHash] = yield;
-        emit UpdatedDefinedTrancheYields(chassHash, yield);
+    function updateDefinedYield(bytes32 classHash, uint256 yield) external onlyOwner {
+        _definedTrancheYields[classHash] = yield;
+        emit UpdatedDefinedTrancheYields(classHash, yield);
     }
 
     // @notice Allows the owner to transfer non-reserve assets out of the system if required.
@@ -447,13 +447,16 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     //      i.e) hash(collteralToken, trancheRatios, seniority).
     function trancheYield(ITranche t) public view override returns (uint256) {
         uint256 yield = _appliedTrancheYields[t];
-        if (yield > 0) {
-            return yield;
-        }
+        return yield > 0 ? yield : _definedTrancheYields[trancheClass(t)];
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    // @dev A given tranche's computed class is the
+    //      hash(collteralToken, trancheRatios, seniority).
+    function trancheClass(ITranche t) public view override returns (bytes32) {
         IBondController bond = IBondController(t.bond());
         TrancheData memory td = bond.getTrancheData();
-        return
-            _definedTrancheYields[keccak256(abi.encode(bond.collateralToken, td.trancheRatios, td.getTrancheIndex(t)))];
+        return keccak256(abi.encode(bond.collateralToken, td.trancheRatios, td.getTrancheIndex(t)));
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -518,9 +521,13 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     //      else it's transferred to the payer from the self.
     //      NOTE: fee is a not-reserve asset.
     function _settleFee(address payer, int256 fee) internal {
+        if (fee == 0) {
+            return;
+        }
+
         IERC20 feeToken_ = feeToken();
         uint256 fee_ = fee.abs();
-        if (fee >= 0) {
+        if (fee > 0) {
             // Funds are coming in
             // Handling a special case, when the fee is to be charged as the perp token itself
             // In this case we don't need to make an external call to the token ERC-20 to "transferFrom"
