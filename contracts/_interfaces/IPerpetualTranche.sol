@@ -65,7 +65,7 @@ interface IPerpetualTranche is IERC20 {
     // @notice Redeem tranche tokens by burning perp tokens.
     // @param trancheOut The tranche token to be redeemed.
     // @param requestedAmount The amount of perp tokens requested to be burnt.
-    // @return mintAmt The amount of perp tokens burnt from the caller.
+    // @return burnAmt The amount of perp tokens burnt from the caller.
     // @return fee The fee paid by the caller.
     function redeem(ITranche trancheOut, uint256 requestedAmount) external returns (uint256 burnAmt, int256 burnFee);
 
