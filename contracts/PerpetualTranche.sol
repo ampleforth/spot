@@ -276,14 +276,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
             _mint(_msgSender(), mintAmt);
 
             // settles fees
-            bool isNativeFeeToken = _settleFee(_msgSender(), mintFee);
-
-            // When the fee is charged in the native token,
-            // fee has been withheld from the mint amount.
-            // Adjusting the return value to account for this.
-            if (isNativeFeeToken) {
-                mintAmt = (mintAmt.toInt256() - mintFee).abs();
-            }
+            _settleFee(_msgSender(), mintFee);
         }
 
         return (mintAmt, mintFee);
@@ -324,14 +317,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
             _burn(_msgSender(), burnAmt);
 
             // settles fees
-            bool isNativeFeeToken = _settleFee(_msgSender(), burnFee);
-
-            // When the fee is charged in the native token,
-            // fee has been charged on top of the burn amount.
-            // Adjusting the return value to account for this.
-            if (isNativeFeeToken) {
-                burnAmt = (burnAmt.toInt256() + burnFee).abs();
-            }
+            _settleFee(_msgSender(), burnFee);
         }
 
         // Handle tranche transfer out
@@ -365,7 +351,10 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
         // calculates the amount of tranche tokens rolled out
         trancheOutAmt = perpsToTranches(trancheOut, rolloverAmt);
-        require(rolloverAmt > 0 && trancheOutAmt > 0, "Expected to rollover a non-zero amount of tokens");
+        require(
+            rolloverAmt > 0 && trancheInAmt > 0 && trancheOutAmt > 0,
+            "Expected to rollover a non-zero amount of tokens"
+        );
 
         // calculates the fee to rollover `rolloverAmt` of perp token
         fee = feeStrategy.computeRolloverFee(rolloverAmt);
@@ -675,6 +664,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         uint256 yield,
         uint256 price
     ) private pure returns (uint256) {
-        return yield > 0 && price > 0 ? (((amount * (10**PRICE_DECIMALS)) / price) * (10**YIELD_DECIMALS)) / yield : 0;
+        if (yield == 0 || price == 0) {
+            return 0;
+        }
+        return (((amount * (10**PRICE_DECIMALS)) / price) * (10**YIELD_DECIMALS)) / yield;
     }
 }
