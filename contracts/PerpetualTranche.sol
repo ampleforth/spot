@@ -260,24 +260,18 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         // calculates the fee to mint `mintAmt` of perp token
         mintFee = feeStrategy.computeMintFee(mintAmt);
 
-        // Handle tranche transfer in
-        {
-            // transfers deposited tranches from the sender to the reserve
-            _transferIntoReserve(_msgSender(), trancheIn, trancheInAmt);
+        // transfers deposited tranches from the sender to the reserve
+        _transferIntoReserve(_msgSender(), trancheIn, trancheInAmt);
 
-            // NOTE: Enqueues tranche if this is the first time the tranche token
-            // is entering the system
-            _checkAndEnqueueTranche(trancheIn);
-        }
+        // NOTE: Enqueues tranche if this is the first time the tranche token
+        // is entering the system
+        _checkAndEnqueueTranche(trancheIn);
 
-        // Handle perp and fee transfer
-        {
-            // mints perp tokens to the sender
-            _mint(_msgSender(), mintAmt);
+        // mints perp tokens to the sender
+        _mint(_msgSender(), mintAmt);
 
-            // settles fees
-            _settleFee(_msgSender(), mintFee);
-        }
+        // settles fees
+        _settleFee(_msgSender(), mintFee);
 
         return (mintAmt, mintFee);
     }
@@ -311,25 +305,19 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         // calculates the fee to burn `burnAmt` of perp token
         burnFee = feeStrategy.computeBurnFee(burnAmt);
 
-        // Handle perp and fee transfer
-        {
-            // burns perp tokens from the sender
-            _burn(_msgSender(), burnAmt);
+        // burns perp tokens from the sender
+        _burn(_msgSender(), burnAmt);
 
-            // settles fees
-            _settleFee(_msgSender(), burnFee);
-        }
+        // settles fees
+        _settleFee(_msgSender(), burnFee);
 
-        // Handle tranche transfer out
-        {
-            // transfers redeemed tranches from the reserve to the sender
-            uint256 reserveBalance = _transferOutOfReserve(_msgSender(), trancheOut, trancheOutAmt);
+        // transfers redeemed tranches from the reserve to the sender
+        uint256 reserveBalance = _transferOutOfReserve(_msgSender(), trancheOut, trancheOutAmt);
 
-            // NOTE: When redeeming in order and if the tranche balance was burnt fully,
-            //       Dequeuing the tranche.
-            if (inOrderRedemption && reserveBalance == 0) {
-                _dequeueTranche();
-            }
+        // NOTE: When redeeming in order and if the tranche balance was burnt fully,
+        //       Dequeuing the tranche.
+        if (inOrderRedemption && reserveBalance == 0) {
+            _dequeueTranche();
         }
 
         return (burnAmt, burnFee);
@@ -359,24 +347,18 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         // calculates the fee to rollover `rolloverAmt` of perp token
         fee = feeStrategy.computeRolloverFee(rolloverAmt);
 
-        // handle tranche transfer in
-        {
-            // transfers tranche tokens from the sender to the reserve
-            _transferIntoReserve(_msgSender(), trancheIn, trancheInAmt);
+        // transfers tranche tokens from the sender to the reserve
+        _transferIntoReserve(_msgSender(), trancheIn, trancheInAmt);
 
-            // NOTE: Enqueues tranche if this is the first time the tranche token
-            // is entering the system
-            _checkAndEnqueueTranche(trancheIn);
-        }
+        // NOTE: Enqueues tranche if this is the first time the tranche token
+        // is entering the system
+        _checkAndEnqueueTranche(trancheIn);
 
-        // Handle tranche transfer out and fee transfer
-        {
-            // transfers tranche tokens from the reserve to the sender
-            _transferOutOfReserve(_msgSender(), trancheOut, trancheOutAmt);
+        // transfers tranche tokens from the reserve to the sender
+        _transferOutOfReserve(_msgSender(), trancheOut, trancheOutAmt);
 
-            // settles fees
-            _settleFee(_msgSender(), fee);
-        }
+        // settles fees
+        _settleFee(_msgSender(), fee);
 
         return (trancheOutAmt, fee);
     }
