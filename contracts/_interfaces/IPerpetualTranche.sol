@@ -58,21 +58,23 @@ interface IPerpetualTranche is IERC20 {
     // @notice Deposits tranche tokens into the system and mint perp tokens.
     // @param trancheIn The address of the tranche token to be deposited.
     // @param trancheInAmt The amount of tranche tokens deposited.
-    // @return mintAmt The amount of perp tokens minted.
-    // @return fee The fee charged to mint perp tokens.
+    // @return mintAmt The amount of perp tokens minted to the caller.
+    // @return fee The fee paid by the caller.
     function deposit(ITranche trancheIn, uint256 trancheInAmt) external returns (uint256 mintAmt, int256 mintFee);
 
     // @notice Redeem tranche tokens by burning perp tokens.
     // @param trancheOut The tranche token to be redeemed.
     // @param requestedAmount The amount of perp tokens requested to be burnt.
-    // @return The actual amount of perp tokens burnt, fees.
+    // @return burnAmt The amount of perp tokens burnt from the caller.
+    // @return fee The fee paid by the caller.
     function redeem(ITranche trancheOut, uint256 requestedAmount) external returns (uint256 burnAmt, int256 burnFee);
 
     // @notice Rotates newer tranches in for older tranches.
     // @param trancheIn The tranche token deposited.
     // @param trancheOut The tranche token to be redeemed.
     // @param trancheInAmt The amount of trancheIn tokens deposited.
-    // @return The amount of perp tokens rolled over, trancheOut tokens redeemed and fee charged for rolling over.
+    // @return trancheOutAmt The amount of trancheOut tokens redeemed.
+    // @return fee The fee paid by the caller.
     function rollover(
         ITranche trancheIn,
         ITranche trancheOut,
@@ -85,12 +87,19 @@ interface IPerpetualTranche is IERC20 {
     function burn(uint256 amount) external returns (bool);
 
     // @notice The parent bond whose tranches are currently accepted to mint perp tokens.
-    // @return Address of the minting bond.
-    function getMintingBond() external returns (IBondController);
+    // @return Address of the deposit bond.
+    function getDepositBond() external returns (IBondController);
 
     // @notice Tranche up for redemption next.
     // @return Address of the tranche token.
-    function getBurningTranche() external returns (ITranche);
+    function getRedemptionTranche() external returns (ITranche);
+
+    // @notice Total count of tokens in the redemption queue.
+    function getRedemptionQueueCount() external returns (uint256);
+
+    // @notice The token address from the redemption queue by index.
+    // @param index The index of a token.
+    function getRedemptionQueueAt(uint256 index) external returns (address);
 
     // @notice The strategy contract with the fee computation logic.
     // @return Address of the strategy contract.
@@ -148,13 +157,6 @@ interface IPerpetualTranche is IERC20 {
         external
         view
         returns (uint256 trancheAmtUsed, uint256 remainder);
-
-    // @notice Total count of tokens in the redemption queue.
-    function redemptionQueueCount() external view returns (uint256);
-
-    // @notice The token address from the redemption queue by index.
-    // @param index The index of a token.
-    function redemptionQueueAt(uint256 index) external view returns (address);
 
     // @notice Total count of tokens held in the reserve.
     function reserveCount() external view returns (uint256);
