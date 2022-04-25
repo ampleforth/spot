@@ -33,6 +33,8 @@ describe("QueueTester", function () {
 
   describe("enqueue & dequeue", function () {
     it("should update the storage", async function () {
+      await expect(queue.enqueue(constants.AddressZero)).to.be.revertedWith("AddressQueueHelpers: Expected valid item");
+
       // Adding 3 elements, removing all of them and
       // then 1 element and removing it.
       await queue.enqueue(ADDRESSES[0]);
@@ -100,6 +102,10 @@ describe("QueueTester", function () {
       for (const a in ADDRESSES) {
         expect(await queue.at(a)).to.eq(ADDRESSES[a]);
       }
+      await expect(queue.at(ADDRESSES.length)).to.be.revertedWith(
+        "AddressQueueHelpers: Expected index to be in bounds",
+      );
+
       // Removing first 5 addresses and then iterating through them (0:4)
       for (const a in ADDRESSES) {
         if (parseInt(a) < 5) {
@@ -109,6 +115,7 @@ describe("QueueTester", function () {
           expect(await queue.at(newIdx)).to.eq(ADDRESSES[a]);
         }
       }
+      await expect(queue.at(5)).to.be.revertedWith("AddressQueueHelpers: Expected index to be in bounds");
     });
   });
 });

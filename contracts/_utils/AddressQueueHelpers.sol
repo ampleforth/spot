@@ -33,6 +33,7 @@ library AddressQueueHelpers {
     // @param a Address to be added to the queue.
     function enqueue(AddressQueue storage q, address a) internal {
         require(!q.items[a], "AddressQueueHelpers: Expected item to NOT be in queue");
+        require(a != address(0), "AddressQueueHelpers: Expected valid item");
         q.last += 1;
         q.queue[q.last] = a;
         q.items[a] = true;
@@ -83,6 +84,7 @@ library AddressQueueHelpers {
     // @param i Index to look up.
     // @return The item at given index.
     function at(AddressQueue storage q, uint256 index) internal view returns (address) {
+        require(index < length(q), "AddressQueueHelpers: Expected index to be in bounds");
         return q.queue[q.first + index];
     }
 }
