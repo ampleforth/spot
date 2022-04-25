@@ -58,6 +58,9 @@ const config: HardhatUserConfig = {
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,
   },
+  mocha: {
+    bail: true,
+  },
 };
 
 export default config;

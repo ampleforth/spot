@@ -42,6 +42,8 @@
   "scripts": {
     "compile": "yarn hardhat compile",
     "test": "yarn hardhat test test/*.ts test/**/*.ts",
+    "profile": "REPORT_GAS=true yarn hardhat test test/*.ts test/**/*.ts",
+    "coverage": "yarn hardhat coverage --testfiles 'test/*.ts test/**/*.ts'",
     "lint": "yarn run lint:sol && yarn run lint:ts && yarn run prettier:list-different",
     "lint:fix": "yarn run prettier && yarn run lint:sol:fix && yarn run lint:ts:fix",
     "lint:sol": "solhint --config ./.solhint.json --max-warnings 0 \"contracts/**/*.sol\"",

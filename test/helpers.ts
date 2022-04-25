@@ -1,6 +1,16 @@
 import hre, { ethers } from "hardhat";
 import { Signer, Contract, BigNumber } from "ethers";
 
+const TOKEN_DECIMALS = 9;
+const PRICE_DECIMALS = 8;
+const YIELD_DECIMALS = 18;
+
+export const toFixedPtAmt = (a: string): BigNumber => ethers.utils.parseUnits(a, TOKEN_DECIMALS);
+export const toPriceFixedPtAmt = (a: string): BigNumber => ethers.utils.parseUnits(a, PRICE_DECIMALS);
+export const toYieldFixedPtAmt = (a: string): BigNumber => ethers.utils.parseUnits(a, YIELD_DECIMALS);
+
+const ORACLE_BASE_PRICE = toPriceFixedPtAmt("1");
+
 export const TimeHelpers = {
   secondsFromNow: async (secondsFromNow: number): Promise<number> => {
     const res = await hre.network.provider.send("eth_getBlockByNumber", ["latest", false]);
@@ -19,14 +29,12 @@ export const TimeHelpers = {
   },
 };
 
+// Rebasing collateral token (button tokens)
 export interface ButtonTokenContracts {
   underlyingToken: Contract;
   rebaseOracle: Contract;
   collateralToken: Contract;
 }
-
-const BASE_PRICE = BigNumber.from("100000000");
-
 export const setupCollateralToken = async (name: string, symbol: string): Promise<ButtonTokenContracts> => {
   const ERC20 = await ethers.getContractFactory("MockERC20");
   const underlyingToken = await ERC20.deploy(name, symbol);
@@ -35,7 +43,7 @@ export const setupCollateralToken = async (name: string, symbol: string): Promis
   const MockOracle = await ethers.getContractFactory("MockOracle");
   const rebaseOracle = await MockOracle.deploy();
   await rebaseOracle.deployed();
-  await rebaseOracle.setData(BASE_PRICE, true);
+  await rebaseOracle.setData(ORACLE_BASE_PRICE, true);
 
   const ButtonToken = await ethers.getContractFactory("ButtonToken");
   const collateralToken = await ButtonToken.deploy();
@@ -48,6 +56,13 @@ export const setupCollateralToken = async (name: string, symbol: string): Promis
   };
 };
 
+export const rebase = async (token: Contract, oracle: Contract, perc: number) => {
+  const p = await token.lastPrice();
+  const newPrice = p.mul(ORACLE_BASE_PRICE.add(ORACLE_BASE_PRICE.toNumber() * perc)).div(ORACLE_BASE_PRICE);
+  await oracle.setData(newPrice, true);
+};
+
+// Button tranche
 export const setupBondFactory = async (): Promise<Contract> => {
   const BondController = await ethers.getContractFactory("BondController");
   const bondController = await BondController.deploy();
@@ -68,6 +83,11 @@ export const setupBondFactory = async (): Promise<Contract> => {
   return bondFactory;
 };
 
+export const bondAt = async (bond: string): Promise<Contract> => {
+  const BondController = await ethers.getContractFactory("BondController");
+  return BondController.attach(bond);
+};
+
 export const createBondWithFactory = async (
   bondFactory: Contract,
   collateralToken: Contract,
@@ -80,20 +100,10 @@ export const createBondWithFactory = async (
   const bondAddress = await bondFactory.callStatic.createBond(collateralToken.address, trancheRatios, maturityDate);
   await bondFactory.createBond(collateralToken.address, trancheRatios, maturityDate);
 
-  const BondController = await ethers.getContractFactory("BondController");
-  const bond = await BondController.attach(bondAddress);
-
-  return bond;
+  return bondAt(bondAddress);
 };
 
-export const toFixedPtAmt = (a: string): BigNumber => ethers.utils.parseUnits(a, 9);
-
-export const rebase = async (token: Contract, oracle: Contract, perc: number) => {
-  const p = await token.lastPrice();
-  const newPrice = p.mul(BASE_PRICE.add(BASE_PRICE.toNumber() * perc)).div(BASE_PRICE);
-  await oracle.setData(newPrice, true);
-};
-
+// Bond interaction helpers
 export interface BondDeposit {
   amount: BigNumber;
   feeBps: BigNumber;
@@ -141,4 +151,8 @@ export const getTrancheBalances = async (bond: Contract, user: string): Promise<
   return balances;
 };
 
-export const toYieldFixedPtAmt = (a: string): BigNumber => ethers.utils.parseUnits(a, 18);
+export const advancePerpQueue = async (perp: Contract, time: number) => {
+  await TimeHelpers.increaseTime(time);
+  await perp.getDepositBond();
+  await perp.getRedemptionTranche();
+};
