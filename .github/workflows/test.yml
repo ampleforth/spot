@@ -20,8 +20,8 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [10.x]
-        os: [macOS-latest, windows-latest, ubuntu-latest]
+        node-version: [16.x]
+        os: [macOS-latest, ubuntu-latest]
 
     steps:
       - name: Setup Repo
