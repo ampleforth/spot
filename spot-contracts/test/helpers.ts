@@ -30,7 +30,7 @@ export const TimeHelpers = {
 };
 
 // Rebasing collateral token (button tokens)
-export interface ButtonTokenContracts {
+interface ButtonTokenContracts {
   underlyingToken: Contract;
   rebaseOracle: Contract;
   collateralToken: Contract;
@@ -54,6 +54,16 @@ export const setupCollateralToken = async (name: string, symbol: string): Promis
     rebaseOracle,
     collateralToken,
   };
+};
+
+export const mintCollteralToken = async (collateralToken: Contract, amount: BigNumber, from: Signer) => {
+  const fromAddress = await from.getAddress();
+  const ERC20 = await ethers.getContractFactory("MockERC20");
+  const underlyingToken = await ERC20.attach(await collateralToken.underlying());
+  const cAmount = await collateralToken.wrapperToUnderlying(amount);
+  await underlyingToken.connect(from).mint(fromAddress, cAmount);
+  await underlyingToken.connect(from).approve(collateralToken.address, cAmount);
+  await collateralToken.connect(from).mint(amount);
 };
 
 export const rebase = async (token: Contract, oracle: Contract, perc: number) => {
@@ -110,20 +120,12 @@ export interface BondDeposit {
   from: string;
 }
 export const depositIntoBond = async (bond: Contract, amount: BigNumber, from: Signer): Promise<BondDeposit> => {
-  const fromAddress = await from.getAddress();
   const ButtonToken = await ethers.getContractFactory("ButtonToken");
   const collateralToken = await ButtonToken.attach(await bond.collateralToken());
 
-  const ERC20 = await ethers.getContractFactory("MockERC20");
-  const underlyingToken = await ERC20.attach(await collateralToken.underlying());
+  await mintCollteralToken(collateralToken, amount, from);
 
-  const cAmount = await collateralToken.wrapperToUnderlying(amount);
-  await underlyingToken.connect(from).mint(fromAddress, cAmount);
-  await underlyingToken.connect(from).approve(collateralToken.address, cAmount);
-
-  await collateralToken.connect(from).mint(amount);
   await collateralToken.connect(from).approve(bond.address, amount);
-
   const tx = await bond.connect(from).deposit(amount);
   const txR = await tx.wait();
 

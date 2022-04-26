@@ -19,4 +19,12 @@ interface IBondIssuer {
     // @notice Fetches the most recently issued bond.
     // @return Address of the most recent bond.
     function getLatestBond() external returns (IBondController);
+
+    // @notice Returns the total number of bonds issued by this issuer.
+    // @return Number of bonds.
+    function totalIssued() external view returns (uint256);
+
+    // @notice The bond address from the issued list by index.
+    // @return Address of the bond.
+    function issuedBondAt(uint256 index) external view returns (IBondController);
 }
