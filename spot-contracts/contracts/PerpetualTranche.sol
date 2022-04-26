@@ -55,6 +55,9 @@ import { IPricingStrategy } from "./_interfaces/IPricingStrategy.sol";
  *          These reserve tokens can only leave the system on "redeem" and "rollover".
  *          Non reserve assets on the other hand can be transferred out by the contract owner if need be.
  *
+ *          The tranche queue is updated "lazily" without a need for an explicit poke from the outside world.
+ *          At the entry-point of every external function which contains logic which deals with the redemption queue,
+ *          the `updateQueue` function is invoked to bring the queue storage state up to date.
  *
  */
 contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
@@ -250,8 +253,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         override
         returns (uint256 mintAmt, int256 mintFee)
     {
-        IBondController bondIn = IBondController(trancheIn.bond());
-        require(bondIn == getDepositBond(), "Expected tranche to be of deposit bond");
+        updateQueue();
+
+        require(_depositBond == IBondController(trancheIn.bond()), "Expected tranche to be of deposit bond");
 
         // calculates the amount of perp tokens the `trancheInAmt` of tranche tokens are worth
         mintAmt = tranchesToPerps(trancheIn, trancheInAmt);
@@ -277,30 +281,36 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     }
 
     /// @inheritdoc IPerpetualTranche
-    function redeem(ITranche trancheOut, uint256 requestedAmount)
+    function redeem(ITranche trancheOut, uint256 perpAmountRequested)
         external
         override
         returns (uint256 burnAmt, int256 burnFee)
     {
-        ITranche burningTranche = getRedemptionTranche();
+        updateQueue();
+
+        ITranche redemptionTranche = _redemptionTranche();
 
         // When tranche queue is NOT empty, redemption ordering is enforced.
-        bool inOrderRedemption = address(burningTranche) != address(0);
+        bool inOrderRedemption = address(redemptionTranche) != address(0);
 
         // The system only allows redemption of the burning tranche for perp tokens
         // i.e) the tranche at the head of the tranche queue.
         // When the queue is empty, any tranche held in the reserve can be redeemed.
         require(
-            trancheOut == burningTranche || !inOrderRedemption,
+            trancheOut == redemptionTranche || !inOrderRedemption,
             "Expected to redeem burning tranche or queue to be empty"
         );
 
         // calculates the amount of tranche tokens covered to burn `perpRemainder` perp tokens
-        (uint256 trancheOutAmt, uint256 perpRemainder) = perpsToCoveredTranches(trancheOut, requestedAmount);
-        require(requestedAmount > 0 && trancheOutAmt > 0, "Expected to burn a non-zero amount of tokens");
+        (uint256 trancheOutAmt, uint256 perpRemainder) = perpsToCoveredTranches(
+            trancheOut,
+            perpAmountRequested,
+            type(uint256).max
+        );
+        require(perpAmountRequested > 0 && trancheOutAmt > 0, "Expected to burn a non-zero amount of tokens");
 
         // calculates the covered burn amount
-        burnAmt = requestedAmount - perpRemainder;
+        burnAmt = perpAmountRequested - perpRemainder;
 
         // calculates the fee to burn `burnAmt` of perp token
         burnFee = feeStrategy.computeBurnFee(burnAmt);
@@ -330,13 +340,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         ITranche trancheOut,
         uint256 trancheInAmt
     ) external override returns (uint256 trancheOutAmt, int256 rolloverFee) {
-        IBondController depositBond = getDepositBond();
-        IBondController bondIn = IBondController(trancheIn.bond());
-        IBondController bondOut = IBondController(trancheOut.bond());
+        updateQueue();
 
-        require(bondIn == depositBond, "Expected trancheIn to be of deposit bond");
-        require(bondOut != depositBond, "Expected trancheOut to NOT be of deposit bond");
-        require(!_redemptionQueue.contains(address(trancheOut)), "Expected trancheOut to NOT be in the queue");
+        require(_isAcceptableRollover(trancheIn, trancheOut), "Expected rollover to be acceptable");
 
         // calculates the perp denominated amount rolled over
         uint256 rolloverAmt = tranchesToPerps(trancheIn, trancheInAmt);
@@ -374,53 +380,66 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         return true;
     }
 
-    //--------------------------------------------------------------------------
-    // Public methods
-
     /// @inheritdoc IPerpetualTranche
-    // @dev Lazily queries the bond issuer to get the most recently issued bond
-    //      and updates with the new deposit bond if it's "acceptable".
-    function getDepositBond() public override returns (IBondController) {
-        IBondController latestBond = bondIssuer.getLatestBond();
-
-        // new bond has been issued by the issuer and is "acceptable"
-        // update `_depositBond`
-        if (_depositBond != latestBond && _isAcceptableForRedemptionQueue(latestBond)) {
-            _depositBond = latestBond;
-            return latestBond;
-        }
-
-        // use the deposit bond in storage
+    function getDepositBond() external override returns (IBondController) {
+        updateQueue();
         return _depositBond;
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Lazily dequeues tranches from the tranche queue till the head of the
-    //      queue is an "acceptable" tranche.
-    // @return The updated head of the tranche queue which is up for redemption next.
-    function getRedemptionTranche() public override returns (ITranche tranche) {
-        ITranche tranche = ITranche(_redemptionQueue.head());
-
-        while (address(tranche) != address(0) && !_isAcceptableForRedemptionQueue(IBondController(tranche.bond()))) {
-            _dequeueTranche();
-            tranche = ITranche(_redemptionQueue.head());
-        }
-
-        return tranche;
+    function getRedemptionTranche() external override returns (ITranche tranche) {
+        updateQueue();
+        return _redemptionTranche();
     }
 
     /// @inheritdoc IPerpetualTranche
     // @dev Lazily updates the queue before fetching from storage.
-    function getRedemptionQueueCount() public override returns (uint256) {
-        getRedemptionTranche();
+    function getRedemptionQueueCount() external override returns (uint256) {
+        updateQueue();
         return _redemptionQueue.length();
     }
 
     /// @inheritdoc IPerpetualTranche
     // @dev Lazily updates the queue before fetching from storage.
-    function getRedemptionQueueAt(uint256 i) public override returns (address) {
-        getRedemptionTranche();
+    function getRedemptionQueueAt(uint256 i) external override returns (address) {
+        updateQueue();
         return _redemptionQueue.at(i);
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    // @dev Lazily updates the queue before verifying state.
+    function isAcceptableRollover(ITranche trancheIn, ITranche trancheOut) external override returns (bool) {
+        updateQueue();
+        return _isAcceptableRollover(trancheIn, trancheOut);
+    }
+
+    //--------------------------------------------------------------------------
+    // Public methods
+
+    /// @inheritdoc IPerpetualTranche
+    // @dev Lazily updates time-dependent queue state.
+    //      This function is to be invoked on all external function entry points which are
+    //      read data from the queue.
+    function updateQueue() public override {
+        // Lazily queries the bond issuer to get the most recently issued bond
+        // and updates with the new deposit bond if it's "acceptable".
+        IBondController newBond = bondIssuer.getLatestBond();
+        // new bond has been issued by the issuer and is "acceptable"
+        // update `_depositBond`
+        if (_depositBond != newBond && _isAcceptableForRedemptionQueue(newBond)) {
+            _depositBond = newBond;
+        }
+
+        // Lazily dequeues tranches from the tranche queue till the head of the
+        // queue is an "acceptable" tranche.
+        ITranche redemptionTranche = _redemptionTranche();
+        while (
+            address(redemptionTranche) != address(0) &&
+            !_isAcceptableForRedemptionQueue(IBondController(redemptionTranche.bond()))
+        ) {
+            _dequeueTranche();
+            redemptionTranche = _redemptionTranche();
+        }
     }
 
     //--------------------------------------------------------------------------
@@ -460,46 +479,51 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Gets the applied yield for the given tranche if it's set,
-    //      if NOT gets the defined tranche yield based on tranche's computed class,
-    //      i.e) hash(collteralToken, trancheRatios, seniority).
-    function trancheYield(ITranche t) public view override returns (uint256) {
-        uint256 yield = _appliedTrancheYields[t];
-        return yield > 0 ? yield : _definedTrancheYields[trancheClass(t)];
+    // @dev Gets the applied yield for the given tranche if it's set set,
+    //      if NOT gets the defined tranche yield
+    function trancheYield(ITranche tranche) public view override returns (uint256) {
+        uint256 yield = _appliedTrancheYields[tranche];
+        return yield > 0 ? yield : _definedTrancheYields[trancheClass(tranche)];
     }
 
     /// @inheritdoc IPerpetualTranche
     // @dev A given tranche's computed class is the
     //      hash(collteralToken, trancheRatios, seniority).
-    function trancheClass(ITranche t) public view override returns (bytes32) {
-        IBondController bond = IBondController(t.bond());
+    function trancheClass(ITranche tranche) public view override returns (bytes32) {
+        IBondController bond = IBondController(tranche.bond());
         TrancheData memory td = bond.getTrancheData();
-        return keccak256(abi.encode(bond.collateralToken(), td.trancheRatios, td.getTrancheIndex(t)));
+        return keccak256(abi.encode(bond.collateralToken(), td.trancheRatios, td.getTrancheIndex(tranche)));
     }
 
     /// @inheritdoc IPerpetualTranche
-    function tranchePrice(ITranche t) public view override returns (uint256) {
-        return pricingStrategy.computeTranchePrice(t);
+    function tranchePrice(ITranche tranche) public view override returns (uint256) {
+        return pricingStrategy.computeTranchePrice(tranche);
     }
 
     /// @inheritdoc IPerpetualTranche
-    function tranchesToPerps(ITranche t, uint256 trancheAmt) public view override returns (uint256) {
-        return _tranchesToPerps(trancheAmt, trancheYield(t), tranchePrice(t));
+    function tranchesToPerps(ITranche tranche, uint256 trancheAmt) public view override returns (uint256) {
+        return _tranchesToPerps(trancheAmt, trancheYield(tranche), tranchePrice(tranche));
     }
 
     /// @inheritdoc IPerpetualTranche
-    function perpsToTranches(ITranche t, uint256 amount) public view override returns (uint256) {
-        return _perpsToTranches(amount, trancheYield(t), tranchePrice(t));
+    function perpsToTranches(ITranche tranche, uint256 amount) public view override returns (uint256) {
+        return _perpsToTranches(amount, trancheYield(tranche), tranchePrice(tranche));
     }
 
     /// @inheritdoc IPerpetualTranche
-    function perpsToCoveredTranches(ITranche t, uint256 requestedAmount)
-        public
-        view
-        override
-        returns (uint256, uint256)
-    {
-        return _perpsToCoveredTranches(t, requestedAmount, trancheYield(t), tranchePrice(t));
+    // @dev Set `maxTrancheAmtCovered` to max(uint256) to use the current reserve balance.
+    function perpsToCoveredTranches(
+        ITranche tranche,
+        uint256 perpAmountRequested,
+        uint256 maxTrancheAmtCovered
+    ) public view override returns (uint256, uint256) {
+        return
+            _perpsToCoveredTranches(
+                perpAmountRequested,
+                Math.min(maxTrancheAmtCovered, tranche.balanceOf(_self())),
+                trancheYield(tranche),
+                tranchePrice(tranche)
+            );
     }
 
     // @notice Returns the number of decimals used to get its user representation.
@@ -531,6 +555,20 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @dev Removes the tranche from the head of the queue.
     function _dequeueTranche() internal {
         emit TrancheDequeued(ITranche(_redemptionQueue.dequeue()));
+    }
+
+    // @dev The head of the tranche queue which is up for redemption next.
+    function _redemptionTranche() internal returns (ITranche) {
+        return ITranche(_redemptionQueue.head());
+    }
+
+    // @dev Checks if the given tranche pair is a valid rollover.
+    function _isAcceptableRollover(ITranche trancheIn, ITranche trancheOut) internal returns (bool) {
+        IBondController bondIn = IBondController(trancheIn.bond());
+        IBondController bondOut = IBondController(trancheOut.bond());
+        return (bondIn == _depositBond && // Expected trancheIn to be of deposit bond
+            bondOut != _depositBond && // Expected trancheOut to NOT be of deposit bond
+            !_redemptionQueue.contains(address(trancheOut))); // Expected trancheOut to not be part of the queue
     }
 
     // @dev If the fee is positive, fee is transferred from the payer to the self
@@ -611,26 +649,25 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         return (timeToMaturity >= minTrancheMaturiySec && timeToMaturity < maxTrancheMaturiySec);
     }
 
-    // @dev Calculates the tranche token amount for requested perp amount.
-    //      If the tranche balance doesn't cover the exchange, it returns the remainder.
-    function _perpsToCoveredTranches(
-        ITranche t,
-        uint256 requestedAmount,
-        uint256 yield,
-        uint256 price
-    ) private view returns (uint256 trancheAmtUsed, uint256 perpRemainder) {
-        uint256 trancheBalance = t.balanceOf(_self());
-        uint256 trancheAmtForRequested = _perpsToTranches(requestedAmount, yield, price);
-        trancheAmtUsed = Math.min(trancheAmtForRequested, trancheBalance);
-        perpRemainder = trancheAmtUsed > 0
-            ? (requestedAmount * (trancheAmtForRequested - trancheAmtUsed)).ceilDiv(trancheAmtForRequested)
-            : requestedAmount;
-        return (trancheAmtUsed, perpRemainder);
-    }
-
     // @dev Alias to self.
     function _self() private view returns (address) {
         return address(this);
+    }
+
+    // @dev Calculates the tranche token amount for requested perp amount.
+    //      If the tranche balance doesn't cover the exchange, it returns the remainder.
+    function _perpsToCoveredTranches(
+        uint256 perpAmountRequested,
+        uint256 trancheAmtCovered,
+        uint256 yield,
+        uint256 price
+    ) private pure returns (uint256 trancheAmtUsed, uint256 perpRemainder) {
+        uint256 trancheAmtForRequested = _perpsToTranches(perpAmountRequested, yield, price);
+        trancheAmtUsed = Math.min(trancheAmtForRequested, trancheAmtCovered);
+        perpRemainder = trancheAmtUsed > 0
+            ? (perpAmountRequested * (trancheAmtForRequested - trancheAmtUsed)).ceilDiv(trancheAmtForRequested)
+            : perpAmountRequested;
+        return (trancheAmtUsed, perpRemainder);
     }
 
     // @dev Calculates perp token amount from tranche amount.
