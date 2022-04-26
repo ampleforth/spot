@@ -5,6 +5,9 @@ contract MockPricingStrategy {
     uint8 private _decimals;
     uint256 private _price;
 
+    mapping(address => uint256) private _tranchePrice;
+    mapping(address => bool) private _tranchePriceSet;
+
     constructor() {
         _decimals = 8;
         _price = 10**8;
@@ -18,9 +21,14 @@ contract MockPricingStrategy {
         _price = p;
     }
 
+    function setTranchePrice(address t, uint256 p) external {
+        _tranchePrice[t] = p;
+        _tranchePriceSet[t] = true;
+    }
+
     // solhint-disable-next-line no-unused-vars
     function computeTranchePrice(address t) external returns (uint256) {
-        return _price;
+        return _tranchePriceSet[t] ? _tranchePrice[t] : _price;
     }
 
     function decimals() external returns (uint8) {
