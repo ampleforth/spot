@@ -55,6 +55,10 @@ import { IPricingStrategy } from "./_interfaces/IPricingStrategy.sol";
  *          These reserve tokens can only leave the system on "redeem" and "rollover".
  *          Non reserve assets on the other hand can be transferred out by the contract owner if need be.
  *
+ *          The tranche queue is updated "lazily" without a need for an explicit poke from the outside world.
+ *          CRITICAL: Whenever contract functions need to access the queue state, they use the `updateQueueAnd..` getter methods
+ *                    to safely get the updated storage state rather than accessing the storage variables directly.
+ *
  */
 contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     using Math for uint256;
