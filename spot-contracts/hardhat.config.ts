@@ -9,10 +9,10 @@ import "solidity-coverage";
 import "hardhat-gas-reporter";
 
 // Loads custom tasks
-import "./scripts/tools/verify";
-import "./scripts/accounts";
-import "./scripts/deploy";
-import "./scripts/ops";
+// import "./scripts/tools/verify";
+// import "./scripts/accounts";
+// import "./scripts/deploy";
+// import "./scripts/ops";
 
 // Loads env variables from .env file
 import * as dotenv from "dotenv";

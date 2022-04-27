@@ -8,9 +8,7 @@
   "license": "GNUV3",
   "private": true,
   "packageManager": "yarn@3.2.0",
-  "workspaces": {
-    "packages": [
-      "spot-contracts"
-    ]
-  }
+  "workspaces": [
+    "spot-contracts"
+  ]
 }
