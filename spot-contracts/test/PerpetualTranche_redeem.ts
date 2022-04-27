@@ -47,7 +47,7 @@ describe("PerpetualTranche", function () {
     await perp.init(issuer.address, feeStrategy.address, pricingStrategy.address);
     await advancePerpQueue(perp, 3600);
 
-    depositBond = await bondAt(await perp.callStatic.getDepositBond());
+    depositBond = await bondAt(await perp.callStatic.updateQueueAndGetDepositBond());
     [initialDepositTranche] = await getTranches(depositBond);
 
     await feeStrategy.setFeeToken(perp.address);
@@ -135,7 +135,11 @@ describe("PerpetualTranche", function () {
 
       describe("when fee > 0", function () {
         beforeEach(async function () {
-          await depositIntoBond(await bondAt(await perp.callStatic.getDepositBond()), toFixedPtAmt("2"), deployer);
+          await depositIntoBond(
+            await bondAt(await perp.callStatic.updateQueueAndGetDepositBond()),
+            toFixedPtAmt("2"),
+            deployer,
+          );
           await initialDepositTranche.increaseAllowance(perp.address, toFixedPtAmt("1"));
           await perp.deposit(initialDepositTranche.address, toFixedPtAmt("1"));
           await feeStrategy.setBurnFee(toFixedPtAmt("1"));
@@ -170,7 +174,11 @@ describe("PerpetualTranche", function () {
 
       describe("when fee < 0", function () {
         beforeEach(async function () {
-          await depositIntoBond(await bondAt(await perp.callStatic.getDepositBond()), toFixedPtAmt("2"), deployer);
+          await depositIntoBond(
+            await bondAt(await perp.callStatic.updateQueueAndGetDepositBond()),
+            toFixedPtAmt("2"),
+            deployer,
+          );
           await initialDepositTranche.increaseAllowance(perp.address, toFixedPtAmt("1"));
           await perp.deposit(initialDepositTranche.address, toFixedPtAmt("1"));
           await perp.transfer(perp.address, toFixedPtAmt("1"));
@@ -343,7 +351,7 @@ describe("PerpetualTranche", function () {
       beforeEach(async function () {
         await advancePerpQueue(perp, 7200);
 
-        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        const newBond = await bondAt(await perp.callStatic.updateQueueAndGetDepositBond());
         await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
         const tranches = await getTranches(newBond);
         newRedemptionTranche = tranches[0];
@@ -352,7 +360,7 @@ describe("PerpetualTranche", function () {
       });
       it("should revert", async function () {
         expect(initialDepositTranche.address).not.to.eq(newRedemptionTranche.address);
-        expect(await perp.callStatic.getRedemptionTranche()).to.eq(newRedemptionTranche.address);
+        expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(newRedemptionTranche.address);
         await expect(perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.be.revertedWith(
           "Expected to redeem burning tranche or queue to be empty",
         );
@@ -366,17 +374,17 @@ describe("PerpetualTranche", function () {
 
         await advancePerpQueue(perp, 7200);
 
-        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        const newBond = await bondAt(await perp.callStatic.updateQueueAndGetDepositBond());
         await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
         const tranches = await getTranches(newBond);
         newRedemptionTranche = tranches[0];
         await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
         await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
 
-        expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(1);
-        expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(newRedemptionTranche.address);
-        await expect(perp.callStatic.getRedemptionQueueAt(1)).to.be.reverted;
-        expect(await perp.callStatic.getRedemptionTranche()).to.eq(newRedemptionTranche.address);
+        expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(1);
+        expect(await perp.callStatic.updateQueueAndGetQueueAt(0)).to.eq(newRedemptionTranche.address);
+        await expect(perp.callStatic.updateQueueAndGetQueueAt(1)).to.be.reverted;
+        expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(newRedemptionTranche.address);
         expect(await perp.reserveCount()).to.eq(2);
         expect(await perp.inReserve(initialDepositTranche.address)).to.eq(true);
         expect(await perp.inReserve(newRedemptionTranche.address)).to.eq(true);
@@ -391,14 +399,14 @@ describe("PerpetualTranche", function () {
           await tx;
         });
         it("should NOT dequeue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(1);
+          expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(1);
         });
         it("should NOT update the queue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(newRedemptionTranche.address);
-          await expect(perp.callStatic.getRedemptionQueueAt(1)).to.be.reverted;
+          expect(await perp.callStatic.updateQueueAndGetQueueAt(0)).to.eq(newRedemptionTranche.address);
+          await expect(perp.callStatic.updateQueueAndGetQueueAt(1)).to.be.reverted;
         });
         it("should NOT update the redemption tranche", async function () {
-          expect(await perp.callStatic.getRedemptionTranche()).to.eq(newRedemptionTranche.address);
+          expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(newRedemptionTranche.address);
         });
         it("should NOT emit dequeue", async function () {
           await expect(tx).not.to.emit(perp, "TrancheDequeued").withArgs(newRedemptionTranche.address);
@@ -424,13 +432,13 @@ describe("PerpetualTranche", function () {
           await tx;
         });
         it("should dequeue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(0);
+          expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(0);
         });
         it("should update the queue", async function () {
-          await expect(perp.callStatic.getRedemptionQueueAt(0)).to.be.reverted;
+          await expect(perp.callStatic.updateQueueAndGetQueueAt(0)).to.be.reverted;
         });
         it("should update the redemption tranche", async function () {
-          expect(await perp.callStatic.getRedemptionTranche()).to.eq(constants.AddressZero);
+          expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(constants.AddressZero);
         });
         it("should emit dequeue", async function () {
           await expect(tx).to.emit(perp, "TrancheDequeued").withArgs(newRedemptionTranche.address);
@@ -461,13 +469,13 @@ describe("PerpetualTranche", function () {
             await tx;
           });
           it("should dequeue", async function () {
-            expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(0);
+            expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(0);
           });
           it("should update the queue", async function () {
-            await expect(perp.callStatic.getRedemptionQueueAt(0)).to.be.reverted;
+            await expect(perp.callStatic.updateQueueAndGetQueueAt(0)).to.be.reverted;
           });
           it("should update the redemption tranche", async function () {
-            expect(await perp.callStatic.getRedemptionTranche()).to.eq(constants.AddressZero);
+            expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(constants.AddressZero);
           });
           it("should emit dequeue", async function () {
             await expect(tx).to.emit(perp, "TrancheDequeued").withArgs(newRedemptionTranche.address);
@@ -495,7 +503,7 @@ describe("PerpetualTranche", function () {
 
         await advancePerpQueue(perp, 7200);
 
-        const newBond1 = await bondAt(await perp.callStatic.getDepositBond());
+        const newBond1 = await bondAt(await perp.callStatic.updateQueueAndGetDepositBond());
         await depositIntoBond(newBond1, toFixedPtAmt("1000"), deployer);
         const tranches1 = await getTranches(newBond1);
         await tranches1[0].approve(perp.address, toFixedPtAmt("500"));
@@ -504,18 +512,18 @@ describe("PerpetualTranche", function () {
 
         await advancePerpQueue(perp, 1200);
 
-        const newBond2 = await bondAt(await perp.callStatic.getDepositBond());
+        const newBond2 = await bondAt(await perp.callStatic.updateQueueAndGetDepositBond());
         await depositIntoBond(newBond2, toFixedPtAmt("1000"), deployer);
         const tranches2 = await getTranches(newBond2);
         await tranches2[0].approve(perp.address, toFixedPtAmt("500"));
         await perp.deposit(tranches2[0].address, toFixedPtAmt("500"));
         newRedemptionTranche2 = tranches2[0];
 
-        expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(2);
-        expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(newRedemptionTranche1.address);
-        expect(await perp.callStatic.getRedemptionQueueAt(1)).to.eq(newRedemptionTranche2.address);
-        await expect(perp.callStatic.getRedemptionQueueAt(2)).to.be.reverted;
-        expect(await perp.callStatic.getRedemptionTranche()).to.eq(newRedemptionTranche1.address);
+        expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(2);
+        expect(await perp.callStatic.updateQueueAndGetQueueAt(0)).to.eq(newRedemptionTranche1.address);
+        expect(await perp.callStatic.updateQueueAndGetQueueAt(1)).to.eq(newRedemptionTranche2.address);
+        await expect(perp.callStatic.updateQueueAndGetQueueAt(2)).to.be.reverted;
+        expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(newRedemptionTranche1.address);
 
         expect(await perp.reserveCount()).to.eq(3);
         expect(await perp.inReserve(initialDepositTranche.address)).to.eq(true);
@@ -533,15 +541,15 @@ describe("PerpetualTranche", function () {
           await tx;
         });
         it("should NOT dequeue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(2);
+          expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(2);
         });
         it("should NOT update the queue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(newRedemptionTranche1.address);
-          expect(await perp.callStatic.getRedemptionQueueAt(1)).to.eq(newRedemptionTranche2.address);
-          await expect(perp.callStatic.getRedemptionQueueAt(2)).to.be.reverted;
+          expect(await perp.callStatic.updateQueueAndGetQueueAt(0)).to.eq(newRedemptionTranche1.address);
+          expect(await perp.callStatic.updateQueueAndGetQueueAt(1)).to.eq(newRedemptionTranche2.address);
+          await expect(perp.callStatic.updateQueueAndGetQueueAt(2)).to.be.reverted;
         });
         it("should NOT update the redemption tranche", async function () {
-          expect(await perp.callStatic.getRedemptionTranche()).to.eq(newRedemptionTranche1.address);
+          expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(newRedemptionTranche1.address);
         });
         it("should NOT emit dequeue", async function () {
           await expect(tx).not.to.emit(perp, "TrancheDequeued").withArgs(newRedemptionTranche1.address);
@@ -569,14 +577,14 @@ describe("PerpetualTranche", function () {
           await tx;
         });
         it("should dequeue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(1);
+          expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(1);
         });
         it("should update the queue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(newRedemptionTranche2.address);
-          await expect(perp.callStatic.getRedemptionQueueAt(1)).to.be.reverted;
+          expect(await perp.callStatic.updateQueueAndGetQueueAt(0)).to.eq(newRedemptionTranche2.address);
+          await expect(perp.callStatic.updateQueueAndGetQueueAt(1)).to.be.reverted;
         });
         it("should update the redemption tranche", async function () {
-          expect(await perp.callStatic.getRedemptionTranche()).to.eq(newRedemptionTranche2.address);
+          expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(newRedemptionTranche2.address);
         });
         it("should emit dequeue", async function () {
           await expect(tx).to.emit(perp, "TrancheDequeued").withArgs(newRedemptionTranche1.address);
@@ -609,14 +617,14 @@ describe("PerpetualTranche", function () {
             await tx;
           });
           it("should dequeue", async function () {
-            expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(1);
+            expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(1);
           });
           it("should update the queue", async function () {
-            expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(newRedemptionTranche2.address);
-            await expect(perp.callStatic.getRedemptionQueueAt(1)).to.be.reverted;
+            expect(await perp.callStatic.updateQueueAndGetQueueAt(0)).to.eq(newRedemptionTranche2.address);
+            await expect(perp.callStatic.updateQueueAndGetQueueAt(1)).to.be.reverted;
           });
           it("should update the redemption tranche", async function () {
-            expect(await perp.callStatic.getRedemptionTranche()).to.eq(newRedemptionTranche2.address);
+            expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(newRedemptionTranche2.address);
           });
           it("should emit dequeue", async function () {
             await expect(tx).to.emit(perp, "TrancheDequeued").withArgs(newRedemptionTranche1.address);
@@ -645,7 +653,7 @@ describe("PerpetualTranche", function () {
 
         await advancePerpQueue(perp, 7200);
 
-        const newBond1 = await bondAt(await perp.callStatic.getDepositBond());
+        const newBond1 = await bondAt(await perp.callStatic.updateQueueAndGetDepositBond());
         await depositIntoBond(newBond1, toFixedPtAmt("1000"), deployer);
         const tranches1 = await getTranches(newBond1);
         await tranches1[0].approve(perp.address, toFixedPtAmt("500"));
@@ -654,7 +662,7 @@ describe("PerpetualTranche", function () {
 
         await advancePerpQueue(perp, 1200);
 
-        const newBond2 = await bondAt(await perp.callStatic.getDepositBond());
+        const newBond2 = await bondAt(await perp.callStatic.updateQueueAndGetDepositBond());
         await depositIntoBond(newBond2, toFixedPtAmt("1000"), deployer);
         const tranches2 = await getTranches(newBond2);
         await tranches2[0].approve(perp.address, toFixedPtAmt("500"));
@@ -663,9 +671,9 @@ describe("PerpetualTranche", function () {
 
         await advancePerpQueue(perp, 7200);
 
-        expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(0);
-        await expect(perp.callStatic.getRedemptionQueueAt(0)).to.be.reverted;
-        expect(await perp.callStatic.getRedemptionTranche()).to.eq(constants.AddressZero);
+        expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(0);
+        await expect(perp.callStatic.updateQueueAndGetQueueAt(0)).to.be.reverted;
+        expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(constants.AddressZero);
 
         expect(await perp.reserveCount()).to.eq(3);
         expect(await perp.inReserve(initialDepositTranche.address)).to.eq(true);
@@ -683,13 +691,13 @@ describe("PerpetualTranche", function () {
           await tx;
         });
         it("should NOT dequeue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(0);
+          expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(0);
         });
         it("should NOT update the queue", async function () {
-          await expect(perp.callStatic.getRedemptionQueueAt(0)).to.be.reverted;
+          await expect(perp.callStatic.updateQueueAndGetQueueAt(0)).to.be.reverted;
         });
         it("should NOT update the redemption tranche", async function () {
-          expect(await perp.callStatic.getRedemptionTranche()).to.eq(constants.AddressZero);
+          expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(constants.AddressZero);
         });
         it("should NOT emit dequeue", async function () {
           await expect(tx).not.to.emit(perp, "TrancheDequeued").withArgs(queuedTranche2.address);
@@ -717,13 +725,13 @@ describe("PerpetualTranche", function () {
           await tx;
         });
         it("should NOT dequeue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(0);
+          expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(0);
         });
         it("should NOT update the queue", async function () {
-          await expect(perp.callStatic.getRedemptionQueueAt(0)).to.be.reverted;
+          await expect(perp.callStatic.updateQueueAndGetQueueAt(0)).to.be.reverted;
         });
         it("should NOT update the redemption tranche", async function () {
-          expect(await perp.callStatic.getRedemptionTranche()).to.eq(constants.AddressZero);
+          expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(constants.AddressZero);
         });
         it("should NOT emit dequeue", async function () {
           await expect(tx).not.to.emit(perp, "TrancheDequeued").withArgs(queuedTranche2.address);
@@ -757,13 +765,13 @@ describe("PerpetualTranche", function () {
             await tx;
           });
           it("should NOT dequeue", async function () {
-            expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(0);
+            expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(0);
           });
           it("should NOT update the queue", async function () {
-            await expect(perp.callStatic.getRedemptionQueueAt(0)).to.be.reverted;
+            await expect(perp.callStatic.updateQueueAndGetQueueAt(0)).to.be.reverted;
           });
           it("should NOT update the redemption tranche", async function () {
-            expect(await perp.callStatic.getRedemptionTranche()).to.eq(constants.AddressZero);
+            expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(constants.AddressZero);
           });
           it("should NOT emit dequeue", async function () {
             await expect(tx).not.to.emit(perp, "TrancheDequeued").withArgs(queuedTranche2.address);

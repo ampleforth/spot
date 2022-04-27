@@ -88,23 +88,23 @@ interface IPerpetualTranche is IERC20 {
 
     // @notice The parent bond whose tranches are currently accepted to mint perp tokens.
     // @return Address of the deposit bond.
-    function getDepositBond() external returns (IBondController);
+    function updateQueueAndGetDepositBond() external returns (IBondController);
 
     // @notice Tranche up for redemption next.
     // @return Address of the tranche token.
-    function getRedemptionTranche() external returns (ITranche);
+    function updateQueueAndGetRedemptionTranche() external returns (ITranche);
 
     // @notice Total count of tokens in the redemption queue.
-    function getRedemptionQueueCount() external returns (uint256);
+    function updateQueueAndGetQueueCount() external returns (uint256);
 
     // @notice The token address from the redemption queue by index.
     // @param index The index of a token.
-    function getRedemptionQueueAt(uint256 index) external returns (address);
+    function updateQueueAndGetQueueAt(uint256 index) external returns (address);
 
     // @notice Checks if the given `trancheIn` can be rolled out for `trancheOut`.
     // @param trancheIn The tranche token deposited.
     // @param trancheOut The tranche token to be redeemed.
-    function isValidRollover(ITranche trancheIn, ITranche trancheOut) external returns (bool);
+    function updateQueueAndGetRolloverValidity(ITranche trancheIn, ITranche trancheOut) external returns (bool);
 
     // @notice The strategy contract with the fee computation logic.
     // @return Address of the strategy contract.

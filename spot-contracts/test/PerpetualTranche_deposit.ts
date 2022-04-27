@@ -48,7 +48,7 @@ describe("PerpetualTranche", function () {
     await perp.init(issuer.address, feeStrategy.address, pricingStrategy.address);
     await advancePerpQueue(perp, 3600);
 
-    depositBond = await bondAt(await perp.callStatic.getDepositBond());
+    depositBond = await bondAt(await perp.callStatic.updateQueueAndGetDepositBond());
     [depositTrancheA, depositTrancheZ] = await getTranches(depositBond);
 
     await feeStrategy.setFeeToken(perp.address);
@@ -238,7 +238,11 @@ describe("PerpetualTranche", function () {
       });
       describe("when fee < 0", function () {
         beforeEach(async function () {
-          await depositIntoBond(await bondAt(await perp.callStatic.getDepositBond()), toFixedPtAmt("2"), deployer);
+          await depositIntoBond(
+            await bondAt(await perp.callStatic.updateQueueAndGetDepositBond()),
+            toFixedPtAmt("2"),
+            deployer,
+          );
           await depositTrancheA.increaseAllowance(perp.address, toFixedPtAmt("1"));
           await perp.deposit(depositTrancheA.address, toFixedPtAmt("1"));
           await perp.transfer(perp.address, toFixedPtAmt("1"));
@@ -408,10 +412,10 @@ describe("PerpetualTranche", function () {
     describe("when the tranche queue is empty", function () {
       let tx: Transaction;
       beforeEach(async function () {
-        expect(await perp.callStatic.getDepositBond()).to.eq(depositBond.address);
-        expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(0);
-        await expect(perp.callStatic.getRedemptionQueueAt(0)).to.be.reverted;
-        expect(await perp.callStatic.getRedemptionTranche()).to.eq(constants.AddressZero);
+        expect(await perp.callStatic.updateQueueAndGetDepositBond()).to.eq(depositBond.address);
+        expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(0);
+        await expect(perp.callStatic.updateQueueAndGetQueueAt(0)).to.be.reverted;
+        expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(constants.AddressZero);
         expect(await perp.reserveCount()).to.eq(0);
         expect(await perp.inReserve(depositTrancheA.address)).to.eq(false);
         await expect(perp.reserveAt(0)).to.be.reverted;
@@ -421,7 +425,7 @@ describe("PerpetualTranche", function () {
       });
 
       it("should NOT update the deposit bond", async function () {
-        expect(await perp.callStatic.getDepositBond()).to.eq(depositBond.address);
+        expect(await perp.callStatic.updateQueueAndGetDepositBond()).to.eq(depositBond.address);
       });
       it("should emit enqueue", async function () {
         await expect(tx).to.emit(perp, "TrancheEnqueued").withArgs(depositTrancheA.address);
@@ -433,14 +437,14 @@ describe("PerpetualTranche", function () {
         await expect(tx).to.emit(perp, "ReserveSynced").withArgs(depositTrancheA.address, toFixedPtAmt("500"));
       });
       it("should increase the queue size", async function () {
-        expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(1);
+        expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(1);
       });
       it("should add the the queue", async function () {
-        expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(depositTrancheA.address);
-        await expect(perp.callStatic.getRedemptionQueueAt(1)).to.be.reverted;
+        expect(await perp.callStatic.updateQueueAndGetQueueAt(0)).to.eq(depositTrancheA.address);
+        await expect(perp.callStatic.updateQueueAndGetQueueAt(1)).to.be.reverted;
       });
       it("should update the head of the queue", async function () {
-        expect(await perp.callStatic.getRedemptionTranche()).to.eq(depositTrancheA.address);
+        expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(depositTrancheA.address);
       });
       it("should increase the reserve size", async function () {
         expect(await perp.reserveCount()).to.eq(1);
@@ -455,11 +459,11 @@ describe("PerpetualTranche", function () {
       beforeEach(async function () {
         await perp.deposit(depositTrancheA.address, toFixedPtAmt("200"));
 
-        expect(await perp.callStatic.getDepositBond()).to.eq(depositBond.address);
-        expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(1);
-        expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(depositTrancheA.address);
-        await expect(perp.callStatic.getRedemptionQueueAt(1)).to.be.reverted;
-        expect(await perp.callStatic.getRedemptionTranche()).to.eq(depositTrancheA.address);
+        expect(await perp.callStatic.updateQueueAndGetDepositBond()).to.eq(depositBond.address);
+        expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(1);
+        expect(await perp.callStatic.updateQueueAndGetQueueAt(0)).to.eq(depositTrancheA.address);
+        await expect(perp.callStatic.updateQueueAndGetQueueAt(1)).to.be.reverted;
+        expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(depositTrancheA.address);
         expect(await perp.reserveCount()).to.eq(1);
         expect(await perp.inReserve(depositTrancheA.address)).to.eq(true);
         expect(await perp.reserveAt(0)).to.eq(depositTrancheA.address);
@@ -474,7 +478,7 @@ describe("PerpetualTranche", function () {
         });
 
         it("should NOT update the deposit bond", async function () {
-          expect(await perp.callStatic.getDepositBond()).to.eq(depositBond.address);
+          expect(await perp.callStatic.updateQueueAndGetDepositBond()).to.eq(depositBond.address);
         });
         it("should NOT emit enqueue", async function () {
           await expect(tx).not.to.emit(perp, "TrancheEnqueued").withArgs(depositTrancheA.address);
@@ -488,14 +492,14 @@ describe("PerpetualTranche", function () {
           await expect(tx).to.emit(perp, "ReserveSynced").withArgs(depositTrancheA.address, toFixedPtAmt("500"));
         });
         it("should NOT increase the queue size", async function () {
-          expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(1);
+          expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(1);
         });
         it("should NOT add the the queue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(depositTrancheA.address);
-          await expect(perp.callStatic.getRedemptionQueueAt(1)).to.be.reverted;
+          expect(await perp.callStatic.updateQueueAndGetQueueAt(0)).to.eq(depositTrancheA.address);
+          await expect(perp.callStatic.updateQueueAndGetQueueAt(1)).to.be.reverted;
         });
         it("should NOT update the head of the queue", async function () {
-          expect(await perp.callStatic.getRedemptionTranche()).to.eq(depositTrancheA.address);
+          expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(depositTrancheA.address);
         });
         it("should NOT increase the reserve size", async function () {
           expect(await perp.reserveCount()).to.eq(1);
@@ -512,7 +516,7 @@ describe("PerpetualTranche", function () {
         beforeEach(async function () {
           await advancePerpQueue(perp, 1200);
 
-          newBond = await bondAt(await perp.callStatic.getDepositBond());
+          newBond = await bondAt(await perp.callStatic.updateQueueAndGetDepositBond());
           await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
           const tranches = await getTranches(newBond);
           newTranche = tranches[0];
@@ -524,7 +528,7 @@ describe("PerpetualTranche", function () {
         });
 
         it("should update the deposit bond", async function () {
-          expect(await perp.callStatic.getDepositBond()).to.eq(newBond.address);
+          expect(await perp.callStatic.updateQueueAndGetDepositBond()).to.eq(newBond.address);
         });
         it("should emit enqueue", async function () {
           await expect(tx).to.emit(perp, "TrancheEnqueued").withArgs(newTranche.address);
@@ -536,15 +540,15 @@ describe("PerpetualTranche", function () {
           await expect(tx).to.emit(perp, "ReserveSynced").withArgs(newTranche.address, toFixedPtAmt("250"));
         });
         it("should increase the queue size", async function () {
-          expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(2);
+          expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(2);
         });
         it("should add the the queue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(depositTrancheA.address);
-          expect(await perp.callStatic.getRedemptionQueueAt(1)).to.eq(newTranche.address);
-          await expect(perp.callStatic.getRedemptionQueueAt(2)).to.be.reverted;
+          expect(await perp.callStatic.updateQueueAndGetQueueAt(0)).to.eq(depositTrancheA.address);
+          expect(await perp.callStatic.updateQueueAndGetQueueAt(1)).to.eq(newTranche.address);
+          await expect(perp.callStatic.updateQueueAndGetQueueAt(2)).to.be.reverted;
         });
         it("should NOT update the head of the queue", async function () {
-          expect(await perp.callStatic.getRedemptionTranche()).to.eq(depositTrancheA.address);
+          expect(await perp.callStatic.updateQueueAndGetRedemptionTranche()).to.eq(depositTrancheA.address);
         });
         it("should increase the reserve size", async function () {
           expect(await perp.reserveCount()).to.eq(2);

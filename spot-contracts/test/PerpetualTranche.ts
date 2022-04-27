@@ -64,7 +64,7 @@ describe("PerpetualTranche", function () {
 
     it("should initialize lists", async function () {
       expect(await perp.reserveCount()).to.eq(0);
-      expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(0);
+      expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(0);
     });
 
     it("should set hyper parameters", async function () {

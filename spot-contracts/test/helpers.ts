@@ -155,6 +155,6 @@ export const getTrancheBalances = async (bond: Contract, user: string): Promise<
 
 export const advancePerpQueue = async (perp: Contract, time: number) => {
   await TimeHelpers.increaseTime(time);
-  await perp.getDepositBond();
-  await perp.getRedemptionTranche();
+  await perp.updateQueueAndGetDepositBond();
+  await perp.updateQueueAndGetRedemptionTranche();
 };

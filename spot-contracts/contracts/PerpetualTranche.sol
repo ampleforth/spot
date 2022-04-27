@@ -41,10 +41,10 @@ import { IPricingStrategy } from "./_interfaces/IPricingStrategy.sol";
  *             it is added to the tail of the queue.
  *          3) When a user burns perp tokens, it iteratively redeems tranches from the head of the queue
  *             till the requested amount is covered.
- *          4) Tranches which are about to mature are removed from the tranche queue.
+ *          4) Tranches which are about to mature are removed from the redemption queue.
  *
  *          Once tranches are removed from the queue, they entire a holding area called the "icebox".
- *          Tranches in the icebox can only be redeemed when the tranche queue is empty.
+ *          Tranches in the icebox can only be redeemed when the redemption queue is empty.
  *
  *          Incentivized parties can "rollover" older tranches in the icebox for
  *          newer tranches that belong to the "depositBond".
@@ -129,11 +129,11 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     mapping(ITranche => uint256) private _appliedTrancheYields;
 
     // @notice The minimum maturity time in seconds for a tranche below which
-    //         it can get removed from the tranche queue.
+    //         it can get removed from the redemption queue.
     uint256 public minTrancheMaturiySec;
 
     // @notice The maximum maturity time in seconds for a tranche above which
-    //         it can NOT get added into the tranche queue.
+    //         it can NOT get added into the redemption queue.
     uint256 public maxTrancheMaturiySec;
 
     //--------------------------------------------------------------------------
@@ -203,7 +203,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @notice Update the maturity tolerance parameters.
     // @param minTrancheMaturiySec_ New minimum maturity time.
     // @param maxTrancheMaturiySec_ New maximum maturity time.
-    // @dev NOTE: Setting `minTrancheMaturiySec` to 0 will mean bonds will remain in the queue
+    // @dev NOTE: Setting `minTrancheMaturiySec` to 0 will mean bonds will remain in the redemption queue
     //      past maturity.
     function updateTolerableTrancheMaturiy(uint256 minTrancheMaturiySec_, uint256 maxTrancheMaturiySec_)
         external
@@ -249,7 +249,10 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         override
         returns (uint256 mintAmt, int256 mintFee)
     {
-        require(getDepositBond() == IBondController(trancheIn.bond()), "Expected tranche to be of deposit bond");
+        require(
+            updateQueueAndGetDepositBond() == IBondController(trancheIn.bond()),
+            "Expected tranche to be of deposit bond"
+        );
 
         // calculates the amount of perp tokens the `trancheInAmt` of tranche tokens are worth
         mintAmt = tranchesToPerps(trancheIn, trancheInAmt);
@@ -280,13 +283,13 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         override
         returns (uint256 burnAmt, int256 burnFee)
     {
-        ITranche redemptionTranche = getRedemptionTranche();
+        ITranche redemptionTranche = updateQueueAndGetRedemptionTranche();
 
-        // When tranche queue is NOT empty, redemption ordering is enforced.
+        // When redemption queue is NOT empty, redemption ordering is enforced.
         bool inOrderRedemption = address(redemptionTranche) != address(0);
 
         // The system only allows redemption of the burning tranche for perp tokens
-        // i.e) the tranche at the head of the tranche queue.
+        // i.e) the tranche at the head of the redemption queue.
         // When the queue is empty, any tranche held in the reserve can be redeemed.
         require(
             trancheOut == redemptionTranche || !inOrderRedemption,
@@ -332,7 +335,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         ITranche trancheOut,
         uint256 trancheInAmt
     ) external override returns (uint256 trancheOutAmt, int256 rolloverFee) {
-        require(isValidRollover(trancheIn, trancheOut), "Expected rollover to be acceptable");
+        require(updateQueueAndGetRolloverValidity(trancheIn, trancheOut), "Expected rollover to be acceptable");
 
         // calculates the perp denominated amount rolled over
         uint256 rolloverAmt = tranchesToPerps(trancheIn, trancheInAmt);
@@ -374,42 +377,42 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // Public methods
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Lazily updates the queue before fetching from storage.
-    function getDepositBond() public override returns (IBondController) {
+    // @dev Lazily updates the redemption queue before fetching from storage.
+    function updateQueueAndGetDepositBond() public override returns (IBondController) {
         updateQueue();
         return _depositBond;
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Lazily updates the queue before fetching from storage.
-    function getRedemptionTranche() public override returns (ITranche tranche) {
+    // @dev Lazily updates the redemption queue before fetching from storage.
+    function updateQueueAndGetRedemptionTranche() public override returns (ITranche tranche) {
         updateQueue();
         return _redemptionTranche();
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Lazily updates the queue before fetching from storage.
-    function getRedemptionQueueCount() public override returns (uint256) {
+    // @dev Lazily updates the redemption queue before fetching from storage.
+    function updateQueueAndGetQueueCount() public override returns (uint256) {
         updateQueue();
         return _redemptionQueue.length();
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Lazily updates the queue before fetching from storage.
-    function getRedemptionQueueAt(uint256 i) public override returns (address) {
+    // @dev Lazily updates the redemption queue before fetching from storage.
+    function updateQueueAndGetQueueAt(uint256 i) public override returns (address) {
         updateQueue();
         return _redemptionQueue.at(i);
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Lazily updates the queue before verifying state.
-    function isValidRollover(ITranche trancheIn, ITranche trancheOut) public override returns (bool) {
+    // @dev Lazily updates the redemption queue before verifying state.
+    function updateQueueAndGetRolloverValidity(ITranche trancheIn, ITranche trancheOut) public override returns (bool) {
         updateQueue();
         return _isValidRollover(trancheIn, trancheOut);
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Lazily updates time-dependent queue state.
+    // @dev Lazily updates time-dependent redemption queue state.
     function updateQueue() public override {
         // Lazily queries the bond issuer to get the most recently issued bond
         // and updates with the new deposit bond if it's "acceptable".
@@ -420,7 +423,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
             _depositBond = newBond;
         }
 
-        // Lazily dequeues tranches from the tranche queue till the head of the
+        // Lazily dequeues tranches from the queue till the head of the
         // queue is an "acceptable" tranche.
         ITranche redemptionTranche = _redemptionTranche();
         while (
@@ -526,12 +529,12 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     //--------------------------------------------------------------------------
     // Private/Internal helper methods
 
-    // @dev If the given tranche isn't already part of the tranche queue,
+    // @dev If the given tranche isn't already part of the redemption queue,
     //      it is added to the tail of the queue and its yield factor is set.
     //      This is invoked when the tranche enters the system for the first time on deposit.
     function _checkAndEnqueueTranche(ITranche t) internal {
         if (!_redemptionQueue.contains(address(t))) {
-            // Inserts new tranche into tranche queue
+            // Inserts new tranche into redemption queue
             _redemptionQueue.enqueue(address(t));
             emit TrancheEnqueued(t);
 
@@ -542,12 +545,12 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         }
     }
 
-    // @dev Removes the tranche from the head of the queue.
+    // @dev Removes the tranche from the head of the redemption queue.
     function _dequeueTranche() internal {
         emit TrancheDequeued(ITranche(_redemptionQueue.dequeue()));
     }
 
-    // @dev The head of the tranche queue which is up for redemption next.
+    // @dev The head of the redemption queue which is up for redemption next.
     function _redemptionTranche() internal returns (ITranche) {
         return ITranche(_redemptionQueue.head());
     }
@@ -558,7 +561,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         IBondController bondOut = IBondController(trancheOut.bond());
         return (bondIn == _depositBond && // Expected trancheIn to be of deposit bond
             bondOut != _depositBond && // Expected trancheOut to NOT be of deposit bond
-            !_redemptionQueue.contains(address(trancheOut))); // Expected trancheOut to not be part of the queue
+            !_redemptionQueue.contains(address(trancheOut))); // Expected trancheOut to not be part of the redemption queue
     }
 
     // @dev If the fee is positive, fee is transferred from the payer to the self
@@ -630,7 +633,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         return balance;
     }
 
-    // @dev Checks if the bond's tranches can be accepted into the tranche queue.
+    // @dev Checks if the bond's tranches can be accepted into the redemption queue.
     //      * Expects the bond's maturity to be within expected bounds.
     // @return True if the bond is "acceptable".
     function _isAcceptableForRedemptionQueue(IBondController bond) private view returns (bool) {

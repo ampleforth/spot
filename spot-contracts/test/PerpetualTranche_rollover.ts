@@ -59,7 +59,7 @@ describe("PerpetualTranche", function () {
     await perp.updateTolerableTrancheMaturiy(1200, 3600);
     await advancePerpQueue(perp, 3600);
 
-    iceboxBond1 = await bondAt(await perp.callStatic.getDepositBond());
+    iceboxBond1 = await bondAt(await perp.callStatic.updateQueueAndGetDepositBond());
     [iceboxTranche1] = await getTranches(iceboxBond1);
     await perp.updateDefinedYield(await perp.trancheClass(iceboxTranche1.address), toYieldFixedPtAmt("1"));
 
@@ -69,7 +69,7 @@ describe("PerpetualTranche", function () {
 
     await advancePerpQueue(perp, 1200);
 
-    iceboxBond2 = await bondAt(await perp.callStatic.getDepositBond());
+    iceboxBond2 = await bondAt(await perp.callStatic.updateQueueAndGetDepositBond());
     [iceboxTranche2] = await getTranches(iceboxBond2);
 
     await depositIntoBond(iceboxBond2, toFixedPtAmt("1000"), deployer);
@@ -78,7 +78,7 @@ describe("PerpetualTranche", function () {
 
     await advancePerpQueue(perp, 3600);
 
-    rotationInBond = await bondAt(await perp.callStatic.getDepositBond());
+    rotationInBond = await bondAt(await perp.callStatic.updateQueueAndGetDepositBond());
     [rotationInTranche] = await getTranches(rotationInBond);
     await depositIntoBond(rotationInBond, toFixedPtAmt("2000"), deployer);
     await rotationInTranche.approve(perp.address, toFixedPtAmt("1000"));
@@ -115,7 +115,7 @@ describe("PerpetualTranche", function () {
       let newRotationInTranche: Contract;
       beforeEach(async function () {
         await advancePerpQueue(perp, 1200);
-        const newRotationInBond = await bondAt(await perp.callStatic.getDepositBond());
+        const newRotationInBond = await bondAt(await perp.callStatic.updateQueueAndGetDepositBond());
         [newRotationInTranche] = await getTranches(newRotationInBond);
       });
       it("should revert", async function () {
@@ -449,9 +449,9 @@ describe("PerpetualTranche", function () {
     describe("when trancheIn is part of the queue", async function () {
       let tx: Transaction;
       beforeEach(async function () {
-        expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(1);
-        expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(rotationInTranche.address);
-        await expect(perp.callStatic.getRedemptionQueueAt(1)).to.be.reverted;
+        expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(1);
+        expect(await perp.callStatic.updateQueueAndGetQueueAt(0)).to.eq(rotationInTranche.address);
+        await expect(perp.callStatic.updateQueueAndGetQueueAt(1)).to.be.reverted;
 
         expect(await perp.reserveCount()).to.eq(3);
         expect(await perp.inReserve(rotationInTranche.address)).to.eq(true);
@@ -467,9 +467,9 @@ describe("PerpetualTranche", function () {
       });
 
       it("should NOT update the queue", async function () {
-        expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(1);
-        expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(rotationInTranche.address);
-        await expect(perp.callStatic.getRedemptionQueueAt(1)).to.be.reverted;
+        expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(1);
+        expect(await perp.callStatic.updateQueueAndGetQueueAt(0)).to.eq(rotationInTranche.address);
+        await expect(perp.callStatic.updateQueueAndGetQueueAt(1)).to.be.reverted;
       });
       it("should NOT emit enqueue", async function () {
         await expect(tx).not.to.emit(perp, "TrancheEnqueued").withArgs(rotationInTranche.address);
@@ -493,9 +493,9 @@ describe("PerpetualTranche", function () {
     describe("when trancheIn is NOT part of the queue", async function () {
       let tx: Transaction, newRotationInTranche: Contract;
       beforeEach(async function () {
-        expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(1);
-        expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(rotationInTranche.address);
-        await expect(perp.callStatic.getRedemptionQueueAt(1)).to.be.reverted;
+        expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(1);
+        expect(await perp.callStatic.updateQueueAndGetQueueAt(0)).to.eq(rotationInTranche.address);
+        await expect(perp.callStatic.updateQueueAndGetQueueAt(1)).to.be.reverted;
 
         expect(await perp.reserveCount()).to.eq(3);
         expect(await perp.inReserve(rotationInTranche.address)).to.eq(true);
@@ -507,7 +507,7 @@ describe("PerpetualTranche", function () {
         await expect(perp.reserveAt(3)).to.be.reverted;
 
         await advancePerpQueue(perp, 1200);
-        const newRotationInBond = await bondAt(await perp.callStatic.getDepositBond());
+        const newRotationInBond = await bondAt(await perp.callStatic.updateQueueAndGetDepositBond());
         [newRotationInTranche] = await getTranches(newRotationInBond);
         await depositIntoBond(newRotationInBond, toFixedPtAmt("1000"), deployer);
         await newRotationInTranche.approve(perp.address, toFixedPtAmt("1000"));
@@ -517,10 +517,10 @@ describe("PerpetualTranche", function () {
       });
 
       it("should update the queue", async function () {
-        expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(2);
-        expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(rotationInTranche.address);
-        expect(await perp.callStatic.getRedemptionQueueAt(1)).to.eq(newRotationInTranche.address);
-        await expect(perp.callStatic.getRedemptionQueueAt(2)).to.be.reverted;
+        expect(await perp.callStatic.updateQueueAndGetQueueCount()).to.eq(2);
+        expect(await perp.callStatic.updateQueueAndGetQueueAt(0)).to.eq(rotationInTranche.address);
+        expect(await perp.callStatic.updateQueueAndGetQueueAt(1)).to.eq(newRotationInTranche.address);
+        await expect(perp.callStatic.updateQueueAndGetQueueAt(2)).to.be.reverted;
       });
       it("should emit enqueue", async function () {
         await expect(tx).to.emit(perp, "TrancheEnqueued").withArgs(newRotationInTranche.address);
