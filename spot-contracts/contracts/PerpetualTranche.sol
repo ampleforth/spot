@@ -435,7 +435,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         }
 
         // Lazily dequeues tranches from the queue till the head of the
-        // queue is an "acceptable" tranche.
+        // queue is an "acceptable" tranche (until the queue is empty).
         ITranche redemptionTranche = _redemptionTranche();
         while (
             address(redemptionTranche) != address(0) &&
