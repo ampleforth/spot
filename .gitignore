@@ -1,5 +1,3 @@
-.yarn
-
 /.yarn/*
 !/.yarn/patches
 !/.yarn/plugins
