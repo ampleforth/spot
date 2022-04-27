@@ -253,8 +253,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         override
         returns (uint256 mintAmt, int256 mintFee)
     {
+        IBondController depositBond = updateQueueAndGetDepositBond();
         require(
-            updateQueueAndGetDepositBond() == IBondController(trancheIn.bond()),
+            depositBond == IBondController(trancheIn.bond()),
             "Expected tranche to be of deposit bond"
         );
 
