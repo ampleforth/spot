@@ -104,7 +104,7 @@ interface IPerpetualTranche is IERC20 {
     // @notice Checks if the given `trancheIn` can be rolled out for `trancheOut`.
     // @param trancheIn The tranche token deposited.
     // @param trancheOut The tranche token to be redeemed.
-    function isAcceptableRollover(ITranche trancheIn, ITranche trancheOut) external returns (bool);
+    function isValidRollover(ITranche trancheIn, ITranche trancheOut) external returns (bool);
 
     // @notice The strategy contract with the fee computation logic.
     // @return Address of the strategy contract.
