@@ -412,7 +412,13 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @dev Lazily updates the redemption queue before verifying state.
     function updateQueueAndGetRolloverValidity(ITranche trancheIn, ITranche trancheOut) public override returns (bool) {
         updateQueue();
-        return _isValidRollover(trancheIn, trancheOut);
+
+        IBondController bondIn = IBondController(trancheIn.bond());
+        IBondController bondOut = IBondController(trancheOut.bond());
+        return (bondIn == _depositBond && // Expected trancheIn to be of deposit bond
+            bondOut != _depositBond && // Expected trancheOut to NOT be of deposit bond
+            !_redemptionQueue.contains(address(trancheOut))); // Expected trancheOut to not be part of the redemption queue
+        );
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -557,15 +563,6 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @dev The head of the redemption queue which is up for redemption next.
     function _redemptionTranche() internal returns (ITranche) {
         return ITranche(_redemptionQueue.head());
-    }
-
-    // @dev Checks if the given tranche pair is a valid rollover.
-    function _isValidRollover(ITranche trancheIn, ITranche trancheOut) internal returns (bool) {
-        IBondController bondIn = IBondController(trancheIn.bond());
-        IBondController bondOut = IBondController(trancheOut.bond());
-        return (bondIn == _depositBond && // Expected trancheIn to be of deposit bond
-            bondOut != _depositBond && // Expected trancheOut to NOT be of deposit bond
-            !_redemptionQueue.contains(address(trancheOut))); // Expected trancheOut to not be part of the redemption queue
     }
 
     // @dev If the fee is positive, fee is transferred from the payer to the self
