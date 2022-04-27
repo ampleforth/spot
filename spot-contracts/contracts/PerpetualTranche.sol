@@ -254,10 +254,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         returns (uint256 mintAmt, int256 mintFee)
     {
         IBondController depositBond = updateQueueAndGetDepositBond();
-        require(
-            depositBond == IBondController(trancheIn.bond()),
-            "Expected tranche to be of deposit bond"
-        );
+        require(depositBond == IBondController(trancheIn.bond()), "Expected tranche to be of deposit bond");
 
         // calculates the amount of perp tokens the `trancheInAmt` of tranche tokens are worth
         mintAmt = tranchesToPerps(trancheIn, trancheInAmt);
@@ -392,7 +389,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @dev Lazily updates the redemption queue before fetching from storage.
     function updateQueueAndGetRedemptionTranche() public override returns (ITranche tranche) {
         updateQueue();
-        return _redemptionTranche();
+        return ITranche(_redemptionQueue.head());
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -419,7 +416,6 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         return (bondIn == _depositBond && // Expected trancheIn to be of deposit bond
             bondOut != _depositBond && // Expected trancheOut to NOT be of deposit bond
             !_redemptionQueue.contains(address(trancheOut))); // Expected trancheOut to not be part of the redemption queue
-        );
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -436,13 +432,13 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
         // Lazily dequeues tranches from the queue till the head of the
         // queue is an "acceptable" tranche (until the queue is empty).
-        ITranche redemptionTranche = _redemptionTranche();
+        ITranche redemptionTranche = ITranche(_redemptionQueue.head());
         while (
             address(redemptionTranche) != address(0) &&
             !_isAcceptableForRedemptionQueue(IBondController(redemptionTranche.bond()))
         ) {
             _dequeueTranche();
-            redemptionTranche = _redemptionTranche();
+            redemptionTranche = ITranche(_redemptionQueue.head());
         }
     }
 
@@ -543,6 +539,8 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @dev If the given tranche isn't already part of the redemption queue,
     //      it is added to the tail of the queue and its yield factor is set.
     //      This is invoked when the tranche enters the system for the first time on deposit.
+    //      NOTE: This is a low-level method which directly modifies the queue storage state.
+    //            It assumes that the storage state is up to date.
     function _checkAndEnqueueTranche(ITranche t) internal {
         if (!_redemptionQueue.contains(address(t))) {
             // Inserts new tranche into redemption queue
@@ -557,13 +555,10 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     }
 
     // @dev Removes the tranche from the head of the redemption queue.
+    //      NOTE: This is a low-level method which directly modifies the queue storage state.
+    //            It assumes that the storage state is up to date.
     function _dequeueTranche() internal {
         emit TrancheDequeued(ITranche(_redemptionQueue.dequeue()));
-    }
-
-    // @dev The head of the redemption queue which is up for redemption next.
-    function _redemptionTranche() internal returns (ITranche) {
-        return ITranche(_redemptionQueue.head());
     }
 
     // @dev If the fee is positive, fee is transferred from the payer to the self
