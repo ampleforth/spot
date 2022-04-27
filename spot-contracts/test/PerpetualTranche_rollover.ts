@@ -5,6 +5,7 @@ import { Contract, Transaction, Signer } from "ethers";
 import {
   setupCollateralToken,
   setupBondFactory,
+  createBondWithFactory,
   depositIntoBond,
   bondAt,
   getTranches,
@@ -121,6 +122,19 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await expect(
           perp.rollover(newRotationInTranche.address, rotationInTranche.address, toFixedPtAmt("500")),
+        ).to.revertedWith("Expected rollover to be acceptable");
+      });
+    });
+
+    describe("when trancheOut is not in the reserve", function () {
+      let maliciousTranche: Contract;
+      beforeEach(async function () {
+        const bond = await createBondWithFactory(bondFactory, collateralToken, [1, 999], 86400);
+        maliciousTranche = (await getTranches(bond))[0];
+      });
+      it("should revert", async function () {
+        await expect(
+          perp.rollover(rotationInTranche.address, maliciousTranche.address, toFixedPtAmt("500")),
         ).to.revertedWith("Expected rollover to be acceptable");
       });
     });
