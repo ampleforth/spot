@@ -56,8 +56,10 @@ import { IPricingStrategy } from "./_interfaces/IPricingStrategy.sol";
  *          Non reserve assets on the other hand can be transferred out by the contract owner if need be.
  *
  *          The tranche queue is updated "lazily" without a need for an explicit poke from the outside world.
- *          At the entry-point of every external function which contains logic which deals with the redemption queue,
- *          the `updateQueue` function is invoked to bring the queue storage state up to date.
+ *          NOTE: Every external function that deals with the queue invokes the `afterQueueUpdate` modifier
+ *                at the entry-point. This brings the queue storage state up to date.
+ *                All code then on assumes the queue is up to date and interacts
+ *                with the queue storage state variables directly.
  *
  */
 contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
@@ -139,6 +141,13 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @notice The maximum maturity time in seconds for a tranche above which
     //         it can NOT get added into the tranche queue.
     uint256 public maxTrancheMaturiySec;
+
+    //--------------------------------------------------------------------------
+    // Modifiers
+    modifier afterQueueUpdate() {
+        updateQueue();
+        _;
+    }
 
     //--------------------------------------------------------------------------
     // Construction & Initialization
@@ -251,10 +260,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     function deposit(ITranche trancheIn, uint256 trancheInAmt)
         external
         override
+        afterQueueUpdate
         returns (uint256 mintAmt, int256 mintFee)
     {
-        updateQueue();
-
         require(_depositBond == IBondController(trancheIn.bond()), "Expected tranche to be of deposit bond");
 
         // calculates the amount of perp tokens the `trancheInAmt` of tranche tokens are worth
@@ -284,10 +292,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     function redeem(ITranche trancheOut, uint256 perpAmountRequested)
         external
         override
+        afterQueueUpdate
         returns (uint256 burnAmt, int256 burnFee)
     {
-        updateQueue();
-
         ITranche redemptionTranche = _redemptionTranche();
 
         // When tranche queue is NOT empty, redemption ordering is enforced.
@@ -339,9 +346,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         ITranche trancheIn,
         ITranche trancheOut,
         uint256 trancheInAmt
-    ) external override returns (uint256 trancheOutAmt, int256 rolloverFee) {
-        updateQueue();
-
+    ) external override afterQueueUpdate returns (uint256 trancheOutAmt, int256 rolloverFee) {
         require(_isAcceptableRollover(trancheIn, trancheOut), "Expected rollover to be acceptable");
 
         // calculates the perp denominated amount rolled over
@@ -381,35 +386,35 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     }
 
     /// @inheritdoc IPerpetualTranche
-    function getDepositBond() external override returns (IBondController) {
-        updateQueue();
+    function getDepositBond() external override afterQueueUpdate returns (IBondController) {
         return _depositBond;
     }
 
     /// @inheritdoc IPerpetualTranche
-    function getRedemptionTranche() external override returns (ITranche tranche) {
-        updateQueue();
+    function getRedemptionTranche() external override afterQueueUpdate returns (ITranche tranche) {
         return _redemptionTranche();
     }
 
     /// @inheritdoc IPerpetualTranche
     // @dev Lazily updates the queue before fetching from storage.
-    function getRedemptionQueueCount() external override returns (uint256) {
-        updateQueue();
+    function getRedemptionQueueCount() external override afterQueueUpdate returns (uint256) {
         return _redemptionQueue.length();
     }
 
     /// @inheritdoc IPerpetualTranche
     // @dev Lazily updates the queue before fetching from storage.
-    function getRedemptionQueueAt(uint256 i) external override returns (address) {
-        updateQueue();
+    function getRedemptionQueueAt(uint256 i) external override afterQueueUpdate returns (address) {
         return _redemptionQueue.at(i);
     }
 
     /// @inheritdoc IPerpetualTranche
     // @dev Lazily updates the queue before verifying state.
-    function isAcceptableRollover(ITranche trancheIn, ITranche trancheOut) external override returns (bool) {
-        updateQueue();
+    function isAcceptableRollover(ITranche trancheIn, ITranche trancheOut)
+        external
+        override
+        afterQueueUpdate
+        returns (bool)
+    {
         return _isAcceptableRollover(trancheIn, trancheOut);
     }
 
