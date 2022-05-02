@@ -6,6 +6,10 @@ import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
+/// @notice Expected tranche to be part of bond.
+/// @param tranche Address of the tranche token.
+error UnacceptableTrancheIndex(ITranche tranche);
+
 struct TrancheData {
     ITranche[] tranches;
     uint256[] trancheRatios;
@@ -147,7 +151,7 @@ library TrancheDataHelpers {
                 return i;
             }
         }
-        require(false, "TrancheDataHelpers: Expected tranche to be part of bond");
+        revert UnacceptableTrancheIndex(t);
         return type(uint256).max;
     }
 }

@@ -82,7 +82,7 @@ describe("PerpetualTranche", function () {
     describe("when requested amount is zero", function () {
       it("should revert", async function () {
         await expect(perp.redeem(initialDepositTranche.address, toFixedPtAmt("0"))).to.revertedWith(
-          "Expected to burn a non-zero amount of tokens",
+          "UnacceptableBurnAmt",
         );
       });
     });
@@ -94,7 +94,7 @@ describe("PerpetualTranche", function () {
 
       it("should revert", async function () {
         await expect(perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.revertedWith(
-          "Expected to burn a non-zero amount of tokens",
+          "UnacceptableBurnAmt",
         );
       });
     });
@@ -354,7 +354,7 @@ describe("PerpetualTranche", function () {
         expect(initialDepositTranche.address).not.to.eq(newRedemptionTranche.address);
         expect(await perp.callStatic.getRedemptionTranche()).to.eq(newRedemptionTranche.address);
         await expect(perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.be.revertedWith(
-          "Expected to redeem burning tranche or queue to be empty",
+          "UnacceptableRedemptionTranche",
         );
       });
     });

@@ -86,9 +86,7 @@ describe("PerpetualTranche", function () {
 
     describe("when set address is NOT valid", function () {
       it("should revert", async function () {
-        await expect(perp.updateBondIssuer(constants.AddressZero)).to.be.revertedWith(
-          "Expected new bond issuer to be set",
-        );
+        await expect(perp.updateBondIssuer(constants.AddressZero)).to.be.revertedWith("UnacceptableBondIssuer");
       });
     });
 
@@ -121,9 +119,7 @@ describe("PerpetualTranche", function () {
 
     describe("when set address is NOT valid", function () {
       it("should revert", async function () {
-        await expect(perp.updateFeeStrategy(constants.AddressZero)).to.be.revertedWith(
-          "Expected new fee strategy to be set",
-        );
+        await expect(perp.updateFeeStrategy(constants.AddressZero)).to.be.revertedWith("UnacceptableFeeStrategy");
       });
     });
 
@@ -157,7 +153,7 @@ describe("PerpetualTranche", function () {
     describe("when set address is NOT valid", function () {
       it("should revert", async function () {
         await expect(perp.updatePricingStrategy(constants.AddressZero)).to.be.revertedWith(
-          "Expected new pricing strategy to be set",
+          "UnacceptablePricingStrategy",
         );
       });
     });
@@ -170,7 +166,7 @@ describe("PerpetualTranche", function () {
       });
       it("should revert", async function () {
         await expect(perp.updatePricingStrategy(newPricingStrategy.address)).to.be.revertedWith(
-          "Expected new pricing strategy to use same decimals",
+          "InvalidPricingStrategyDecimals",
         );
       });
     });
@@ -205,7 +201,7 @@ describe("PerpetualTranche", function () {
     describe("when set values are not valid", function () {
       it("should revert", async function () {
         await expect(perp.updateTolerableTrancheMaturiy(86400, 3600)).to.be.revertedWith(
-          "Expected max to be greater than min",
+          "InvalidTrancheMaturityBounds",
         );
       });
     });
@@ -315,7 +311,7 @@ describe("PerpetualTranche", function () {
 
       it("should revert", async function () {
         await expect(perp.transferERC20(transferToken.address, toAddress, toFixedPtAmt("100"))).to.be.revertedWith(
-          "Expected token to NOT be reserve asset",
+          "UnauthorizedTransferOut",
         );
       });
     });
