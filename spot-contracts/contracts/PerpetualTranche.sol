@@ -375,7 +375,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
             revert UnacceptableRedemptionTranche(trancheOut, redemptionTranche);
         }
 
-        // calculates the amount of tranche tokens covered to burn 
+        // calculates the amount of tranche tokens covered to burn
         // up to `perpAmountRequested` perp tokens
         (uint256 trancheOutAmt, uint256 perpRemainder) = perpsToCoveredTranches(
             trancheOut,
