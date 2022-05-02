@@ -85,7 +85,7 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await depositTrancheA.approve(perp.address, toFixedPtAmt("500"));
         await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWith(
-          "Expected tranche to be of deposit bond",
+          "UnacceptableDepositTranche",
         );
       });
     });
@@ -115,9 +115,7 @@ describe("PerpetualTranche", function () {
 
     describe("when tranche amount is zero", function () {
       it("should revert", async function () {
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("0"))).to.revertedWith(
-          "Expected to mint a non-zero amount of tokens",
-        );
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("0"))).to.revertedWith("UnacceptableMintAmt");
       });
     });
 
@@ -127,17 +125,13 @@ describe("PerpetualTranche", function () {
       });
 
       it("should revert", async function () {
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWith(
-          "Expected to mint a non-zero amount of tokens",
-        );
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWith("UnacceptableMintAmt");
       });
     });
 
     describe("when tranche yield is zero", function () {
       it("should revert", async function () {
-        await expect(perp.deposit(depositTrancheZ.address, toFixedPtAmt("500"))).to.revertedWith(
-          "Expected to mint a non-zero amount of tokens",
-        );
+        await expect(perp.deposit(depositTrancheZ.address, toFixedPtAmt("500"))).to.revertedWith("UnacceptableMintAmt");
       });
     });
 

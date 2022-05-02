@@ -100,7 +100,7 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await expect(
           perp.rollover(rotationInTranche.address, tranches[1].address, toFixedPtAmt("500")),
-        ).to.revertedWith("Expected rollover to be acceptable");
+        ).to.revertedWith("UnacceptableRollover");
       });
     });
 
@@ -108,7 +108,7 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await expect(
           perp.rollover(iceboxTranche2.address, iceboxTranche1.address, toFixedPtAmt("500")),
-        ).to.revertedWith("Expected rollover to be acceptable");
+        ).to.revertedWith("UnacceptableRollover");
       });
     });
 
@@ -122,7 +122,7 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await expect(
           perp.rollover(newRotationInTranche.address, rotationInTranche.address, toFixedPtAmt("500")),
-        ).to.revertedWith("Expected rollover to be acceptable");
+        ).to.revertedWith("UnacceptableRollover");
       });
     });
 
@@ -135,7 +135,7 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await expect(
           perp.rollover(rotationInTranche.address, maliciousTranche.address, toFixedPtAmt("500")),
-        ).to.revertedWith("Expected rollover to be acceptable");
+        ).to.revertedWith("UnacceptableRollover");
       });
     });
 
@@ -169,7 +169,7 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await expect(
           perp.rollover(rotationInTranche.address, iceboxTranche1.address, toFixedPtAmt("0")),
-        ).to.revertedWith("Expected to rollover a non-zero amount of tokens");
+        ).to.revertedWith("UnacceptableRolloverAmt");
       });
     });
 
@@ -182,7 +182,7 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await expect(
           perp.rollover(rotationInTranche.address, iceboxTranche1.address, toFixedPtAmt("500")),
-        ).to.revertedWith("Expected to rollover a non-zero amount of tokens");
+        ).to.revertedWith("UnacceptableRolloverAmt");
       });
     });
 
@@ -195,7 +195,7 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await expect(
           perp.rollover(rotationInTranche.address, iceboxTranche1.address, toFixedPtAmt("500")),
-        ).to.revertedWith("Expected to rollover a non-zero amount of tokens");
+        ).to.revertedWith("UnacceptableRolloverAmt");
       });
     });
 

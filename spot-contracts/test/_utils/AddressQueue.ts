@@ -33,7 +33,7 @@ describe("QueueTester", function () {
 
   describe("enqueue & dequeue", function () {
     it("should update the storage", async function () {
-      await expect(queue.enqueue(constants.AddressZero)).to.be.revertedWith("AddressQueueHelpers: Expected valid item");
+      await expect(queue.enqueue(constants.AddressZero)).to.be.revertedWith("InvalidItem");
 
       // Adding 3 elements, removing all of them and
       // then 1 element and removing it.
@@ -44,7 +44,7 @@ describe("QueueTester", function () {
 
       // attempting to add duplicate element
       await expect(queue.enqueue(ADDRESSES[0])).to.be.revertedWith(
-        "AddressQueueHelpers: Expected item to NOT be in queue",
+        "DuplicateItem",
       );
 
       await queue.enqueue(ADDRESSES[1]);
@@ -75,7 +75,7 @@ describe("QueueTester", function () {
       expect(await queue.head()).to.eq(constants.AddressZero);
       expect(await queue.tail()).to.eq(constants.AddressZero);
 
-      await expect(queue.dequeue()).to.be.revertedWith("AddressQueueHelpers: Expected non-empty queue");
+      await expect(queue.dequeue()).to.be.revertedWith("EmptyQueue");
 
       await queue.enqueue(ADDRESSES[3]);
       expect(await queue.length()).to.eq(1);
@@ -103,7 +103,7 @@ describe("QueueTester", function () {
         expect(await queue.at(a)).to.eq(ADDRESSES[a]);
       }
       await expect(queue.at(ADDRESSES.length)).to.be.revertedWith(
-        "AddressQueueHelpers: Expected index to be in bounds",
+        "IndexOutOfBounds",
       );
 
       // Removing first 5 addresses and then iterating through them (0:4)
@@ -115,7 +115,7 @@ describe("QueueTester", function () {
           expect(await queue.at(newIdx)).to.eq(ADDRESSES[a]);
         }
       }
-      await expect(queue.at(5)).to.be.revertedWith("AddressQueueHelpers: Expected index to be in bounds");
+      await expect(queue.at(5)).to.be.revertedWith("IndexOutOfBounds");
     });
   });
 });

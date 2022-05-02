@@ -516,7 +516,7 @@ describe("RouterV1", function () {
       it("should revert", async function () {
         await expect(
           router.trancheAndDeposit(perp.address, depositBond.address, toFixedPtAmt("1000"), 0),
-        ).to.revertedWith("Expected tranche to be of deposit bond");
+        ).to.revertedWith("UnacceptableDepositTranche");
       });
     });
 
@@ -657,7 +657,7 @@ describe("RouterV1", function () {
             depositTranches2[0].address,
             depositTranches1[1].address,
           ]),
-        ).to.be.revertedWith("Expected to redeem burning tranche or queue to be empty");
+        ).to.be.revertedWith("UnacceptableRedemptionTranche");
       });
     });
 
