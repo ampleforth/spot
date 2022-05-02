@@ -98,14 +98,13 @@ contract RouterV1 {
         uint256 collateralAmount,
         uint256 feePaid
     ) external afterPerpStateUpdate(perp) {
-        require(perp.getDepositBond() == bond, "Expected to tranche deposit bond");
-
         TrancheData memory td = bond.getTrancheData();
         IERC20 collateralToken = IERC20(bond.collateralToken());
         IERC20 feeToken = perp.feeToken();
 
         // transfers collateral & fees to router
         collateralToken.safeTransferFrom(msg.sender, address(this), collateralAmount);
+
         if (feePaid > 0) {
             feeToken.safeTransferFrom(msg.sender, address(this), feePaid);
         }
@@ -209,8 +208,6 @@ contract RouterV1 {
             uint256 numTranchesRedeemed
         )
     {
-        require(perp.getRedemptionQueueCount() == 0, "Expected redemption queue to be empty");
-
         uint256 remainder = perpAmountRequested;
 
         uint256 i;
@@ -309,22 +306,21 @@ contract RouterV1 {
             int256 rolloverFee
         )
     {
-        require(perp.isAcceptableRollover(trancheIn, trancheOut), "Expected rollover to be acceptable");
-
-        r.requestedRolloverAmt = perp.tranchesToPerps(trancheIn, trancheInAmt);
-
-        uint256 rolloverAmtRemainder;
-        (r.trancheOutAmt, rolloverAmtRemainder) = perp.perpsToCoveredTranches(
-            trancheOut,
-            r.requestedRolloverAmt,
-            maxTrancheOutAmtUsed
-        );
-        r.rolloverAmt = r.requestedRolloverAmt - rolloverAmtRemainder;
-
-        r.remainingTrancheInAmt = perp.perpsToTranches(trancheIn, rolloverAmtRemainder);
-
         feeToken = perp.feeToken();
-        rolloverFee = perp.feeStrategy().computeRolloverFee(r.rolloverAmt);
+        r.remainingTrancheInAmt = trancheInAmt;
+
+        if (perp.isAcceptableRollover(trancheIn, trancheOut)) {
+            r.requestedRolloverAmt = perp.tranchesToPerps(trancheIn, r.remainingTrancheInAmt);
+            uint256 rolloverAmtRemainder;
+            (r.trancheOutAmt, rolloverAmtRemainder) = perp.perpsToCoveredTranches(
+                trancheOut,
+                r.requestedRolloverAmt,
+                maxTrancheOutAmtUsed
+            );
+            r.rolloverAmt = r.requestedRolloverAmt - rolloverAmtRemainder;
+            r.remainingTrancheInAmt = perp.perpsToTranches(trancheIn, rolloverAmtRemainder);
+            rolloverFee = perp.feeStrategy().computeRolloverFee(r.rolloverAmt);
+        }
 
         return (r, feeToken, rolloverFee);
     }
@@ -348,9 +344,6 @@ contract RouterV1 {
         RolloverBatch[] memory rollovers,
         uint256 feePaid
     ) external afterPerpStateUpdate(perp) {
-        require(rollovers.length > 0, "Expected atleast one rollover in batch");
-        require(perp.getDepositBond() == bond, "Expected to tranche deposit bond");
-
         TrancheData memory td = bond.getTrancheData();
         IERC20 collateralToken = IERC20(bond.collateralToken());
         IERC20 feeToken = perp.feeToken();

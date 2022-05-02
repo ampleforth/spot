@@ -262,23 +262,6 @@ describe("RouterV1", function () {
       await advancePerpQueue(perp, 7200);
     });
 
-    describe("when queue is not empty", function () {
-      beforeEach(async function () {
-        const depositBond = await bondAt(await perp.callStatic.getDepositBond());
-        const depositTranches = await getTranches(depositBond);
-        await depositIntoBond(depositBond, toFixedPtAmt("1000"), deployer);
-        await depositTranches[0].approve(perp.address, toFixedPtAmt("200"));
-        await perp.deposit(depositTranches[0].address, toFixedPtAmt("200"));
-        await depositTranches[1].approve(perp.address, toFixedPtAmt("300"));
-        await perp.deposit(depositTranches[1].address, toFixedPtAmt("300"));
-      });
-      it("should revert", async function () {
-        await expect(
-          router.callStatic.previewRedeemFromIcebox(perp.address, toFixedPtAmt("1275"), []),
-        ).to.be.revertedWith("Expected redemption queue to be empty");
-      });
-    });
-
     describe("full redemption", function () {
       it("should compute the burn amount and fee", async function () {
         const r = await router.callStatic.previewRedeemFromIcebox(perp.address, toFixedPtAmt("1275"), [
@@ -347,16 +330,23 @@ describe("RouterV1", function () {
     });
 
     describe("when rollover is not acceptable", function () {
-      it("should revert", async function () {
-        await expect(
-          router.callStatic.previewRollover(
-            perp.address,
-            depositTranches[0].address,
-            depositTranches[0].address,
-            toFixedPtAmt("200"),
-            constants.MaxUint256,
-          ),
-        ).to.be.revertedWith("Expected rollover to be acceptable");
+      beforeEach(async function () {
+        await await feeStrategy.setRolloverFee(toFixedPtAmt("1"));
+      });
+      it("should return 0", async function () {
+        const r = await router.callStatic.previewRollover(
+          perp.address,
+          depositTranches[0].address,
+          depositTranches[0].address,
+          toFixedPtAmt("200"),
+          constants.MaxUint256,
+        );
+        expect(r[0].rolloverAmt).to.eq(toFixedPtAmt("0"));
+        expect(r[0].requestedRolloverAmt).to.eq(toFixedPtAmt("0"));
+        expect(r[0].trancheOutAmt).to.eq(toFixedPtAmt("0"));
+        expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("200"));
+        expect(r[1]).to.eq(perp.address);
+        expect(r[2]).to.eq(toFixedPtAmt("0"));
       });
     });
 
@@ -519,11 +509,14 @@ describe("RouterV1", function () {
     });
 
     describe("when deposit bond is incorrect", function () {
-      it("should revert", async function () {
+      beforeEach(async function () {
+        await collateralToken.approve(router.address, constants.MaxUint256);
         await advancePerpQueue(perp, 7200);
+      });
+      it("should revert", async function () {
         await expect(
           router.trancheAndDeposit(perp.address, depositBond.address, toFixedPtAmt("1000"), 0),
-        ).to.revertedWith("Expected to tranche deposit bond");
+        ).to.revertedWith("Expected tranche to be of deposit bond");
       });
     });
 
