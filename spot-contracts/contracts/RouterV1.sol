@@ -172,9 +172,9 @@ contract RouterV1 {
         tranches = new ITranche[](maxTranches);
         for (uint256 i = 0; remainder > 0 && i < maxTranches; i++) {
             // NOTE: loops through queue from head to tail, i.e) in redemption order
-            ITranche t = ITranche(perp.getRedemptionQueueAt(i));
-            (, remainder) = perp.perpsToCoveredTranches(t, remainder, type(uint256).max);
-            tranches[i] = t;
+            ITranche tranche = ITranche(perp.getRedemptionQueueAt(i));
+            (, remainder) = perp.perpsToCoveredTranches(tranche, remainder, type(uint256).max);
+            tranches[i] = tranche;
         }
 
         burnAmt = perpAmountRequested - remainder;
@@ -250,16 +250,16 @@ contract RouterV1 {
 
         uint256 trancheCount;
         while (remainder > 0) {
-            ITranche t = requestedTranches[trancheCount++];
+            ITranche tranche = requestedTranches[trancheCount++];
 
             // When the tranche queue is non empty redeem expects
-            //     - t == perp.getRedemptionTranche()
+            //     - tranche == perp.getRedemptionTranche()
             // When the tranche queue is empty redeem can happen in any order
-            (uint256 burnAmt, ) = perp.redeem(t, remainder);
+            (uint256 burnAmt, ) = perp.redeem(tranche, remainder);
             remainder -= burnAmt;
 
             // Transfer redeemed tranches back
-            t.safeTransfer(msg.sender, t.balanceOf(address(this)));
+            tranche.safeTransfer(msg.sender, tranche.balanceOf(address(this)));
         }
 
         // transfers remaining fee back if overpaid or reward
@@ -370,8 +370,20 @@ contract RouterV1 {
             // perform rollover
             perp.rollover(rollovers[i].trancheIn, rollovers[i].trancheOut, rollovers[i].trancheInAmt);
 
-            // transfer trancheOut tokens back
-            rollovers[i].trancheOut.safeTransfer(msg.sender, rollovers[i].trancheOut.balanceOf(address(this)));
+        }
+
+        for (uint256 i = 0; i < rollovers.length; i++) {
+            // transfer remaining trancheIn tokens back
+            uint256 trancheInBalance = rollovers[i].trancheIn.balanceOf(address(this));
+            if (trancheInBalance > 0) {
+                rollovers[i].trancheIn.safeTransfer(msg.sender, trancheInBalance);
+            }
+
+            // transfer remaining trancheOut tokens back
+            uint256 trancheOutBalance = rollovers[i].trancheOut.balanceOf(address(this));
+            if (trancheOutBalance > 0) {
+                rollovers[i].trancheOut.safeTransfer(msg.sender, trancheOutBalance);
+            }
         }
 
         // transfers unused tranches back
