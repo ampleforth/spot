@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { network, ethers } from "hardhat";
+import { network, ethers, upgrades } from "hardhat";
 import { constants, Contract, Transaction, Signer } from "ethers";
 
 import {
@@ -44,8 +44,13 @@ describe("PerpetualTranche", function () {
     pricingStrategy = await PricingStrategy.deploy();
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
-    perp = await PerpetualTranche.deploy("PerpetualTranche", "PERP", 9);
-    await perp.init(issuer.address, feeStrategy.address, pricingStrategy.address);
+    perp = await upgrades.deployProxy(
+      PerpetualTranche.connect(deployer),
+      ["PerpetualTranche", "PERP", 9, issuer.address, feeStrategy.address, pricingStrategy.address],
+      {
+        initializer: "init(string,string,uint8,address,address,address)",
+      },
+    );
     await advancePerpQueue(perp, 3600);
 
     depositBond = await bondAt(await perp.callStatic.getDepositBond());
@@ -271,7 +276,8 @@ describe("PerpetualTranche", function () {
       let feeToken: Contract;
       beforeEach(async function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
-        feeToken = await ERC20.deploy("Mock token", "MOCK");
+        feeToken = await ERC20.deploy();
+        await feeToken.init("Mock token", "MOCK");
         await feeStrategy.setFeeToken(feeToken.address);
       });
 

@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.4;
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { SignedMath } from "@openzeppelin/contracts/utils/math/SignedMath.sol";
+import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
+import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
+import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
+import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 
-import { TrancheData, BondHelpers, TrancheDataHelpers } from "./_utils/BondHelpers.sol";
+import { TrancheData, TrancheDataHelpers, BondHelpers } from "./_utils/BondHelpers.sol";
 
-import { IPerpetualTranche } from "./_interfaces/IPerpetualTranche.sol";
-import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
+import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { ITranche } from "./_interfaces/buttonwood/ITranche.sol";
+import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
+import { IPerpetualTranche } from "./_interfaces/IPerpetualTranche.sol";
 
 /*
  *  @title RouterV1
@@ -20,14 +20,19 @@ import { ITranche } from "./_interfaces/buttonwood/ITranche.sol";
  *
  */
 contract RouterV1 {
-    using Math for uint256;
-    using SafeCast for uint256;
-    using SignedMath for int256;
-    using SafeERC20 for IERC20;
-    using SafeERC20 for ITranche;
-    using SafeERC20 for IPerpetualTranche;
+    // math
+    using MathUpgradeable for uint256;
+    using SafeCastUpgradeable for uint256;
+    using SignedMathUpgradeable for int256;
+
+    // data handling
     using BondHelpers for IBondController;
     using TrancheDataHelpers for TrancheData;
+
+    // ERC20 operations
+    using SafeERC20Upgradeable for IERC20Upgradeable;
+    using SafeERC20Upgradeable for ITranche;
+    using SafeERC20Upgradeable for IPerpetualTranche;
 
     modifier afterPerpStateUpdate(IPerpetualTranche perp) {
         perp.updateQueue();
@@ -74,7 +79,7 @@ contract RouterV1 {
         afterPerpStateUpdate(perp)
         returns (
             uint256 mintAmt,
-            IERC20 feeToken,
+            IERC20Upgradeable feeToken,
             int256 mintFee
         )
     {
@@ -99,8 +104,8 @@ contract RouterV1 {
         uint256 feePaid
     ) external afterPerpStateUpdate(perp) {
         TrancheData memory td = bond.getTrancheData();
-        IERC20 collateralToken = IERC20(bond.collateralToken());
-        IERC20 feeToken = perp.feeToken();
+        IERC20Upgradeable collateralToken = IERC20Upgradeable(bond.collateralToken());
+        IERC20Upgradeable feeToken = perp.feeToken();
 
         // transfers collateral & fees to router
         collateralToken.safeTransferFrom(msg.sender, address(this), collateralAmount);
@@ -167,13 +172,13 @@ contract RouterV1 {
         afterPerpStateUpdate(perp)
         returns (
             uint256 burnAmt,
-            IERC20 feeToken,
+            IERC20Upgradeable feeToken,
             int256 burnFee,
             ITranche[] memory tranches
         )
     {
         uint256 remainder = perpAmountRequested;
-        maxTranches = Math.min(perp.getRedemptionQueueCount(), maxTranches);
+        maxTranches = MathUpgradeable.min(perp.getRedemptionQueueCount(), maxTranches);
         tranches = new ITranche[](maxTranches);
         for (uint256 i = 0; remainder > 0 && i < maxTranches; i++) {
             // NOTE: loops through queue from head to tail, i.e) in redemption order
@@ -208,7 +213,7 @@ contract RouterV1 {
         afterPerpStateUpdate(perp)
         returns (
             uint256 burnAmt,
-            IERC20 feeToken,
+            IERC20Upgradeable feeToken,
             int256 burnFee,
             uint256 numTranchesRedeemed
         )
@@ -240,7 +245,7 @@ contract RouterV1 {
         uint256 feePaid,
         ITranche[] memory requestedTranches
     ) external afterPerpStateUpdate(perp) {
-        IERC20 feeToken = perp.feeToken();
+        IERC20Upgradeable feeToken = perp.feeToken();
         uint256 remainder = perpAmountRequested;
 
         // transfer collateral & fee to router
@@ -349,8 +354,8 @@ contract RouterV1 {
         uint256 feePaid
     ) external afterPerpStateUpdate(perp) {
         TrancheData memory td = bond.getTrancheData();
-        IERC20 collateralToken = IERC20(bond.collateralToken());
-        IERC20 feeToken = perp.feeToken();
+        IERC20Upgradeable collateralToken = IERC20Upgradeable(bond.collateralToken());
+        IERC20Upgradeable feeToken = perp.feeToken();
 
         // transfers collateral & fees to router
         collateralToken.safeTransferFrom(msg.sender, address(this), collateralAmount);
@@ -408,7 +413,7 @@ contract RouterV1 {
 
     // @dev Checks if the spender has sufficient allowance. If not, approves the maximum possible amount.
     function _checkAndApproveMax(
-        IERC20 token,
+        IERC20Upgradeable token,
         address spender,
         uint256 amount
     ) private {

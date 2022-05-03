@@ -43,9 +43,7 @@ describe("QueueTester", function () {
       expect(await queue.tail()).to.eq(ADDRESSES[0]);
 
       // attempting to add duplicate element
-      await expect(queue.enqueue(ADDRESSES[0])).to.be.revertedWith(
-        "DuplicateItem",
-      );
+      await expect(queue.enqueue(ADDRESSES[0])).to.be.revertedWith("DuplicateItem");
 
       await queue.enqueue(ADDRESSES[1]);
       expect(await queue.length()).to.eq(2);
@@ -102,9 +100,7 @@ describe("QueueTester", function () {
       for (const a in ADDRESSES) {
         expect(await queue.at(a)).to.eq(ADDRESSES[a]);
       }
-      await expect(queue.at(ADDRESSES.length)).to.be.revertedWith(
-        "IndexOutOfBounds",
-      );
+      await expect(queue.at(ADDRESSES.length)).to.be.revertedWith("IndexOutOfBounds");
 
       // Removing first 5 addresses and then iterating through them (0:4)
       for (const a in ADDRESSES) {

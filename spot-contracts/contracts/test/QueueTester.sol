@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.4;
 
-import { AddressQueue, AddressQueueHelpers } from "../_utils/AddressQueueHelpers.sol";
+import { AddressQueueHelpers } from "../_utils/AddressQueueHelpers.sol";
 
 contract QueueTester {
-    using AddressQueueHelpers for AddressQueue;
-    AddressQueue private _queue;
+    using AddressQueueHelpers for AddressQueueHelpers.AddressQueue;
+    AddressQueueHelpers.AddressQueue private _queue;
 
     constructor() {
         _queue.init();

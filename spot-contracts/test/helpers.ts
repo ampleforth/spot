@@ -37,8 +37,8 @@ interface ButtonTokenContracts {
 }
 export const setupCollateralToken = async (name: string, symbol: string): Promise<ButtonTokenContracts> => {
   const ERC20 = await ethers.getContractFactory("MockERC20");
-  const underlyingToken = await ERC20.deploy(name, symbol);
-  await underlyingToken.deployed();
+  const underlyingToken = await ERC20.deploy();
+  await underlyingToken.init(name, symbol);
 
   const MockOracle = await ethers.getContractFactory("MockOracle");
   const rebaseOracle = await MockOracle.deploy();

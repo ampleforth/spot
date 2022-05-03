@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.4;
 
-import { EnumerableSet } from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 
 import { IBondFactory } from "./_interfaces/buttonwood/IBondFactory.sol";
 import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
@@ -16,7 +16,7 @@ import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
  *
  */
 contract BondIssuer is IBondIssuer {
-    using EnumerableSet for EnumerableSet.AddressSet;
+    using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
 
     // @notice Address of the bond factory.
     IBondFactory public immutable bondFactory;
@@ -48,7 +48,7 @@ contract BondIssuer is IBondIssuer {
     // @notice An enumerable list to keep track of bonds issued by this issuer.
     // @dev Bonds are only added and never removed, thus the last item will always point
     //      to the latest bond.
-    EnumerableSet.AddressSet private _issuedBonds;
+    EnumerableSetUpgradeable.AddressSet private _issuedBonds;
 
     // @notice The timestamp when the issue window opened during the last issue.
     uint256 public lastIssueWindowTimestamp;

@@ -1,21 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.4;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { Initializable } from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { SignedMath } from "@openzeppelin/contracts/utils/math/SignedMath.sol";
+import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
+import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
+import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 
-import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { EnumerableSet } from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
+import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 
-import { AddressQueue, AddressQueueHelpers } from "./_utils/AddressQueueHelpers.sol";
+import { AddressQueueHelpers } from "./_utils/AddressQueueHelpers.sol";
 import { TrancheData, TrancheDataHelpers, BondHelpers } from "./_utils/BondHelpers.sol";
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { ITranche } from "./_interfaces/buttonwood/ITranche.sol";
 import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
 
@@ -43,7 +42,7 @@ error InvalidTrancheMaturityBounds(uint256 minTrancheMaturiySec, uint256 maxTran
 
 /// @notice Expected transfer out asset to not be a reserve asset.
 /// @param token Address of the token transferred.
-error UnauthorizedTransferOut(IERC20 token);
+error UnauthorizedTransferOut(IERC20Upgradeable token);
 
 /// @notice Expected deposited tranche to be of current deposit bond.
 /// @param trancheIn Address of the deposit tranche.
@@ -114,16 +113,21 @@ error UnacceptableRolloverAmt(uint256 trancheInAmt, uint256 trancheOutAmt, uint2
  *                with the queue storage state variables directly.
  *
  */
-contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
-    using Math for uint256;
-    using SafeCast for uint256;
-    using SignedMath for int256;
-    using SafeERC20 for IERC20;
-    using SafeERC20 for ITranche;
-    using EnumerableSet for EnumerableSet.AddressSet;
-    using AddressQueueHelpers for AddressQueue;
+contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTranche {
+    // math
+    using MathUpgradeable for uint256;
+    using SafeCastUpgradeable for uint256;
+    using SignedMathUpgradeable for int256;
+
+    // data handling
+    using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
+    using AddressQueueHelpers for AddressQueueHelpers.AddressQueue;
     using BondHelpers for IBondController;
     using TrancheDataHelpers for TrancheData;
+
+    // ERC20 operations
+    using SafeERC20Upgradeable for IERC20Upgradeable;
+    using SafeERC20Upgradeable for ITranche;
 
     //-------------------------------------------------------------------------
     // Constants & Immutables
@@ -131,7 +135,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     uint8 public constant PRICE_DECIMALS = 8;
 
     // @dev Number of ERC-20 decimal places to get the perp token amount for user representation.
-    uint8 private immutable _decimals;
+    uint8 private _decimals;
 
     //-------------------------------------------------------------------------
     // Data
@@ -150,10 +154,10 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @notice A FIFO queue of tranches ordered by maturity time used to enforce redemption ordering.
     // @dev Most recently created tranches pushed to the tail of the queue (on deposit) and
     //      the oldest ones are pulled from the head of the queue (on redemption).
-    AddressQueue private _redemptionQueue;
+    AddressQueueHelpers.AddressQueue private _redemptionQueue;
 
     // @notice A record of all tranches with a balance held in the reserve which backs perp token supply.
-    EnumerableSet.AddressSet private _reserve;
+    EnumerableSetUpgradeable.AddressSet private _reserve;
 
     // TODO: allow multiple deposit bonds
     // @notice The active deposit bond of whose tranches are currently being accepted as deposits
@@ -204,27 +208,26 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     //--------------------------------------------------------------------------
     // Construction & Initialization
 
-    // @notice Constructor to create the contract.
+    // @notice Contract state initialization.
     // @param name ERC-20 Name of the Perp token.
     // @param symbol ERC-20 Symbol of the Perp token.
     // @param decimals_ Number of ERC-20 decimal places.
-    constructor(
-        string memory name,
-        string memory symbol,
-        uint8 decimals_
-    ) ERC20(name, symbol) {
-        _decimals = decimals_;
-    }
-
-    // @notice Contract state initialization.
     // @param bondIssuer_ Address of the bond issuer contract.
     // @param feeStrategy_ Address of the fee strategy contract.
     // @param pricingStrategy_ Address of the pricing strategy contract.
     function init(
+        string memory name,
+        string memory symbol,
+        uint8 decimals_,
         IBondIssuer bondIssuer_,
         IFeeStrategy feeStrategy_,
         IPricingStrategy pricingStrategy_
     ) public initializer {
+        __ERC20_init(name, symbol);
+        _decimals = decimals_;
+
+        __Ownable_init();
+
         updateBondIssuer(bondIssuer_);
         updateFeeStrategy(feeStrategy_);
         updatePricingStrategy(pricingStrategy_);
@@ -307,7 +310,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @param to The destination address.
     // @param amount The amount of tokens to be transferred.
     function transferERC20(
-        IERC20 token,
+        IERC20Upgradeable token,
         address to,
         uint256 amount
     ) external onlyOwner {
@@ -545,12 +548,12 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // Public view methods
 
     /// @inheritdoc IPerpetualTranche
-    function feeToken() public view override returns (IERC20) {
+    function feeToken() public view override returns (IERC20Upgradeable) {
         return feeStrategy.feeToken();
     }
 
     /// @inheritdoc IPerpetualTranche
-    function inReserve(IERC20 token) public view override returns (bool) {
+    function inReserve(IERC20Upgradeable token) public view override returns (bool) {
         return _reserve.contains(address(token));
     }
 
@@ -596,7 +599,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         return
             _perpsToCoveredTranches(
                 perpAmountRequested,
-                Math.min(maxTrancheAmtCovered, tranche.balanceOf(_self())),
+                MathUpgradeable.min(maxTrancheAmtCovered, tranche.balanceOf(_self())),
                 trancheYield(tranche),
                 tranchePrice(tranche)
             );
@@ -653,7 +656,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     //      NOTE: fee is a not-reserve asset.
     // @return True if the fee token used for settlement is the perp token.
     function _settleFee(address payer, int256 fee) internal returns (bool isNativeFeeToken) {
-        IERC20 feeToken_ = feeToken();
+        IERC20Upgradeable feeToken_ = feeToken();
         isNativeFeeToken = (address(feeToken_) == _self());
 
         if (fee == 0) {
@@ -684,7 +687,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @return Reserve balance after transfer in.
     function _transferIntoReserve(
         address from,
-        IERC20 token,
+        IERC20Upgradeable token,
         uint256 amount
     ) internal returns (uint256) {
         token.safeTransferFrom(from, _self(), amount);
@@ -695,7 +698,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @return Reserve balance after transfer out.
     function _transferOutOfReserve(
         address to,
-        IERC20 token,
+        IERC20Upgradeable token,
         uint256 amount
     ) internal returns (uint256) {
         token.safeTransfer(to, amount);
@@ -705,7 +708,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @dev Keeps the list of tokens held in the reserve up to date.
     //      Perp tokens are backed by tokens in this list.
     // @return The reserve's token balance
-    function _syncReserve(IERC20 t) internal returns (uint256) {
+    function _syncReserve(IERC20Upgradeable t) internal returns (uint256) {
         uint256 balance = t.balanceOf(_self());
         bool inReserve_ = inReserve(t);
         if (balance > 0 && !inReserve_) {
@@ -740,7 +743,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         uint256 price
     ) private pure returns (uint256 trancheAmtUsed, uint256 perpRemainder) {
         uint256 trancheAmtForRequested = _perpsToTranches(perpAmountRequested, yield, price);
-        trancheAmtUsed = Math.min(trancheAmtForRequested, trancheAmtCovered);
+        trancheAmtUsed = MathUpgradeable.min(trancheAmtForRequested, trancheAmtCovered);
         perpRemainder = trancheAmtUsed > 0
             ? (perpAmountRequested * (trancheAmtForRequested - trancheAmtUsed)).ceilDiv(trancheAmtForRequested)
             : perpAmountRequested;

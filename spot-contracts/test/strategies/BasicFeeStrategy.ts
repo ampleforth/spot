@@ -10,6 +10,8 @@ describe("BasicFeeStrategy", function () {
   beforeEach(async function () {
     const PerpetualTranche = await ethers.getContractFactory("MockPerpetualTranche");
     perp = await PerpetualTranche.deploy();
+    await perp.deployed();
+    await perp.init("MockPerpetualTranche", "PERP");
 
     factory = await ethers.getContractFactory("BasicFeeStrategy");
   });

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.4;
 
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { SignedMath } from "@openzeppelin/contracts/utils/math/SignedMath.sol";
+import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
+import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 import { SignedMathHelpers } from "../_utils/SignedMathHelpers.sol";
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { IFeeStrategy } from "../_interfaces/IFeeStrategy.sol";
 import { IPerpetualTranche } from "../_interfaces/IPerpetualTranche.sol";
 
@@ -18,9 +18,9 @@ import { IPerpetualTranche } from "../_interfaces/IPerpetualTranche.sol";
  *       Otherwise, user could extract from the fee collector by constant mint/burn transactions.
  */
 contract BasicFeeStrategy is IFeeStrategy {
-    using SignedMath for int256;
+    using SignedMathUpgradeable for int256;
     using SignedMathHelpers for int256;
-    using SafeCast for uint256;
+    using SafeCastUpgradeable for uint256;
 
     // @dev {10 ** PCT_DECIMALS} is considered 100%
     uint256 public constant PCT_DECIMALS = 6;
@@ -29,7 +29,7 @@ contract BasicFeeStrategy is IFeeStrategy {
     IPerpetualTranche public immutable perp;
 
     /// @inheritdoc IFeeStrategy
-    IERC20 public immutable override feeToken;
+    IERC20Upgradeable public immutable override feeToken;
 
     // @notice Fixed percentage of the mint amount to be used as fee.
     int256 public immutable mintFeePct;
@@ -51,7 +51,7 @@ contract BasicFeeStrategy is IFeeStrategy {
     // @param rolloverFeePct_ Rollover fee percentage.
     constructor(
         IPerpetualTranche perp_,
-        IERC20 feeToken_,
+        IERC20Upgradeable feeToken_,
         int256 mintFeePct_,
         int256 burnFeePct_,
         int256 rolloverFeePct_

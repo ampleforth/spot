@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+pragma solidity ^0.8.0;
 
-// solhint-disable-next-line compiler-version
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+
 import { IBondIssuer } from "./IBondIssuer.sol";
 import { IFeeStrategy } from "./IFeeStrategy.sol";
 import { IPricingStrategy } from "./IPricingStrategy.sol";
 import { IBondController } from "./buttonwood/IBondController.sol";
 import { ITranche } from "./buttonwood/ITranche.sol";
 
-interface IPerpetualTranche is IERC20 {
+interface IPerpetualTranche is IERC20Upgradeable {
     //--------------------------------------------------------------------------
     // Events
 
@@ -50,7 +51,7 @@ interface IPerpetualTranche is IERC20 {
     // @notice Event emitted the reserve's current token balance is recorded after change.
     // @param token Address of token.
     // @param balance The recorded ERC-20 balance of the token held by the reserve.
-    event ReserveSynced(IERC20 token, uint256 balance);
+    event ReserveSynced(IERC20Upgradeable token, uint256 balance);
 
     //--------------------------------------------------------------------------
     // Methods
@@ -120,7 +121,7 @@ interface IPerpetualTranche is IERC20 {
 
     // @notice The fee token currently used to receive fees in.
     // @return Address of the fee token.
-    function feeToken() external view returns (IERC20);
+    function feeToken() external view returns (IERC20Upgradeable);
 
     // @notice The yield to be applied given the tranche.
     // @param tranche The address of the tranche token.
@@ -174,7 +175,7 @@ interface IPerpetualTranche is IERC20 {
 
     // @notice Checks if the given token is part of the reserve list.
     // @param token The address of a token to check.
-    function inReserve(IERC20 token) external view returns (bool);
+    function inReserve(IERC20Upgradeable token) external view returns (bool);
 
     // @notice Updates time dependent queue state.
     function updateQueue() external;
