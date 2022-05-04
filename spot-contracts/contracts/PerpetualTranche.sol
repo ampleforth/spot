@@ -75,6 +75,17 @@ error UnacceptableRollover(ITranche trancheIn, ITranche trancheOut);
 /// @param rolloverAmt The perp denominated value of tokens rolled over.
 error UnacceptableRolloverAmt(uint256 trancheInAmt, uint256 trancheOutAmt, uint256 rolloverAmt);
 
+/// @notice Expected supply to be lower than the defined max supply.
+/// @param newSupply The new total supply after minting.
+/// @param currentMaxSupply The current max supply.
+error ExceededMaxSupply(uint256 newSupply, uint256 currentMaxSupply);
+
+/// @notice Expected the total mint amount per tranche to be lower than the limit.
+/// @param trancheIn Address of the deposit tranche.
+/// @param mintAmtForCurrentTranche The amount of perp tokens that have been minted using the tranche.
+/// @param maxMintAmtPerTranche The amount of perp tokens that can be minted per tranche.
+error ExceededMaxMintPerTranche(ITranche trancheIn, uint256 mintAmtForCurrentTranche, uint256 maxMintAmtPerTranche);
+
 /*
  *  @title PerpetualTranche
  *
@@ -166,6 +177,23 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     //         to mint perp tokens.
     IBondController private _depositBond;
 
+    // @notice The minimum maturity time in seconds for a tranche below which
+    //         it can get removed from the tranche queue.
+    uint256 public minTrancheMaturiySec;
+
+    // @notice The maximum maturity time in seconds for a tranche above which
+    //         it can NOT get added into the tranche queue.
+    uint256 public maxTrancheMaturiySec;
+
+    // @notice The maximum supply of perp tokens that can exist at any given time.
+    uint256 public maxSupply;
+
+    // @notice The max number of perp tokens that can be minted for each tranche in the minting bond.
+    uint256 public maxMintAmtPerTranche;
+
+    // @notice The total number of perp tokens that have been minted using a given tranche.
+    mapping(ITranche => uint256) private _totalMintAmtPerTranche;
+
     // @notice Yield factor defined for a particular "class" of tranches.
     //         Any tranche's class is defined as the unique combination of:
     //          - it's collateralToken
@@ -191,14 +219,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     //      update tranche yields without affecting the system's collateralization ratio.
     //      The yield is stored as a fixed point unsigned integer with {YIELD_DECIMALS} decimals
     mapping(ITranche => uint256) private _appliedTrancheYields;
-
-    // @notice The minimum maturity time in seconds for a tranche below which
-    //         it can get removed from the tranche queue.
-    uint256 public minTrancheMaturiySec;
-
-    // @notice The maximum maturity time in seconds for a tranche above which
-    //         it can NOT get added into the tranche queue.
-    uint256 public maxTrancheMaturiySec;
 
     //--------------------------------------------------------------------------
     // Modifiers
@@ -236,6 +256,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
         minTrancheMaturiySec = 1;
         maxTrancheMaturiySec = type(uint256).max;
+
+        maxSupply = 1000000 * (10**decimals_); // 1m
+        maxMintAmtPerTranche = 200000 * (10**decimals_); // 200k
 
         _redemptionQueue.init();
     }
@@ -293,6 +316,15 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         minTrancheMaturiySec = minTrancheMaturiySec_;
         maxTrancheMaturiySec = maxTrancheMaturiySec_;
         emit UpdatedTolerableTrancheMaturiy(minTrancheMaturiySec_, maxTrancheMaturiySec_);
+    }
+
+    // @notice Update parameters controlling the perp token mint limits.
+    // @param maxSupply_ New max total supply.
+    // @param maxMintAmtPerTranche_ New max total for per tranche in minting bond.
+    function updateMintingLimits(uint256 maxSupply_, uint256 maxMintAmtPerTranche_) external onlyOwner {
+        maxSupply = maxSupply_;
+        maxMintAmtPerTranche = maxMintAmtPerTranche_;
+        emit UpdatedMintingLimits(maxSupply_, maxMintAmtPerTranche_);
     }
 
     // @notice Updates the tranche class's yields.
@@ -357,6 +389,12 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
         // settles fees
         _settleFee(_msgSender(), mintFee);
+
+        // updates the total amount minted using the given tranche
+        _totalMintAmtPerTranche[trancheIn] += mintAmt;
+
+        // enforces supply cap and tranche mint cap
+        _enforceMintingLimits(trancheIn);
 
         return (mintAmt, mintFee);
     }
@@ -501,9 +539,19 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // Lazily queries the bond issuer to get the most recently issued bond
         // and updates with the new deposit bond if it's "acceptable".
         IBondController newBond = bondIssuer.getLatestBond();
-        // new bond has been issued by the issuer and is "acceptable"
-        // update `_depositBond`
+
+        // If the new bond has been issued by the issuer and is "acceptable"
         if (_depositBond != newBond && _isAcceptableForRedemptionQueue(newBond)) {
+            // Storage optimization: Zeroing out mint amounts
+            // from the previous deposit bond
+            if(address(_depositBond) != address(0)){
+                TrancheData memory td = _depositBond.getTrancheData();
+                for (uint8 i = 0; i < td.trancheCount; i++) {
+                    delete _totalMintAmtPerTranche[td.tranches[i]];
+                }
+            }
+
+            // updates `_depositBond` with the new bond
             _depositBond = newBond;
         }
 
@@ -647,6 +695,20 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
             bondOut != _depositBond && // Expected trancheOut to NOT be of deposit bond
             inReserve(trancheOut) && // Expected trancheOut to be part of the reserve
             !_redemptionQueue.contains(address(trancheOut))); // Expected trancheOut to not be part of the queue
+    }
+
+    // @dev Enforces the mint limits. To be invoked AFTER the mint operation.
+    function _enforceMintingLimits(ITranche trancheIn) internal view {
+        // checks if new total supply is within the max supply cap
+        uint256 newSupply = totalSupply();
+        if (newSupply > maxSupply) {
+            revert ExceededMaxSupply(newSupply, maxSupply);
+        }
+
+        // checks if total amount minted using the given tranche is within the cap
+        if (_totalMintAmtPerTranche[trancheIn] > maxMintAmtPerTranche) {
+            revert ExceededMaxMintPerTranche(trancheIn, _totalMintAmtPerTranche[trancheIn], maxMintAmtPerTranche);
+        }
     }
 
     // @dev If the fee is positive, fee is transferred from the payer to the self

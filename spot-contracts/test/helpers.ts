@@ -12,8 +12,8 @@ export const toYieldFixedPtAmt = (a: string): BigNumber => ethers.utils.parseUni
 
 const ORACLE_BASE_PRICE = toPriceFixedPtAmt("1");
 
-const EXTERNAL_ARTIFACTS_PATH = __dirname + '/../external-artifacts';
-async function getContractFactoryFromExternalArtifacts(name:string): Promise<ContractFactory> {
+const EXTERNAL_ARTIFACTS_PATH = __dirname + "/../external-artifacts";
+async function getContractFactoryFromExternalArtifacts(name: string): Promise<ContractFactory> {
   const artifact = JSON.parse(fs.readFileSync(`${EXTERNAL_ARTIFACTS_PATH}/${name}.json`).toString());
   return ethers.getContractFactoryFromArtifact(artifact);
 }
