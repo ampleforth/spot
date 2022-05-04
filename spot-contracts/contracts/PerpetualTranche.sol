@@ -54,7 +54,7 @@ error UnacceptableDepositTranche(ITranche trancheIn, IBondController depositBond
 /// @param mintAmt The amount of tranche tokens mint.
 error UnacceptableMintAmt(uint256 trancheInAmt, uint256 mintAmt);
 
-/// @notice Expected to redeem current redemption tranche or tranche queue to be empty.
+/// @notice Expected to redeem current redemption tranche.
 /// @param trancheOut Address of the withdrawn tranche.
 /// @param redemptionTranche Address of the next tranche up for redemption.
 error UnacceptableRedemptionTranche(ITranche trancheOut, ITranche redemptionTranche);
@@ -93,9 +93,11 @@ error UnacceptableRolloverAmt(uint256 trancheInAmt, uint256 trancheOutAmt, uint2
  *          3) When a user burns perp tokens, it iteratively redeems tranches from the head of the queue
  *             till the requested amount is covered.
  *          4) Tranches which are about to mature are removed from the tranche queue.
+ *          5) If the queue is empty the users cant redeem anything until the queue has tranches again
+ *             (either through more minting or rolling over).
  *
- *          Once tranches are removed from the queue, they entire a holding area called the "icebox".
- *          Tranches in the icebox can only be redeemed when the tranche queue is empty.
+ *          Once tranches (that are about to mature) are removed from the queue,
+ *          they enter a holding area called the "icebox".
  *
  *          Incentivized parties can "rollover" older tranches in the icebox for
  *          newer tranches that belong to the "depositBond".
@@ -368,13 +370,10 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     {
         ITranche redemptionTranche = _redemptionTranche();
 
-        // When tranche queue is NOT empty, redemption ordering is enforced.
-        bool inOrderRedemption = address(redemptionTranche) != address(0);
-
-        // The system only allows redemption of the burning tranche for perp tokens
-        // i.e) the tranche at the head of the tranche queue.
-        // When the queue is empty, any tranche held in the reserve can be redeemed.
-        if (inOrderRedemption && trancheOut != redemptionTranche) {
+        // The system only allows burning perp tokens for the current redemption tranche
+        // i.e) the head of the tranche queue.
+        // When the queue is empty, the redemption operation fails.
+        if (trancheOut != redemptionTranche) {
             revert UnacceptableRedemptionTranche(trancheOut, redemptionTranche);
         }
 
@@ -404,9 +403,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // transfers redeemed tranches from the reserve to the sender
         uint256 reserveBalance = _transferOutOfReserve(_msgSender(), trancheOut, trancheOutAmt);
 
-        // NOTE: When redeeming in order and if the tranche balance was burnt fully,
-        //       Dequeuing the tranche.
-        if (inOrderRedemption && reserveBalance == 0) {
+        // NOTE: If the tranche balance was burnt fully, dequeuing the tranche.
+        if (reserveBalance == 0) {
             _dequeueTranche();
         }
 
