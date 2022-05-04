@@ -22,7 +22,7 @@ interface IBondIssuer {
 
     // @notice Returns the total number of bonds issued by this issuer.
     // @return Number of bonds.
-    function totalIssued() external view returns (uint256);
+    function issuedCount() external view returns (uint256);
 
     // @notice The bond address from the issued list by index.
     // @return Address of the bond.

@@ -104,7 +104,7 @@ contract BondIssuer is IBondIssuer {
     }
 
     /// @inheritdoc IBondIssuer
-    function totalIssued() external view override returns (uint256) {
+    function issuedCount() external view override returns (uint256) {
         return _issuedBonds.length();
     }
 
