@@ -25,6 +25,8 @@ describe("BondIssuer", function () {
       expect(await issuer.trancheRatios(1)).to.eq(300);
       expect(await issuer.trancheRatios(2)).to.eq(500);
       expect(await issuer.lastIssueWindowTimestamp()).to.eq(0);
+      expect(await issuer.issuedCount()).to.eq(0);
+      await expect(issuer.issuedBondAt(0)).to.be.reverted;
     });
   });
 
@@ -42,9 +44,16 @@ describe("BondIssuer", function () {
         expect(await issuer.callStatic.getLatestBond()).to.eq(bond);
         expect(await issuer.lastIssueWindowTimestamp()).to.eq(2499998520);
 
+        expect(await issuer.issuedCount()).to.eq(1);
+        expect(await issuer.issuedBondAt(0)).to.eq(bond);
+        await expect(issuer.issuedBondAt(1)).to.be.reverted;
+
         await TimeHelpers.setNextBlockTimestamp(2500002120);
         await expect(issuer.issue()).to.emit(issuer, "BondIssued");
         expect(await issuer.lastIssueWindowTimestamp()).to.eq(2500002120);
+
+        expect(await issuer.issuedCount()).to.eq(2);
+        await expect(issuer.issuedBondAt(1)).to.not.be.reverted;
       });
     });
 
@@ -52,12 +61,15 @@ describe("BondIssuer", function () {
       it("should not issue a new bond", async function () {
         await TimeHelpers.setNextBlockTimestamp(2500005720);
         await expect(issuer.issue()).to.emit(issuer, "BondIssued");
+        expect(await issuer.issuedCount()).to.eq(1);
 
         await TimeHelpers.setNextBlockTimestamp(2500009310);
         await expect(issuer.issue()).not.to.emit(issuer, "BondIssued");
+        expect(await issuer.issuedCount()).to.eq(1);
 
         await TimeHelpers.setNextBlockTimestamp(2500009320);
         await expect(issuer.issue()).to.emit(issuer, "BondIssued");
+        expect(await issuer.issuedCount()).to.eq(2);
       });
     });
   });
