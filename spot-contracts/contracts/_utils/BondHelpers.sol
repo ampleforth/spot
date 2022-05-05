@@ -48,11 +48,12 @@ library BondHelpers {
     // @notice Given a bond, retrieves all of the bond's tranche related data.
     // @param b The address of the bond contract.
     // @return The tranche data.
-    function getTrancheData(IBondController b) internal view returns (TrancheData memory td) {
-        // Max tranches per bond < 2**8 - 1
+    function getTrancheData(IBondController b) internal view returns (TrancheData memory) {
+        TrancheData memory td;
         td.trancheCount = SafeCastUpgradeable.toUint8(b.trancheCount());
         td.tranches = new ITranche[](td.trancheCount);
         td.trancheRatios = new uint256[](td.trancheCount);
+        // Max tranches per bond < 2**8 - 1
         for (uint8 i = 0; i < td.trancheCount; i++) {
             (ITranche t, uint256 ratio) = b.tranches(i);
             td.tranches[i] = t;
@@ -71,19 +72,19 @@ library BondHelpers {
         internal
         view
         returns (
-            TrancheData memory td,
-            uint256[] memory trancheAmts,
-            uint256[] memory fees
+            TrancheData memory,
+            uint256[] memory,
+            uint256[] memory
         )
     {
-        td = getTrancheData(b);
+        TrancheData memory td = getTrancheData(b);
+        uint256[] memory trancheAmts = new uint256[](td.trancheCount);
+        uint256[] memory fees = new uint256[](td.trancheCount);
 
         uint256 totalDebt = b.totalDebt();
         uint256 collateralBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(address(b));
         uint256 feeBps = b.feeBps();
 
-        trancheAmts = new uint256[](td.trancheCount);
-        fees = new uint256[](td.trancheCount);
         for (uint256 i = 0; i < td.trancheCount; i++) {
             uint256 trancheValue = (collateralAmount * td.trancheRatios[i]) / TRANCHE_RATIO_GRANULARITY;
             if (collateralBalance > 0) {
@@ -107,11 +108,10 @@ library BondHelpers {
     function getTrancheCollateralBalances(IBondController b, address u)
         internal
         view
-        returns (TrancheData memory td, uint256[] memory balances)
+        returns (TrancheData memory, uint256[] memory)
     {
-        td = getTrancheData(b);
-
-        balances = new uint256[](td.trancheCount);
+        TrancheData memory td = getTrancheData(b);
+        uint256[] memory balances = new uint256[](td.trancheCount);
 
         if (b.isMature()) {
             for (uint8 i = 0; i < td.trancheCount; i++) {
@@ -133,6 +133,7 @@ library BondHelpers {
             bondCollateralBalance -= trancheCollaterBalance;
         }
         balances[td.trancheCount - 1] = (bondCollateralBalance > 0) ? bondCollateralBalance : 0;
+
         return (td, balances);
     }
 }
