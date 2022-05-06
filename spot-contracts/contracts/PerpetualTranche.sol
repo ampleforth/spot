@@ -308,7 +308,8 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
             "Expected to redeem burning tranche or queue to be empty"
         );
 
-        // calculates the amount of tranche tokens covered to burn `perpRemainder` perp tokens
+        // calculates the amount of tranche tokens covered to burn 
+        // up to `perpAmountRequested` perp tokens
         (uint256 trancheOutAmt, uint256 perpRemainder) = perpsToCoveredTranches(
             trancheOut,
             perpAmountRequested,
