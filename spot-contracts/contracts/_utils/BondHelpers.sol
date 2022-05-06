@@ -62,7 +62,6 @@ library BondHelpers {
         return td;
     }
 
-    // TODO: move off-chain helpers to a different file?
     // @notice Helper function to estimate the amount of tranches minted when a given amount of collateral
     //         is deposited into the bond.
     // @dev This function is used off-chain services (using callStatic) to preview tranches minted after
@@ -100,39 +99,76 @@ library BondHelpers {
         return (td, trancheAmts, fees);
     }
 
-    // @notice Given a bond, retrieves the collateral currently redeemable for
+    // @notice Given a bond, for each tranche token retrieves the total collateral redeemable
+    //         for the total supply of the tranche token (aka debt issued).
+    // @dev The cdr can be computed for each tranche by dividing the
+    //      returned tranche's collateralBalance by the tranche's totalSupply.
+    // @param b The address of the bond contract.
+    // @return The tranche data and the list of collateral balances and the total supplies for each tranche.
+    function getTrancheCollateralizations(IBondController b)
+        internal
+        view
+        returns (
+            TrancheData memory,
+            uint256[] memory,
+            uint256[] memory
+        )
+    {
+        TrancheData memory td = getTrancheData(b);
+        uint256[] memory collateralBalances = new uint256[](td.trancheCount);
+        uint256[] memory trancheSupplies = new uint256[](td.trancheCount);
+
+        // When the bond is mature, the collateral is transferred over to the individual tranche token contracts
+        if (b.isMature()) {
+            for (uint8 i = 0; i < td.trancheCount; i++) {
+                trancheSupplies[i] = td.tranches[i].totalSupply();
+                collateralBalances[i] = IERC20Upgradeable(b.collateralToken()).balanceOf(address(td.tranches[i]));
+            }
+            return (td, collateralBalances, trancheSupplies);
+        }
+
+        // Before the bond is mature, all the collateral is held by the bond contract
+        uint256 bondCollateralBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(address(b));
+        uint256 zTrancheIndex = td.trancheCount - 1;
+        for (uint8 i = 0; i < td.trancheCount; i++) {
+            trancheSupplies[i] = td.tranches[i].totalSupply();
+
+            // a to y tranches
+            if (i != zTrancheIndex) {
+                collateralBalances[i] = (trancheSupplies[i] <= bondCollateralBalance)
+                    ? trancheSupplies[i]
+                    : bondCollateralBalance;
+                bondCollateralBalance -= collateralBalances[i];
+            }
+            // z tranche
+            else {
+                collateralBalances[i] = bondCollateralBalance;
+            }
+        }
+
+        return (td, collateralBalances, trancheSupplies);
+    }
+
+    // @notice Given a bond, retrieves the collateral redeemable for
     //         each tranche held by the given address.
     // @param b The address of the bond contract.
     // @param u The address to check balance for.
-    // @return The tranche data and an array of collateral amounts.
+    // @return The tranche data and an array of collateral balances.
     function getTrancheCollateralBalances(IBondController b, address u)
         internal
         view
         returns (TrancheData memory, uint256[] memory)
     {
-        TrancheData memory td = getTrancheData(b);
+        TrancheData memory td;
+        uint256[] memory collateralBalances;
+        uint256[] memory trancheSupplies;
+
+        (td, collateralBalances, trancheSupplies) = getTrancheCollateralizations(b);
+
         uint256[] memory balances = new uint256[](td.trancheCount);
-
-        if (b.isMature()) {
-            for (uint8 i = 0; i < td.trancheCount; i++) {
-                uint256 trancheCollaterBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(
-                    address(td.tranches[i])
-                );
-                balances[i] = (td.tranches[i].balanceOf(u) * trancheCollaterBalance) / td.tranches[i].totalSupply();
-            }
-            return (td, balances);
+        for (uint8 i = 0; i < td.trancheCount; i++) {
+            balances[i] = (td.tranches[i].balanceOf(u) * collateralBalances[i]) / trancheSupplies[i];
         }
-
-        uint256 bondCollateralBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(address(b));
-        for (uint8 i = 0; i < td.trancheCount - 1; i++) {
-            uint256 trancheSupply = td.tranches[i].totalSupply();
-            uint256 trancheCollaterBalance = trancheSupply <= bondCollateralBalance
-                ? trancheSupply
-                : bondCollateralBalance;
-            balances[i] = (td.tranches[i].balanceOf(u) * trancheCollaterBalance) / trancheSupply;
-            bondCollateralBalance -= trancheCollaterBalance;
-        }
-        balances[td.trancheCount - 1] = (bondCollateralBalance > 0) ? bondCollateralBalance : 0;
 
         return (td, balances);
     }
