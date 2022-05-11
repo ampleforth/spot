@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
+import { EnumerableSet } from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+
 import { IBondFactory } from "./_interfaces/buttonwood/IBondFactory.sol";
 import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
 import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
@@ -14,6 +16,8 @@ import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
  *
  */
 contract BondIssuer is IBondIssuer {
+    using EnumerableSet for EnumerableSet.AddressSet;
+
     // @notice Address of the bond factory.
     IBondFactory public immutable bondFactory;
 
@@ -41,11 +45,10 @@ contract BondIssuer is IBondIssuer {
     //      https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol#L20
     uint256[] public trancheRatios;
 
-    // @notice A private mapping to keep track of bonds issued by this issuer.
-    mapping(IBondController => bool) private _issuedBonds;
-
-    // @notice The address of the most recently issued bond.
-    IBondController private _latestBond;
+    // @notice An enumerable list to keep track of bonds issued by this issuer.
+    // @dev Bonds are only added and never removed, thus the last item will always point
+    //      to the latest bond.
+    EnumerableSet.AddressSet private _issuedBonds;
 
     // @notice The timestamp when the issue window opened during the last issue.
     uint256 public lastIssueWindowTimestamp;
@@ -71,7 +74,7 @@ contract BondIssuer is IBondIssuer {
 
     /// @inheritdoc IBondIssuer
     function isInstance(IBondController bond) external view override returns (bool) {
-        return _issuedBonds[bond];
+        return _issuedBonds.contains(address(bond));
     }
 
     /// @inheritdoc IBondIssuer
@@ -87,9 +90,7 @@ contract BondIssuer is IBondIssuer {
             bondFactory.createBond(collateralToken, trancheRatios, lastIssueWindowTimestamp + maxMaturityDuration)
         );
 
-        _issuedBonds[bond] = true;
-
-        _latestBond = bond;
+        _issuedBonds.add(address(bond));
 
         emit BondIssued(bond);
     }
@@ -98,6 +99,17 @@ contract BondIssuer is IBondIssuer {
     // @dev Lazily issues a new bond when the time is right.
     function getLatestBond() external override returns (IBondController) {
         issue();
-        return _latestBond;
+        // NOTE: The latest bond will be at the end of the list.
+        return IBondController(_issuedBonds.at(_issuedBonds.length() - 1));
+    }
+
+    /// @inheritdoc IBondIssuer
+    function issuedCount() external view override returns (uint256) {
+        return _issuedBonds.length();
+    }
+
+    /// @inheritdoc IBondIssuer
+    function issuedBondAt(uint256 index) external view override returns (IBondController) {
+        return IBondController(_issuedBonds.at(index));
     }
 }
