@@ -64,10 +64,10 @@ interface IPerpetualTranche is IERC20 {
 
     // @notice Redeem tranche tokens by burning perp tokens.
     // @param trancheOut The tranche token to be redeemed.
-    // @param requestedAmount The amount of perp tokens requested to be burnt.
+    // @param amountRequested The amount of perp tokens requested to be burnt.
     // @return burnAmt The amount of perp tokens burnt from the caller.
     // @return fee The fee paid by the caller.
-    function redeem(ITranche trancheOut, uint256 requestedAmount) external returns (uint256 burnAmt, int256 burnFee);
+    function redeem(ITranche trancheOut, uint256 amountRequested) external returns (uint256 burnAmt, int256 burnFee);
 
     // @notice Rotates newer tranches in for older tranches.
     // @param trancheIn The tranche token deposited.
@@ -100,6 +100,11 @@ interface IPerpetualTranche is IERC20 {
     // @notice The token address from the redemption queue by index.
     // @param index The index of a token.
     function getRedemptionQueueAt(uint256 index) external returns (address);
+
+    // @notice Checks if the given `trancheIn` can be rolled out for `trancheOut`.
+    // @param trancheIn The tranche token deposited.
+    // @param trancheOut The tranche token to be redeemed.
+    function isAcceptableRollover(ITranche trancheIn, ITranche trancheOut) external returns (bool);
 
     // @notice The strategy contract with the fee computation logic.
     // @return Address of the strategy contract.
@@ -150,13 +155,15 @@ interface IPerpetualTranche is IERC20 {
     //         If the system doesn't have enough tranche tokens to cover the exchange,
     //         it computes the remainder perp tokens which cannot be exchanged.
     // @param tranche The address of the tranche token.
-    // @param requestedAmount The amount of perp tokens to exchange.
+    // @param amountRequested The amount of perp tokens to exchange.
+    // @param trancheAmtCovered The maximum tranche amount covered the exchange.
     // @return trancheAmtUsed The tranche tokens used for the exchange.
     // @return remainder The number of perp tokens which cannot be exchanged.
-    function perpsToCoveredTranches(ITranche tranche, uint256 requestedAmount)
-        external
-        view
-        returns (uint256 trancheAmtUsed, uint256 remainder);
+    function perpsToCoveredTranches(
+        ITranche tranche,
+        uint256 amountRequested,
+        uint256 trancheAmtCovered
+    ) external view returns (uint256 trancheAmtUsed, uint256 remainder);
 
     // @notice Total count of tokens held in the reserve.
     function reserveCount() external view returns (uint256);
@@ -168,4 +175,7 @@ interface IPerpetualTranche is IERC20 {
     // @notice Checks if the given token is part of the reserve list.
     // @param token The address of a token to check.
     function inReserve(IERC20 token) external view returns (bool);
+
+    // @notice Updates time dependent queue state.
+    function updateQueue() external;
 }

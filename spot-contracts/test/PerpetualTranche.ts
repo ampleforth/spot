@@ -627,8 +627,8 @@ describe("PerpetualTranche", function () {
     });
 
     describe("when tranche balance is 0", function () {
-      it("should return the 0 tranche amount and remainder", async function () {
-        const r = await perp.perpsToCoveredTranches(tranche.address, toFixedPtAmt("200"));
+      it("should return the 0 tranche amount and remainders", async function () {
+        const r = await perp.perpsToCoveredTranches(tranche.address, toFixedPtAmt("200"), constants.MaxUint256);
         expect(r[0]).to.eq(toFixedPtAmt("0"));
         expect(r[1]).to.eq(toFixedPtAmt("200"));
       });
@@ -640,34 +640,46 @@ describe("PerpetualTranche", function () {
       });
 
       describe("when requested amount is covered", async function () {
-        it("should return the tranche amount and remainder", async function () {
-          const r = await perp.perpsToCoveredTranches(tranche.address, toFixedPtAmt("33"));
+        it("should return the tranche amount and remainders", async function () {
+          const r = await perp.perpsToCoveredTranches(tranche.address, toFixedPtAmt("33"), constants.MaxUint256);
           expect(r[0]).to.eq(toFixedPtAmt("33"));
           expect(r[1]).to.eq(toFixedPtAmt("0"));
         });
       });
 
       describe("when requested amount is covered", async function () {
-        it("should return the tranche amount and remainder", async function () {
-          const r = await perp.perpsToCoveredTranches(tranche.address, toFixedPtAmt("200"));
+        it("should return the tranche amount and remainders", async function () {
+          const r = await perp.perpsToCoveredTranches(tranche.address, toFixedPtAmt("200"), constants.MaxUint256);
           expect(r[0]).to.eq(toFixedPtAmt("200"));
           expect(r[1]).to.eq(toFixedPtAmt("0"));
         });
       });
 
       describe("when requested amount is NOT covered", async function () {
-        it("should return the tranche amount and remainder", async function () {
-          const r = await perp.perpsToCoveredTranches(tranche.address, toFixedPtAmt("200").add("1"));
+        it("should return the tranche amount and remainders", async function () {
+          const r = await perp.perpsToCoveredTranches(
+            tranche.address,
+            toFixedPtAmt("200").add("1"),
+            constants.MaxUint256,
+          );
           expect(r[0]).to.eq(toFixedPtAmt("200"));
           expect(r[1]).to.eq("1");
         });
       });
 
       describe("when requested amount is NOT covered", async function () {
-        it("should return the tranche amount and remainder", async function () {
-          const r = await perp.perpsToCoveredTranches(tranche.address, toFixedPtAmt("1000"));
+        it("should return the tranche amount and remainders", async function () {
+          const r = await perp.perpsToCoveredTranches(tranche.address, toFixedPtAmt("1000"), constants.MaxUint256);
           expect(r[0]).to.eq(toFixedPtAmt("200"));
           expect(r[1]).to.eq(toFixedPtAmt("800"));
+        });
+      });
+
+      describe("when max covered is less than the balance", function () {
+        it("should return the tranche amount and remainders", async function () {
+          const r = await perp.perpsToCoveredTranches(tranche.address, toFixedPtAmt("200"), toFixedPtAmt("33"));
+          expect(r[0]).to.eq(toFixedPtAmt("33"));
+          expect(r[1]).to.eq(toFixedPtAmt("167"));
         });
       });
     });

@@ -91,11 +91,15 @@ describe("PerpetualTranche", function () {
 
   describe("#rollover", function () {
     describe("when trancheIn and trancheOut belong to the same bond", function () {
+      let tranches: Contract[];
+      beforeEach(async function () {
+        tranches = await getTranches(rotationInBond);
+        await perp.updateDefinedYield(await perp.trancheClass(tranches[1].address), toYieldFixedPtAmt("1"));
+      });
       it("should revert", async function () {
-        const rotationInTranches = await getTranches(rotationInBond);
         await expect(
-          perp.rollover(rotationInTranches[0].address, rotationInTranches[1].address, toFixedPtAmt("500")),
-        ).to.revertedWith("Expected trancheOut to NOT be of deposit bond");
+          perp.rollover(rotationInTranche.address, tranches[1].address, toFixedPtAmt("500")),
+        ).to.revertedWith("Expected rollover to be acceptable");
       });
     });
 
@@ -103,7 +107,7 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await expect(
           perp.rollover(iceboxTranche2.address, iceboxTranche1.address, toFixedPtAmt("500")),
-        ).to.revertedWith("Expected trancheIn to be of deposit bond");
+        ).to.revertedWith("Expected rollover to be acceptable");
       });
     });
 
@@ -117,7 +121,7 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await expect(
           perp.rollover(newRotationInTranche.address, rotationInTranche.address, toFixedPtAmt("500")),
-        ).to.revertedWith("Expected trancheOut to NOT be in the queue");
+        ).to.revertedWith("Expected rollover to be acceptable");
       });
     });
 

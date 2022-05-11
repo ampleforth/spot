@@ -32,14 +32,14 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }} # tests across multiple Deno versions
 
-      - name: Install
-        run: yarn install
+      - name: Install all workspaces
+        run: yarn install --immutable
+
+      - name: Seutp contracts workspace
+        run: yarn workspace @ampleforthorg/spot-contracts run compile
 
       - name: Lint
-        run: yarn lint
-
-      - name: Compile
-        run: yarn compile
+        run: yarn workspaces foreach run lint
 
       - name: Test
-        run: yarn test
+        run: yarn workspaces foreach run test
