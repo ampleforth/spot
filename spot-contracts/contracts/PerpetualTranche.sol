@@ -71,9 +71,10 @@ error UnacceptableBurnAmt(uint256 trancheOutAmt, uint256 requestedBurnAmt);
 error UnacceptableRollover(ITranche trancheIn, ITranche trancheOut);
 
 /// @notice Expected to rollover a non-zero amount of tokens.
+/// @param trancheInAmt The amount of tranche tokens deposited.
 /// @param trancheOutAmt The amount of tranche tokens withdrawn.
 /// @param rolloverAmt The perp denominated value of tokens rolled over.
-error UnacceptableRolloverAmt(uint256 trancheOutAmt, uint256 rolloverAmt);
+error UnacceptableRolloverAmt(uint256 trancheInAmt, uint256 trancheOutAmt, uint256 rolloverAmt);
 
 /*
  *  @title PerpetualTranche
@@ -424,8 +425,8 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
         // calculates the amount of tranche tokens rolled out
         trancheOutAmt = perpsToTranches(trancheOut, rolloverAmt);
-        if (trancheOutAmt == 0 || rolloverAmt == 0) {
-            revert UnacceptableRolloverAmt(trancheOutAmt, rolloverAmt);
+        if (trancheInAmt == 0 || trancheOutAmt == 0 || rolloverAmt == 0) {
+            revert UnacceptableRolloverAmt(trancheInAmt, trancheOutAmt, rolloverAmt);
         }
 
         // calculates the fee to rollover `rolloverAmt` of perp token
