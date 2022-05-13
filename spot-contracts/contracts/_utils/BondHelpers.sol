@@ -152,6 +152,5 @@ library TrancheDataHelpers {
             }
         }
         revert UnacceptableTrancheIndex(t);
-        return type(uint256).max;
     }
 }
