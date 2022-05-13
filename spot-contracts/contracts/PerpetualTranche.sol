@@ -36,7 +36,7 @@ error UnacceptablePricingStrategy();
 /// @notice Expected pricing strategy to return a fixed point with exactly {PRICE_DECIMALS} decimals.
 error InvalidPricingStrategyDecimals();
 
-/// @notice Expected minTrancheMatuirty be less than or equal to maxTrancheMaturity.
+/// @notice Expected minTrancheMaturity be less than or equal to maxTrancheMaturity.
 /// @param minTrancheMaturiySec Minimum tranche maturity time in seconds.
 /// @param minTrancheMaturiySec Maximum tranche maturity time in seconds.
 error InvalidTrancheMaturityBounds(uint256 minTrancheMaturiySec, uint256 maxTrancheMaturiySec);
