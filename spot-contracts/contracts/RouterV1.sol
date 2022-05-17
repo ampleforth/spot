@@ -57,7 +57,7 @@ contract RouterV1 {
         return (bond, td.tranches, trancheAmts);
     }
 
-    // @notice Calculates the amount of perp tokens are minted and fees for the operation.
+    // @notice Calculates the amount of perp tokens minted and fees for the operation.
     // @dev Used by off-chain services to preview a deposit operation.
     // @param perp Address of the perpetual tranche contract.
     // @param trancheIn The address of the tranche token to be deposited.
@@ -86,7 +86,7 @@ contract RouterV1 {
 
     // @notice Tranches the collateral using the current deposit bond and then deposits individual tranches
     //         to mint perp tokens. It transfers the perp tokens back to the
-    //         transaction sender along with, any unused tranches and fees.
+    //         transaction sender along with any unused tranches and fees.
     // @param perp Address of the perpetual tranche contract.
     // @param bond Address of the deposit bond.
     // @param collateralAmount The amount of collateral the user wants to tranche.
@@ -109,11 +109,11 @@ contract RouterV1 {
             feeToken.safeTransferFrom(msg.sender, address(this), feePaid);
         }
 
-        // approves collateral to be tranched tranched
+        // approves collateral to be tranched
         _checkAndApproveMax(collateralToken, address(bond), collateralAmount);
 
         // tranches collateral
-        bond.deposit(collateralToken.balanceOf(address(this)));
+        bond.deposit(collateralAmount);
 
         // approves fee to be spent to mint perp tokens
         _checkAndApproveMax(feeToken, address(perp), feePaid);
@@ -272,7 +272,8 @@ contract RouterV1 {
         perp.safeTransfer(msg.sender, perp.balanceOf(address(this)));
     }
 
-    struct RolloverPreivew {
+    struct RolloverPreview {
+        // Rollover amounts are perp denominated. Useful for deriving fee amount for users.
         uint256 rolloverAmt;
         uint256 requestedRolloverAmt;
         uint256 trancheOutAmt;
@@ -280,11 +281,11 @@ contract RouterV1 {
     }
 
     // @notice Calculates the amount tranche tokens that can be rolled out, remainders and fees,
-    //         with a given the tranche token rolled in and amount.
+    //         with a given tranche token rolled in and amount.
     // @dev Used by off-chain services to preview a rollover operation.
     // @param perp Address of the perpetual tranche contract.
     // @param trancheIn The tranche token deposited.
-    // @param trancheOut The tranche token requested to be redeemed.
+    // @param trancheOut The tranche token requested to be withdrawn.
     // @param trancheInAmt The amount of trancheIn tokens available to deposit.
     // @param maxTrancheOutAmtUsed The tranche balance to be used for rollover.
     // @dev Set maxTrancheOutAmtUsed to max(uint256) to use the entire balance.
@@ -336,7 +337,7 @@ contract RouterV1 {
     // @param bond Address of the deposit bond.
     // @param collateralAmount The amount of collateral the user wants to tranche.
     // @param rollovers List of batch rollover operations pre-computed off-chain.
-    // @param feePaid The fee paid to the perpetual tranche contract to mint perp.
+    // @param feePaid The fee paid by the user performing rollover (fee could be negative).
     function trancheAndRollover(
         IPerpetualTranche perp,
         IBondController bond,
@@ -354,14 +355,16 @@ contract RouterV1 {
             feeToken.safeTransferFrom(msg.sender, address(this), feePaid);
         }
 
-        // approves collateral to be tranched tranched
+        // approves collateral to be tranched
         _checkAndApproveMax(collateralToken, address(bond), collateralAmount);
 
         // tranches collateral
-        bond.deposit(collateralToken.balanceOf(address(this)));
+        bond.deposit(collateralAmount);
 
         // approves fee to be spent to rollover
-        _checkAndApproveMax(feeToken, address(perp), feePaid);
+        if (feePaid > 0) {
+            _checkAndApproveMax(feeToken, address(perp), feePaid);
+        }
 
         for (uint256 i = 0; i < rollovers.length; i++) {
             // approve trancheIn to be spent by perp
@@ -401,7 +404,7 @@ contract RouterV1 {
         }
     }
 
-    // @dev Checks if the spender has sufficient allowance if not approves the maximum possible amount.
+    // @dev Checks if the spender has sufficient allowance. If not, approves the maximum possible amount.
     function _checkAndApproveMax(
         IERC20 token,
         address spender,
