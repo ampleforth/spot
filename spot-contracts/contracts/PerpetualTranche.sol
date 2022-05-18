@@ -424,7 +424,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     /// @inheritdoc IPerpetualTranche
     // @dev Lazily updates time-dependent queue state.
     //      This function is to be invoked on all external function entry points which are
-    //      read data from the queue.
+    //      read data from the queue. This function is intended to be idempotent.
     function updateQueue() public override {
         // Lazily queries the bond issuer to get the most recently issued bond
         // and updates with the new deposit bond if it's "acceptable".

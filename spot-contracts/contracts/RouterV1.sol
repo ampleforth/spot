@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.4;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -104,7 +104,6 @@ contract RouterV1 {
 
         // transfers collateral & fees to router
         collateralToken.safeTransferFrom(msg.sender, address(this), collateralAmount);
-
         if (feePaid > 0) {
             feeToken.safeTransferFrom(msg.sender, address(this), feePaid);
         }
@@ -130,6 +129,12 @@ contract RouterV1 {
                 // transfers unused tranches back
                 td.tranches[i].safeTransfer(msg.sender, trancheAmt);
             }
+        }
+
+        // transfers any remaining collateral tokens back
+        uint256 collateralBalance = collateralToken.balanceOf(address(this));
+        if (collateralBalance > 0) {
+            collateralToken.safeTransfer(msg.sender, collateralBalance);
         }
 
         // transfers remaining fee back if overpaid or reward
@@ -209,7 +214,6 @@ contract RouterV1 {
         )
     {
         uint256 remainder = perpAmountRequested;
-
         uint256 i;
         for (i = 0; remainder > 0 && i < requestedTranches.length; i++) {
             // NOTE: loops through requested list
@@ -227,13 +231,13 @@ contract RouterV1 {
     // @notice Redeems perp tokens for tranche tokens until the tranche balance covers it.
     // @param perp Address of the perpetual tranche contract.
     // @param perpAmountRequested The amount of perp tokens requested to be burnt.
-    // @param fee The fee paid for burning.
+    // @param feePaid The fee paid for burning.
     // @param requestedTranches The tranches in order to be redeemed.
     // @dev Fee and requestedTranches list are to be pre-computed off-chain using the preview function.
     function redeem(
         IPerpetualTranche perp,
         uint256 perpAmountRequested,
-        uint256 fee,
+        uint256 feePaid,
         ITranche[] memory requestedTranches
     ) external afterPerpStateUpdate(perp) {
         IERC20 feeToken = perp.feeToken();
@@ -241,12 +245,12 @@ contract RouterV1 {
 
         // transfer collateral & fee to router
         perp.safeTransferFrom(msg.sender, address(this), remainder);
-        if (fee > 0) {
-            feeToken.safeTransferFrom(msg.sender, address(this), fee);
+        if (feePaid > 0) {
+            feeToken.safeTransferFrom(msg.sender, address(this), feePaid);
         }
 
         // Approve fees to be spent from router
-        _checkAndApproveMax(feeToken, address(perp), fee);
+        _checkAndApproveMax(feeToken, address(perp), feePaid);
 
         uint256 trancheCount;
         while (remainder > 0) {
@@ -274,8 +278,8 @@ contract RouterV1 {
 
     struct RolloverPreview {
         // Rollover amounts are perp denominated. Useful for deriving fee amount for users.
-        uint256 rolloverAmt;
-        uint256 requestedRolloverAmt;
+        uint256 rolloverPerpAmt;
+        uint256 requestedRolloverPerpAmt;
         uint256 trancheOutAmt;
         uint256 remainingTrancheInAmt;
     }
@@ -302,27 +306,26 @@ contract RouterV1 {
         external
         afterPerpStateUpdate(perp)
         returns (
-            RolloverPreivew memory r,
+            RolloverPreview memory r,
             IERC20 feeToken,
             int256 rolloverFee
         )
     {
         feeToken = perp.feeToken();
-        r.remainingTrancheInAmt = trancheInAmt;
-
+        uint256 rolloverPerpAmtRemainder = 0;
         if (perp.isAcceptableRollover(trancheIn, trancheOut)) {
-            r.requestedRolloverAmt = perp.tranchesToPerps(trancheIn, r.remainingTrancheInAmt);
-            uint256 rolloverAmtRemainder;
-            (r.trancheOutAmt, rolloverAmtRemainder) = perp.perpsToCoveredTranches(
+            r.requestedRolloverPerpAmt = perp.tranchesToPerps(trancheIn, trancheInAmt);
+            (r.trancheOutAmt, rolloverPerpAmtRemainder) = perp.perpsToCoveredTranches(
                 trancheOut,
-                r.requestedRolloverAmt,
+                r.requestedRolloverPerpAmt,
                 maxTrancheOutAmtUsed
             );
-            r.rolloverAmt = r.requestedRolloverAmt - rolloverAmtRemainder;
-            r.remainingTrancheInAmt = perp.perpsToTranches(trancheIn, rolloverAmtRemainder);
-            rolloverFee = perp.feeStrategy().computeRolloverFee(r.rolloverAmt);
+            r.rolloverPerpAmt = r.requestedRolloverPerpAmt - rolloverPerpAmtRemainder;
+            r.remainingTrancheInAmt = (rolloverPerpAmtRemainder * trancheInAmt) / r.requestedRolloverPerpAmt;
+            rolloverFee = perp.feeStrategy().computeRolloverFee(r.rolloverPerpAmt);
+        } else {
+            r.remainingTrancheInAmt = trancheInAmt;
         }
-
         return (r, feeToken, rolloverFee);
     }
 
@@ -372,16 +375,9 @@ contract RouterV1 {
 
             // perform rollover
             perp.rollover(rollovers[i].trancheIn, rollovers[i].trancheOut, rollovers[i].trancheInAmt);
-
         }
 
         for (uint256 i = 0; i < rollovers.length; i++) {
-            // transfer remaining trancheIn tokens back
-            uint256 trancheInBalance = rollovers[i].trancheIn.balanceOf(address(this));
-            if (trancheInBalance > 0) {
-                rollovers[i].trancheIn.safeTransfer(msg.sender, trancheInBalance);
-            }
-
             // transfer remaining trancheOut tokens back
             uint256 trancheOutBalance = rollovers[i].trancheOut.balanceOf(address(this));
             if (trancheOutBalance > 0) {
@@ -395,6 +391,12 @@ contract RouterV1 {
             if (trancheBalance > 0) {
                 td.tranches[i].safeTransfer(msg.sender, trancheBalance);
             }
+        }
+
+        // transfers any remaining collateral tokens back
+        uint256 collateralBalance = collateralToken.balanceOf(address(this));
+        if (collateralBalance > 0) {
+            collateralToken.safeTransfer(msg.sender, collateralBalance);
         }
 
         // transfers remaining fee back if overpaid or reward
