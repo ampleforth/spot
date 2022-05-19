@@ -321,7 +321,7 @@ contract RouterV1 {
                 maxTrancheOutAmtUsed
             );
             r.rolloverPerpAmt = r.requestedRolloverPerpAmt - rolloverPerpAmtRemainder;
-            r.remainingTrancheInAmt = (rolloverPerpAmtRemainder * trancheInAmt) / r.requestedRolloverPerpAmt;
+            r.remainingTrancheInAmt = perp.perpsToTranches(trancheIn, rolloverPerpAmtRemainder);
             rolloverFee = perp.feeStrategy().computeRolloverFee(r.rolloverPerpAmt);
         } else {
             r.remainingTrancheInAmt = trancheInAmt;
