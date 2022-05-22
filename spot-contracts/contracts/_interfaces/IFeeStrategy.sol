@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+pragma solidity ^0.8.0;
 
-// solhint-disable-next-line compiler-version
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 
 interface IFeeStrategy {
     // @notice Address of the fee token.
-    function feeToken() external view returns (IERC20);
+    function feeToken() external view returns (IERC20Upgradeable);
 
     // @notice Computes the fee to mint given amount of perp tokens.
     // @dev Fee can be either positive or negative. When positive it's paid by the minting users to the system.

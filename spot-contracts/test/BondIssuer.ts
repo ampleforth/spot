@@ -9,7 +9,8 @@ describe("BondIssuer", function () {
   beforeEach(async function () {
     bondFactory = await setupBondFactory();
     const Token = await ethers.getContractFactory("MockERC20");
-    token = await Token.deploy("Test token", "TEST");
+    token = await Token.deploy();
+    await token.init("Test token", "TEST");
     const BondIssuer = await ethers.getContractFactory("BondIssuer");
     issuer = await BondIssuer.deploy(bondFactory.address, 3600, 120, 86400, token.address, [200, 300, 500]);
   });

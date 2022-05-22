@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { network, ethers } from "hardhat";
+import { network, ethers, upgrades } from "hardhat";
 import { constants, Contract, Signer } from "ethers";
 
 import {
@@ -46,8 +46,13 @@ describe("RouterV1", function () {
     pricingStrategy = await PricingStrategy.deploy();
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
-    perp = await PerpetualTranche.deploy("PerpetualTranche", "PERP", 9);
-    await perp.init(issuer.address, feeStrategy.address, pricingStrategy.address);
+    perp = await upgrades.deployProxy(
+      PerpetualTranche.connect(deployer),
+      ["PerpetualTranche", "PERP", 9, issuer.address, feeStrategy.address, pricingStrategy.address],
+      {
+        initializer: "init(string,string,uint8,address,address,address)",
+      },
+    );
     await advancePerpQueue(perp, 3600);
 
     depositBond = await bondAt(await perp.callStatic.getDepositBond());
@@ -99,7 +104,8 @@ describe("RouterV1", function () {
       let feeToken: Contract;
       beforeEach(async function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
-        feeToken = await ERC20.deploy("Mock token", "MOCK");
+        feeToken = await ERC20.deploy();
+        await feeToken.init("Mock token", "MOCK")
         await feeStrategy.setFeeToken(feeToken.address);
       });
 
@@ -202,7 +208,8 @@ describe("RouterV1", function () {
       let feeToken: Contract;
       beforeEach(async function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
-        feeToken = await ERC20.deploy("Mock token", "MOCK");
+        feeToken = await ERC20.deploy();
+        await feeToken.init("Mock token", "MOCK")
         await feeStrategy.setFeeToken(feeToken.address);
       });
 
@@ -480,7 +487,8 @@ describe("RouterV1", function () {
       let feeToken: Contract;
       beforeEach(async function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
-        feeToken = await ERC20.deploy("Mock token", "MOCK");
+        feeToken = await ERC20.deploy();
+        await feeToken.init("Mock token", "MOCK")
         await feeStrategy.setFeeToken(feeToken.address);
         await await feeStrategy.setRolloverFee(toFixedPtAmt("1"));
       });
@@ -545,7 +553,8 @@ describe("RouterV1", function () {
       let feeToken: Contract;
       beforeEach(async function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
-        feeToken = await ERC20.deploy("Mock token", "MOCK");
+        feeToken = await ERC20.deploy();
+        await feeToken.init("Mock token", "MOCK")
         await feeStrategy.setFeeToken(feeToken.address);
         await feeToken.mint(deployerAddress, toFixedPtAmt("10"));
 
@@ -578,7 +587,8 @@ describe("RouterV1", function () {
       let feeToken: Contract;
       beforeEach(async function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
-        feeToken = await ERC20.deploy("Mock token", "MOCK");
+        feeToken = await ERC20.deploy();
+        await feeToken.init("Mock token", "MOCK")
         await feeStrategy.setFeeToken(feeToken.address);
         await feeToken.mint(deployerAddress, toFixedPtAmt("25"));
 
@@ -724,7 +734,8 @@ describe("RouterV1", function () {
       let feeToken: Contract;
       beforeEach(async function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
-        feeToken = await ERC20.deploy("Mock token", "MOCK");
+        feeToken = await ERC20.deploy();
+        await feeToken.init("Mock token", "MOCK")
         await feeToken.mint(deployerAddress, toFixedPtAmt("20"));
         await feeStrategy.setFeeToken(feeToken.address);
         await feeToken.approve(router.address, constants.MaxUint256);

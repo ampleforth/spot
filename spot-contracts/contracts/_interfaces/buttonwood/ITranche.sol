@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+pragma solidity ^0.8.0;
 
-// solhint-disable-next-line compiler-version
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 
-interface ITranche is IERC20 {
+interface ITranche is IERC20Upgradeable {
     function bond() external view returns (address);
 }

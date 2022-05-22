@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { ethers, upgrades } from "hardhat";
 import { Contract, Transaction, Signer, constants } from "ethers";
 
 import {
@@ -36,8 +36,13 @@ describe("PerpetualTranche", function () {
     pricingStrategy = await PricingStrategy.deploy();
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
-    perp = await PerpetualTranche.deploy("PerpetualTranche", "PERP", 9);
-    await perp.init(issuer.address, feeStrategy.address, pricingStrategy.address);
+    perp = await upgrades.deployProxy(
+      PerpetualTranche.connect(deployer),
+      ["PerpetualTranche", "PERP", 9, issuer.address, feeStrategy.address, pricingStrategy.address],
+      {
+        initializer: "init(string,string,uint8,address,address,address)",
+      },
+    );
   });
 
   describe("#init", function () {
@@ -258,7 +263,8 @@ describe("PerpetualTranche", function () {
 
     beforeEach(async function () {
       const Token = await ethers.getContractFactory("MockERC20");
-      transferToken = await Token.deploy("Mock Token", "MOCK");
+      transferToken = await Token.deploy();
+      await transferToken.init("Mock Token", "MOCK");
       await transferToken.mint(perp.address, "100");
       toAddress = await deployer.getAddress();
     });
@@ -466,7 +472,8 @@ describe("PerpetualTranche", function () {
     let feeToken: Contract;
     beforeEach(async function () {
       const ERC20 = await ethers.getContractFactory("MockERC20");
-      feeToken = await ERC20.deploy("Mock token", "MOCK");
+      feeToken = await ERC20.deploy();
+      await feeToken.init("Mock token", "MOCK");
       expect(await perp.feeToken()).not.to.eq(feeToken.address);
       await feeStrategy.setFeeToken(feeToken.address);
     });

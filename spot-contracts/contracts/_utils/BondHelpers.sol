@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.4;
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
+
+import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 /// @notice Expected tranche to be part of bond.
 /// @param tranche Address of the tranche token.
@@ -49,7 +50,7 @@ library BondHelpers {
     // @return The tranche data.
     function getTrancheData(IBondController b) internal view returns (TrancheData memory td) {
         // Max tranches per bond < 2**8 - 1
-        td.trancheCount = SafeCast.toUint8(b.trancheCount());
+        td.trancheCount = SafeCastUpgradeable.toUint8(b.trancheCount());
         td.tranches = new ITranche[](td.trancheCount);
         td.trancheRatios = new uint256[](td.trancheCount);
         for (uint8 i = 0; i < td.trancheCount; i++) {
@@ -78,7 +79,7 @@ library BondHelpers {
         td = getTrancheData(b);
 
         uint256 totalDebt = b.totalDebt();
-        uint256 collateralBalance = IERC20(b.collateralToken()).balanceOf(address(b));
+        uint256 collateralBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(address(b));
         uint256 feeBps = b.feeBps();
 
         trancheAmts = new uint256[](td.trancheCount);
@@ -114,13 +115,15 @@ library BondHelpers {
 
         if (b.isMature()) {
             for (uint8 i = 0; i < td.trancheCount; i++) {
-                uint256 trancheCollaterBalance = IERC20(b.collateralToken()).balanceOf(address(td.tranches[i]));
+                uint256 trancheCollaterBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(
+                    address(td.tranches[i])
+                );
                 balances[i] = (td.tranches[i].balanceOf(u) * trancheCollaterBalance) / td.tranches[i].totalSupply();
             }
             return (td, balances);
         }
 
-        uint256 bondCollateralBalance = IERC20(b.collateralToken()).balanceOf(address(b));
+        uint256 bondCollateralBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(address(b));
         for (uint8 i = 0; i < td.trancheCount - 1; i++) {
             uint256 trancheSupply = td.tranches[i].totalSupply();
             uint256 trancheCollaterBalance = trancheSupply <= bondCollateralBalance
