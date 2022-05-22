@@ -49,14 +49,15 @@ contract RouterV1 {
         external
         afterPerpStateUpdate(perp)
         returns (
-            IBondController bond,
-            ITranche[] memory tranches,
-            uint256[] memory trancheAmts
+            IBondController,
+            ITranche[] memory,
+            uint256[] memory
         )
     {
-        bond = perp.getDepositBond();
+        IBondController bond = perp.getDepositBond();
 
         TrancheData memory td;
+        uint256[] memory trancheAmts;
         (td, trancheAmts, ) = bond.previewDeposit(collateralAmount);
 
         return (bond, td.tranches, trancheAmts);
@@ -78,14 +79,14 @@ contract RouterV1 {
         external
         afterPerpStateUpdate(perp)
         returns (
-            uint256 mintAmt,
-            IERC20Upgradeable feeToken,
-            int256 mintFee
+            uint256,
+            IERC20Upgradeable,
+            int256
         )
     {
-        mintAmt = perp.tranchesToPerps(trancheIn, trancheInAmt);
-        feeToken = perp.feeToken();
-        mintFee = perp.feeStrategy().computeMintFee(mintAmt);
+        uint256 mintAmt = perp.tranchesToPerps(trancheIn, trancheInAmt);
+        IERC20Upgradeable feeToken = perp.feeToken();
+        int256 mintFee = perp.feeStrategy().computeMintFee(mintAmt);
         return (mintAmt, feeToken, mintFee);
     }
 
@@ -171,15 +172,15 @@ contract RouterV1 {
         external
         afterPerpStateUpdate(perp)
         returns (
-            uint256 burnAmt,
-            IERC20Upgradeable feeToken,
-            int256 burnFee,
-            ITranche[] memory tranches
+            uint256,
+            IERC20Upgradeable,
+            int256,
+            ITranche[] memory
         )
     {
         uint256 remainder = perpAmountRequested;
         maxTranches = MathUpgradeable.min(perp.getRedemptionQueueCount(), maxTranches);
-        tranches = new ITranche[](maxTranches);
+        ITranche[] memory tranches = new ITranche[](maxTranches);
         for (uint256 i = 0; remainder > 0 && i < maxTranches; i++) {
             // NOTE: loops through queue from head to tail, i.e) in redemption order
             ITranche tranche = ITranche(perp.getRedemptionQueueAt(i));
@@ -187,9 +188,9 @@ contract RouterV1 {
             tranches[i] = tranche;
         }
 
-        burnAmt = perpAmountRequested - remainder;
-        feeToken = perp.feeToken();
-        burnFee = perp.feeStrategy().computeBurnFee(burnAmt);
+        uint256 burnAmt = perpAmountRequested - remainder;
+        IERC20Upgradeable feeToken = perp.feeToken();
+        int256 burnFee = perp.feeStrategy().computeBurnFee(burnAmt);
 
         return (burnAmt, feeToken, burnFee, tranches);
     }
@@ -272,13 +273,17 @@ contract RouterV1 {
         external
         afterPerpStateUpdate(perp)
         returns (
-            RolloverPreview memory r,
-            IERC20 feeToken,
-            int256 rolloverFee
+            RolloverPreview memory,
+            IERC20Upgradeable,
+            int256
         )
     {
-        feeToken = perp.feeToken();
-        uint256 rolloverPerpAmtRemainder = 0;
+        RolloverPreview memory r;
+        IERC20Upgradeable feeToken = perp.feeToken();
+        int256 rolloverFee;
+
+        r.remainingTrancheInAmt = trancheInAmt;
+
         if (perp.isAcceptableRollover(trancheIn, trancheOut)) {
             r.requestedRolloverPerpAmt = perp.tranchesToPerps(trancheIn, trancheInAmt);
             (r.trancheOutAmt, rolloverPerpAmtRemainder) = perp.perpsToCoveredTranches(

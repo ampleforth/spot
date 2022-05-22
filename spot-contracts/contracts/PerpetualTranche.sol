@@ -362,20 +362,20 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         external
         override
         afterQueueUpdate
-        returns (uint256 mintAmt, int256 mintFee)
+        returns (uint256, int256)
     {
         if (IBondController(trancheIn.bond()) != _depositBond) {
             revert UnacceptableDepositTranche(trancheIn, _depositBond);
         }
 
         // calculates the amount of perp tokens the `trancheInAmt` of tranche tokens are worth
-        mintAmt = tranchesToPerps(trancheIn, trancheInAmt);
+        uint256 mintAmt = tranchesToPerps(trancheIn, trancheInAmt);
         if (trancheInAmt == 0 || mintAmt == 0) {
             revert UnacceptableMintAmt(trancheInAmt, mintAmt);
         }
 
         // calculates the fee to mint `mintAmt` of perp token
-        mintFee = feeStrategy.computeMintFee(mintAmt);
+        int256 mintFee = feeStrategy.computeMintFee(mintAmt);
 
         // transfers deposited tranches from the sender to the reserve
         _transferIntoReserve(_msgSender(), trancheIn, trancheInAmt);
@@ -404,7 +404,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         external
         override
         afterQueueUpdate
-        returns (uint256 burnAmt, int256 burnFee)
+        returns (uint256, int256)
     {
         ITranche redemptionTranche = _redemptionTranche();
 
@@ -427,10 +427,10 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         }
 
         // calculates the covered burn amount
-        burnAmt = perpAmountRequested - perpRemainder;
+        uint256 burnAmt = perpAmountRequested - perpRemainder;
 
         // calculates the fee to burn `burnAmt` of perp token
-        burnFee = feeStrategy.computeBurnFee(burnAmt);
+        int256 burnFee = feeStrategy.computeBurnFee(burnAmt);
 
         // burns perp tokens from the sender
         _burn(_msgSender(), burnAmt);
@@ -455,7 +455,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         ITranche trancheIn,
         ITranche trancheOut,
         uint256 trancheInAmt
-    ) external override afterQueueUpdate returns (uint256 trancheOutAmt, int256 rolloverFee) {
+    ) external override afterQueueUpdate returns (uint256, int256) {
         if (!_isAcceptableRollover(trancheIn, trancheOut)) {
             revert UnacceptableRollover(trancheIn, trancheOut);
         }
@@ -464,13 +464,13 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         uint256 rolloverAmt = tranchesToPerps(trancheIn, trancheInAmt);
 
         // calculates the amount of tranche tokens rolled out
-        trancheOutAmt = perpsToTranches(trancheOut, rolloverAmt);
+        uint256 trancheOutAmt = perpsToTranches(trancheOut, rolloverAmt);
         if (trancheInAmt == 0 || trancheOutAmt == 0 || rolloverAmt == 0) {
             revert UnacceptableRolloverAmt(trancheInAmt, trancheOutAmt, rolloverAmt);
         }
 
         // calculates the fee to rollover `rolloverAmt` of perp token
-        rolloverFee = feeStrategy.computeRolloverFee(rolloverAmt);
+        int256 rolloverFee = feeStrategy.computeRolloverFee(rolloverAmt);
 
         // transfers tranche tokens from the sender to the reserve
         _transferIntoReserve(_msgSender(), trancheIn, trancheInAmt);
