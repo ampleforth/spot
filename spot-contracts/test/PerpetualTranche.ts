@@ -75,6 +75,8 @@ describe("PerpetualTranche", function () {
     it("should set hyper parameters", async function () {
       expect(await perp.minTrancheMaturiySec()).to.eq(1);
       expect(await perp.maxTrancheMaturiySec()).to.eq(constants.MaxUint256);
+      expect(await perp.maxSupply()).to.eq(toFixedPtAmt("1000000"));
+      expect(await perp.maxMintAmtPerTranche()).to.eq(toFixedPtAmt("200000"));
     });
   });
 
@@ -222,6 +224,31 @@ describe("PerpetualTranche", function () {
       });
       it("should emit event", async function () {
         await expect(tx).to.emit(perp, "UpdatedTolerableTrancheMaturiy").withArgs(3600, 86400);
+      });
+    });
+  });
+
+  describe("#updateMintingLimits", function () {
+    let tx: Transaction;
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(
+          perp.connect(otherUser).updateMintingLimits(constants.MaxUint256, constants.MaxUint256),
+        ).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      beforeEach(async function () {
+        tx = perp.updateMintingLimits(toFixedPtAmt("100"), toFixedPtAmt("20"));
+      });
+      it("should update reference", async function () {
+        expect(await perp.maxSupply()).to.eq(toFixedPtAmt("100"));
+        expect(await perp.maxMintAmtPerTranche()).to.eq(toFixedPtAmt("20"));
+      });
+      it("should emit event", async function () {
+        await expect(tx).to.emit(perp, "UpdatedMintingLimits").withArgs(toFixedPtAmt("100"), toFixedPtAmt("20"));
       });
     });
   });

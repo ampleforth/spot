@@ -118,6 +118,54 @@ describe("PerpetualTranche", function () {
       });
     });
 
+    describe("when the supply cap is exceeded", function () {
+      beforeEach(async function () {
+        await perp.updateMintingLimits(toFixedPtAmt("499"), toFixedPtAmt("1000"));
+      });
+
+      it("should mint the correct amount", async function () {
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWith("ExceededMaxSupply");
+      });
+    });
+
+    describe("when the supply cap is exceeded and existing supply > 0", function () {
+      beforeEach(async function () {
+        await perp.deposit(depositTrancheA.address, toFixedPtAmt("400"));
+        await perp.updateMintingLimits(toFixedPtAmt("499"), toFixedPtAmt("1000"));
+      });
+
+      it("should mint the correct amount", async function () {
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("100"))).to.revertedWith(
+          "ExceededMaxSupply(500000000000, 499000000000)",
+        );
+      });
+    });
+
+    describe("when the tranche mint limit is exceeded", function () {
+      beforeEach(async function () {
+        await perp.updateMintingLimits(toFixedPtAmt("1000"), toFixedPtAmt("499"));
+      });
+
+      it("should mint the correct amount", async function () {
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWith(
+          "ExceededMaxMintPerTranche",
+        );
+      });
+    });
+
+    describe("when the tranche mint limit is exceeded and existing supply > 0", function () {
+      beforeEach(async function () {
+        await perp.deposit(depositTrancheA.address, toFixedPtAmt("400"));
+        await perp.updateMintingLimits(toFixedPtAmt("1000"), toFixedPtAmt("499"));
+      });
+
+      it("should mint the correct amount", async function () {
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("100"))).to.revertedWith(
+          `ExceededMaxMintPerTranche("${depositTrancheA.address}", 500000000000, 499000000000)`,
+        );
+      });
+    });
+
     describe("when tranche amount is zero", function () {
       it("should revert", async function () {
         await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("0"))).to.revertedWith("UnacceptableMintAmt");
