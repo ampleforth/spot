@@ -6,7 +6,9 @@ import { IPricingStrategy } from "../_interfaces/IPricingStrategy.sol";
 /*
  *  @title UnitPricingStrategy
  *
- *  @notice Basic pricing strategy, prices tranches 1:1 with the underlying collateral.
+ *  @notice Every tranche has a price of ONE.
+ *
+ *  @dev This is a reasonable assumption for "non-equity" tranches.
  *
  */
 contract UnitPricingStrategy is IPricingStrategy {

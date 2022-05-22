@@ -1,6 +1,7 @@
 import hre, { ethers } from "hardhat";
 import { Signer, Contract, BigNumber, ContractFactory } from "ethers";
 import * as fs from "fs";
+import * as path from "path";
 
 const TOKEN_DECIMALS = 9;
 const PRICE_DECIMALS = 8;
@@ -12,7 +13,7 @@ export const toYieldFixedPtAmt = (a: string): BigNumber => ethers.utils.parseUni
 
 const ORACLE_BASE_PRICE = toPriceFixedPtAmt("1");
 
-const EXTERNAL_ARTIFACTS_PATH = __dirname + "/../external-artifacts";
+const EXTERNAL_ARTIFACTS_PATH = path.join(__dirname, "/../external-artifacts");
 async function getContractFactoryFromExternalArtifacts(name: string): Promise<ContractFactory> {
   const artifact = JSON.parse(fs.readFileSync(`${EXTERNAL_ARTIFACTS_PATH}/${name}.json`).toString());
   return ethers.getContractFactoryFromArtifact(artifact);
