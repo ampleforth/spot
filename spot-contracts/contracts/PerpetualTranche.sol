@@ -544,7 +544,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         if (_depositBond != newBond && _isAcceptableForRedemptionQueue(newBond)) {
             // Storage optimization: Zeroing out mint amounts
             // from the previous deposit bond
-            if(address(_depositBond) != address(0)){
+            if (address(_depositBond) != address(0)) {
                 TrancheData memory td = _depositBond.getTrancheData();
                 for (uint8 i = 0; i < td.trancheCount; i++) {
                     delete _totalMintAmtPerTranche[td.tranches[i]];

@@ -281,6 +281,7 @@ contract RouterV1 {
         RolloverPreview memory r;
         IERC20Upgradeable feeToken = perp.feeToken();
         int256 rolloverFee;
+        uint256 rolloverPerpAmtRemainder;
 
         r.remainingTrancheInAmt = trancheInAmt;
 

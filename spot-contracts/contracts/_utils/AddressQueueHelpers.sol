@@ -8,21 +8,6 @@ error InvalidItem();
 /// @param item Item to be inserted into the address queue.
 error DuplicateItem(address item);
 
-/// @notice Expected queue to not be empty. 
-error EmptyQueue();
-
-/// @notice Expected accessed index to be within the queue's length bounds.
-/// @param index Index of the item in the queue.
-/// @param length Number of elements in the queue.
-error IndexOutOfBounds(uint256 index, uint256 length);
-
-/// @notice Expected item to not be `address(0)`.
-error InvalidItem();
-
-/// @notice Expected item to not be part of the queue.
-/// @param item Item to be inserted into the address queue.
-error DuplicateItem(address item);
-
 /// @notice Expected queue to not be empty.
 error EmptyQueue();
 
