@@ -163,7 +163,7 @@ contract RouterV1 {
     // @return feeToken The address of the fee token.
     // @return burnFee The fee charged for burning.
     // @return tranches The list of tranches redeemed.
-    function previewRedeemFromQueue(
+    function previewRedeem(
         IPerpetualTranche perp,
         uint256 perpAmountRequested,
         uint256 maxTranches
@@ -192,45 +192,6 @@ contract RouterV1 {
         burnFee = perp.feeStrategy().computeBurnFee(burnAmt);
 
         return (burnAmt, feeToken, burnFee, tranches);
-    }
-
-    // @notice Calculates the tranche tokens that can be redeemed from the icebox
-    //         for burning up to the requested amount of perp tokens.
-    // @dev Used by off-chain services to preview a redeem operation.
-    // @param perp Address of the perpetual tranche contract.
-    // @param perpAmountRequested The amount of perp tokens requested to be burnt.
-    // @param requestedTranches The list of requested tranches the user wants to redeem.
-    // @return burnAmt The amount of perp tokens burnt.
-    // @return feeToken The address of the fee token.
-    // @return burnFee The fee charged for burning.
-    // @return numTranchesRedeemed The number of tranches from the requested list redeemed.
-    function previewRedeemFromIcebox(
-        IPerpetualTranche perp,
-        uint256 perpAmountRequested,
-        ITranche[] memory requestedTranches
-    )
-        external
-        afterPerpStateUpdate(perp)
-        returns (
-            uint256 burnAmt,
-            IERC20Upgradeable feeToken,
-            int256 burnFee,
-            uint256 numTranchesRedeemed
-        )
-    {
-        uint256 remainder = perpAmountRequested;
-        uint256 i;
-        for (i = 0; remainder > 0 && i < requestedTranches.length; i++) {
-            // NOTE: loops through requested list
-            (, remainder) = perp.perpsToCoveredTranches(requestedTranches[i], remainder, type(uint256).max);
-        }
-
-        burnAmt = perpAmountRequested - remainder;
-        feeToken = perp.feeToken();
-        burnFee = perp.feeStrategy().computeBurnFee(burnAmt);
-        numTranchesRedeemed = i;
-
-        return (burnAmt, feeToken, burnFee, numTranchesRedeemed);
     }
 
     // @notice Redeems perp tokens for tranche tokens until the tranche balance covers it.

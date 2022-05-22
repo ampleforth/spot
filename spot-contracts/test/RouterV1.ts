@@ -105,7 +105,7 @@ describe("RouterV1", function () {
       beforeEach(async function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
         feeToken = await ERC20.deploy();
-        await feeToken.init("Mock token", "MOCK")
+        await feeToken.init("Mock token", "MOCK");
         await feeStrategy.setFeeToken(feeToken.address);
       });
 
@@ -118,7 +118,7 @@ describe("RouterV1", function () {
     });
   });
 
-  describe("#previewRedeemFromQueue", function () {
+  describe("#previewRedeem", function () {
     let depositTranches1: Contract[], depositTranches2: Contract[], depositTranches3: Contract[];
     beforeEach(async function () {
       await feeStrategy.setBurnFee(toFixedPtAmt("10"));
@@ -154,11 +154,7 @@ describe("RouterV1", function () {
 
     describe("full redemption", function () {
       it("should compute the burn amount and fee", async function () {
-        const r = await router.callStatic.previewRedeemFromQueue(
-          perp.address,
-          toFixedPtAmt("1275"),
-          constants.MaxUint256,
-        );
+        const r = await router.callStatic.previewRedeem(perp.address, toFixedPtAmt("1275"), constants.MaxUint256);
         expect(r[0]).to.eq(toFixedPtAmt("1275"));
         expect(r[1]).to.eq(perp.address);
         expect(r[2]).to.eq(toFixedPtAmt("10"));
@@ -174,7 +170,7 @@ describe("RouterV1", function () {
 
     describe("full redemption when max tranches is set", async function () {
       it("should compute the burn amount and fee", async function () {
-        const r = await router.callStatic.previewRedeemFromQueue(perp.address, toFixedPtAmt("1275"), 2);
+        const r = await router.callStatic.previewRedeem(perp.address, toFixedPtAmt("1275"), 2);
         expect(r[0]).to.eq(toFixedPtAmt("425"));
         expect(r[1]).to.eq(perp.address);
         expect(r[2]).to.eq(toFixedPtAmt("10"));
@@ -186,11 +182,7 @@ describe("RouterV1", function () {
 
     describe("partial redemption", async function () {
       it("should compute the burn amount and fee", async function () {
-        const r = await router.callStatic.previewRedeemFromQueue(
-          perp.address,
-          toFixedPtAmt("500"),
-          constants.MaxUint256,
-        );
+        const r = await router.callStatic.previewRedeem(perp.address, toFixedPtAmt("500"), constants.MaxUint256);
         expect(r[0]).to.eq(toFixedPtAmt("500"));
         expect(r[1]).to.eq(perp.address);
         expect(r[2]).to.eq(toFixedPtAmt("10"));
@@ -209,16 +201,12 @@ describe("RouterV1", function () {
       beforeEach(async function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
         feeToken = await ERC20.deploy();
-        await feeToken.init("Mock token", "MOCK")
+        await feeToken.init("Mock token", "MOCK");
         await feeStrategy.setFeeToken(feeToken.address);
       });
 
       it("should compute the burn amount and fee", async function () {
-        const r = await router.callStatic.previewRedeemFromQueue(
-          perp.address,
-          toFixedPtAmt("500"),
-          constants.MaxUint256,
-        );
+        const r = await router.callStatic.previewRedeem(perp.address, toFixedPtAmt("500"), constants.MaxUint256);
         expect(r[0]).to.eq(toFixedPtAmt("500"));
         expect(r[1]).to.eq(feeToken.address);
         expect(r[2]).to.eq(toFixedPtAmt("10"));
@@ -229,75 +217,6 @@ describe("RouterV1", function () {
         expect(r[3][3]).to.eq(constants.AddressZero);
         expect(r[3][4]).to.eq(constants.AddressZero);
         expect(r[3][5]).to.eq(constants.AddressZero);
-      });
-    });
-  });
-
-  describe("#previewRedeemFromIcebox", function () {
-    let iceboxTranches1: Contract[], iceboxTranches2: Contract[], iceboxTranches3: Contract[];
-    beforeEach(async function () {
-      await feeStrategy.setBurnFee(toFixedPtAmt("10"));
-
-      const iceboxBond1 = await bondAt(await perp.callStatic.getDepositBond());
-      iceboxTranches1 = await getTranches(iceboxBond1);
-      await depositIntoBond(iceboxBond1, toFixedPtAmt("1000"), deployer);
-      await iceboxTranches1[0].approve(perp.address, toFixedPtAmt("200"));
-      await perp.deposit(iceboxTranches1[0].address, toFixedPtAmt("200"));
-      await iceboxTranches1[1].approve(perp.address, toFixedPtAmt("300"));
-      await perp.deposit(iceboxTranches1[1].address, toFixedPtAmt("300"));
-
-      await advancePerpQueue(perp, 1200);
-
-      const iceboxBond2 = await bondAt(await perp.callStatic.getDepositBond());
-      iceboxTranches2 = await getTranches(iceboxBond2);
-      await depositIntoBond(iceboxBond2, toFixedPtAmt("1000"), deployer);
-      await iceboxTranches2[0].approve(perp.address, toFixedPtAmt("200"));
-      await perp.deposit(iceboxTranches2[0].address, toFixedPtAmt("200"));
-      await iceboxTranches2[1].approve(perp.address, toFixedPtAmt("300"));
-      await perp.deposit(iceboxTranches2[1].address, toFixedPtAmt("300"));
-
-      await advancePerpQueue(perp, 1200);
-
-      const iceboxBond3 = await bondAt(await perp.callStatic.getDepositBond());
-      iceboxTranches3 = await getTranches(iceboxBond3);
-      await depositIntoBond(iceboxBond3, toFixedPtAmt("1000"), deployer);
-      await iceboxTranches3[0].approve(perp.address, toFixedPtAmt("200"));
-      await perp.deposit(iceboxTranches3[0].address, toFixedPtAmt("200"));
-      await iceboxTranches3[1].approve(perp.address, toFixedPtAmt("300"));
-      await perp.deposit(iceboxTranches3[1].address, toFixedPtAmt("300"));
-
-      await advancePerpQueue(perp, 7200);
-    });
-
-    describe("full redemption", function () {
-      it("should compute the burn amount and fee", async function () {
-        const r = await router.callStatic.previewRedeemFromIcebox(perp.address, toFixedPtAmt("1275"), [
-          iceboxTranches1[0].address,
-          iceboxTranches1[1].address,
-          iceboxTranches2[0].address,
-          iceboxTranches2[1].address,
-          iceboxTranches3[0].address,
-          iceboxTranches3[1].address,
-        ]);
-        expect(r[0]).to.eq(toFixedPtAmt("1275"));
-        expect(r[1]).to.eq(perp.address);
-        expect(r[2]).to.eq(toFixedPtAmt("10"));
-        expect(r[3]).to.eq(6);
-      });
-    });
-
-    describe("partial redemption", function () {
-      it("should compute the burn amount and fee", async function () {
-        const r = await router.callStatic.previewRedeemFromIcebox(perp.address, toFixedPtAmt("1275"), [
-          iceboxTranches1[0].address,
-          iceboxTranches1[1].address,
-          iceboxTranches2[0].address,
-          iceboxTranches2[1].address,
-        ]);
-        expect(r[0]).to.eq(toFixedPtAmt("850"));
-        expect(r[1]).to.eq(perp.address);
-        expect(r[2]).to.eq(toFixedPtAmt("10"));
-        expect(r[3]).to.eq(4);
       });
     });
   });
@@ -488,7 +407,7 @@ describe("RouterV1", function () {
       beforeEach(async function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
         feeToken = await ERC20.deploy();
-        await feeToken.init("Mock token", "MOCK")
+        await feeToken.init("Mock token", "MOCK");
         await feeStrategy.setFeeToken(feeToken.address);
         await await feeStrategy.setRolloverFee(toFixedPtAmt("1"));
       });
@@ -554,7 +473,7 @@ describe("RouterV1", function () {
       beforeEach(async function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
         feeToken = await ERC20.deploy();
-        await feeToken.init("Mock token", "MOCK")
+        await feeToken.init("Mock token", "MOCK");
         await feeStrategy.setFeeToken(feeToken.address);
         await feeToken.mint(deployerAddress, toFixedPtAmt("10"));
 
@@ -588,7 +507,7 @@ describe("RouterV1", function () {
       beforeEach(async function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
         feeToken = await ERC20.deploy();
-        await feeToken.init("Mock token", "MOCK")
+        await feeToken.init("Mock token", "MOCK");
         await feeStrategy.setFeeToken(feeToken.address);
         await feeToken.mint(deployerAddress, toFixedPtAmt("25"));
 
@@ -735,7 +654,7 @@ describe("RouterV1", function () {
       beforeEach(async function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
         feeToken = await ERC20.deploy();
-        await feeToken.init("Mock token", "MOCK")
+        await feeToken.init("Mock token", "MOCK");
         await feeToken.mint(deployerAddress, toFixedPtAmt("20"));
         await feeStrategy.setFeeToken(feeToken.address);
         await feeToken.approve(router.address, constants.MaxUint256);

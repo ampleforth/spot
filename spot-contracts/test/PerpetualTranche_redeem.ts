@@ -215,7 +215,7 @@ describe("PerpetualTranche", function () {
       beforeEach(async function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
         feeToken = await ERC20.deploy();
-        await feeToken.init("Mock token", "MOCK")
+        await feeToken.init("Mock token", "MOCK");
         await feeStrategy.setFeeToken(feeToken.address);
       });
 
@@ -645,7 +645,7 @@ describe("PerpetualTranche", function () {
     });
 
     describe("when tranche queue is empty", function () {
-      let queuedTranche1: Contract, queuedTranche2: Contract, tx: Transaction;
+      let queuedTranche1: Contract, queuedTranche2: Contract;
       beforeEach(async function () {
         await perp.updateTolerableTrancheMaturiy(300, 3600);
 
@@ -683,112 +683,16 @@ describe("PerpetualTranche", function () {
         await expect(perp.reserveAt(3)).to.be.reverted;
       });
 
-      describe("partial redeem", function () {
-        beforeEach(async function () {
-          tx = perp.redeem(queuedTranche2.address, toFixedPtAmt("250"));
-          await tx;
-        });
-        it("should NOT dequeue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(0);
-        });
-        it("should NOT update the queue", async function () {
-          await expect(perp.callStatic.getRedemptionQueueAt(0)).to.be.reverted;
-        });
-        it("should NOT update the redemption tranche", async function () {
-          expect(await perp.callStatic.getRedemptionTranche()).to.eq(constants.AddressZero);
-        });
-        it("should NOT emit dequeue", async function () {
-          await expect(tx).not.to.emit(perp, "TrancheDequeued").withArgs(queuedTranche2.address);
-        });
-        it("should NOT remove from the reserve", async function () {
-          expect(await perp.reserveCount()).to.eq(3);
-        });
-        it("should NOT update the reserve", async function () {
-          expect(await perp.inReserve(initialDepositTranche.address)).to.eq(true);
-          expect(await perp.inReserve(queuedTranche1.address)).to.eq(true);
-          expect(await perp.inReserve(queuedTranche2.address)).to.eq(true);
-          expect(await perp.reserveAt(0)).to.eq(initialDepositTranche.address);
-          expect(await perp.reserveAt(1)).to.eq(queuedTranche1.address);
-          expect(await perp.reserveAt(2)).to.eq(queuedTranche2.address);
-          await expect(perp.reserveAt(3)).to.be.reverted;
-        });
-        it("should emit reserve synced", async function () {
-          expect(tx).to.emit(perp, "ReserveSynced").withArgs(queuedTranche2.address, toFixedPtAmt("250"));
-        });
-      });
-
-      describe("full redeem", function () {
-        beforeEach(async function () {
-          tx = perp.redeem(queuedTranche2.address, toFixedPtAmt("500"));
-          await tx;
-        });
-        it("should NOT dequeue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(0);
-        });
-        it("should NOT update the queue", async function () {
-          await expect(perp.callStatic.getRedemptionQueueAt(0)).to.be.reverted;
-        });
-        it("should NOT update the redemption tranche", async function () {
-          expect(await perp.callStatic.getRedemptionTranche()).to.eq(constants.AddressZero);
-        });
-        it("should NOT emit dequeue", async function () {
-          await expect(tx).not.to.emit(perp, "TrancheDequeued").withArgs(queuedTranche2.address);
-        });
-        it("should remove from the reserve", async function () {
-          expect(await perp.reserveCount()).to.eq(2);
-        });
-        it("should update the reserve", async function () {
-          expect(await perp.inReserve(initialDepositTranche.address)).to.eq(true);
-          expect(await perp.inReserve(queuedTranche1.address)).to.eq(true);
-          expect(await perp.inReserve(queuedTranche2.address)).to.eq(false);
-          expect(await perp.reserveAt(0)).to.eq(initialDepositTranche.address);
-          expect(await perp.reserveAt(1)).to.eq(queuedTranche1.address);
-          await expect(perp.reserveAt(2)).to.be.reverted;
-        });
-        it("should emit reserve synced", async function () {
-          expect(tx).to.emit(perp, "ReserveSynced").withArgs(queuedTranche2.address, toFixedPtAmt("0"));
-        });
-      });
-
-      describe("with remainder", function () {
-        it("should redeem the entire balance", async function () {
-          const r = await perp.callStatic.redeem(queuedTranche2.address, toFixedPtAmt("1900"));
-          expect(r[0]).to.eq(toFixedPtAmt("500"));
-          expect(await queuedTranche2.balanceOf(perp.address)).to.eq(toFixedPtAmt("500"));
-        });
-
-        describe("queue", function () {
-          beforeEach(async function () {
-            tx = perp.redeem(queuedTranche2.address, toFixedPtAmt("1200"));
-            await tx;
-          });
-          it("should NOT dequeue", async function () {
-            expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(0);
-          });
-          it("should NOT update the queue", async function () {
-            await expect(perp.callStatic.getRedemptionQueueAt(0)).to.be.reverted;
-          });
-          it("should NOT update the redemption tranche", async function () {
-            expect(await perp.callStatic.getRedemptionTranche()).to.eq(constants.AddressZero);
-          });
-          it("should NOT emit dequeue", async function () {
-            await expect(tx).not.to.emit(perp, "TrancheDequeued").withArgs(queuedTranche2.address);
-          });
-          it("should remove from the reserve", async function () {
-            expect(await perp.reserveCount()).to.eq(2);
-          });
-          it("should update the reserve", async function () {
-            expect(await perp.inReserve(initialDepositTranche.address)).to.eq(true);
-            expect(await perp.inReserve(queuedTranche1.address)).to.eq(true);
-            expect(await perp.inReserve(queuedTranche2.address)).to.eq(false);
-            expect(await perp.reserveAt(0)).to.eq(initialDepositTranche.address);
-            expect(await perp.reserveAt(1)).to.eq(queuedTranche1.address);
-            await expect(perp.reserveAt(2)).to.be.reverted;
-          });
-          it("should emit reserve synced", async function () {
-            expect(tx).to.emit(perp, "ReserveSynced").withArgs(queuedTranche2.address, toFixedPtAmt("0"));
-          });
-        });
+      it("should revert", async function () {
+        await expect(perp.redeem(initialDepositTranche.address, toFixedPtAmt("100"))).to.be.revertedWith(
+          "UnacceptableRedemptionTranche",
+        );
+        await expect(perp.redeem(queuedTranche1.address, toFixedPtAmt("100"))).to.be.revertedWith(
+          "UnacceptableRedemptionTranche",
+        );
+        await expect(perp.redeem(queuedTranche2.address, toFixedPtAmt("100"))).to.be.revertedWith(
+          "UnacceptableRedemptionTranche",
+        );
       });
     });
   });
