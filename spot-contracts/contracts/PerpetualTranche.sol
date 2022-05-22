@@ -101,7 +101,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     AddressQueue private _redemptionQueue;
 
     // @notice A record of all tranches with a balance held in the reserve which backs perp token supply.
-    EnumerableSet.AddressSet private _reserves;
+    EnumerableSet.AddressSet private _reserve;
 
     // TODO: allow multiple deposit bonds
     // @notice The active deposit bond of whose tranches are currently being accepted as deposits
@@ -453,12 +453,12 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
     /// @inheritdoc IPerpetualTranche
     function reserveCount() external view override returns (uint256) {
-        return _reserves.length();
+        return _reserve.length();
     }
 
     /// @inheritdoc IPerpetualTranche
     function reserveAt(uint256 i) external view override returns (address) {
-        return _reserves.at(i);
+        return _reserve.at(i);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -481,7 +481,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
 
     /// @inheritdoc IPerpetualTranche
     function inReserve(IERC20 token) public view override returns (bool) {
-        return _reserves.contains(address(token));
+        return _reserve.contains(address(token));
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -574,6 +574,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         IBondController bondOut = IBondController(trancheOut.bond());
         return (bondIn == _depositBond && // Expected trancheIn to be of deposit bond
             bondOut != _depositBond && // Expected trancheOut to NOT be of deposit bond
+            inReserve(trancheOut) && // Expected trancheOut to be part of the reserve
             !_redemptionQueue.contains(address(trancheOut))); // Expected trancheOut to not be part of the queue
     }
 
@@ -617,7 +618,7 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         uint256 amount
     ) internal returns (uint256) {
         token.safeTransferFrom(from, _self(), amount);
-        return _syncReserves(token);
+        return _syncReserve(token);
     }
 
     // @dev Transfers tokens from self into the given address and updates the reserve list.
@@ -628,19 +629,19 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         uint256 amount
     ) internal returns (uint256) {
         token.safeTransfer(to, amount);
-        return _syncReserves(token);
+        return _syncReserve(token);
     }
 
     // @dev Keeps the list of tokens held in the reserve up to date.
     //      Perp tokens are backed by tokens in this list.
     // @return The reserve's token balance
-    function _syncReserves(IERC20 t) internal returns (uint256) {
+    function _syncReserve(IERC20 t) internal returns (uint256) {
         uint256 balance = t.balanceOf(_self());
         bool inReserve_ = inReserve(t);
         if (balance > 0 && !inReserve_) {
-            _reserves.add(address(t));
+            _reserve.add(address(t));
         } else if (balance == 0 && inReserve_) {
-            _reserves.remove(address(t));
+            _reserve.remove(address(t));
         }
         emit ReserveSynced(t, balance);
         return balance;
