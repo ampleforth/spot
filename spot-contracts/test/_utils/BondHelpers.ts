@@ -99,13 +99,13 @@ describe("BondHelpers", function () {
       }
 
       await expect(bondHelpers.getTrancheIndex(bond.address, bond.address)).to.be.revertedWith(
-        "TrancheDataHelpers: Expected tranche to be part of bond",
+        "UnacceptableTrancheIndex",
       );
       await expect(bondHelpers.getTrancheIndex(bond.address, deployerAddress)).to.be.revertedWith(
-        "TrancheDataHelpers: Expected tranche to be part of bond",
+        "UnacceptableTrancheIndex",
       );
       await expect(bondHelpers.getTrancheIndex(bond.address, constants.AddressZero)).to.be.revertedWith(
-        "TrancheDataHelpers: Expected tranche to be part of bond",
+        "UnacceptableTrancheIndex",
       );
     });
   });

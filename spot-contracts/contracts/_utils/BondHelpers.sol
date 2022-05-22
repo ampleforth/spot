@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.4;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+
+/// @notice Expected tranche to be part of bond.
+/// @param tranche Address of the tranche token.
+error UnacceptableTrancheIndex(ITranche tranche);
 
 struct TrancheData {
     ITranche[] tranches;
@@ -147,7 +151,6 @@ library TrancheDataHelpers {
                 return i;
             }
         }
-        require(false, "TrancheDataHelpers: Expected tranche to be part of bond");
-        return type(uint256).max;
+        revert UnacceptableTrancheIndex(t);
     }
 }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.4;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { Initializable } from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
@@ -23,6 +23,58 @@ import { IPerpetualTranche } from "./_interfaces/IPerpetualTranche.sol";
 import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
 import { IFeeStrategy } from "./_interfaces/IFeeStrategy.sol";
 import { IPricingStrategy } from "./_interfaces/IPricingStrategy.sol";
+
+/// @notice Expected bond issuer to not be `address(0)`.
+error UnacceptableBondIssuer();
+
+/// @notice Expected fee strategy to not be `address(0)`.
+error UnacceptableFeeStrategy();
+
+/// @notice Expected pricing strategy to not be `address(0)`.
+error UnacceptablePricingStrategy();
+
+/// @notice Expected pricing strategy to return a fixed point with exactly {PRICE_DECIMALS} decimals.
+error InvalidPricingStrategyDecimals();
+
+/// @notice Expected minTrancheMaturity be less than or equal to maxTrancheMaturity.
+/// @param minTrancheMaturiySec Minimum tranche maturity time in seconds.
+/// @param minTrancheMaturiySec Maximum tranche maturity time in seconds.
+error InvalidTrancheMaturityBounds(uint256 minTrancheMaturiySec, uint256 maxTrancheMaturiySec);
+
+/// @notice Expected transfer out asset to not be a reserve asset.
+/// @param token Address of the token transferred.
+error UnauthorizedTransferOut(IERC20 token);
+
+/// @notice Expected deposited tranche to be of current deposit bond.
+/// @param trancheIn Address of the deposit tranche.
+/// @param depositBond Address of the currently accepted deposit bond.
+error UnacceptableDepositTranche(ITranche trancheIn, IBondController depositBond);
+
+/// @notice Expected to mint a non-zero amount of tokens.
+/// @param trancheInAmt The amount of tranche tokens deposited.
+/// @param mintAmt The amount of tranche tokens mint.
+error UnacceptableMintAmt(uint256 trancheInAmt, uint256 mintAmt);
+
+/// @notice Expected to redeem current redemption tranche or tranche queue to be empty.
+/// @param trancheOut Address of the withdrawn tranche.
+/// @param redemptionTranche Address of the next tranche up for redemption.
+error UnacceptableRedemptionTranche(ITranche trancheOut, ITranche redemptionTranche);
+
+/// @notice Expected to burn a non-zero amount of tokens.
+/// @param trancheOutAmt The amount of tranche tokens withdrawn.
+/// @param requestedBurnAmt The amount of tranche tokens requested to be burnt.
+error UnacceptableBurnAmt(uint256 trancheOutAmt, uint256 requestedBurnAmt);
+
+/// @notice Expected rollover to be acceptable.
+/// @param trancheIn Address of the tranche token transferred in.
+/// @param trancheOut Address of the tranche token transferred out.
+error UnacceptableRollover(ITranche trancheIn, ITranche trancheOut);
+
+/// @notice Expected to rollover a non-zero amount of tokens.
+/// @param trancheInAmt The amount of tranche tokens deposited.
+/// @param trancheOutAmt The amount of tranche tokens withdrawn.
+/// @param rolloverAmt The perp denominated value of tokens rolled over.
+error UnacceptableRolloverAmt(uint256 trancheInAmt, uint256 trancheOutAmt, uint256 rolloverAmt);
 
 /*
  *  @title PerpetualTranche
@@ -191,7 +243,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @dev CAUTION: While updating the issuer, immediately set the defined
     //      yields for the new issuer's tranche config.
     function updateBondIssuer(IBondIssuer bondIssuer_) public onlyOwner {
-        require(address(bondIssuer_) != address(0), "Expected new bond issuer to be set");
+        if (address(bondIssuer_) == address(0)) {
+            revert UnacceptableBondIssuer();
+        }
         bondIssuer = bondIssuer_;
         emit UpdatedBondIssuer(bondIssuer_);
     }
@@ -199,7 +253,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @notice Update the reference to the fee strategy contract.
     // @param feeStrategy_ New strategy address.
     function updateFeeStrategy(IFeeStrategy feeStrategy_) public onlyOwner {
-        require(address(feeStrategy_) != address(0), "Expected new fee strategy to be set");
+        if (address(feeStrategy_) == address(0)) {
+            revert UnacceptableFeeStrategy();
+        }
         feeStrategy = feeStrategy_;
         emit UpdatedFeeStrategy(feeStrategy_);
     }
@@ -207,8 +263,12 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     // @notice Update the reference to the pricing strategy contract.
     // @param pricingStrategy_ New strategy address.
     function updatePricingStrategy(IPricingStrategy pricingStrategy_) public onlyOwner {
-        require(address(pricingStrategy_) != address(0), "Expected new pricing strategy to be set");
-        require(pricingStrategy_.decimals() == PRICE_DECIMALS, "Expected new pricing strategy to use same decimals");
+        if (address(pricingStrategy_) == address(0)) {
+            revert UnacceptablePricingStrategy();
+        }
+        if (pricingStrategy_.decimals() != PRICE_DECIMALS) {
+            revert InvalidPricingStrategyDecimals();
+        }
         pricingStrategy = pricingStrategy_;
         emit UpdatedPricingStrategy(pricingStrategy_);
     }
@@ -222,7 +282,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         external
         onlyOwner
     {
-        require(minTrancheMaturiySec_ <= maxTrancheMaturiySec_, "Expected max to be greater than min");
+        if (minTrancheMaturiySec_ > maxTrancheMaturiySec_) {
+            revert InvalidTrancheMaturityBounds(minTrancheMaturiySec_, maxTrancheMaturiySec_);
+        }
         minTrancheMaturiySec = minTrancheMaturiySec_;
         maxTrancheMaturiySec = maxTrancheMaturiySec_;
         emit UpdatedTolerableTrancheMaturiy(minTrancheMaturiySec_, maxTrancheMaturiySec_);
@@ -249,7 +311,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         address to,
         uint256 amount
     ) external onlyOwner {
-        require(!inReserve(token), "Expected token to NOT be reserve asset");
+        if (inReserve(token)) {
+            revert UnauthorizedTransferOut(token);
+        }
         token.safeTransfer(to, amount);
     }
 
@@ -263,11 +327,15 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         afterQueueUpdate
         returns (uint256 mintAmt, int256 mintFee)
     {
-        require(_depositBond == IBondController(trancheIn.bond()), "Expected tranche to be of deposit bond");
+        if (IBondController(trancheIn.bond()) != _depositBond) {
+            revert UnacceptableDepositTranche(trancheIn, _depositBond);
+        }
 
         // calculates the amount of perp tokens the `trancheInAmt` of tranche tokens are worth
         mintAmt = tranchesToPerps(trancheIn, trancheInAmt);
-        require(mintAmt > 0 && trancheInAmt > 0, "Expected to mint a non-zero amount of tokens");
+        if (trancheInAmt == 0 || mintAmt == 0) {
+            revert UnacceptableMintAmt(trancheInAmt, mintAmt);
+        }
 
         // calculates the fee to mint `mintAmt` of perp token
         mintFee = feeStrategy.computeMintFee(mintAmt);
@@ -303,10 +371,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         // The system only allows redemption of the burning tranche for perp tokens
         // i.e) the tranche at the head of the tranche queue.
         // When the queue is empty, any tranche held in the reserve can be redeemed.
-        require(
-            trancheOut == redemptionTranche || !inOrderRedemption,
-            "Expected to redeem burning tranche or queue to be empty"
-        );
+        if (inOrderRedemption && trancheOut != redemptionTranche) {
+            revert UnacceptableRedemptionTranche(trancheOut, redemptionTranche);
+        }
 
         // calculates the amount of tranche tokens covered to burn 
         // up to `perpAmountRequested` perp tokens
@@ -315,7 +382,9 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
             perpAmountRequested,
             type(uint256).max
         );
-        require(perpAmountRequested > 0 && trancheOutAmt > 0, "Expected to burn a non-zero amount of tokens");
+        if (trancheOutAmt == 0 || perpAmountRequested == 0) {
+            revert UnacceptableBurnAmt(trancheOutAmt, perpAmountRequested);
+        }
 
         // calculates the covered burn amount
         burnAmt = perpAmountRequested - perpRemainder;
@@ -348,17 +417,18 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
         ITranche trancheOut,
         uint256 trancheInAmt
     ) external override afterQueueUpdate returns (uint256 trancheOutAmt, int256 rolloverFee) {
-        require(_isAcceptableRollover(trancheIn, trancheOut), "Expected rollover to be acceptable");
+        if (!_isAcceptableRollover(trancheIn, trancheOut)) {
+            revert UnacceptableRollover(trancheIn, trancheOut);
+        }
 
         // calculates the perp denominated amount rolled over
         uint256 rolloverAmt = tranchesToPerps(trancheIn, trancheInAmt);
 
         // calculates the amount of tranche tokens rolled out
         trancheOutAmt = perpsToTranches(trancheOut, rolloverAmt);
-        require(
-            rolloverAmt > 0 && trancheInAmt > 0 && trancheOutAmt > 0,
-            "Expected to rollover a non-zero amount of tokens"
-        );
+        if (trancheInAmt == 0 || trancheOutAmt == 0 || rolloverAmt == 0) {
+            revert UnacceptableRolloverAmt(trancheInAmt, trancheOutAmt, rolloverAmt);
+        }
 
         // calculates the fee to rollover `rolloverAmt` of perp token
         rolloverFee = feeStrategy.computeRolloverFee(rolloverAmt);
@@ -564,12 +634,12 @@ contract PerpetualTranche is ERC20, Initializable, Ownable, IPerpetualTranche {
     }
 
     // @dev The head of the tranche queue which is up for redemption next.
-    function _redemptionTranche() internal returns (ITranche) {
+    function _redemptionTranche() internal view returns (ITranche) {
         return ITranche(_redemptionQueue.head());
     }
 
     // @dev Checks if the given tranche pair is a valid rollover.
-    function _isAcceptableRollover(ITranche trancheIn, ITranche trancheOut) internal returns (bool) {
+    function _isAcceptableRollover(ITranche trancheIn, ITranche trancheOut) internal view returns (bool) {
         IBondController bondIn = IBondController(trancheIn.bond());
         IBondController bondOut = IBondController(trancheOut.bond());
         return (bondIn == _depositBond && // Expected trancheIn to be of deposit bond

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.4;
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { IPricingStrategy } from "../_interfaces/IPricingStrategy.sol";
 
