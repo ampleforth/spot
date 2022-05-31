@@ -386,7 +386,7 @@ contract RouterV1 {
     ) private {
         uint256 allowance = token.allowance(address(this), spender);
         if (allowance < amount) {
-            token.approve(spender, type(uint256).max);
+            token.safeApprove(spender, type(uint256).max);
         }
     }
 }
