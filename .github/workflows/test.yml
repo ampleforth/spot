@@ -16,12 +16,12 @@ on:
 
 jobs:
   test:
-    runs-on: ${{ matrix.os }} # runs a test on Ubuntu, Windows and macOS
+    runs-on: ${{ matrix.os }} # runs a test on Ubuntu
 
     strategy:
       matrix:
         node-version: [16.x]
-        os: [macOS-latest, ubuntu-latest]
+        os: [ubuntu-latest]
 
     steps:
       - name: Setup Repo
@@ -33,10 +33,10 @@ jobs:
           node-version: ${{ matrix.node-version }} # tests across multiple Deno versions
 
       - name: Install all workspaces
-        run: yarn install
+        run: yarn install --immutable
 
-      - name: Seutp contracts workspace
-        run: yarn workspace @ampleforthorg/spot-contracts run compile
+      - name: Seutp workspaces
+        run: yarn workspaces foreach run compile
 
       - name: Lint
         run: yarn workspaces foreach run lint
