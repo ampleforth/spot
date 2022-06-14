@@ -7,7 +7,7 @@ import { SignedMathHelpers } from "../_utils/SignedMathHelpers.sol";
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { IFeeStrategy } from "../_interfaces/IFeeStrategy.sol";
-import { IPerpetualTranche } from "../_interfaces/IPerpetualTranche.sol";
+import { IPerpetualNoteTranche } from "../_interfaces/IPerpetualNoteTranche.sol";
 
 /*
  *  @title BasicFeeStrategy
@@ -26,7 +26,7 @@ contract BasicFeeStrategy is IFeeStrategy {
     uint256 public constant PCT_DECIMALS = 6;
 
     // @notice Address of the parent perpetual ERC-20 token contract which uses this strategy.
-    IPerpetualTranche public immutable perp;
+    IPerpetualNoteTranche public immutable perp;
 
     /// @inheritdoc IFeeStrategy
     IERC20Upgradeable public immutable override feeToken;
@@ -50,7 +50,7 @@ contract BasicFeeStrategy is IFeeStrategy {
     // @param burnFeePct_ Burn fee percentage.
     // @param rolloverFeePct_ Rollover fee percentage.
     constructor(
-        IPerpetualTranche perp_,
+        IPerpetualNoteTranche perp_,
         IERC20Upgradeable feeToken_,
         int256 mintFeePct_,
         int256 burnFeePct_,

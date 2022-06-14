@@ -25,7 +25,7 @@ let perp: Contract,
   depositBond: Contract,
   initialDepositTranche: Contract;
 
-describe("PerpetualTranche", function () {
+describe("PerpetualNoteTranche", function () {
   beforeEach(async function () {
     const accounts = await ethers.getSigners();
     deployer = accounts[0];
@@ -42,10 +42,10 @@ describe("PerpetualTranche", function () {
     const PricingStrategy = await ethers.getContractFactory("MockPricingStrategy");
     pricingStrategy = await PricingStrategy.deploy();
 
-    const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
+    const PerpetualNoteTranche = await ethers.getContractFactory("PerpetualNoteTranche");
     perp = await upgrades.deployProxy(
-      PerpetualTranche.connect(deployer),
-      ["PerpetualTranche", "PERP", 9, issuer.address, feeStrategy.address, pricingStrategy.address],
+      PerpetualNoteTranche.connect(deployer),
+      ["PerpetualNoteTranche", "PERP", 9, issuer.address, feeStrategy.address, pricingStrategy.address],
       {
         initializer: "init(string,string,uint8,address,address,address)",
       },

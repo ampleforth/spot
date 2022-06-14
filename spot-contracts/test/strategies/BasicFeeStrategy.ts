@@ -8,10 +8,10 @@ let perp: Contract, factory: ContractFactory;
 
 describe("BasicFeeStrategy", function () {
   beforeEach(async function () {
-    const PerpetualTranche = await ethers.getContractFactory("MockPerpetualTranche");
-    perp = await PerpetualTranche.deploy();
+    const PerpetualNoteTranche = await ethers.getContractFactory("MockPerpetualNoteTranche");
+    perp = await PerpetualNoteTranche.deploy();
     await perp.deployed();
-    await perp.init("MockPerpetualTranche", "PERP");
+    await perp.init("MockPerpetualNoteTranche", "PERP");
 
     factory = await ethers.getContractFactory("BasicFeeStrategy");
   });
