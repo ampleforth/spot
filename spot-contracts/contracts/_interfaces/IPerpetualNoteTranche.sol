@@ -56,26 +56,21 @@ interface IPerpetualNoteTranche is IERC20Upgradeable {
     // @notice Deposits tranche tokens into the system and mint perp tokens.
     // @param trancheIn The address of the tranche token to be deposited.
     // @param trancheInAmt The amount of tranche tokens deposited.
-    // @return mintAmt The amount of perp tokens minted to the caller.
-    // @return fee The fee paid by the caller.
-    function deposit(ITranche trancheIn, uint256 trancheInAmt) external returns (uint256 mintAmt, int256 mintFee);
+    function deposit(ITranche trancheIn, uint256 trancheInAmt) external;
 
     // @notice Redeem tranche tokens by burning perp tokens.
     // @param perpAmtBurnt The amount of perp tokens burnt from the caller.
-    // @return fee The fee paid by the caller.
-    function redeem(uint256 perpAmtBurnt) external returns (int256 burnFee);
+    function redeem(uint256 perpAmtBurnt) external;
 
     // @notice Rotates newer tranches in for reserve tokens.
     // @param trancheIn The tranche token deposited.
     // @param tokenOut The reserve token to be redeemed.
     // @param trancheInAmt The amount of trancheIn tokens deposited.
-    // @return tokenOutAmt The amount of tokenOut tokens redeemed.
-    // @return rolloverFee The fee paid by the caller.
     function rollover(
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmt
-    ) external returns (uint256 tokenOutAmt, int256 rolloverFee);
+    ) external;
 
     // @notice Burn perp tokens without redemption.
     // @param amount Amount of perp tokens to be burnt.

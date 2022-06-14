@@ -375,12 +375,7 @@ contract PerpetualNoteTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetua
     // External methods
 
     /// @inheritdoc IPerpetualNoteTranche
-    function deposit(ITranche trancheIn, uint256 trancheInAmt)
-        external
-        override
-        afterStateUpdate
-        returns (uint256, int256)
-    {
+    function deposit(ITranche trancheIn, uint256 trancheInAmt) external override afterStateUpdate {
         if (IBondController(trancheIn.bond()) != _depositBond) {
             revert UnacceptableDepositTranche(trancheIn, _depositBond);
         }
@@ -411,12 +406,10 @@ contract PerpetualNoteTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetua
 
         // enforces supply cap and tranche mint cap
         _enforceMintingLimits(trancheIn);
-
-        return (mintAmt, mintFee);
     }
 
     /// @inheritdoc IPerpetualNoteTranche
-    function redeem(uint256 burnAmt) external override afterStateUpdate returns (int256) {
+    function redeem(uint256 burnAmt) external override afterStateUpdate {
         // gets the current perp supply
         uint256 perpSupply = totalSupply();
 
@@ -447,8 +440,6 @@ contract PerpetualNoteTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetua
         // updates reserve's tranche balances
         totalTrancheBalance -= _perpsToReserveShare(burnAmt, perpSupply, totalTrancheBalance);
         matureTrancheBalance -= _perpsToReserveShare(burnAmt, perpSupply, matureTrancheBalance);
-
-        return burnFee;
     }
 
     /// @inheritdoc IPerpetualNoteTranche
@@ -456,7 +447,7 @@ contract PerpetualNoteTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetua
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtRequested
-    ) external override afterStateUpdate returns (uint256, int256) {
+    ) external override afterStateUpdate {
         if (!_isAcceptableRollover(trancheIn, tokenOut)) {
             revert UnacceptableRollover(trancheIn, tokenOut);
         }
@@ -487,13 +478,10 @@ contract PerpetualNoteTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetua
         _transferOutOfReserve(_msgSender(), tokenOut, tokenOutAmt);
 
         // updates reserve's tranche balance
-        // NOTE: `totalTrancheBalance` does not change on rollovers
-        //       as `stdTrancheInAmt` == `stdTrancheOutAmt`
+        // NOTE: `totalTrancheBalance` does not change on rollovers as `stdTrancheInAmt` == `stdTrancheOutAmt`
         if (tokenOut == collateral) {
             matureTrancheBalance -= stdTrancheInAmt;
         }
-
-        return (tokenOutAmt, rolloverFee);
     }
 
     /// @inheritdoc IPerpetualNoteTranche
@@ -552,13 +540,11 @@ contract PerpetualNoteTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetua
             ITranche tranche = ITranche(_reserveTranches.at(i));
             IBondController bond = IBondController(tranche.bond());
 
-            bool hasReachedMaturity = bond.timeToMaturity() == 0;
-            if (!hasReachedMaturity) {
+            if (bond.timeToMaturity() > 0) {
                 continue;
             }
 
-            bool isMature = bond.isMature();
-            if (!isMature) {
+            if (!bond.isMature()) {
                 bond.mature();
             }
 
