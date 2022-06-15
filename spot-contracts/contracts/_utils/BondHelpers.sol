@@ -18,6 +18,46 @@ struct TrancheData {
 }
 
 /*
+ *  @title TrancheDataHelpers
+ *
+ *  @notice Library with helper functions the bond's retrieved tranche data.
+ *
+ */
+library TrancheDataHelpers {
+    // @notice Iterates through the tranche data to find the seniority index of the given tranche.
+    // @param td The tranche data object.
+    // @param t The address of the tranche to check.
+    // @return the index of the tranche in the tranches array.
+    function getTrancheIndex(TrancheData memory td, ITranche t) internal pure returns (uint256) {
+        for (uint8 i = 0; i < td.trancheCount; i++) {
+            if (td.tranches[i] == t) {
+                return i;
+            }
+        }
+        revert UnacceptableTrancheIndex(t);
+    }
+}
+
+/*
+ *  @title TrancheHelpers
+ *
+ *  @notice Library with helper functions tranche tokens.
+ *
+ */
+library TrancheHelpers {
+    // @dev TODO
+    function getTrancheCollateralization(ITranche t) internal view returns (uint256, uint256) {
+        IBondController bond = IBondController(t.bond());
+        TrancheData memory td;
+        uint256[] memory collateralBalances;
+        uint256[] memory trancheSupplies;
+        (td, collateralBalances, trancheSupplies) = BondHelpers.getTrancheCollateralizations(bond);
+        uint256 trancheIndex = TrancheDataHelpers.getTrancheIndex(td, t);
+        return (collateralBalances[trancheIndex], trancheSupplies[trancheIndex]);
+    }
+}
+
+/*
  *  @title BondHelpers
  *
  *  @notice Library with helper functions for ButtonWood's Bond contract.
@@ -171,26 +211,5 @@ library BondHelpers {
         }
 
         return (td, balances);
-    }
-}
-
-/*
- *  @title TrancheDataHelpers
- *
- *  @notice Library with helper functions the bond's retrieved tranche data.
- *
- */
-library TrancheDataHelpers {
-    // @notice Iterates through the tranche data to find the seniority index of the given tranche.
-    // @param td The tranche data object.
-    // @param t The address of the tranche to check.
-    // @return the index of the tranche in the tranches array.
-    function getTrancheIndex(TrancheData memory td, ITranche t) internal pure returns (uint256) {
-        for (uint8 i = 0; i < td.trancheCount; i++) {
-            if (td.tranches[i] == t) {
-                return i;
-            }
-        }
-        revert UnacceptableTrancheIndex(t);
     }
 }

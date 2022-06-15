@@ -6,6 +6,7 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { IBondIssuer } from "./IBondIssuer.sol";
 import { IFeeStrategy } from "./IFeeStrategy.sol";
 import { IPricingStrategy } from "./IPricingStrategy.sol";
+import { IYieldStrategy } from "./IYieldStrategy.sol";
 import { IBondController } from "./buttonwood/IBondController.sol";
 import { ITranche } from "./buttonwood/ITranche.sol";
 
@@ -25,6 +26,10 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @param strategy Address of the strategy contract.
     event UpdatedPricingStrategy(IPricingStrategy strategy);
 
+    // @notice Event emitted when the yield strategy is updated.
+    // @param strategy Address of the strategy contract.
+    event UpdatedYieldStrategy(IYieldStrategy strategy);
+
     // @notice Event emitted when maturity tolerance parameters are updated.
     // @param min The minimum maturity time.
     // @param max The maximum maturity time.
@@ -35,23 +40,10 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @param maxMintAmtPerTranche The max mint amount per tranche.
     event UpdatedMintingLimits(uint256 maxSupply, uint256 maxMintAmtPerTranche);
 
-    // @notice Event emitted when the defined tranche yields are updated.
-    // @param hash The tranche class hash.
-    // @param yield The yield factor for any tranche belonging to that class.
-    event UpdatedDefinedTrancheYields(bytes32 hash, uint256 yield);
-
-    // @notice Event emitted when the applied yield for a given tranche is set.
-    // @param tranche The address of the tranche token.
+    // @notice Event emitted when the applied yield for a given token is set.
+    // @param token The address of the token.
     // @param yield The yield factor applied.
-    event TrancheYieldApplied(ITranche tranche, uint256 yield);
-
-    // @notice Event emitted when a new tranche is added to the queue head.
-    // @param strategy Address of the tranche added to the queue.
-    event TrancheEnqueued(ITranche tranche);
-
-    // @notice Event emitted when a tranche is removed from the queue tail.
-    // @param strategy Address of the tranche removed from the queue.
-    event TrancheDequeued(ITranche tranche);
+    event YieldApplied(IERC20Upgradeable token, uint256 yield);
 
     // @notice Event emitted the reserve's current token balance is recorded after change.
     // @param token Address of token.
@@ -64,53 +56,47 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @notice Deposits tranche tokens into the system and mint perp tokens.
     // @param trancheIn The address of the tranche token to be deposited.
     // @param trancheInAmt The amount of tranche tokens deposited.
-    // @return mintAmt The amount of perp tokens minted to the caller.
-    // @return fee The fee paid by the caller.
-    function deposit(ITranche trancheIn, uint256 trancheInAmt) external returns (uint256 mintAmt, int256 mintFee);
+    function deposit(ITranche trancheIn, uint256 trancheInAmt) external;
 
     // @notice Redeem tranche tokens by burning perp tokens.
-    // @param trancheOut The tranche token to be redeemed.
-    // @param amountRequested The amount of perp tokens requested to be burnt.
-    // @return burnAmt The amount of perp tokens burnt from the caller.
-    // @return fee The fee paid by the caller.
-    function redeem(ITranche trancheOut, uint256 amountRequested) external returns (uint256 burnAmt, int256 burnFee);
+    // @param perpAmtBurnt The amount of perp tokens burnt from the caller.
+    function redeem(uint256 perpAmtBurnt) external;
 
-    // @notice Rotates newer tranches in for older tranches.
+    // @notice Rotates newer tranches in for reserve tokens.
     // @param trancheIn The tranche token deposited.
-    // @param trancheOut The tranche token to be redeemed.
+    // @param tokenOut The reserve token to be redeemed.
     // @param trancheInAmt The amount of trancheIn tokens deposited.
-    // @return trancheOutAmt The amount of trancheOut tokens redeemed.
-    // @return rolloverFee The fee paid by the caller.
     function rollover(
         ITranche trancheIn,
-        ITranche trancheOut,
+        IERC20Upgradeable tokenOut,
         uint256 trancheInAmt
-    ) external returns (uint256 trancheOutAmt, int256 rolloverFee);
+    ) external;
 
     // @notice Burn perp tokens without redemption.
     // @param amount Amount of perp tokens to be burnt.
     // @return True if burn is successful.
     function burn(uint256 amount) external returns (bool);
 
+    // @notice The address of the underlying rebasing ERC-20 collateral token backing the tranches.
+    // @return Address of the collateral token.
+    function collateral() external view returns (IERC20Upgradeable);
+
+    // @notice The total balance of all tranches deposited into the system.
+    // @return The total tranche balance.
+    function totalTrancheBalance() external view returns (uint256);
+
+    // @notice The total balance of all mature tranches.
+    // @return The mature tranche balance.
+    function matureTrancheBalance() external view returns (uint256);
+
     // @notice The parent bond whose tranches are currently accepted to mint perp tokens.
     // @return Address of the deposit bond.
     function getDepositBond() external returns (IBondController);
 
-    // @notice Tranche up for redemption next.
-    // @return Address of the tranche token.
-    function getRedemptionTranche() external returns (ITranche);
-
-    // @notice Total count of tokens in the redemption queue.
-    function getRedemptionQueueCount() external returns (uint256);
-
-    // @notice The token address from the redemption queue by index.
-    // @param index The index of a token.
-    function getRedemptionQueueAt(uint256 index) external returns (address);
-
-    // @notice Checks if the given `trancheIn` can be rolled out for `trancheOut`.
+    // @notice Checks if the given `trancheIn` can be rolled out for `tokenOut`.
     // @param trancheIn The tranche token deposited.
-    // @param trancheOut The tranche token to be redeemed.
-    function isAcceptableRollover(ITranche trancheIn, ITranche trancheOut) external returns (bool);
+    // @param tokenOut The reserve token to be redeemed.
+    function isAcceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut) external returns (bool);
 
     // @notice The strategy contract with the fee computation logic.
     // @return Address of the strategy contract.
@@ -128,60 +114,83 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @return Address of the fee token.
     function feeToken() external view returns (IERC20Upgradeable);
 
-    // @notice The yield to be applied given the tranche.
-    // @param tranche The address of the tranche token.
-    // @return The yield applied.
-    function trancheYield(ITranche tranche) external view returns (uint256);
-
-    // @notice The computes the class hash of a given tranche.
-    // @dev This is used to identify different tranche tokens instances of the same class.
-    // @param tranche The address of the tranche token.
-    // @return The class hash.
-    function trancheClass(ITranche t) external view returns (bytes32);
-
-    // @notice The price of the given tranche.
-    // @param tranche The address of the tranche token.
-    // @return The computed price.
-    function tranchePrice(ITranche tranche) external view returns (uint256);
-
-    // @notice Computes the amount of perp token amount that can be exchanged for given tranche and amount.
-    // @param tranche The address of the tranche token.
-    // @param trancheAmt The amount of tranche tokens.
-    // @return The perp token amount.
-    function tranchesToPerps(ITranche tranche, uint256 trancheAmt) external view returns (uint256);
-
-    // @notice Computes the amount of tranche tokens amount that can be exchanged for given perp token amount.
-    // @param tranche The address of the tranche token.
-    // @param trancheAmt The amount of perp tokens.
-    // @return The tranche token amount.
-    function perpsToTranches(ITranche tranche, uint256 amount) external view returns (uint256);
-
-    // @notice Computes the maximum amount of tranche tokens amount that
-    //         can be exchanged for the requested perp token amount covered by the systems tranche balance.
-    //         If the system doesn't have enough tranche tokens to cover the exchange,
-    //         it computes the remainder perp tokens which cannot be exchanged.
-    // @param tranche The address of the tranche token.
-    // @param amountRequested The amount of perp tokens to exchange.
-    // @param trancheAmtCovered The maximum tranche amount covered the exchange.
-    // @return trancheAmtUsed The tranche tokens used for the exchange.
-    // @return remainder The number of perp tokens which cannot be exchanged.
-    function perpsToCoveredTranches(
-        ITranche tranche,
-        uint256 amountRequested,
-        uint256 trancheAmtCovered
-    ) external view returns (uint256 trancheAmtUsed, uint256 remainder);
-
     // @notice Total count of tokens held in the reserve.
     function reserveCount() external view returns (uint256);
 
     // @notice The token address from the reserve list by index.
     // @param index The index of a token.
-    function reserveAt(uint256 index) external view returns (address);
+    function reserveAt(uint256 index) external view returns (IERC20Upgradeable);
 
-    // @notice Checks if the given token is part of the reserve list.
+    // @notice Checks if the given token is part of the reserve.
     // @param token The address of a token to check.
-    function inReserve(IERC20Upgradeable token) external view returns (bool);
+    function isReserveToken(IERC20Upgradeable token) external view returns (bool);
 
-    // @notice Updates time dependent queue state.
-    function updateQueue() external;
+    // @notice Checks if the given token is a tranche token part of the reserve.
+    // @param token The address of a reserve token to check.
+    function isReserveTranche(IERC20Upgradeable token) external view returns (bool);
+
+    // @notice Fetches the reserve's token balance.
+    // @param token The address of the reserve token.
+    function reserveBalance(IERC20Upgradeable token) external view returns (uint256);
+
+    // @notice Computes the total value of all reserve assets.
+    function reserveValue() external view returns (uint256);
+
+    // @notice Computes the amount of perp tokens minted when `trancheInAmt` `trancheIn` tokens
+    //         are deposited into the system.
+    // @param trancheIn The tranche token deposited.
+    // @param trancheInAmt The amount of tranche tokens deposited.
+    // @return perpAmtMinted The amount of perp tokens to be minted.
+    // @return stdTrancheAmt The standardized tranche amount deposited.
+    function computeMintAmt(ITranche trancheIn, uint256 trancheInAmt)
+        external
+        view
+        returns (uint256 perpAmtMinted, uint256 stdTrancheAmt);
+
+    // @notice Computes the amount reserve tokens redeemed when burning given number of perp tokens.
+    // @param perpAmtBurnt The amount of perp tokens to be burnt.
+    // @return tokensOut The list of reserve tokens redeemed.
+    // @return tokenOutAmts The list of reserve token amounts redeemed.
+    function computeRedemptionAmts(uint256 perpAmtBurnt)
+        external
+        view
+        returns (IERC20Upgradeable[] memory tokensOut, uint256[] memory tokenOutAmts);
+
+    // @notice Computes the amount reserve tokens that can be swapped out for the given number
+    //         of `trancheIn` tokens.
+    // @param trancheIn The tranche token deposited.
+    // @param tokenOut The reserve token to be withdrawn.
+    // @param trancheInAmtRequested The maximum amount of trancheIn tokens deposited.
+    // @param maxTokenOutAmtCovered The reserve token balance available for rollover.
+    // @return rolloverAmt The perp denominated value of tokens rolled over.
+    // @return tokenOutAmt The amount of tokens to be withdrawn.
+    // @return stdTrancheAmt The standardized tranche amount rolled over.
+    // @return trancheInAmtUsed The amount of trancheIn tokens used in the roll over operation.
+    function computeRolloverAmt(
+        ITranche trancheIn,
+        IERC20Upgradeable tokenOut,
+        uint256 trancheInAmtRequested,
+        uint256 maxTokenOutAmtCovered
+    )
+        external
+        view
+        returns (
+            uint256 rolloverAmt,
+            uint256 tokenOutAmt,
+            uint256 stdTrancheAmt,
+            uint256 trancheInAmtUsed
+        );
+
+    // @notice The yield to be applied given the reserve token.
+    // @param token The address of the reserve token.
+    // @return The yield applied.
+    function computeYield(IERC20Upgradeable token) external view returns (uint256);
+
+    // @notice The price of the given reserve token.
+    // @param token The address of the reserve token.
+    // @return The computed price.
+    function computePrice(IERC20Upgradeable token) external view returns (uint256);
+
+    // @notice Updates time dependent storage state.
+    function updateState() external;
 }
