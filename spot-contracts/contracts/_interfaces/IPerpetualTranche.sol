@@ -10,7 +10,7 @@ import { IYieldStrategy } from "./IYieldStrategy.sol";
 import { IBondController } from "./buttonwood/IBondController.sol";
 import { ITranche } from "./buttonwood/ITranche.sol";
 
-interface IPerpetualNoteTranche is IERC20Upgradeable {
+interface IPerpetualTranche is IERC20Upgradeable {
     //--------------------------------------------------------------------------
     // Events
 

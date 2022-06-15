@@ -11,7 +11,7 @@ import { TrancheData, TrancheDataHelpers, BondHelpers } from "./_utils/BondHelpe
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { ITranche } from "./_interfaces/buttonwood/ITranche.sol";
 import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
-import { IPerpetualNoteTranche } from "./_interfaces/IPerpetualNoteTranche.sol";
+import { IPerpetualTranche } from "./_interfaces/IPerpetualTranche.sol";
 
 /*
  *  @title RouterV1
@@ -32,9 +32,9 @@ contract RouterV1 {
     // ERC20 operations
     using SafeERC20Upgradeable for IERC20Upgradeable;
     using SafeERC20Upgradeable for ITranche;
-    using SafeERC20Upgradeable for IPerpetualNoteTranche;
+    using SafeERC20Upgradeable for IPerpetualTranche;
 
-    modifier afterPerpStateUpdate(IPerpetualNoteTranche perp) {
+    modifier afterPerpStateUpdate(IPerpetualTranche perp) {
         perp.updateState();
         _;
     }
@@ -45,7 +45,7 @@ contract RouterV1 {
     // @param collateralAmount The amount of collateral the user wants to tranche.
     // @return bond The address of the current deposit bond.
     // @return trancheAmts The tranche token amounts minted.
-    function previewTranche(IPerpetualNoteTranche perp, uint256 collateralAmount)
+    function previewTranche(IPerpetualTranche perp, uint256 collateralAmount)
         external
         afterPerpStateUpdate(perp)
         returns (
@@ -72,7 +72,7 @@ contract RouterV1 {
     // @return feeToken The address of the fee token.
     // @return mintFee The fee charged for minting.
     function previewDeposit(
-        IPerpetualNoteTranche perp,
+        IPerpetualTranche perp,
         ITranche trancheIn,
         uint256 trancheInAmt
     )
@@ -99,7 +99,7 @@ contract RouterV1 {
     // @param feePaid The fee paid to the perp contract to mint perp.
     // @dev Fee to be paid should be pre-computed off-chain using the preview function.
     function trancheAndDeposit(
-        IPerpetualNoteTranche perp,
+        IPerpetualTranche perp,
         IBondController bond,
         uint256 collateralAmount,
         uint256 feePaid
@@ -163,7 +163,7 @@ contract RouterV1 {
     // @return redemptionAmts The list of reserve token amounts redeemed.
     // @return feeToken The address of the fee token.
     // @return burnFee The fee charged for burning.
-    function previewRedeem(IPerpetualNoteTranche perp, uint256 perpAmtBurnt)
+    function previewRedeem(IPerpetualTranche perp, uint256 perpAmtBurnt)
         external
         afterPerpStateUpdate(perp)
         returns (
@@ -203,7 +203,7 @@ contract RouterV1 {
     // @return feeToken The address of the fee token.
     // @return rolloverFee The fee paid by the caller.
     function previewRollover(
-        IPerpetualNoteTranche perp,
+        IPerpetualTranche perp,
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtRequested,
@@ -249,7 +249,7 @@ contract RouterV1 {
     // @param rollovers List of batch rollover operations pre-computed off-chain.
     // @param feePaid The fee paid by the user performing rollover (fee could be negative).
     function trancheAndRollover(
-        IPerpetualNoteTranche perp,
+        IPerpetualTranche perp,
         IBondController bond,
         uint256 collateralAmount,
         RolloverBatch[] memory rollovers,

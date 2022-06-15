@@ -45,10 +45,10 @@ describe("RouterV1", function () {
     const PricingStrategy = await ethers.getContractFactory("MockPricingStrategy");
     pricingStrategy = await PricingStrategy.deploy();
 
-    const PerpetualNoteTranche = await ethers.getContractFactory("PerpetualNoteTranche");
+    const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
-      PerpetualNoteTranche.connect(deployer),
-      ["PerpetualNoteTranche", "PERP", 9, issuer.address, feeStrategy.address, pricingStrategy.address],
+      PerpetualTranche.connect(deployer),
+      ["PerpetualTranche", "PERP", 9, issuer.address, feeStrategy.address, pricingStrategy.address],
       {
         initializer: "init(string,string,uint8,address,address,address)",
       },

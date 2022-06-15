@@ -20,7 +20,7 @@ let perp: Contract,
   pricingStrategy: Contract,
   deployer: Signer,
   otherUser: Signer;
-describe("PerpetualNoteTranche", function () {
+describe("PerpetualTranche", function () {
   beforeEach(async function () {
     const accounts = await ethers.getSigners();
     deployer = accounts[0];
@@ -35,10 +35,10 @@ describe("PerpetualNoteTranche", function () {
     const PricingStrategy = await ethers.getContractFactory("MockPricingStrategy");
     pricingStrategy = await PricingStrategy.deploy();
 
-    const PerpetualNoteTranche = await ethers.getContractFactory("PerpetualNoteTranche");
+    const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
-      PerpetualNoteTranche.connect(deployer),
-      ["PerpetualNoteTranche", "PERP", 9, issuer.address, feeStrategy.address, pricingStrategy.address],
+      PerpetualTranche.connect(deployer),
+      ["PerpetualTranche", "PERP", 9, issuer.address, feeStrategy.address, pricingStrategy.address],
       {
         initializer: "init(string,string,uint8,address,address,address)",
       },
@@ -47,7 +47,7 @@ describe("PerpetualNoteTranche", function () {
 
   describe("#init", function () {
     it("should set erc20 parameters", async function () {
-      expect(await perp.name()).to.eq("PerpetualNoteTranche");
+      expect(await perp.name()).to.eq("PerpetualTranche");
       expect(await perp.symbol()).to.eq("PERP");
       expect(await perp.decimals()).to.eq(9);
     });
