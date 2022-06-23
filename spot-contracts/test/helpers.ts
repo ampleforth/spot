@@ -1,9 +1,10 @@
+import { expect } from "chai";
 import hre, { ethers } from "hardhat";
-import { Signer, Contract, BigNumber, ContractFactory } from "ethers";
+import { Signer, Contract, BigNumber, ContractFactory, Transaction } from "ethers";
 import * as fs from "fs";
 import * as path from "path";
 
-const TOKEN_DECIMALS = 9;
+const TOKEN_DECIMALS = 18;
 const PRICE_DECIMALS = 8;
 const YIELD_DECIMALS = 18;
 
@@ -161,8 +162,32 @@ export const getTrancheBalances = async (bond: Contract, user: string): Promise<
   return balances;
 };
 
-export const advancePerpQueue = async (perp: Contract, time: number) => {
+export const advancePerpQueue = async (perp: Contract, time: number): Promise<Transaction> => {
   await TimeHelpers.increaseTime(time);
-  await perp.getDepositBond();
-  await perp.getRedemptionTranche();
+  return perp.updateState();
+};
+
+export const logReserveComposition = async (perp: Contract) => {
+  const count = await perp.reserveCount();
+  console.log("Reserve count", count);
+  for (let i = 0; i < count; i++) {
+    const token = await perp.reserveAt(i);
+    console.log(i, token, await perp.reserveBalance(token));
+  }
+};
+
+export const checkReserveComposition = async (perp: Contract, tokens: Contract[], balances: BigNumber[] = []) => {
+  const checkBalances = balances.length > 0;
+  expect(await perp.reserveCount()).to.eq(tokens.length);
+  for (const i in tokens) {
+    expect(await perp.isReserveToken(tokens[i].address)).to.eq(true);
+    if (parseInt(i) > 0) {
+      expect(await perp.isReserveTranche(tokens[i].address)).to.eq(true);
+    }
+    expect(await perp.reserveAt(i)).to.eq(tokens[i].address);
+    if (checkBalances) {
+      expect(await perp.reserveBalance(tokens[i].address)).to.eq(balances[i]);
+    }
+  }
+  await expect(perp.reserveAt(tokens.length)).to.be.reverted;
 };

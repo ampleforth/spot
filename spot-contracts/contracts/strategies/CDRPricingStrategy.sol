@@ -28,26 +28,19 @@ contract CDRPricingStrategy is IPricingStrategy {
     }
 
     /// @inheritdoc IPricingStrategy
-    function computePrice(IPerpetualTranche perp, IERC20Upgradeable token) external view override returns (uint256) {
-        // NOTE: selective handling for collateral for mature tranches are held by the perp reserve
-        return
-            (token == perp.collateral())
-                ? computeMatureTrancheCDR(perp, token)
-                : computeTrancheCDR(ITranche(address(token)));
-    }
-
-    // @dev todo
-    function computeTrancheCDR(ITranche tranche) internal view returns (uint256) {
-        (uint256 collateralBalance, uint256 debt) = tranche.getTrancheCollateralization();
+    // @dev Selective handling for collateral for mature tranches are held by the perp reserve.
+    function computeMatureTranchePrice(
+        // solhint-disable-next-line no-unused-vars
+        IERC20Upgradeable collateralToken,
+        uint256 collateralBalance,
+        uint256 debt
+    ) external pure override returns (uint256) {
         return (collateralBalance * UNIT_PRICE) / debt;
     }
 
-    // @dev todo
-    function computeMatureTrancheCDR(IPerpetualTranche perp, IERC20Upgradeable collateral)
-        internal
-        view
-        returns (uint256)
-    {
-        return (perp.reserveBalance(collateral) * UNIT_PRICE) / perp.matureTrancheBalance();
+    /// @inheritdoc IPricingStrategy
+    function computeTranchePrice(ITranche tranche) external view override returns (uint256) {
+        (uint256 collateralBalance, uint256 debt) = tranche.getTrancheCollateralization();
+        return (collateralBalance * UNIT_PRICE) / debt;
     }
 }

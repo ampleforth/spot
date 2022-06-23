@@ -26,8 +26,15 @@ contract MockPricingStrategy {
         _tranchePriceSet[t] = true;
     }
 
-    // solhint-disable-next-line no-unused-vars
     function computeTranchePrice(address t) external returns (uint256) {
+        return _tranchePriceSet[t] ? _tranchePrice[t] : _price;
+    }
+
+    function computeMatureTranchePrice(
+        address t,
+        uint256 collateralBalance, // solhint-disable no-unused-vars
+        uint256 debt // solhint-disable no-unused-vars
+    ) external returns (uint256) {
         return _tranchePriceSet[t] ? _tranchePrice[t] : _price;
     }
 
