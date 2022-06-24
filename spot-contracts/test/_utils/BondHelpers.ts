@@ -488,12 +488,12 @@ describe("BondHelpers", function () {
           await rebase(collateralToken, rebaseOracle, -0.6);
           const b = await bondHelpers.getTrancheCollateralBalances(bond.address, deployerAddress);
           expect(b[1][0]).to.eq(toFixedPtAmt("150"));
-          expect(b[1][1]).to.eq(toFixedPtAmt("166.666666666"));
+          expect(b[1][1]).to.eq(toFixedPtAmt("166.666666666666666666"));
           expect(b[1][2]).to.eq(toFixedPtAmt("0"));
 
           const c = await bondHelpers.getTrancheCollateralBalances(bond.address, userAddress);
           expect(c[1][0]).to.eq(toFixedPtAmt("50"));
-          expect(c[1][1]).to.eq(toFixedPtAmt("33.333333333"));
+          expect(c[1][1]).to.eq(toFixedPtAmt("33.333333333333333333"));
           expect(c[1][2]).to.eq(toFixedPtAmt("0"));
         });
       });

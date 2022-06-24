@@ -2,9 +2,7 @@
 pragma solidity ^0.8.4;
 
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
-import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
-import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 
 import { TrancheData, TrancheDataHelpers, BondHelpers } from "./_utils/BondHelpers.sol";
 
@@ -21,9 +19,7 @@ import { IPerpetualTranche } from "./_interfaces/IPerpetualTranche.sol";
  */
 contract RouterV1 {
     // math
-    using MathUpgradeable for uint256;
-    using SafeCastUpgradeable for uint256;
-    using SignedMathUpgradeable for int256;
+    using SafeCastUpgradeable for int256;
 
     // data handling
     using BondHelpers for IBondController;
@@ -85,8 +81,15 @@ contract RouterV1 {
         )
     {
         (uint256 mintAmt, ) = perp.computeMintAmt(trancheIn, trancheInAmt);
+
         IERC20Upgradeable feeToken = perp.feeToken();
         int256 mintFee = perp.feeStrategy().computeMintFee(mintAmt);
+
+        // When Fee is to be paid in perps, it is withheld from the mint amount
+        if (address(feeToken) == address(perp) && mintFee > 0) {
+            mintAmt -= mintFee.toUint256();
+        }
+
         return (mintAmt, feeToken, mintFee);
     }
 
@@ -173,11 +176,17 @@ contract RouterV1 {
             int256
         )
     {
+        int256 burnFee = perp.feeStrategy().computeBurnFee(perpAmtBurnt);
+        IERC20Upgradeable feeToken = perp.feeToken();
+
+        // When Fee is to be paid in perps, it is withheld from the burn amount
+        if (address(feeToken) == address(perp) && burnFee > 0) {
+            perpAmtBurnt -= burnFee.toUint256();
+        }
+
         (IERC20Upgradeable[] memory reserveTokens, uint256[] memory redemptionAmts) = perp.computeRedemptionAmts(
             perpAmtBurnt
         );
-        int256 burnFee = perp.feeStrategy().computeBurnFee(perpAmtBurnt);
-        IERC20Upgradeable feeToken = perp.feeToken();
         return (reserveTokens, redemptionAmts, feeToken, burnFee);
     }
 

@@ -167,6 +167,13 @@ export const advancePerpQueue = async (perp: Contract, time: number): Promise<Tr
   return perp.updateState();
 };
 
+export const advancePerpQueueToBondMaturity = async (perp: Contract, bond: Contract): Promise<Transaction> => {
+  const bufferSec = await perp.minTrancheMaturiySec();
+  const matuirtyDate = await bond.maturityDate();
+  await TimeHelpers.setNextBlockTimestamp(matuirtyDate.sub(bufferSec).toNumber() + 1);
+  return perp.updateState();
+};
+
 export const logReserveComposition = async (perp: Contract) => {
   const count = await perp.reserveCount();
   console.log("Reserve count", count);
