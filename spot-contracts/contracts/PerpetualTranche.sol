@@ -222,13 +222,13 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     uint256 public maxMintAmtPerTranche;
 
     // @notice The total number of perps that have been minted using a given tranche.
-    mapping(IERC20Upgradeable => uint256) private _totalMintAmtPerTranche;
+    mapping(ITranche => uint256) private _mintedSupplyPerTranche;
 
     // @notice Yield factor actually "applied" on each reserve token. It is computed and recorded when
     //         a token is deposited into the system for the first time.
     // @dev For all calculations thereafter, the token's applied yield will be used.
     //      The yield is stored as a fixed point unsigned integer with {YIELD_DECIMALS} decimals.
-    mapping(IERC20Upgradeable => uint256) public appliedYields;
+    mapping(IERC20Upgradeable => uint256) private _appliedYields;
 
     //--------------------------------------------------------------------------
     // RESERVE
@@ -244,11 +244,11 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     EnumerableSetUpgradeable.AddressSet private _reserveTranches;
 
     // @notice The standardized amount of all tranches deposited into the system.
-    uint256 public override totalTrancheBalance;
+    uint256 private _stdTotalTrancheBalance;
 
     // @notice The standardized amount of all the mature tranches extracted and
     //         held as the collateral token.
-    uint256 public override matureTrancheBalance;
+    uint256 private _stdMatureTrancheBalance;
 
     //--------------------------------------------------------------------------
     // Modifiers
@@ -290,6 +290,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
         minTrancheMaturiySec = 1;
         maxTrancheMaturiySec = type(uint256).max;
+
+        maxSupply = 1000000 * (10**decimals()); // 1M
+        maxMintAmtPerTranche = 200000 * (10**decimals()); // 200k
     }
 
     //--------------------------------------------------------------------------
@@ -402,7 +405,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         _transferIntoReserve(_msgSender(), trancheIn, trancheInAmt);
 
         // updates reserve's tranche balance
-        totalTrancheBalance += stdTrancheInAmt;
+        _stdTotalTrancheBalance += stdTrancheInAmt;
 
         // mints perp tokens to the sender
         _mint(_msgSender(), mintAmt);
@@ -410,8 +413,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // settles fees
         _settleFee(_msgSender(), mintFee);
 
-        // updates the total amount minted using the given tranche
-        _totalMintAmtPerTranche[trancheIn] += mintAmt;
+        // updates the supply minted using the given tranche
+        _mintedSupplyPerTranche[trancheIn] += mintAmt;
 
         // enforces supply cap and tranche mint cap
         _enforceMintingLimits(trancheIn);
@@ -447,8 +450,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         }
 
         // updates reserve's tranche balances
-        totalTrancheBalance -= _perpsToReserveShare(burnAmt, perpSupply, totalTrancheBalance);
-        matureTrancheBalance -= _perpsToReserveShare(burnAmt, perpSupply, matureTrancheBalance);
+        _stdTotalTrancheBalance -= _perpsToReserveShare(burnAmt, perpSupply, _stdTotalTrancheBalance);
+        _stdMatureTrancheBalance -= _perpsToReserveShare(burnAmt, perpSupply, _stdMatureTrancheBalance);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -487,9 +490,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         _transferOutOfReserve(_msgSender(), tokenOut, tokenOutAmt);
 
         // updates reserve's tranche balance
-        // NOTE: `totalTrancheBalance` does not change on rollovers as `stdTrancheInAmt` == `stdTrancheOutAmt`
+        // NOTE: `_stdTotalTrancheBalance` does not change on rollovers as `stdTrancheInAmt` == `stdTrancheOutAmt`
         if (tokenOut == collateral) {
-            matureTrancheBalance -= stdTrancheInAmt;
+            _stdMatureTrancheBalance -= stdTrancheInAmt;
         }
     }
 
@@ -498,6 +501,11 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     function burn(uint256 amount) external override returns (bool) {
         _burn(_msgSender(), amount);
         return true;
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    function getStdTrancheBalances() external override afterStateUpdate returns (uint256, uint256) {
+        return (_stdTotalTrancheBalance, _stdMatureTrancheBalance);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -529,17 +537,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
         // If the new bond has been issued by the issuer and is "acceptable"
         if (_depositBond != newBond && _isAcceptableForReserve(newBond)) {
-            // Storage optimization: Zeroing out mint amounts
-            // from the previous deposit bond
-            if (address(_depositBond) != address(0)) {
-                TrancheData memory td = _depositBond.getTrancheData();
-                for (uint8 i = 0; i < td.trancheCount; i++) {
-                    delete _totalMintAmtPerTranche[td.tranches[i]];
-                }
-            }
-
             // updates `_depositBond` with the new bond
             _depositBond = newBond;
+            emit UpdatedDepositBond(newBond);
         }
 
         // Lazily checks if every reserve tranche has reached maturity.
@@ -571,7 +571,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
             _syncReserve(tranche);
 
             // Keeps track of the total tranches redeemed
-            matureTrancheBalance += _toStdTrancheAmt(trancheBalance, computeYield(tranche));
+            _stdMatureTrancheBalance += _toStdTrancheAmt(trancheBalance, computeYield(tranche));
         }
 
         // Keeps track of reserve's rebasing collateral token balance
@@ -627,12 +627,13 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     }
 
     /// @inheritdoc IPerpetualTranche
+    // @dev Returns a fixed point with {PRICE_DECIMALS} decimals.
     function reserveValue() public view override returns (uint256) {
         uint256 totalVal = 0;
         for (uint256 i = 0; i < reserveCount(); i++) {
             IERC20Upgradeable token = reserveAt(i);
             uint256 stdTokenAmt = _toStdTrancheAmt(_tokenBalance(token), computeYield(token));
-            totalVal += (stdTokenAmt * computePrice(token)) / UNIT_PRICE;
+            totalVal += (stdTokenAmt * computePrice(token));
         }
         return totalVal;
     }
@@ -641,19 +642,26 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     // @dev Gets the applied yield for the given tranche if it's set,
     //      if NOT computes the yield.
     function computeYield(IERC20Upgradeable token) public view override returns (uint256) {
-        uint256 yield = appliedYields[token];
+        uint256 yield = _appliedYields[token];
         return yield > 0 ? yield : yieldStrategy.computeYield(token);
     }
 
     /// @inheritdoc IPerpetualTranche
     function computePrice(IERC20Upgradeable token) public view override returns (uint256) {
-        return pricingStrategy.computePrice(IPerpetualTranche(_self()), token);
+        return
+            token == collateral
+                ? pricingStrategy.computeMatureTranchePrice(token, _tokenBalance(token), _stdMatureTrancheBalance)
+                : pricingStrategy.computeTranchePrice(ITranche(address(token)));
     }
 
     /// @inheritdoc IPerpetualTranche
     function computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) public view override returns (uint256, uint256) {
+        uint256 totalSupply_ = totalSupply();
         uint256 stdTrancheAmt = _toStdTrancheAmt(trancheInAmt, computeYield(trancheIn));
-        uint256 mintAmt = ((stdTrancheAmt * computePrice(trancheIn)) / reserveValue()) * totalSupply();
+        uint256 price = computePrice(trancheIn);
+        uint256 mintAmt = (totalSupply_ > 0)
+            ? (stdTrancheAmt * totalSupply_ * price) / reserveValue()
+            : (stdTrancheAmt * price) / UNIT_PRICE;
         return (mintAmt, stdTrancheAmt);
     }
 
@@ -692,23 +700,34 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
             uint256
         )
     {
-        maxTokenOutAmtCovered = MathUpgradeable.min(maxTokenOutAmtCovered, _tokenBalance(tokenOut));
+        bool isMatureTranche = tokenOut == collateral;
+        uint256 tokenOutBalance = _tokenBalance(tokenOut);
+        maxTokenOutAmtCovered = MathUpgradeable.min(maxTokenOutAmtCovered, tokenOutBalance);
+
         uint256 trancheInYield = computeYield(trancheIn);
         uint256 tokenOutYield = computeYield(tokenOut);
 
-        uint256 stdTrancheAmt = _toStdTrancheAmt(trancheInAmtRequested, trancheInYield);
-        uint256 tokenOutAmt = _fromStdTrancheAmt(stdTrancheAmt, tokenOutYield);
         uint256 trancheInAmtUsed = trancheInAmtRequested;
+        uint256 stdTrancheRolloverAmt = _toStdTrancheAmt(trancheInAmtRequested, trancheInYield);
+        uint256 trancheOutAmt = _fromStdTrancheAmt(stdTrancheRolloverAmt, tokenOutYield);
 
-        // when the token out balance is NOT covered
+        // In the case token out is the mature tranche (held as naked collateral):
+        // Token balance is calculated from the tranche denomination
+        uint256 tokenOutAmt = isMatureTranche
+            ? ((trancheOutAmt * tokenOutBalance) / _stdMatureTrancheBalance)
+            : trancheOutAmt;
+
+        // When the token out balance is NOT covered
         if (tokenOutAmt > maxTokenOutAmtCovered) {
             tokenOutAmt = maxTokenOutAmtCovered;
-            stdTrancheAmt = _toStdTrancheAmt(tokenOutAmt, tokenOutYield);
-            trancheInAmtUsed = _fromStdTrancheAmt(stdTrancheAmt, trancheInYield);
+            stdTrancheRolloverAmt = isMatureTranche
+                ? ((tokenOutAmt * _stdMatureTrancheBalance) / tokenOutBalance)
+                : _toStdTrancheAmt(tokenOutAmt, tokenOutYield);
+            trancheInAmtUsed = _fromStdTrancheAmt(stdTrancheRolloverAmt, trancheInYield);
         }
 
-        uint256 perpRolloverAmt = (stdTrancheAmt * totalSupply()) / totalTrancheBalance;
-        return (perpRolloverAmt, tokenOutAmt, stdTrancheAmt, trancheInAmtUsed);
+        uint256 perpRolloverAmt = (stdTrancheRolloverAmt * totalSupply()) / _stdTotalTrancheBalance;
+        return (perpRolloverAmt, tokenOutAmt, stdTrancheRolloverAmt, trancheInAmtUsed);
     }
 
     // @notice Returns the number of decimals used to get its user representation.
@@ -739,7 +758,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         IERC20Upgradeable token,
         uint256 tokenAmt
     ) internal returns (uint256) {
-        token.safeTransfer(to, tokenAmt);
+        if (tokenAmt > 0) {
+            token.safeTransfer(to, tokenAmt);
+        }
         return _syncReserve(token);
     }
 
@@ -751,20 +772,24 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
         // If token is a tranche
         if (token != collateral) {
-            if (balance > 0 && !isReserveTranche(token)) {
-                // Inserts new tranche into reserve list
+            bool isReserveTranche_ = isReserveTranche(token);
+            if (balance > 0 && !isReserveTranche_) {
+                // Inserts new tranche into reserve list.
                 _reserveTranches.add(address(token));
 
                 // Stores the yield for future usage.
                 _applyYield(token, computeYield(token));
             }
 
-            if (balance == 0 && isReserveTranche(token)) {
-                // Removes tranche from reserve list
+            if (balance == 0 && isReserveTranche_) {
+                // Removes tranche from reserve list.
                 _reserveTranches.remove(address(token));
 
                 // Frees up stored yield.
                 _applyYield(token, 0);
+
+                // Frees up minted supply.
+                delete _mintedSupplyPerTranche[ITranche(address(token))];
             }
         }
 
@@ -806,10 +831,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     // @dev Updates contract store with provided yield.
     function _applyYield(IERC20Upgradeable token, uint256 yield) private {
         if (yield > 0) {
-            appliedYields[token] = yield;
+            _appliedYields[token] = yield;
         } else {
-            delete appliedYields[token];
-            // assert(appliedYields[token] == 0);
+            delete _appliedYields[token];
         }
         emit YieldApplied(token, yield);
     }
@@ -859,9 +883,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
             revert ExceededMaxSupply(newSupply, maxSupply);
         }
 
-        // checks if total amount minted using the given tranche is within the cap
-        if (_totalMintAmtPerTranche[trancheIn] > maxMintAmtPerTranche) {
-            revert ExceededMaxMintPerTranche(trancheIn, _totalMintAmtPerTranche[trancheIn], maxMintAmtPerTranche);
+        // checks if supply minted using the given tranche is within the cap
+        if (_mintedSupplyPerTranche[trancheIn] > maxMintAmtPerTranche) {
+            revert ExceededMaxMintPerTranche(trancheIn, _mintedSupplyPerTranche[trancheIn], maxMintAmtPerTranche);
         }
     }
 

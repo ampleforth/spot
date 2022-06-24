@@ -39,6 +39,11 @@ contract TrancheClassYieldStrategy is IYieldStrategy, OwnableUpgradeable {
     // @param yield The yield factor for any tranche belonging to that class.
     event UpdatedDefinedTrancheYields(bytes32 hash, uint256 yield);
 
+    // @notice Contract initializer.
+    function init() public initializer {
+        __Ownable_init();
+    }
+
     // @notice Updates the tranche class's yield.
     // @param classHash The tranche class (hash(collteralToken, trancheRatios, seniority)).
     // @param yield The yield factor.

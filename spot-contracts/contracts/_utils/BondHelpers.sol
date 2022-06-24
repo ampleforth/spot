@@ -45,7 +45,9 @@ library TrancheDataHelpers {
  *
  */
 library TrancheHelpers {
-    // @dev TODO
+    // @notice Given a tranche, looks up the collateral balance backing the tranche supply.
+    // @param t Address of the tranche token.
+    // @return The collateral balance and the tranche token supply.
     function getTrancheCollateralization(ITranche t) internal view returns (uint256, uint256) {
         IBondController bond = IBondController(t.bond());
         TrancheData memory td;

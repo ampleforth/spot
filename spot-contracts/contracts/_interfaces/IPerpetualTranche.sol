@@ -50,6 +50,10 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @param balance The recorded ERC-20 balance of the token held by the reserve.
     event ReserveSynced(IERC20Upgradeable token, uint256 balance);
 
+    // @notice Event emitted when the active deposit bond is updated.
+    // @param bond Address of the new deposit bond.
+    event UpdatedDepositBond(IBondController bond);
+
     //--------------------------------------------------------------------------
     // Methods
 
@@ -81,13 +85,10 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @return Address of the collateral token.
     function collateral() external view returns (IERC20Upgradeable);
 
-    // @notice The total balance of all tranches deposited into the system.
-    // @return The total tranche balance.
-    function totalTrancheBalance() external view returns (uint256);
-
-    // @notice The total balance of all mature tranches.
-    // @return The mature tranche balance.
-    function matureTrancheBalance() external view returns (uint256);
+    // @notice The "standardized" balances of all tranches deposited into the system.
+    // @return stdTotalTrancheBalance The "standardized" total tranche balance.
+    // @return stdMatureTrancheBalance The "standardized" mature tranche balance.
+    function getStdTrancheBalances() external returns (uint256 stdTotalTrancheBalance, uint256 stdMatureTrancheBalance);
 
     // @notice The parent bond whose tranches are currently accepted to mint perp tokens.
     // @return Address of the deposit bond.

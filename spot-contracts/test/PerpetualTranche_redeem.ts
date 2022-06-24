@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { network, ethers, upgrades } from "hardhat";
-import { constants, Contract, Transaction, Signer } from "ethers";
+import { Contract, Transaction, Signer } from "ethers";
 
 import {
   setupCollateralToken,
@@ -12,14 +12,18 @@ import {
   toYieldFixedPtAmt,
   toPriceFixedPtAmt,
   advancePerpQueue,
+  checkReserveComposition,
+  rebase,
 } from "./helpers";
 
 let perp: Contract,
   bondFactory: Contract,
   collateralToken: Contract,
+  rebaseOracle: Contract,
   issuer: Contract,
   feeStrategy: Contract,
   pricingStrategy: Contract,
+  yieldStrategy: Contract,
   deployer: Signer,
   deployerAddress: string,
   depositBond: Contract,
@@ -32,7 +36,7 @@ describe("PerpetualTranche", function () {
     deployerAddress = await deployer.getAddress();
 
     bondFactory = await setupBondFactory();
-    ({ collateralToken } = await setupCollateralToken("Bitcoin", "BTC"));
+    ({ collateralToken, rebaseOracle } = await setupCollateralToken("Bitcoin", "BTC"));
     const BondIssuer = await ethers.getContractFactory("BondIssuer");
     issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, 3600, collateralToken.address, [500, 500]);
 
@@ -42,12 +46,23 @@ describe("PerpetualTranche", function () {
     const PricingStrategy = await ethers.getContractFactory("MockPricingStrategy");
     pricingStrategy = await PricingStrategy.deploy();
 
+    const YieldStrategy = await ethers.getContractFactory("MockYieldStrategy");
+    yieldStrategy = await YieldStrategy.deploy();
+
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
       PerpetualTranche.connect(deployer),
-      ["PerpetualTranche", "PERP", 9, issuer.address, feeStrategy.address, pricingStrategy.address],
+      [
+        "PerpetualTranche",
+        "PERP",
+        collateralToken.address,
+        issuer.address,
+        feeStrategy.address,
+        pricingStrategy.address,
+        yieldStrategy.address,
+      ],
       {
-        initializer: "init(string,string,uint8,address,address,address)",
+        initializer: "init(string,string,address,address,address,address,address)",
       },
     );
     await advancePerpQueue(perp, 3600);
@@ -57,12 +72,11 @@ describe("PerpetualTranche", function () {
 
     await feeStrategy.setFeeToken(perp.address);
     await feeStrategy.setMintFee(toFixedPtAmt("0"));
-    await pricingStrategy.setPrice(toPriceFixedPtAmt("1"));
-    await perp.updateDefinedYield(await perp.trancheClass(initialDepositTranche.address), toYieldFixedPtAmt("1"));
+    await pricingStrategy.setTranchePrice(initialDepositTranche.address, toPriceFixedPtAmt("1"));
+    await yieldStrategy.setTrancheYield(initialDepositTranche.address, toYieldFixedPtAmt("1"));
 
     await depositIntoBond(depositBond, toFixedPtAmt("1000"), deployer);
     await initialDepositTranche.approve(perp.address, toFixedPtAmt("500"));
-
     await perp.deposit(initialDepositTranche.address, toFixedPtAmt("500"));
   });
 
@@ -78,63 +92,40 @@ describe("PerpetualTranche", function () {
 
       it("should revert", async function () {
         expect(await perp.balanceOf(deployerAddress)).to.lte(toFixedPtAmt("500"));
-        await expect(perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.revertedWith(
-          "ERC20: burn amount exceeds balance",
+        await expect(perp.redeem(toFixedPtAmt("500"))).to.revertedWith(
+          "UnacceptableBurnAmt(500000000000000000000, 250000000000000000000)",
         );
       });
     });
 
     describe("when requested amount is zero", function () {
       it("should revert", async function () {
-        await expect(perp.redeem(initialDepositTranche.address, toFixedPtAmt("0"))).to.revertedWith(
-          "UnacceptableBurnAmt",
-        );
-      });
-    });
-
-    describe("when tranche price is zero", function () {
-      beforeEach(async function () {
-        await pricingStrategy.setPrice(toPriceFixedPtAmt("0"));
-      });
-
-      it("should revert", async function () {
-        await expect(perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.revertedWith(
-          "UnacceptableBurnAmt",
-        );
-      });
-    });
-
-    describe("when tranche price is 0.5", function () {
-      beforeEach(async function () {
-        await pricingStrategy.setPrice(toPriceFixedPtAmt("0.5"));
-      });
-
-      it("should burn the correct amount", async function () {
-        const r = await perp.callStatic.redeem(initialDepositTranche.address, toFixedPtAmt("500"));
-        expect(r[0]).to.eq(toFixedPtAmt("250"));
+        await expect(perp.redeem(toFixedPtAmt("0"))).to.revertedWith("UnacceptableBurnAmt(0, 500000000000000000000)");
       });
     });
 
     describe("when fee is in native token", function () {
       describe("when fee is zero", function () {
         it("should burn perp tokens", async function () {
-          await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalance(
+          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
             perp,
             deployer,
             toFixedPtAmt("-500"),
           );
         });
         it("should transfer the tranches out", async function () {
-          await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalances(
+          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalances(
             initialDepositTranche,
             [deployer, perp],
             [toFixedPtAmt("500"), toFixedPtAmt("-500")],
           );
         });
-        it("should return the burnAmt and fee", async function () {
-          const r = await perp.callStatic.redeem(initialDepositTranche.address, toFixedPtAmt("500"));
-          expect(r[0]).to.eq(toFixedPtAmt("500"));
-          expect(r[1]).to.eq(toFixedPtAmt("0"));
+        it("should return the redemption amounts", async function () {
+          const r = await perp.computeRedemptionAmts(toFixedPtAmt("500"));
+          expect(r[0][0]).to.eq(collateralToken.address);
+          expect(r[0][1]).to.eq(initialDepositTranche.address);
+          expect(r[1][0]).to.eq(toFixedPtAmt("0"));
+          expect(r[1][1]).to.eq(toFixedPtAmt("500"));
         });
       });
 
@@ -146,30 +137,28 @@ describe("PerpetualTranche", function () {
           await feeStrategy.setBurnFee(toFixedPtAmt("1"));
         });
         it("should burn perp tokens", async function () {
-          await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalance(
+          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
             perp,
             deployer,
             toFixedPtAmt("-501"),
           );
         });
         it("should withhold fee", async function () {
-          await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalance(
-            perp,
-            perp,
-            toFixedPtAmt("1"),
-          );
+          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(perp, perp, toFixedPtAmt("1"));
         });
         it("should transfer the tranches out", async function () {
-          await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalances(
+          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalances(
             initialDepositTranche,
             [deployer, perp],
             [toFixedPtAmt("500"), toFixedPtAmt("-500")],
           );
         });
-        it("should return the burnAmt and fee", async function () {
-          const r = await perp.callStatic.redeem(initialDepositTranche.address, toFixedPtAmt("500"));
-          expect(r[0]).to.eq(toFixedPtAmt("500"));
-          expect(r[1]).to.eq(toFixedPtAmt("1"));
+        it("should return the redemption amounts", async function () {
+          const r = await perp.computeRedemptionAmts(toFixedPtAmt("500"));
+          expect(r[0][0]).to.eq(collateralToken.address);
+          expect(r[0][1]).to.eq(initialDepositTranche.address);
+          expect(r[1][0]).to.eq(toFixedPtAmt("0"));
+          expect(r[1][1]).to.eq(toFixedPtAmt("500"));
         });
       });
 
@@ -182,30 +171,28 @@ describe("PerpetualTranche", function () {
           await feeStrategy.setBurnFee(toFixedPtAmt("-1"));
         });
         it("should burn perp tokens", async function () {
-          await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalance(
+          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
             perp,
             deployer,
             toFixedPtAmt("-499"),
           );
         });
         it("should transfer reward", async function () {
-          await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalance(
-            perp,
-            perp,
-            toFixedPtAmt("-1"),
-          );
+          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(perp, perp, toFixedPtAmt("-1"));
         });
         it("should transfer the tranches out", async function () {
-          await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalances(
+          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalances(
             initialDepositTranche,
             [deployer, perp],
             [toFixedPtAmt("500"), toFixedPtAmt("-500")],
           );
         });
-        it("should return the burnAmt and fee", async function () {
-          const r = await perp.callStatic.redeem(initialDepositTranche.address, toFixedPtAmt("500"));
-          expect(r[0]).to.eq(toFixedPtAmt("500"));
-          expect(r[1]).to.eq(toFixedPtAmt("-1"));
+        it("should return the redemption amounts", async function () {
+          const r = await perp.computeRedemptionAmts(toFixedPtAmt("500"));
+          expect(r[0][0]).to.eq(collateralToken.address);
+          expect(r[0][1]).to.eq(initialDepositTranche.address);
+          expect(r[1][0]).to.eq(toFixedPtAmt("0"));
+          expect(r[1][1]).to.eq(toFixedPtAmt("500"));
         });
       });
     });
@@ -221,30 +208,32 @@ describe("PerpetualTranche", function () {
 
       describe("when fee is zero", async function () {
         it("should burn perp tokens", async function () {
-          await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalance(
+          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
             perp,
             deployer,
             toFixedPtAmt("-500"),
           );
         });
         it("should settle fee", async function () {
-          await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalance(
+          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
             feeToken,
             deployer,
             toFixedPtAmt("0"),
           );
         });
         it("should transfer the tranches out", async function () {
-          await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalances(
+          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalances(
             initialDepositTranche,
             [deployer, perp],
             [toFixedPtAmt("500"), toFixedPtAmt("-500")],
           );
         });
-        it("should return the burnAmt and fee", async function () {
-          const r = await perp.callStatic.redeem(initialDepositTranche.address, toFixedPtAmt("500"));
-          expect(r[0]).to.eq(toFixedPtAmt("500"));
-          expect(r[1]).to.eq(toFixedPtAmt("0"));
+        it("should return the redemption amounts", async function () {
+          const r = await perp.computeRedemptionAmts(toFixedPtAmt("500"));
+          expect(r[0][0]).to.eq(collateralToken.address);
+          expect(r[0][1]).to.eq(initialDepositTranche.address);
+          expect(r[1][0]).to.eq(toFixedPtAmt("0"));
+          expect(r[1][1]).to.eq(toFixedPtAmt("500"));
         });
       });
 
@@ -255,9 +244,7 @@ describe("PerpetualTranche", function () {
 
         describe("with no approval", function () {
           it("should revert", async function () {
-            await expect(perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.be.revertedWith(
-              "ERC20: insufficient allowance",
-            );
+            await expect(perp.redeem(toFixedPtAmt("500"))).to.be.revertedWith("ERC20: insufficient allowance");
           });
         });
 
@@ -267,9 +254,7 @@ describe("PerpetualTranche", function () {
           });
 
           it("should revert", async function () {
-            await expect(perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.be.revertedWith(
-              "ERC20: transfer amount exceeds balance",
-            );
+            await expect(perp.redeem(toFixedPtAmt("500"))).to.be.revertedWith("ERC20: transfer amount exceeds balance");
           });
         });
 
@@ -281,30 +266,32 @@ describe("PerpetualTranche", function () {
           });
 
           it("should burn perp tokens", async function () {
-            await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalance(
+            await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
               perp,
               deployer,
               toFixedPtAmt("-500"),
             );
           });
           it("should transfer fee from redeemer", async function () {
-            await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalance(
+            await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
               feeToken,
               deployer,
               toFixedPtAmt("-1"),
             );
           });
           it("should transfer the tranches out", async function () {
-            await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalances(
+            await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalances(
               initialDepositTranche,
               [deployer, perp],
               [toFixedPtAmt("500"), toFixedPtAmt("-500")],
             );
           });
-          it("should return the burnAmt and fee", async function () {
-            const r = await perp.callStatic.redeem(initialDepositTranche.address, toFixedPtAmt("500"));
-            expect(r[0]).to.eq(toFixedPtAmt("500"));
-            expect(r[1]).to.eq(toFixedPtAmt("1"));
+          it("should return the redemption amounts", async function () {
+            const r = await perp.computeRedemptionAmts(toFixedPtAmt("500"));
+            expect(r[0][0]).to.eq(collateralToken.address);
+            expect(r[0][1]).to.eq(initialDepositTranche.address);
+            expect(r[1][0]).to.eq(toFixedPtAmt("0"));
+            expect(r[1][1]).to.eq(toFixedPtAmt("500"));
           });
         });
       });
@@ -316,383 +303,372 @@ describe("PerpetualTranche", function () {
         });
 
         it("should burn perp tokens", async function () {
-          await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalance(
+          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
             perp,
             deployer,
             toFixedPtAmt("-500"),
           );
         });
         it("should transfer fee to redeemer", async function () {
-          await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalance(
+          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
             feeToken,
             deployer,
             toFixedPtAmt("1"),
           );
         });
         it("should transfer the tranches out", async function () {
-          await expect(() => perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.changeTokenBalances(
+          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalances(
             initialDepositTranche,
             [deployer, perp],
             [toFixedPtAmt("500"), toFixedPtAmt("-500")],
           );
         });
-        it("should return the burnAmt and fee", async function () {
-          const r = await perp.callStatic.redeem(initialDepositTranche.address, toFixedPtAmt("500"));
-          expect(r[0]).to.eq(toFixedPtAmt("500"));
-          expect(r[1]).to.eq(toFixedPtAmt("-1"));
+        it("should return the redemption amounts", async function () {
+          const r = await perp.computeRedemptionAmts(toFixedPtAmt("500"));
+          expect(r[0][0]).to.eq(collateralToken.address);
+          expect(r[0][1]).to.eq(initialDepositTranche.address);
+          expect(r[1][0]).to.eq(toFixedPtAmt("0"));
+          expect(r[1][1]).to.eq(toFixedPtAmt("500"));
         });
       });
     });
 
-    describe("when redeeming tranche out of order when queue is NOT empty", function () {
-      let newRedemptionTranche: Contract;
-      beforeEach(async function () {
-        await advancePerpQueue(perp, 7200);
-
-        const newBond = await bondAt(await perp.callStatic.getDepositBond());
-        await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
-        const tranches = await getTranches(newBond);
-        newRedemptionTranche = tranches[0];
-        await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
-        await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
-      });
-      it("should revert", async function () {
-        expect(initialDepositTranche.address).not.to.eq(newRedemptionTranche.address);
-        expect(await perp.callStatic.getRedemptionTranche()).to.eq(newRedemptionTranche.address);
-        await expect(perp.redeem(initialDepositTranche.address, toFixedPtAmt("500"))).to.be.revertedWith(
-          "UnacceptableRedemptionTranche",
+    describe("when redeeming all the tokens", function () {
+      it("should update the reserve composition", async function () {
+        await checkReserveComposition(
+          perp,
+          [collateralToken, initialDepositTranche],
+          [toFixedPtAmt("0"), toFixedPtAmt("500")],
         );
+        await perp.redeem(toFixedPtAmt("500"));
+        await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("0")]);
       });
     });
 
-    describe("when tranche queue has one element", function () {
+    describe("when reserve has more than one tranche", function () {
       let newRedemptionTranche: Contract, tx: Transaction;
       beforeEach(async function () {
         await perp.updateTolerableTrancheMaturiy(1200, 3600);
 
-        await advancePerpQueue(perp, 7200);
+        await advancePerpQueue(perp, 1200);
 
         const newBond = await bondAt(await perp.callStatic.getDepositBond());
         await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
         const tranches = await getTranches(newBond);
         newRedemptionTranche = tranches[0];
+
+        await pricingStrategy.setTranchePrice(newRedemptionTranche.address, toPriceFixedPtAmt("1"));
+        await yieldStrategy.setTrancheYield(newRedemptionTranche.address, toYieldFixedPtAmt("0.5"));
+
         await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
         await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
 
-        expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(1);
-        expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(newRedemptionTranche.address);
-        await expect(perp.callStatic.getRedemptionQueueAt(1)).to.be.reverted;
-        expect(await perp.callStatic.getRedemptionTranche()).to.eq(newRedemptionTranche.address);
-        expect(await perp.reserveCount()).to.eq(2);
-        expect(await perp.inReserve(initialDepositTranche.address)).to.eq(true);
-        expect(await perp.inReserve(newRedemptionTranche.address)).to.eq(true);
-        expect(await perp.reserveAt(0)).to.eq(initialDepositTranche.address);
-        expect(await perp.reserveAt(1)).to.eq(newRedemptionTranche.address);
-        await expect(perp.reserveAt(2)).to.be.reverted;
+        await checkReserveComposition(
+          perp,
+          [collateralToken, initialDepositTranche, newRedemptionTranche],
+          [toFixedPtAmt("0"), toFixedPtAmt("500"), toFixedPtAmt("500")],
+        );
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("750"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
+        expect(await perp.reserveBalance(collateralToken.address)).to.eq(toFixedPtAmt("0"));
+        expect(await perp.reserveBalance(initialDepositTranche.address)).to.eq(toFixedPtAmt("500"));
+        expect(await perp.reserveBalance(newRedemptionTranche.address)).to.eq(toFixedPtAmt("500"));
+
+        tx = perp.redeem(toFixedPtAmt("375"));
+        await tx;
       });
 
-      describe("partial redeem", async function () {
-        beforeEach(async function () {
-          tx = perp.redeem(newRedemptionTranche.address, toFixedPtAmt("250"));
-          await tx;
-        });
-        it("should NOT dequeue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(1);
-        });
-        it("should NOT update the queue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(newRedemptionTranche.address);
-          await expect(perp.callStatic.getRedemptionQueueAt(1)).to.be.reverted;
-        });
-        it("should NOT update the redemption tranche", async function () {
-          expect(await perp.callStatic.getRedemptionTranche()).to.eq(newRedemptionTranche.address);
-        });
-        it("should NOT emit dequeue", async function () {
-          await expect(tx).not.to.emit(perp, "TrancheDequeued").withArgs(newRedemptionTranche.address);
-        });
-        it("should NOT remove from the reserve", async function () {
-          expect(await perp.reserveCount()).to.eq(2);
-        });
-        it("should NOT update the reserve", async function () {
-          expect(await perp.inReserve(initialDepositTranche.address)).to.eq(true);
-          expect(await perp.inReserve(newRedemptionTranche.address)).to.eq(true);
-          expect(await perp.reserveAt(0)).to.eq(initialDepositTranche.address);
-          expect(await perp.reserveAt(1)).to.eq(newRedemptionTranche.address);
-          await expect(perp.reserveAt(2)).to.be.reverted;
-        });
-        it("should emit reserve synced", async function () {
-          expect(tx).to.emit(perp, "ReserveSynced").withArgs(newRedemptionTranche.address, toFixedPtAmt("250"));
-        });
+      it("should update the reserve composition", async function () {
+        await checkReserveComposition(
+          perp,
+          [collateralToken, initialDepositTranche, newRedemptionTranche],
+          [toFixedPtAmt("0"), toFixedPtAmt("250"), toFixedPtAmt("250")],
+        );
       });
-
-      describe("full redeem", async function () {
-        beforeEach(async function () {
-          tx = perp.redeem(newRedemptionTranche.address, toFixedPtAmt("500"));
-          await tx;
-        });
-        it("should dequeue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(0);
-        });
-        it("should update the queue", async function () {
-          await expect(perp.callStatic.getRedemptionQueueAt(0)).to.be.reverted;
-        });
-        it("should update the redemption tranche", async function () {
-          expect(await perp.callStatic.getRedemptionTranche()).to.eq(constants.AddressZero);
-        });
-        it("should emit dequeue", async function () {
-          await expect(tx).to.emit(perp, "TrancheDequeued").withArgs(newRedemptionTranche.address);
-        });
-        it("should remove from the reserve", async function () {
-          expect(await perp.reserveCount()).to.eq(1);
-        });
-        it("should update the reserve", async function () {
-          expect(await perp.inReserve(initialDepositTranche.address)).to.eq(true);
-          expect(await perp.inReserve(newRedemptionTranche.address)).to.eq(false);
-          expect(await perp.reserveAt(0)).to.eq(initialDepositTranche.address);
-          await expect(perp.reserveAt(1)).to.be.reverted;
-        });
-        it("should emit reserve synced", async function () {
-          expect(tx).to.emit(perp, "ReserveSynced").withArgs(newRedemptionTranche.address, toFixedPtAmt("0"));
-        });
+      it("should emit reserve synced", async function () {
+        await expect(tx)
+          .to.emit(perp, "ReserveSynced")
+          .withArgs(collateralToken.address, toFixedPtAmt("0"))
+          .to.emit(perp, "ReserveSynced")
+          .withArgs(initialDepositTranche.address, toFixedPtAmt("250"))
+          .to.emit(perp, "ReserveSynced")
+          .withArgs(newRedemptionTranche.address, toFixedPtAmt("250"));
       });
-
-      describe("with remainder", async function () {
-        it("should redeem the entire balance", async function () {
-          const r = await perp.callStatic.redeem(newRedemptionTranche.address, toFixedPtAmt("1501"));
-          expect(r[0]).to.eq(toFixedPtAmt("500"));
-          expect(await newRedemptionTranche.balanceOf(perp.address)).to.eq(toFixedPtAmt("500"));
-        });
-        describe("queue", function () {
-          beforeEach(async function () {
-            tx = perp.redeem(newRedemptionTranche.address, toFixedPtAmt("1501"));
-            await tx;
-          });
-          it("should dequeue", async function () {
-            expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(0);
-          });
-          it("should update the queue", async function () {
-            await expect(perp.callStatic.getRedemptionQueueAt(0)).to.be.reverted;
-          });
-          it("should update the redemption tranche", async function () {
-            expect(await perp.callStatic.getRedemptionTranche()).to.eq(constants.AddressZero);
-          });
-          it("should emit dequeue", async function () {
-            await expect(tx).to.emit(perp, "TrancheDequeued").withArgs(newRedemptionTranche.address);
-          });
-          it("should remove from the reserve", async function () {
-            expect(await perp.reserveCount()).to.eq(1);
-          });
-          it("should update the reserve", async function () {
-            expect(await perp.inReserve(initialDepositTranche.address)).to.eq(true);
-            expect(await perp.inReserve(newRedemptionTranche.address)).to.eq(false);
-            expect(await perp.reserveAt(0)).to.eq(initialDepositTranche.address);
-            await expect(perp.reserveAt(1)).to.be.reverted;
-          });
-          it("should emit reserve synced", async function () {
-            expect(tx).to.emit(perp, "ReserveSynced").withArgs(newRedemptionTranche.address, toFixedPtAmt("0"));
-          });
-        });
+      it("should transfer tokens out", async function () {
+        await expect(tx)
+          .to.emit(initialDepositTranche, "Transfer")
+          .withArgs(perp.address, deployerAddress, toFixedPtAmt("250"))
+          .to.emit(newRedemptionTranche, "Transfer")
+          .withArgs(perp.address, deployerAddress, toFixedPtAmt("250"));
+      });
+      it("should update totalTrancheBalance", async function () {
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("375"));
+      });
+      it("should update the total supply", async function () {
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("375"));
+      });
+      it("should NOT update matureTrancheBalance", async function () {
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
       });
     });
 
-    describe("when tranche queue has > 1 element", function () {
-      let newRedemptionTranche1: Contract, newRedemptionTranche2: Contract, tx: Transaction;
+    describe("when reserve has mature collateral and tranches", function () {
+      let newRedemptionTranche: Contract, tx: Transaction;
       beforeEach(async function () {
-        await perp.updateTolerableTrancheMaturiy(300, 3600);
-
-        await advancePerpQueue(perp, 7200);
-
-        const newBond1 = await bondAt(await perp.callStatic.getDepositBond());
-        await depositIntoBond(newBond1, toFixedPtAmt("1000"), deployer);
-        const tranches1 = await getTranches(newBond1);
-        await tranches1[0].approve(perp.address, toFixedPtAmt("500"));
-        await perp.deposit(tranches1[0].address, toFixedPtAmt("500"));
-        newRedemptionTranche1 = tranches1[0];
+        await perp.updateTolerableTrancheMaturiy(1200, 3600);
 
         await advancePerpQueue(perp, 1200);
 
-        const newBond2 = await bondAt(await perp.callStatic.getDepositBond());
-        await depositIntoBond(newBond2, toFixedPtAmt("1000"), deployer);
-        const tranches2 = await getTranches(newBond2);
-        await tranches2[0].approve(perp.address, toFixedPtAmt("500"));
-        await perp.deposit(tranches2[0].address, toFixedPtAmt("500"));
-        newRedemptionTranche2 = tranches2[0];
+        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
+        const tranches = await getTranches(newBond);
+        newRedemptionTranche = tranches[0];
 
-        expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(2);
-        expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(newRedemptionTranche1.address);
-        expect(await perp.callStatic.getRedemptionQueueAt(1)).to.eq(newRedemptionTranche2.address);
-        await expect(perp.callStatic.getRedemptionQueueAt(2)).to.be.reverted;
-        expect(await perp.callStatic.getRedemptionTranche()).to.eq(newRedemptionTranche1.address);
+        await pricingStrategy.setTranchePrice(newRedemptionTranche.address, toPriceFixedPtAmt("1"));
+        await yieldStrategy.setTrancheYield(newRedemptionTranche.address, toYieldFixedPtAmt("0.5"));
 
-        expect(await perp.reserveCount()).to.eq(3);
-        expect(await perp.inReserve(initialDepositTranche.address)).to.eq(true);
-        expect(await perp.inReserve(newRedemptionTranche1.address)).to.eq(true);
-        expect(await perp.inReserve(newRedemptionTranche2.address)).to.eq(true);
-        expect(await perp.reserveAt(0)).to.eq(initialDepositTranche.address);
-        expect(await perp.reserveAt(1)).to.eq(newRedemptionTranche1.address);
-        expect(await perp.reserveAt(2)).to.eq(newRedemptionTranche2.address);
-        await expect(perp.reserveAt(3)).to.be.reverted;
+        await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
+        await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
+
+        await checkReserveComposition(
+          perp,
+          [collateralToken, initialDepositTranche, newRedemptionTranche],
+          [toFixedPtAmt("0"), toFixedPtAmt("500"), toFixedPtAmt("500")],
+        );
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("750"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
+
+        await advancePerpQueue(perp, 2400);
+
+        tx = perp.redeem(toFixedPtAmt("375"));
+        await tx;
       });
 
-      describe("partial redeem", async function () {
-        beforeEach(async function () {
-          tx = perp.redeem(newRedemptionTranche1.address, toFixedPtAmt("250"));
-          await tx;
-        });
-        it("should NOT dequeue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(2);
-        });
-        it("should NOT update the queue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(newRedemptionTranche1.address);
-          expect(await perp.callStatic.getRedemptionQueueAt(1)).to.eq(newRedemptionTranche2.address);
-          await expect(perp.callStatic.getRedemptionQueueAt(2)).to.be.reverted;
-        });
-        it("should NOT update the redemption tranche", async function () {
-          expect(await perp.callStatic.getRedemptionTranche()).to.eq(newRedemptionTranche1.address);
-        });
-        it("should NOT emit dequeue", async function () {
-          await expect(tx).not.to.emit(perp, "TrancheDequeued").withArgs(newRedemptionTranche1.address);
-        });
-        it("should NOT remove from the reserve", async function () {
-          expect(await perp.reserveCount()).to.eq(3);
-        });
-        it("should NOT update the reserve", async function () {
-          expect(await perp.inReserve(initialDepositTranche.address)).to.eq(true);
-          expect(await perp.inReserve(newRedemptionTranche1.address)).to.eq(true);
-          expect(await perp.inReserve(newRedemptionTranche2.address)).to.eq(true);
-          expect(await perp.reserveAt(0)).to.eq(initialDepositTranche.address);
-          expect(await perp.reserveAt(1)).to.eq(newRedemptionTranche1.address);
-          expect(await perp.reserveAt(2)).to.eq(newRedemptionTranche2.address);
-          await expect(perp.reserveAt(3)).to.be.reverted;
-        });
-        it("should emit reserve synced", async function () {
-          expect(tx).to.emit(perp, "ReserveSynced").withArgs(newRedemptionTranche1.address, toFixedPtAmt("250"));
-        });
+      it("should update the reserve composition", async function () {
+        await checkReserveComposition(
+          perp,
+          [collateralToken, newRedemptionTranche],
+          [toFixedPtAmt("250"), toFixedPtAmt("250")],
+        );
       });
-
-      describe("full redeem", async function () {
-        beforeEach(async function () {
-          tx = perp.redeem(newRedemptionTranche1.address, toFixedPtAmt("500"));
-          await tx;
-        });
-        it("should dequeue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(1);
-        });
-        it("should update the queue", async function () {
-          expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(newRedemptionTranche2.address);
-          await expect(perp.callStatic.getRedemptionQueueAt(1)).to.be.reverted;
-        });
-        it("should update the redemption tranche", async function () {
-          expect(await perp.callStatic.getRedemptionTranche()).to.eq(newRedemptionTranche2.address);
-        });
-        it("should emit dequeue", async function () {
-          await expect(tx).to.emit(perp, "TrancheDequeued").withArgs(newRedemptionTranche1.address);
-        });
-        it("should remove from the reserve", async function () {
-          expect(await perp.reserveCount()).to.eq(2);
-        });
-        it("should update the reserve", async function () {
-          expect(await perp.inReserve(initialDepositTranche.address)).to.eq(true);
-          expect(await perp.inReserve(newRedemptionTranche2.address)).to.eq(true);
-          expect(await perp.reserveAt(0)).to.eq(initialDepositTranche.address);
-          expect(await perp.reserveAt(1)).to.eq(newRedemptionTranche2.address);
-          await expect(perp.reserveAt(2)).to.be.reverted;
-        });
-        it("should emit reserve synced", async function () {
-          expect(tx).to.emit(perp, "ReserveSynced").withArgs(newRedemptionTranche1.address, toFixedPtAmt("0"));
-        });
+      it("should emit reserve synced", async function () {
+        await expect(tx)
+          .to.emit(perp, "ReserveSynced")
+          .withArgs(collateralToken.address, toFixedPtAmt("250"))
+          .to.emit(perp, "ReserveSynced")
+          .withArgs(newRedemptionTranche.address, toFixedPtAmt("250"));
       });
-
-      describe("with remainder", async function () {
-        it("should redeem the entire balance", async function () {
-          const r = await perp.callStatic.redeem(newRedemptionTranche1.address, toFixedPtAmt("1200"));
-          expect(r[0]).to.eq(toFixedPtAmt("500"));
-          expect(await newRedemptionTranche1.balanceOf(perp.address)).to.eq(toFixedPtAmt("500"));
-        });
-
-        describe("queue", async function () {
-          beforeEach(async function () {
-            tx = perp.redeem(newRedemptionTranche1.address, toFixedPtAmt("1200"));
-            await tx;
-          });
-          it("should dequeue", async function () {
-            expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(1);
-          });
-          it("should update the queue", async function () {
-            expect(await perp.callStatic.getRedemptionQueueAt(0)).to.eq(newRedemptionTranche2.address);
-            await expect(perp.callStatic.getRedemptionQueueAt(1)).to.be.reverted;
-          });
-          it("should update the redemption tranche", async function () {
-            expect(await perp.callStatic.getRedemptionTranche()).to.eq(newRedemptionTranche2.address);
-          });
-          it("should emit dequeue", async function () {
-            await expect(tx).to.emit(perp, "TrancheDequeued").withArgs(newRedemptionTranche1.address);
-          });
-          it("should remove from the reserve", async function () {
-            expect(await perp.reserveCount()).to.eq(2);
-          });
-          it("should update the reserve", async function () {
-            expect(await perp.inReserve(initialDepositTranche.address)).to.eq(true);
-            expect(await perp.inReserve(newRedemptionTranche2.address)).to.eq(true);
-            expect(await perp.reserveAt(0)).to.eq(initialDepositTranche.address);
-            expect(await perp.reserveAt(1)).to.eq(newRedemptionTranche2.address);
-            await expect(perp.reserveAt(2)).to.be.reverted;
-          });
-          it("should emit reserve synced", async function () {
-            expect(tx).to.emit(perp, "ReserveSynced").withArgs(newRedemptionTranche1.address, toFixedPtAmt("0"));
-          });
-        });
+      it("should transfer tokens out", async function () {
+        await expect(tx)
+          .to.emit(collateralToken, "Transfer")
+          .withArgs(perp.address, deployerAddress, toFixedPtAmt("250"))
+          .to.emit(newRedemptionTranche, "Transfer")
+          .withArgs(perp.address, deployerAddress, toFixedPtAmt("250"));
+      });
+      it("should update totalTrancheBalance", async function () {
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("375"));
+      });
+      it("should update the total supply", async function () {
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("375"));
+      });
+      it("should NOT update matureTrancheBalance", async function () {
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("250"));
       });
     });
 
-    describe("when tranche queue is empty", function () {
-      let queuedTranche1: Contract, queuedTranche2: Contract;
+    describe("when the collateralToken balance is over the tranche balance", function () {
+      let newRedemptionTranche: Contract, tx: Transaction;
       beforeEach(async function () {
-        await perp.updateTolerableTrancheMaturiy(300, 3600);
-
-        await advancePerpQueue(perp, 7200);
-
-        const newBond1 = await bondAt(await perp.callStatic.getDepositBond());
-        await depositIntoBond(newBond1, toFixedPtAmt("1000"), deployer);
-        const tranches1 = await getTranches(newBond1);
-        await tranches1[0].approve(perp.address, toFixedPtAmt("500"));
-        await perp.deposit(tranches1[0].address, toFixedPtAmt("500"));
-        queuedTranche1 = tranches1[0];
+        await perp.updateTolerableTrancheMaturiy(1200, 3600);
 
         await advancePerpQueue(perp, 1200);
 
-        const newBond2 = await bondAt(await perp.callStatic.getDepositBond());
-        await depositIntoBond(newBond2, toFixedPtAmt("1000"), deployer);
-        const tranches2 = await getTranches(newBond2);
-        await tranches2[0].approve(perp.address, toFixedPtAmt("500"));
-        await perp.deposit(tranches2[0].address, toFixedPtAmt("500"));
-        queuedTranche2 = tranches2[0];
+        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
+        const tranches = await getTranches(newBond);
+        newRedemptionTranche = tranches[0];
+
+        await pricingStrategy.setTranchePrice(newRedemptionTranche.address, toPriceFixedPtAmt("1"));
+        await yieldStrategy.setTrancheYield(newRedemptionTranche.address, toYieldFixedPtAmt("0.5"));
+
+        await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
+        await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
+
+        await checkReserveComposition(
+          perp,
+          [collateralToken, initialDepositTranche, newRedemptionTranche],
+          [toFixedPtAmt("0"), toFixedPtAmt("500"), toFixedPtAmt("500")],
+        );
+
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("750"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
+        expect(await perp.reserveBalance(collateralToken.address)).to.eq(toFixedPtAmt("0"));
+        expect(await perp.reserveBalance(initialDepositTranche.address)).to.eq(toFixedPtAmt("500"));
+        expect(await perp.reserveBalance(newRedemptionTranche.address)).to.eq(toFixedPtAmt("500"));
+
+        await advancePerpQueue(perp, 2400);
+        await rebase(collateralToken, rebaseOracle, +0.5);
+
+        tx = perp.redeem(toFixedPtAmt("375"));
+        await tx;
+      });
+
+      it("should update the reserve composition", async function () {
+        await checkReserveComposition(
+          perp,
+          [collateralToken, newRedemptionTranche],
+          [toFixedPtAmt("375"), toFixedPtAmt("250")],
+        );
+      });
+      it("should emit reserve synced", async function () {
+        await expect(tx)
+          .to.emit(perp, "ReserveSynced")
+          .withArgs(collateralToken.address, toFixedPtAmt("250"))
+          .to.emit(perp, "ReserveSynced")
+          .withArgs(newRedemptionTranche.address, toFixedPtAmt("250"));
+      });
+      it("should transfer tokens out", async function () {
+        await expect(tx)
+          .to.emit(collateralToken, "Transfer")
+          .withArgs(perp.address, deployerAddress, toFixedPtAmt("250"))
+          .to.emit(newRedemptionTranche, "Transfer")
+          .withArgs(perp.address, deployerAddress, toFixedPtAmt("250"));
+      });
+      it("should update totalTrancheBalance", async function () {
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("375"));
+      });
+      it("should update the total supply", async function () {
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("375"));
+      });
+      it("should NOT update matureTrancheBalance", async function () {
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("250"));
+      });
+    });
+
+    describe("when the collateralToken balance is over the tranche balance", function () {
+      let newRedemptionTranche: Contract, tx: Transaction;
+      beforeEach(async function () {
+        await perp.updateTolerableTrancheMaturiy(1200, 3600);
+
+        await advancePerpQueue(perp, 1200);
+
+        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
+        const tranches = await getTranches(newBond);
+        newRedemptionTranche = tranches[0];
+
+        await pricingStrategy.setTranchePrice(newRedemptionTranche.address, toPriceFixedPtAmt("1"));
+        await yieldStrategy.setTrancheYield(newRedemptionTranche.address, toYieldFixedPtAmt("0.5"));
+
+        await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
+        await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
+
+        await checkReserveComposition(
+          perp,
+          [collateralToken, initialDepositTranche, newRedemptionTranche],
+          [toFixedPtAmt("0"), toFixedPtAmt("500"), toFixedPtAmt("500")],
+        );
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("750"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
+
+        await advancePerpQueue(perp, 2400);
+        await rebase(collateralToken, rebaseOracle, -0.5);
+
+        tx = perp.redeem(toFixedPtAmt("375"));
+        await tx;
+      });
+
+      it("should update the reserve composition", async function () {
+        await checkReserveComposition(
+          perp,
+          [collateralToken, newRedemptionTranche],
+          [toFixedPtAmt("125"), toFixedPtAmt("250")],
+        );
+      });
+      it("should emit reserve synced", async function () {
+        await expect(tx)
+          .to.emit(perp, "ReserveSynced")
+          .withArgs(collateralToken.address, toFixedPtAmt("250"))
+          .to.emit(perp, "ReserveSynced")
+          .withArgs(newRedemptionTranche.address, toFixedPtAmt("250"));
+      });
+      it("should transfer tokens out", async function () {
+        await expect(tx)
+          .to.emit(collateralToken, "Transfer")
+          .withArgs(perp.address, deployerAddress, toFixedPtAmt("250"))
+          .to.emit(newRedemptionTranche, "Transfer")
+          .withArgs(perp.address, deployerAddress, toFixedPtAmt("250"));
+      });
+      it("should update totalTrancheBalance", async function () {
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("375"));
+      });
+      it("should update the total supply", async function () {
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("375"));
+      });
+      it("should NOT update matureTrancheBalance", async function () {
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("250"));
+      });
+    });
+
+    describe("when reserve has only mature collateral", function () {
+      let newRedemptionTranche: Contract, tx: Transaction;
+      beforeEach(async function () {
+        await perp.updateTolerableTrancheMaturiy(1200, 3600);
+
+        await advancePerpQueue(perp, 1200);
+
+        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
+        const tranches = await getTranches(newBond);
+        newRedemptionTranche = tranches[0];
+
+        await pricingStrategy.setTranchePrice(newRedemptionTranche.address, toPriceFixedPtAmt("1"));
+        await yieldStrategy.setTrancheYield(newRedemptionTranche.address, toYieldFixedPtAmt("0.5"));
+
+        await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
+        await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
+
+        await checkReserveComposition(perp, [collateralToken, initialDepositTranche, newRedemptionTranche]);
+        await checkReserveComposition(
+          perp,
+          [collateralToken, initialDepositTranche, newRedemptionTranche],
+          [toFixedPtAmt("0"), toFixedPtAmt("500"), toFixedPtAmt("500")],
+        );
+
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("750"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
 
         await advancePerpQueue(perp, 7200);
 
-        expect(await perp.callStatic.getRedemptionQueueCount()).to.eq(0);
-        await expect(perp.callStatic.getRedemptionQueueAt(0)).to.be.reverted;
-        expect(await perp.callStatic.getRedemptionTranche()).to.eq(constants.AddressZero);
-
-        expect(await perp.reserveCount()).to.eq(3);
-        expect(await perp.inReserve(initialDepositTranche.address)).to.eq(true);
-        expect(await perp.inReserve(queuedTranche1.address)).to.eq(true);
-        expect(await perp.inReserve(queuedTranche2.address)).to.eq(true);
-        expect(await perp.reserveAt(0)).to.eq(initialDepositTranche.address);
-        expect(await perp.reserveAt(1)).to.eq(queuedTranche1.address);
-        expect(await perp.reserveAt(2)).to.eq(queuedTranche2.address);
-        await expect(perp.reserveAt(3)).to.be.reverted;
+        tx = perp.redeem(toFixedPtAmt("375"));
+        await tx;
       });
 
-      it("should revert", async function () {
-        await expect(perp.redeem(initialDepositTranche.address, toFixedPtAmt("100"))).to.be.revertedWith(
-          "UnacceptableRedemptionTranche",
-        );
-        await expect(perp.redeem(queuedTranche1.address, toFixedPtAmt("100"))).to.be.revertedWith(
-          "UnacceptableRedemptionTranche",
-        );
-        await expect(perp.redeem(queuedTranche2.address, toFixedPtAmt("100"))).to.be.revertedWith(
-          "UnacceptableRedemptionTranche",
-        );
+      it("should update the reserve composition", async function () {
+        await checkReserveComposition(perp, [collateralToken]);
+        await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("500")]);
+      });
+      it("should emit reserve synced", async function () {
+        await expect(tx).to.emit(perp, "ReserveSynced").withArgs(collateralToken.address, toFixedPtAmt("500"));
+      });
+      it("should transfer tokens out", async function () {
+        await expect(tx)
+          .to.emit(collateralToken, "Transfer")
+          .withArgs(perp.address, deployerAddress, toFixedPtAmt("500"));
+      });
+      it("should update totalTrancheBalance", async function () {
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("375"));
+      });
+      it("should update the total supply", async function () {
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("375"));
+      });
+      it("should NOT update matureTrancheBalance", async function () {
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("375"));
       });
     });
   });
