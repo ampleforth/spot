@@ -50,7 +50,7 @@ describe("CDRPricingStrategy", function () {
     });
   });
 
-  describe("computePrice", function () {
+  describe("computeTranchePrice", function () {
     let bond: Contract, tranches: Contract[];
     beforeEach(async function () {
       bond = await createBondWithFactory(bondFactory, collateralToken, [500, 500], 86400);
@@ -58,42 +58,10 @@ describe("CDRPricingStrategy", function () {
       tranches = await getTranches(bond);
     });
 
-    describe("when pricing the collateralToken", function () {
-      describe("when cdr = 1", async function () {
-        beforeEach(async function () {
-          await perp.setReserveBalance(toFixedPtAmt("100"));
-          await perp.setMatureTrancheBalance(toFixedPtAmt("100"));
-        });
-        it("should return the price", async function () {
-          expect(await pricingStrategy.computePrice(perp.address, collateralToken.address)).to.eq("100000000");
-        });
-      });
-
-      describe("when cdr > 1", async function () {
-        beforeEach(async function () {
-          await perp.setReserveBalance(toFixedPtAmt("110"));
-          await perp.setMatureTrancheBalance(toFixedPtAmt("100"));
-        });
-        it("should return the price", async function () {
-          expect(await pricingStrategy.computePrice(perp.address, collateralToken.address)).to.eq("110000000");
-        });
-      });
-
-      describe("when cdr < 1", async function () {
-        beforeEach(async function () {
-          await perp.setReserveBalance(toFixedPtAmt("90"));
-          await perp.setMatureTrancheBalance(toFixedPtAmt("100"));
-        });
-        it("should return the price", async function () {
-          expect(await pricingStrategy.computePrice(perp.address, collateralToken.address)).to.eq("90000000");
-        });
-      });
-    });
-
     describe("when pricing the tranche", function () {
       describe("when bond not mature", function () {
         it("should return the price", async function () {
-          expect(await pricingStrategy.computePrice(perp.address, tranches[0].address)).to.eq("100000000");
+          expect(await pricingStrategy.computeTranchePrice(tranches[0].address)).to.eq("100000000");
         });
       });
 
@@ -105,7 +73,7 @@ describe("CDRPricingStrategy", function () {
 
         describe("when cdr = 1", async function () {
           it("should return the price", async function () {
-            expect(await pricingStrategy.computePrice(perp.address, tranches[0].address)).to.eq("100000000");
+            expect(await pricingStrategy.computeTranchePrice(tranches[0].address)).to.eq("100000000");
           });
         });
 
@@ -114,7 +82,7 @@ describe("CDRPricingStrategy", function () {
             await rebase(collateralToken, rebaseOracle, 0.1);
           });
           it("should return the price", async function () {
-            expect(await pricingStrategy.computePrice(perp.address, tranches[0].address)).to.eq("110000000");
+            expect(await pricingStrategy.computeTranchePrice(tranches[0].address)).to.eq("110000000");
           });
         });
 
@@ -123,9 +91,47 @@ describe("CDRPricingStrategy", function () {
             await rebase(collateralToken, rebaseOracle, -0.1);
           });
           it("should return the price", async function () {
-            expect(await pricingStrategy.computePrice(perp.address, tranches[0].address)).to.eq("90000000");
+            expect(await pricingStrategy.computeTranchePrice(tranches[0].address)).to.eq("90000000");
           });
         });
+      });
+    });
+  });
+
+  describe("computeMatureTranchePrice", function () {
+    describe("when cdr = 1", async function () {
+      it("should return the price", async function () {
+        expect(
+          await pricingStrategy.computeMatureTranchePrice(
+            collateralToken.address,
+            toFixedPtAmt("100"),
+            toFixedPtAmt("100"),
+          ),
+        ).to.eq("100000000");
+      });
+    });
+
+    describe("when cdr > 1", async function () {
+      it("should return the price", async function () {
+        expect(
+          await pricingStrategy.computeMatureTranchePrice(
+            collateralToken.address,
+            toFixedPtAmt("110"),
+            toFixedPtAmt("100"),
+          ),
+        ).to.eq("110000000");
+      });
+    });
+
+    describe("when cdr < 1", async function () {
+      it("should return the price", async function () {
+        expect(
+          await pricingStrategy.computeMatureTranchePrice(
+            collateralToken.address,
+            toFixedPtAmt("90"),
+            toFixedPtAmt("100"),
+          ),
+        ).to.eq("90000000");
       });
     });
   });
