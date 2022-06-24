@@ -16,7 +16,7 @@ interface IPricingStrategy {
     // @param debt The total count of mature tranches.
     // @return The price as a fixed point number with `decimals()`.
     function computeMatureTranchePrice(
-        IERC20Upgradeable token,
+        IERC20Upgradeable collateralToken,
         uint256 collateralBalance,
         uint256 debt
     ) external view returns (uint256);
