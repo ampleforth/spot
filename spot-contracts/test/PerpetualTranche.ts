@@ -16,7 +16,6 @@ import {
   checkReserveComposition,
   TimeHelpers,
   rebase,
-  advancePerpQueueToBondMaturity,
 } from "./helpers";
 
 let perp: Contract,
