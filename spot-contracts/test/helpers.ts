@@ -153,7 +153,7 @@ export const getTranches = async (bond: Contract): Promise<Contract[]> => {
   return tranches;
 };
 
-export const getTrancheBalances = async (bond: Contract, user: string): Promise<BigNumber[]> => {
+export const getStdTrancheBalances = async (bond: Contract, user: string): Promise<BigNumber[]> => {
   const tranches = await getTranches(bond);
   const balances: BigNumber[] = [];
   for (let i = 0; i < tranches.length; i++) {

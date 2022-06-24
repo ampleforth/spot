@@ -368,9 +368,9 @@ describe("PerpetualTranche", function () {
           [collateralToken, initialDepositTranche, newRedemptionTranche],
           [toFixedPtAmt("0"), toFixedPtAmt("500"), toFixedPtAmt("500")],
         );
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("750"));
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
         expect(await perp.reserveBalance(collateralToken.address)).to.eq(toFixedPtAmt("0"));
         expect(await perp.reserveBalance(initialDepositTranche.address)).to.eq(toFixedPtAmt("500"));
         expect(await perp.reserveBalance(newRedemptionTranche.address)).to.eq(toFixedPtAmt("500"));
@@ -403,13 +403,13 @@ describe("PerpetualTranche", function () {
           .withArgs(perp.address, deployerAddress, toFixedPtAmt("250"));
       });
       it("should update totalTrancheBalance", async function () {
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("375"));
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("375"));
       });
       it("should update the total supply", async function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("375"));
       });
       it("should NOT update matureTrancheBalance", async function () {
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
       });
     });
 
@@ -436,9 +436,9 @@ describe("PerpetualTranche", function () {
           [collateralToken, initialDepositTranche, newRedemptionTranche],
           [toFixedPtAmt("0"), toFixedPtAmt("500"), toFixedPtAmt("500")],
         );
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("750"));
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
 
         await advancePerpQueue(perp, 2400);
 
@@ -468,13 +468,13 @@ describe("PerpetualTranche", function () {
           .withArgs(perp.address, deployerAddress, toFixedPtAmt("250"));
       });
       it("should update totalTrancheBalance", async function () {
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("375"));
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("375"));
       });
       it("should update the total supply", async function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("375"));
       });
       it("should NOT update matureTrancheBalance", async function () {
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq(toFixedPtAmt("250"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("250"));
       });
     });
 
@@ -502,9 +502,9 @@ describe("PerpetualTranche", function () {
           [toFixedPtAmt("0"), toFixedPtAmt("500"), toFixedPtAmt("500")],
         );
 
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("750"));
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
         expect(await perp.reserveBalance(collateralToken.address)).to.eq(toFixedPtAmt("0"));
         expect(await perp.reserveBalance(initialDepositTranche.address)).to.eq(toFixedPtAmt("500"));
         expect(await perp.reserveBalance(newRedemptionTranche.address)).to.eq(toFixedPtAmt("500"));
@@ -538,13 +538,13 @@ describe("PerpetualTranche", function () {
           .withArgs(perp.address, deployerAddress, toFixedPtAmt("250"));
       });
       it("should update totalTrancheBalance", async function () {
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("375"));
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("375"));
       });
       it("should update the total supply", async function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("375"));
       });
       it("should NOT update matureTrancheBalance", async function () {
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq(toFixedPtAmt("250"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("250"));
       });
     });
 
@@ -571,9 +571,9 @@ describe("PerpetualTranche", function () {
           [collateralToken, initialDepositTranche, newRedemptionTranche],
           [toFixedPtAmt("0"), toFixedPtAmt("500"), toFixedPtAmt("500")],
         );
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("750"));
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
 
         await advancePerpQueue(perp, 2400);
         await rebase(collateralToken, rebaseOracle, -0.5);
@@ -604,13 +604,13 @@ describe("PerpetualTranche", function () {
           .withArgs(perp.address, deployerAddress, toFixedPtAmt("250"));
       });
       it("should update totalTrancheBalance", async function () {
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("375"));
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("375"));
       });
       it("should update the total supply", async function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("375"));
       });
       it("should NOT update matureTrancheBalance", async function () {
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq(toFixedPtAmt("250"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("250"));
       });
     });
 
@@ -639,9 +639,9 @@ describe("PerpetualTranche", function () {
           [toFixedPtAmt("0"), toFixedPtAmt("500"), toFixedPtAmt("500")],
         );
 
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("750"));
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
 
         await advancePerpQueue(perp, 7200);
 
@@ -662,13 +662,13 @@ describe("PerpetualTranche", function () {
           .withArgs(perp.address, deployerAddress, toFixedPtAmt("500"));
       });
       it("should update totalTrancheBalance", async function () {
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("375"));
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("375"));
       });
       it("should update the total supply", async function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("375"));
       });
       it("should NOT update matureTrancheBalance", async function () {
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq(toFixedPtAmt("375"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("375"));
       });
     });
   });

@@ -85,10 +85,10 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @return Address of the collateral token.
     function collateral() external view returns (IERC20Upgradeable);
 
-    // @notice The balances of tranches deposited into the system.
-    // @return totalTrancheBalance The total tranche balance.
-    // @return matureTrancheBalance The mature tranche balance.
-    function getTrancheBalances() external returns (uint256 totalTrancheBalance, uint256 matureTrancheBalance);
+    // @notice The "standardized" balances of all tranches deposited into the system.
+    // @return stdTotalTrancheBalance The "standardized" total tranche balance.
+    // @return stdMatureTrancheBalance The "standardized" mature tranche balance.
+    function getStdTrancheBalances() external returns (uint256 stdTotalTrancheBalance, uint256 stdMatureTrancheBalance);
 
     // @notice The parent bond whose tranches are currently accepted to mint perp tokens.
     // @return Address of the deposit bond.

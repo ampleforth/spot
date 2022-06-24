@@ -244,11 +244,11 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     EnumerableSetUpgradeable.AddressSet private _reserveTranches;
 
     // @notice The standardized amount of all tranches deposited into the system.
-    uint256 private _totalTrancheBalance;
+    uint256 private _stdTotalTrancheBalance;
 
     // @notice The standardized amount of all the mature tranches extracted and
     //         held as the collateral token.
-    uint256 private _matureTrancheBalance;
+    uint256 private _stdMatureTrancheBalance;
 
     //--------------------------------------------------------------------------
     // Modifiers
@@ -405,7 +405,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         _transferIntoReserve(_msgSender(), trancheIn, trancheInAmt);
 
         // updates reserve's tranche balance
-        _totalTrancheBalance += stdTrancheInAmt;
+        _stdTotalTrancheBalance += stdTrancheInAmt;
 
         // mints perp tokens to the sender
         _mint(_msgSender(), mintAmt);
@@ -450,8 +450,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         }
 
         // updates reserve's tranche balances
-        _totalTrancheBalance -= _perpsToReserveShare(burnAmt, perpSupply, _totalTrancheBalance);
-        _matureTrancheBalance -= _perpsToReserveShare(burnAmt, perpSupply, _matureTrancheBalance);
+        _stdTotalTrancheBalance -= _perpsToReserveShare(burnAmt, perpSupply, _stdTotalTrancheBalance);
+        _stdMatureTrancheBalance -= _perpsToReserveShare(burnAmt, perpSupply, _stdMatureTrancheBalance);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -490,9 +490,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         _transferOutOfReserve(_msgSender(), tokenOut, tokenOutAmt);
 
         // updates reserve's tranche balance
-        // NOTE: `_totalTrancheBalance` does not change on rollovers as `stdTrancheInAmt` == `stdTrancheOutAmt`
+        // NOTE: `_stdTotalTrancheBalance` does not change on rollovers as `stdTrancheInAmt` == `stdTrancheOutAmt`
         if (tokenOut == collateral) {
-            _matureTrancheBalance -= stdTrancheInAmt;
+            _stdMatureTrancheBalance -= stdTrancheInAmt;
         }
     }
 
@@ -504,8 +504,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     }
 
     /// @inheritdoc IPerpetualTranche
-    function getTrancheBalances() external override afterStateUpdate returns (uint256, uint256) {
-        return (_totalTrancheBalance, _matureTrancheBalance);
+    function getStdTrancheBalances() external override afterStateUpdate returns (uint256, uint256) {
+        return (_stdTotalTrancheBalance, _stdMatureTrancheBalance);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -571,7 +571,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
             _syncReserve(tranche);
 
             // Keeps track of the total tranches redeemed
-            _matureTrancheBalance += _toStdTrancheAmt(trancheBalance, computeYield(tranche));
+            _stdMatureTrancheBalance += _toStdTrancheAmt(trancheBalance, computeYield(tranche));
         }
 
         // Keeps track of reserve's rebasing collateral token balance
@@ -650,7 +650,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     function computePrice(IERC20Upgradeable token) public view override returns (uint256) {
         return
             token == collateral
-                ? pricingStrategy.computeMatureTranchePrice(token, _tokenBalance(token), _matureTrancheBalance)
+                ? pricingStrategy.computeMatureTranchePrice(token, _tokenBalance(token), _stdMatureTrancheBalance)
                 : pricingStrategy.computeTranchePrice(ITranche(address(token)));
     }
 
@@ -714,19 +714,19 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // In the case token out is the mature tranche (held as naked collateral):
         // Token balance is calculated from the tranche denomination
         uint256 tokenOutAmt = isMatureTranche
-            ? ((trancheOutAmt * tokenOutBalance) / _matureTrancheBalance)
+            ? ((trancheOutAmt * tokenOutBalance) / _stdMatureTrancheBalance)
             : trancheOutAmt;
 
         // When the token out balance is NOT covered
         if (tokenOutAmt > maxTokenOutAmtCovered) {
             tokenOutAmt = maxTokenOutAmtCovered;
             stdTrancheRolloverAmt = isMatureTranche
-                ? ((tokenOutAmt * _matureTrancheBalance) / tokenOutBalance)
+                ? ((tokenOutAmt * _stdMatureTrancheBalance) / tokenOutBalance)
                 : _toStdTrancheAmt(tokenOutAmt, tokenOutYield);
             trancheInAmtUsed = _fromStdTrancheAmt(stdTrancheRolloverAmt, trancheInYield);
         }
 
-        uint256 perpRolloverAmt = (stdTrancheRolloverAmt * totalSupply()) / _totalTrancheBalance;
+        uint256 perpRolloverAmt = (stdTrancheRolloverAmt * totalSupply()) / _stdTotalTrancheBalance;
         return (perpRolloverAmt, tokenOutAmt, stdTrancheRolloverAmt, trancheInAmtUsed);
     }
 

@@ -681,8 +681,8 @@ describe("PerpetualTranche", function () {
         );
 
         expect(await perp.reserveCount()).to.eq("6");
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("2500"));
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq("0");
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2500"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq("0");
         expect(await perp.reserveBalance(collateralToken.address)).to.eq("0");
 
         await TimeHelpers.increaseTime(1200);
@@ -710,8 +710,8 @@ describe("PerpetualTranche", function () {
       });
 
       it("should NOT change tranche balances", async function () {
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("2500"));
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq("0");
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2500"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq("0");
       });
 
       it("should emit ReserveSynced", async function () {
@@ -758,8 +758,8 @@ describe("PerpetualTranche", function () {
           ],
         );
         expect(await perp.reserveCount()).to.eq("6");
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("2500"));
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq("0");
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2500"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq("0");
         expect(await perp.reserveBalance(collateralToken.address)).to.eq("0");
 
         await TimeHelpers.increaseTime(6000);
@@ -784,8 +784,8 @@ describe("PerpetualTranche", function () {
       });
 
       it("should change mature tranche balances", async function () {
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("2500"));
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq(toFixedPtAmt("1000"));
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2500"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("1000"));
       });
 
       it("should call mature if not already called", async function () {
@@ -847,8 +847,8 @@ describe("PerpetualTranche", function () {
           ],
         );
         expect(await perp.reserveCount()).to.eq("6");
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("2500"));
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq("0");
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2500"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq("0");
         expect(await perp.reserveBalance(collateralToken.address)).to.eq("0");
 
         await TimeHelpers.increaseTime(6000);
@@ -869,8 +869,8 @@ describe("PerpetualTranche", function () {
       });
 
       it("should change mature tranche balances", async function () {
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("2500"));
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq(toFixedPtAmt("1000"));
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2500"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("1000"));
       });
 
       it("should call mature if not already called", async function () {
@@ -935,8 +935,8 @@ describe("PerpetualTranche", function () {
           ],
         );
         expect(await perp.reserveCount()).to.eq("6");
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("2250"));
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq("0");
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2250"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq("0");
         expect(await perp.reserveBalance(collateralToken.address)).to.eq("0");
 
         await TimeHelpers.increaseTime(6000);
@@ -957,8 +957,8 @@ describe("PerpetualTranche", function () {
       });
 
       it("should change mature tranche balances", async function () {
-        expect((await perp.callStatic.getTrancheBalances())[0]).to.eq(toFixedPtAmt("2250"));
-        expect((await perp.callStatic.getTrancheBalances())[1]).to.eq(toFixedPtAmt("750"));
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2250"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("750"));
       });
 
       it("should call mature if not already called", async function () {
