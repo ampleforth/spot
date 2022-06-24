@@ -113,7 +113,7 @@ describe("RouterV1", function () {
     describe("when fee token is the native token", async function () {
       it("should compute the mint amount and fee", async function () {
         const r = await router.callStatic.previewDeposit(perp.address, depositTranches[1].address, toFixedPtAmt("300"));
-        expect(r[0]).to.eq(toFixedPtAmt("215"));
+        expect(r[0]).to.eq(toFixedPtAmt("225"));
         expect(r[1]).to.eq(perp.address);
         expect(r[2]).to.eq(toFixedPtAmt("10"));
       });
@@ -202,12 +202,12 @@ describe("RouterV1", function () {
         expect(r[0][6]).to.eq(depositTranches3[1].address);
 
         expect(r[1][0]).to.eq(toFixedPtAmt("0"));
-        expect(r[1][1]).to.eq(toFixedPtAmt("198"));
-        expect(r[1][2]).to.eq(toFixedPtAmt("297"));
-        expect(r[1][3]).to.eq(toFixedPtAmt("198"));
-        expect(r[1][4]).to.eq(toFixedPtAmt("297"));
-        expect(r[1][5]).to.eq(toFixedPtAmt("198"));
-        expect(r[1][6]).to.eq(toFixedPtAmt("297"));
+        expect(r[1][1]).to.eq(toFixedPtAmt("200"));
+        expect(r[1][2]).to.eq(toFixedPtAmt("300"));
+        expect(r[1][3]).to.eq(toFixedPtAmt("200"));
+        expect(r[1][4]).to.eq(toFixedPtAmt("300"));
+        expect(r[1][5]).to.eq(toFixedPtAmt("200"));
+        expect(r[1][6]).to.eq(toFixedPtAmt("300"));
 
         expect(r[2]).to.eq(perp.address);
         expect(r[3]).to.eq(toFixedPtAmt("12.75"));
@@ -227,12 +227,12 @@ describe("RouterV1", function () {
         expect(r[0][6]).to.eq(depositTranches3[1].address);
 
         expect(r[1][0]).to.eq(toFixedPtAmt("0"));
-        expect(r[1][1]).to.eq(toFixedPtAmt("98"));
-        expect(r[1][2]).to.eq(toFixedPtAmt("147"));
-        expect(r[1][3]).to.eq(toFixedPtAmt("98"));
-        expect(r[1][4]).to.eq(toFixedPtAmt("147"));
-        expect(r[1][5]).to.eq(toFixedPtAmt("98"));
-        expect(r[1][6]).to.eq(toFixedPtAmt("147"));
+        expect(r[1][1]).to.eq(toFixedPtAmt("100"));
+        expect(r[1][2]).to.eq(toFixedPtAmt("150"));
+        expect(r[1][3]).to.eq(toFixedPtAmt("100"));
+        expect(r[1][4]).to.eq(toFixedPtAmt("150"));
+        expect(r[1][5]).to.eq(toFixedPtAmt("100"));
+        expect(r[1][6]).to.eq(toFixedPtAmt("150"));
 
         expect(r[2]).to.eq(perp.address);
         expect(r[3]).to.eq(toFixedPtAmt("12.75"));

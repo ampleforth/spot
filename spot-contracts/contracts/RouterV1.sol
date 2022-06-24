@@ -81,15 +81,8 @@ contract RouterV1 {
         )
     {
         (uint256 mintAmt, ) = perp.computeMintAmt(trancheIn, trancheInAmt);
-
         IERC20Upgradeable feeToken = perp.feeToken();
         int256 mintFee = perp.feeStrategy().computeMintFee(mintAmt);
-
-        // When Fee is to be paid in perps, it is withheld from the mint amount
-        if (address(feeToken) == address(perp) && mintFee > 0) {
-            mintAmt -= mintFee.toUint256();
-        }
-
         return (mintAmt, feeToken, mintFee);
     }
 
@@ -176,17 +169,11 @@ contract RouterV1 {
             int256
         )
     {
-        int256 burnFee = perp.feeStrategy().computeBurnFee(perpAmtBurnt);
-        IERC20Upgradeable feeToken = perp.feeToken();
-
-        // When Fee is to be paid in perps, it is withheld from the burn amount
-        if (address(feeToken) == address(perp) && burnFee > 0) {
-            perpAmtBurnt -= burnFee.toUint256();
-        }
-
         (IERC20Upgradeable[] memory reserveTokens, uint256[] memory redemptionAmts) = perp.computeRedemptionAmts(
             perpAmtBurnt
         );
+        int256 burnFee = perp.feeStrategy().computeBurnFee(perpAmtBurnt);
+        IERC20Upgradeable feeToken = perp.feeToken();
         return (reserveTokens, redemptionAmts, feeToken, burnFee);
     }
 
