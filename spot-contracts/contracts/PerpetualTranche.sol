@@ -443,37 +443,37 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     }
 
     /// @inheritdoc IPerpetualTranche
-    function redeem(uint256 burnAmt) external override afterStateUpdate {
+    function burn(uint256 perpAmtBurnt) external override afterStateUpdate {
         // gets the current perp supply
         uint256 perpSupply = totalSupply();
 
         // verifies if burn amount is acceptable
-        if (burnAmt == 0 || burnAmt > perpSupply) {
-            revert UnacceptableBurnAmt(burnAmt, perpSupply);
+        if (perpAmtBurnt == 0 || perpAmtBurnt > perpSupply) {
+            revert UnacceptableBurnAmt(perpAmtBurnt, perpSupply);
         }
 
-        // calculates the fee to burn `burnAmt` of perp token
-        int256 burnFee = feeStrategy.computeBurnFee(burnAmt);
+        // calculates the fee to burn `perpAmtBurnt` of perp token
+        int256 burnFee = feeStrategy.computeBurnFee(perpAmtBurnt);
+
+        // calculates share of reserve tokens to be redeemed
+        (IERC20Upgradeable[] memory tokensOuts, uint256[] memory tokenOutAmts) = computeRedemptionAmts(perpAmtBurnt);
 
         // burns perp tokens from the sender
-        _burn(_msgSender(), burnAmt);
+        _burn(_msgSender(), perpAmtBurnt);
 
         // settles fees
         _settleFee(_msgSender(), burnFee);
 
-        for (uint256 i = 0; i < reserveCount(); i++) {
-            IERC20Upgradeable tokenOut = reserveAt(i);
-
-            // calculates share
-            uint256 tokenOutAmt = _perpsToReserveShare(burnAmt, perpSupply, _tokenBalance(tokenOut));
-
-            // transfers tokens out
-            _transferOutOfReserve(_msgSender(), tokenOut, tokenOutAmt);
+        // transfers reserve tokens out
+        for (uint256 i = 0; i < tokensOuts.length; i++) {
+            if (tokenOutAmts[i] > 0) {
+                _transferOutOfReserve(_msgSender(), tokensOuts[i], tokenOutAmts[i]);
+            }
         }
 
         // updates reserve's tranche balances
-        _stdTotalTrancheBalance -= _perpsToReserveShare(burnAmt, perpSupply, _stdTotalTrancheBalance);
-        _stdMatureTrancheBalance -= _perpsToReserveShare(burnAmt, perpSupply, _stdMatureTrancheBalance);
+        _stdTotalTrancheBalance -= _perpsToReserveShare(perpAmtBurnt, perpSupply, _stdTotalTrancheBalance);
+        _stdMatureTrancheBalance -= _perpsToReserveShare(perpAmtBurnt, perpSupply, _stdMatureTrancheBalance);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -520,7 +520,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
     /// @inheritdoc IPerpetualTranche
     // @dev Used in case an altruistic party intends to increase the collaterlization ratio.
-    function burn(uint256 amount) external override returns (bool) {
+    function burnWithoutRedemption(uint256 amount) external override returns (bool) {
         _burn(_msgSender(), amount);
         return true;
     }
@@ -635,7 +635,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
     /// @inheritdoc IPerpetualTranche
     function reserveAt(uint256 i) public view override returns (IERC20Upgradeable) {
-        return i == 0 ? collateral : IERC20Upgradeable(_reserveTranches.at(i - 1));
+        return (i == 0) ? collateral : IERC20Upgradeable(_reserveTranches.at(i - 1));
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -665,13 +665,13 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     //      if NOT computes the yield.
     function computeYield(IERC20Upgradeable token) public view override returns (uint256) {
         uint256 yield = _appliedYields[token];
-        return yield > 0 ? yield : yieldStrategy.computeYield(token);
+        return (yield > 0) ? yield : yieldStrategy.computeYield(token);
     }
 
     /// @inheritdoc IPerpetualTranche
     function computePrice(IERC20Upgradeable token) public view override returns (uint256) {
         return
-            token == collateral
+            (token == collateral)
                 ? pricingStrategy.computeMatureTranchePrice(token, _tokenBalance(token), _stdMatureTrancheBalance)
                 : pricingStrategy.computeTranchePrice(ITranche(address(token)));
     }
@@ -694,12 +694,13 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         override
         returns (IERC20Upgradeable[] memory, uint256[] memory)
     {
+        uint256 totalSupply_ = totalSupply();
         uint256 reserveCount_ = reserveCount();
         IERC20Upgradeable[] memory reserveTokens = new IERC20Upgradeable[](reserveCount_);
         uint256[] memory redemptionAmts = new uint256[](reserveCount_);
         for (uint256 i = 0; i < reserveCount_; i++) {
             reserveTokens[i] = reserveAt(i);
-            redemptionAmts[i] = _perpsToReserveShare(perpAmtBurnt, totalSupply(), _tokenBalance(reserveTokens[i]));
+            redemptionAmts[i] = _perpsToReserveShare(perpAmtBurnt, totalSupply_, _tokenBalance(reserveTokens[i]));
         }
         return (reserveTokens, redemptionAmts);
     }
