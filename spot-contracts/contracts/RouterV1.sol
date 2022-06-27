@@ -177,15 +177,6 @@ contract RouterV1 {
         return (reserveTokens, redemptionAmts, feeToken, burnFee);
     }
 
-    struct RolloverPreview {
-        // Rollover amounts are perp denominated.
-        // Useful for deriving fee amount for users.
-        uint256 rolloverPerpAmt;
-        uint256 tokenOutAmt;
-        uint256 trancheInAmtUsed;
-        uint256 remainingTrancheInAmt;
-    }
-
     // @notice Calculates the amount tranche tokens that can be rolled out, remainders and fees,
     //         with a given tranche token rolled in and amount.
     // @dev Used by off-chain services to preview a rollover operation.
@@ -208,25 +199,20 @@ contract RouterV1 {
         external
         afterPerpStateUpdate(perp)
         returns (
-            RolloverPreview memory,
+            IPerpetualTranche.RolloverPreview memory,
             IERC20Upgradeable,
             int256
         )
     {
-        RolloverPreview memory r;
+        IPerpetualTranche.RolloverPreview memory r;
+        r.remainingTrancheInAmt = trancheInAmtRequested;
+
         IERC20Upgradeable feeToken = perp.feeToken();
         int256 rolloverFee;
 
-        r.remainingTrancheInAmt = trancheInAmtRequested;
         if (perp.isAcceptableRollover(trancheIn, tokenOut)) {
-            (r.rolloverPerpAmt, r.tokenOutAmt, , r.trancheInAmtUsed) = perp.computeRolloverAmt(
-                trancheIn,
-                tokenOut,
-                trancheInAmtRequested,
-                maxTokenOutAmtUsed
-            );
-            r.remainingTrancheInAmt = trancheInAmtRequested - r.trancheInAmtUsed;
-            rolloverFee = perp.feeStrategy().computeRolloverFee(r.rolloverPerpAmt);
+            r = perp.computeRolloverAmt(trancheIn, tokenOut, trancheInAmtRequested, maxTokenOutAmtUsed);
+            rolloverFee = perp.feeStrategy().computeRolloverFee(r.perpRolloverAmt);
         }
 
         return (r, feeToken, rolloverFee);
