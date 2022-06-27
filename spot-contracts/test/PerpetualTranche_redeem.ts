@@ -86,7 +86,7 @@ describe("PerpetualTranche", function () {
     await network.provider.send("hardhat_reset");
   });
 
-  describe("#redeem", function () {
+  describe("#burn", function () {
     describe("when user has insufficient balance", function () {
       beforeEach(async function () {
         await perp.burn(toFixedPtAmt("250"));
@@ -94,7 +94,7 @@ describe("PerpetualTranche", function () {
 
       it("should revert", async function () {
         expect(await perp.balanceOf(deployerAddress)).to.lte(toFixedPtAmt("500"));
-        await expect(perp.redeem(toFixedPtAmt("500"))).to.revertedWith(
+        await expect(perp.burn(toFixedPtAmt("500"))).to.revertedWith(
           "UnacceptableBurnAmt(500000000000000000000, 250000000000000000000)",
         );
       });
@@ -102,21 +102,21 @@ describe("PerpetualTranche", function () {
 
     describe("when requested amount is zero", function () {
       it("should revert", async function () {
-        await expect(perp.redeem(toFixedPtAmt("0"))).to.revertedWith("UnacceptableBurnAmt(0, 500000000000000000000)");
+        await expect(perp.burn(toFixedPtAmt("0"))).to.revertedWith("UnacceptableBurnAmt(0, 500000000000000000000)");
       });
     });
 
     describe("when fee is in native token", function () {
       describe("when fee is zero", function () {
         it("should burn perp tokens", async function () {
-          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(
             perp,
             deployer,
             toFixedPtAmt("-500"),
           );
         });
         it("should transfer the tranches out", async function () {
-          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalances(
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalances(
             initialDepositTranche,
             [deployer, perp],
             [toFixedPtAmt("500"), toFixedPtAmt("-500")],
@@ -139,17 +139,17 @@ describe("PerpetualTranche", function () {
           await feeStrategy.setBurnFee(toFixedPtAmt("1"));
         });
         it("should burn perp tokens", async function () {
-          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(
             perp,
             deployer,
             toFixedPtAmt("-501"),
           );
         });
         it("should withhold fee", async function () {
-          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(perp, perp, toFixedPtAmt("1"));
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(perp, perp, toFixedPtAmt("1"));
         });
         it("should transfer the tranches out", async function () {
-          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalances(
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalances(
             initialDepositTranche,
             [deployer, perp],
             [toFixedPtAmt("500"), toFixedPtAmt("-500")],
@@ -173,17 +173,17 @@ describe("PerpetualTranche", function () {
           await feeStrategy.setBurnFee(toFixedPtAmt("-1"));
         });
         it("should burn perp tokens", async function () {
-          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(
             perp,
             deployer,
             toFixedPtAmt("-499"),
           );
         });
         it("should transfer reward", async function () {
-          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(perp, perp, toFixedPtAmt("-1"));
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(perp, perp, toFixedPtAmt("-1"));
         });
         it("should transfer the tranches out", async function () {
-          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalances(
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalances(
             initialDepositTranche,
             [deployer, perp],
             [toFixedPtAmt("500"), toFixedPtAmt("-500")],
@@ -210,21 +210,21 @@ describe("PerpetualTranche", function () {
 
       describe("when fee is zero", async function () {
         it("should burn perp tokens", async function () {
-          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(
             perp,
             deployer,
             toFixedPtAmt("-500"),
           );
         });
         it("should settle fee", async function () {
-          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(
             feeToken,
             deployer,
             toFixedPtAmt("0"),
           );
         });
         it("should transfer the tranches out", async function () {
-          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalances(
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalances(
             initialDepositTranche,
             [deployer, perp],
             [toFixedPtAmt("500"), toFixedPtAmt("-500")],
@@ -246,7 +246,7 @@ describe("PerpetualTranche", function () {
 
         describe("with no approval", function () {
           it("should revert", async function () {
-            await expect(perp.redeem(toFixedPtAmt("500"))).to.be.revertedWith("ERC20: insufficient allowance");
+            await expect(perp.burn(toFixedPtAmt("500"))).to.be.revertedWith("ERC20: insufficient allowance");
           });
         });
 
@@ -256,7 +256,7 @@ describe("PerpetualTranche", function () {
           });
 
           it("should revert", async function () {
-            await expect(perp.redeem(toFixedPtAmt("500"))).to.be.revertedWith("ERC20: transfer amount exceeds balance");
+            await expect(perp.burn(toFixedPtAmt("500"))).to.be.revertedWith("ERC20: transfer amount exceeds balance");
           });
         });
 
@@ -268,21 +268,21 @@ describe("PerpetualTranche", function () {
           });
 
           it("should burn perp tokens", async function () {
-            await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
+            await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(
               perp,
               deployer,
               toFixedPtAmt("-500"),
             );
           });
           it("should transfer fee from redeemer", async function () {
-            await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
+            await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(
               feeToken,
               deployer,
               toFixedPtAmt("-1"),
             );
           });
           it("should transfer the tranches out", async function () {
-            await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalances(
+            await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalances(
               initialDepositTranche,
               [deployer, perp],
               [toFixedPtAmt("500"), toFixedPtAmt("-500")],
@@ -305,21 +305,21 @@ describe("PerpetualTranche", function () {
         });
 
         it("should burn perp tokens", async function () {
-          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(
             perp,
             deployer,
             toFixedPtAmt("-500"),
           );
         });
         it("should transfer fee to redeemer", async function () {
-          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(
             feeToken,
             deployer,
             toFixedPtAmt("1"),
           );
         });
         it("should transfer the tranches out", async function () {
-          await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalances(
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalances(
             initialDepositTranche,
             [deployer, perp],
             [toFixedPtAmt("500"), toFixedPtAmt("-500")],
@@ -342,7 +342,7 @@ describe("PerpetualTranche", function () {
           [collateralToken, initialDepositTranche],
           [toFixedPtAmt("0"), toFixedPtAmt("500")],
         );
-        await perp.redeem(toFixedPtAmt("500"));
+        await perp.burn(toFixedPtAmt("500"));
         await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("0")]);
       });
     });
@@ -377,7 +377,7 @@ describe("PerpetualTranche", function () {
         expect(await perp.reserveBalance(initialDepositTranche.address)).to.eq(toFixedPtAmt("500"));
         expect(await perp.reserveBalance(newRedemptionTranche.address)).to.eq(toFixedPtAmt("500"));
 
-        tx = perp.redeem(toFixedPtAmt("375"));
+        tx = perp.burn(toFixedPtAmt("375"));
         await tx;
       });
 
@@ -444,7 +444,7 @@ describe("PerpetualTranche", function () {
 
         await advancePerpQueue(perp, 2400);
 
-        tx = perp.redeem(toFixedPtAmt("375"));
+        tx = perp.burn(toFixedPtAmt("375"));
         await tx;
       });
 
@@ -514,7 +514,7 @@ describe("PerpetualTranche", function () {
         await advancePerpQueue(perp, 2400);
         await rebase(collateralToken, rebaseOracle, +0.5);
 
-        tx = perp.redeem(toFixedPtAmt("375"));
+        tx = perp.burn(toFixedPtAmt("375"));
         await tx;
       });
 
@@ -580,7 +580,7 @@ describe("PerpetualTranche", function () {
         await advancePerpQueue(perp, 2400);
         await rebase(collateralToken, rebaseOracle, -0.5);
 
-        tx = perp.redeem(toFixedPtAmt("375"));
+        tx = perp.burn(toFixedPtAmt("375"));
         await tx;
       });
 
@@ -647,7 +647,7 @@ describe("PerpetualTranche", function () {
 
         await advancePerpQueue(perp, 7200);
 
-        tx = perp.redeem(toFixedPtAmt("375"));
+        tx = perp.burn(toFixedPtAmt("375"));
         await tx;
       });
 
