@@ -230,6 +230,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     uint256 public maxMintAmtPerTranche;
 
     // @notice The percentage of the excess value the system retains on rotation.
+    // @dev Skim percentage is stored as fixed point number with {PERC_DECIMALS}.
     uint256 public skimPerc;
 
     // @notice The total number of perps that have been minted using a given tranche.
@@ -731,14 +732,14 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // In the case token out is the mature tranche (held as naked collateral):
         // Token balance is calculated from the tranche denomination
         uint256 trancheOutAmt = _fromStdTrancheAmt(r.stdTrancheRolloverAmt, tokenOutYield);
-        r.tokenOutAmt = tokenOut == collateral
+        r.tokenOutAmt = (tokenOut == collateral)
             ? ((trancheOutAmt * tokenOutBalance) / _stdMatureTrancheBalance)
             : trancheOutAmt;
 
         // When the token out balance is NOT covered
         if (r.tokenOutAmt > maxTokenOutAmtCovered) {
             r.tokenOutAmt = maxTokenOutAmtCovered;
-            r.stdTrancheRolloverAmt = tokenOut == collateral
+            r.stdTrancheRolloverAmt = (tokenOut == collateral)
                 ? ((r.tokenOutAmt * _stdMatureTrancheBalance) / tokenOutBalance)
                 : _toStdTrancheAmt(r.tokenOutAmt, tokenOutYield);
             r.trancheInAmtUsed = _fromStdTrancheAmt(r.stdTrancheRolloverAmt, trancheInYield);
@@ -750,7 +751,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
             uint256 valueIn = r.trancheInAmtUsed * trancheInPrice;
             uint256 valueOut = r.tokenOutAmt * tokenOutPrice;
             if (valueOut > valueIn) {
-                uint256 adjustedValueOut = valueIn + ((HUNDRED_PERC - skimPerc) * (valueOut - valueIn)) / HUNDRED_PERC;
+                uint256 adjustedValueOut = valueOut - ((skimPerc * (valueOut - valueIn)) / HUNDRED_PERC);
                 r.tokenOutAmt = (r.tokenOutAmt * adjustedValueOut) / valueOut;
             }
         }
