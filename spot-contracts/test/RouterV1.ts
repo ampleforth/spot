@@ -337,7 +337,7 @@ describe("RouterV1", function () {
           toFixedPtAmt("200"),
           constants.MaxUint256,
         );
-        expect(r[0].rolloverPerpAmt).to.eq(toFixedPtAmt("0"));
+        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("0"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("0"));
         expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("0"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("200"));
@@ -358,7 +358,7 @@ describe("RouterV1", function () {
           toFixedPtAmt("250"),
           constants.MaxUint256,
         );
-        expect(r[0].rolloverPerpAmt).to.eq(toFixedPtAmt("180"));
+        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("180"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("200"));
         expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("200"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("50"));
@@ -379,7 +379,7 @@ describe("RouterV1", function () {
           toFixedPtAmt("250"),
           constants.MaxUint256,
         );
-        expect(r[0].rolloverPerpAmt).to.eq(toFixedPtAmt("202.5"));
+        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("202.5"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("300"));
         expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("225"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("25"));
@@ -400,7 +400,7 @@ describe("RouterV1", function () {
           toFixedPtAmt("200"),
           constants.MaxUint256,
         );
-        expect(r[0].rolloverPerpAmt).to.eq(toFixedPtAmt("180"));
+        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("180"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("200"));
         expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("200"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
@@ -421,7 +421,7 @@ describe("RouterV1", function () {
           toFixedPtAmt("200"),
           toFixedPtAmt("190"),
         );
-        expect(r[0].rolloverPerpAmt).to.eq(toFixedPtAmt("171"));
+        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("171"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("190"));
         expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("190"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("10"));
@@ -442,7 +442,7 @@ describe("RouterV1", function () {
           toFixedPtAmt("190"),
           constants.MaxUint256,
         );
-        expect(r[0].rolloverPerpAmt).to.eq(toFixedPtAmt("171"));
+        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("171"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("190"));
         expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("190"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
@@ -463,7 +463,7 @@ describe("RouterV1", function () {
           toFixedPtAmt("250"),
           constants.MaxUint256,
         );
-        expect(r[0].rolloverPerpAmt).to.eq(toFixedPtAmt("225"));
+        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("225"));
         expect(r[0].tokenOutAmt).to.eq("294117647058823529411");
         expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("250"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
@@ -484,7 +484,7 @@ describe("RouterV1", function () {
           toFixedPtAmt("200"),
           constants.MaxUint256,
         );
-        expect(r[0].rolloverPerpAmt).to.eq(toFixedPtAmt("180"));
+        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("180"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("200"));
         expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("200"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
@@ -510,7 +510,7 @@ describe("RouterV1", function () {
           toFixedPtAmt("200"),
           constants.MaxUint256,
         );
-        expect(r[0].rolloverPerpAmt).to.eq(toFixedPtAmt("180"));
+        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("180"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("200"));
         expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("200"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));

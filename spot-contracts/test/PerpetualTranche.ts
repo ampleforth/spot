@@ -288,6 +288,37 @@ describe("PerpetualTranche", function () {
     });
   });
 
+  describe("#updateSkimPerc", function () {
+    let tx: Transaction;
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(perp.connect(otherUser).updateSkimPerc("1")).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    describe("when set skim perc is NOT valid", function () {
+      it("should revert", async function () {
+        await expect(perp.updateSkimPerc("100000001")).to.be.revertedWith("UnacceptableSkimPerc");
+      });
+    });
+
+    describe("when set skim perc is valid", function () {
+      beforeEach(async function () {
+        tx = perp.updateSkimPerc("50000000");
+        await tx;
+      });
+      it("should update reference", async function () {
+        expect(await perp.skimPerc()).to.eq("50000000");
+      });
+      it("should emit event", async function () {
+        await expect(tx).to.emit(perp, "UpdatedSkimPerc").withArgs("50000000");
+      });
+    });
+  });
+
   describe("#transferERC20", function () {
     let transferToken: Contract, toAddress: string;
 

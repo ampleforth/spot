@@ -40,6 +40,10 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @param maxMintAmtPerTranche The max mint amount per tranche.
     event UpdatedMintingLimits(uint256 maxSupply, uint256 maxMintAmtPerTranche);
 
+    // @notice Event emitted when the skim percentage is updated.
+    // @param skimPerc The skim percentage.
+    event UpdatedSkimPerc(uint256 skimPerc);
+
     // @notice Event emitted when the applied yield for a given token is set.
     // @param token The address of the token.
     // @param yield The yield factor applied.
@@ -157,30 +161,32 @@ interface IPerpetualTranche is IERC20Upgradeable {
         view
         returns (IERC20Upgradeable[] memory tokensOut, uint256[] memory tokenOutAmts);
 
+    struct RolloverPreview {
+        // @notice The perp denominated value of tokens rolled over.
+        uint256 perpRolloverAmt;
+        // @notice The amount of tokens to be withdrawn.
+        uint256 tokenOutAmt;
+        // @notice The standardized tranche amount rolled over.
+        uint256 stdTrancheRolloverAmt;
+        // @notice The amount of trancheIn tokens used in the roll over operation.
+        uint256 trancheInAmtUsed;
+        // @notice The difference between the requested trancheIn amount and the amount used for the rollover.
+        uint256 remainingTrancheInAmt;
+    }
+
     // @notice Computes the amount reserve tokens that can be swapped out for the given number
     //         of `trancheIn` tokens.
     // @param trancheIn The tranche token deposited.
     // @param tokenOut The reserve token to be withdrawn.
     // @param trancheInAmtRequested The maximum amount of trancheIn tokens deposited.
     // @param maxTokenOutAmtCovered The reserve token balance available for rollover.
-    // @return rolloverAmt The perp denominated value of tokens rolled over.
-    // @return tokenOutAmt The amount of tokens to be withdrawn.
-    // @return stdTrancheAmt The standardized tranche amount rolled over.
-    // @return trancheInAmtUsed The amount of trancheIn tokens used in the roll over operation.
+    // @return r The rollover amounts in various denominations.
     function computeRolloverAmt(
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtRequested,
         uint256 maxTokenOutAmtCovered
-    )
-        external
-        view
-        returns (
-            uint256 rolloverAmt,
-            uint256 tokenOutAmt,
-            uint256 stdTrancheAmt,
-            uint256 trancheInAmtUsed
-        );
+    ) external view returns (RolloverPreview memory);
 
     // @notice The yield to be applied given the reserve token.
     // @param token The address of the reserve token.

@@ -42,6 +42,10 @@ error UnacceptableYieldStrategy();
 /// @notice Expected yield strategy to return a fixed point with exactly {YIELD_DECIMALS} decimals.
 error InvalidYieldStrategyDecimals();
 
+/// @notice Expected skim percentage to be less than 100 with {PERC_DECIMALS}.
+/// @param skimPerc The skim percentage.
+error UnacceptableSkimPerc(uint256 skimPerc);
+
 /// @notice Expected minTrancheMaturity be less than or equal to maxTrancheMaturity.
 /// @param minTrancheMaturiySec Minimum tranche maturity time in seconds.
 /// @param minTrancheMaturiySec Maximum tranche maturity time in seconds.
@@ -178,6 +182,10 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     uint8 public constant PRICE_DECIMALS = 8;
     uint256 public constant UNIT_PRICE = (10**PRICE_DECIMALS);
 
+    uint8 public constant PERC_DECIMALS = 6;
+    uint256 public constant UNIT_PERC = (10**PERC_DECIMALS);
+    uint256 public constant HUNDRED_PERC = 100 * UNIT_PERC;
+
     //-------------------------------------------------------------------------
     // Storage
 
@@ -220,6 +228,10 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
     // @notice The max number of perps that can be minted for each tranche in the minting bond.
     uint256 public maxMintAmtPerTranche;
+
+    // @notice The percentage of the excess value the system retains on rotation.
+    // @dev Skim percentage is stored as fixed point number with {PERC_DECIMALS}.
+    uint256 public skimPerc;
 
     // @notice The total number of perps that have been minted using a given tranche.
     mapping(ITranche => uint256) private _mintedSupplyPerTranche;
@@ -368,6 +380,16 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         emit UpdatedMintingLimits(maxSupply_, maxMintAmtPerTranche_);
     }
 
+    // @notice Updates the skim percentage parameter.
+    // @param skimPerc_ New skim percentage.
+    function updateSkimPerc(uint256 skimPerc_) external onlyOwner {
+        if (skimPerc_ > HUNDRED_PERC) {
+            revert UnacceptableSkimPerc(skimPerc_);
+        }
+        skimPerc = skimPerc_;
+        emit UpdatedSkimPerc(skimPerc_);
+    }
+
     // @notice Allows the owner to transfer non-reserve assets out of the system if required.
     // @param token The token address.
     // @param to The destination address.
@@ -465,34 +487,34 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         }
 
         // calculates the perp denominated amount rolled over and the tokenOutAmt
-        (
-            uint256 rolloverAmt,
-            uint256 tokenOutAmt,
-            uint256 stdTrancheInAmt,
-            uint256 trancheInAmtUsed
-        ) = computeRolloverAmt(trancheIn, tokenOut, trancheInAmtRequested, type(uint256).max);
+        IPerpetualTranche.RolloverPreview memory r = computeRolloverAmt(
+            trancheIn,
+            tokenOut,
+            trancheInAmtRequested,
+            type(uint256).max
+        );
 
         // verifies if rollover amount is acceptable
-        if (trancheInAmtUsed == 0 || tokenOutAmt == 0 || rolloverAmt == 0) {
-            revert UnacceptableRolloverAmt(trancheInAmtUsed, tokenOutAmt, rolloverAmt);
+        if (r.trancheInAmtUsed == 0 || r.tokenOutAmt == 0 || r.perpRolloverAmt == 0) {
+            revert UnacceptableRolloverAmt(r.trancheInAmtUsed, r.tokenOutAmt, r.perpRolloverAmt);
         }
 
-        // calculates the fee to rollover `rolloverAmt` of perp token
-        int256 rolloverFee = feeStrategy.computeRolloverFee(rolloverAmt);
+        // calculates the fee to rollover `r.perpRolloverAmt` of perp token
+        int256 rolloverFee = feeStrategy.computeRolloverFee(r.perpRolloverAmt);
 
         // transfers tranche tokens from the sender to the reserve
-        _transferIntoReserve(_msgSender(), trancheIn, trancheInAmtUsed);
+        _transferIntoReserve(_msgSender(), trancheIn, r.trancheInAmtUsed);
 
         // settles fees
         _settleFee(_msgSender(), rolloverFee);
 
         // transfers tranche from the reserve to the sender
-        _transferOutOfReserve(_msgSender(), tokenOut, tokenOutAmt);
+        _transferOutOfReserve(_msgSender(), tokenOut, r.tokenOutAmt);
 
         // updates reserve's tranche balance
         // NOTE: `_stdTotalTrancheBalance` does not change on rollovers as `stdTrancheInAmt` == `stdTrancheOutAmt`
         if (tokenOut == collateral) {
-            _stdMatureTrancheBalance -= stdTrancheInAmt;
+            _stdMatureTrancheBalance -= r.stdTrancheRolloverAmt;
         }
     }
 
@@ -689,45 +711,54 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtRequested,
         uint256 maxTokenOutAmtCovered
-    )
-        public
-        view
-        override
-        returns (
-            uint256,
-            uint256,
-            uint256,
-            uint256
-        )
-    {
-        bool isMatureTranche = tokenOut == collateral;
+    ) public view override returns (IPerpetualTranche.RolloverPreview memory) {
+        uint256 trancheInYield = computeYield(trancheIn);
+        uint256 tokenOutYield = computeYield(tokenOut);
+        uint256 trancheInPrice = computePrice(trancheIn);
+        uint256 tokenOutPrice = computePrice(tokenOut);
+
+        IPerpetualTranche.RolloverPreview memory r;
+        if (trancheInYield == 0 || tokenOutYield == 0 || trancheInPrice == 0 || tokenOutPrice == 0) {
+            r.remainingTrancheInAmt = trancheInAmtRequested;
+            return r;
+        }
+
         uint256 tokenOutBalance = _tokenBalance(tokenOut);
         maxTokenOutAmtCovered = MathUpgradeable.min(maxTokenOutAmtCovered, tokenOutBalance);
 
-        uint256 trancheInYield = computeYield(trancheIn);
-        uint256 tokenOutYield = computeYield(tokenOut);
-
-        uint256 trancheInAmtUsed = trancheInAmtRequested;
-        uint256 stdTrancheRolloverAmt = _toStdTrancheAmt(trancheInAmtRequested, trancheInYield);
-        uint256 trancheOutAmt = _fromStdTrancheAmt(stdTrancheRolloverAmt, tokenOutYield);
+        r.trancheInAmtUsed = trancheInAmtRequested;
+        r.stdTrancheRolloverAmt = _toStdTrancheAmt(trancheInAmtRequested, trancheInYield);
 
         // In the case token out is the mature tranche (held as naked collateral):
         // Token balance is calculated from the tranche denomination
-        uint256 tokenOutAmt = isMatureTranche
+        uint256 trancheOutAmt = _fromStdTrancheAmt(r.stdTrancheRolloverAmt, tokenOutYield);
+        r.tokenOutAmt = (tokenOut == collateral)
             ? ((trancheOutAmt * tokenOutBalance) / _stdMatureTrancheBalance)
             : trancheOutAmt;
 
         // When the token out balance is NOT covered
-        if (tokenOutAmt > maxTokenOutAmtCovered) {
-            tokenOutAmt = maxTokenOutAmtCovered;
-            stdTrancheRolloverAmt = isMatureTranche
-                ? ((tokenOutAmt * _stdMatureTrancheBalance) / tokenOutBalance)
-                : _toStdTrancheAmt(tokenOutAmt, tokenOutYield);
-            trancheInAmtUsed = _fromStdTrancheAmt(stdTrancheRolloverAmt, trancheInYield);
+        if (r.tokenOutAmt > maxTokenOutAmtCovered) {
+            r.tokenOutAmt = maxTokenOutAmtCovered;
+            r.stdTrancheRolloverAmt = (tokenOut == collateral)
+                ? ((r.tokenOutAmt * _stdMatureTrancheBalance) / tokenOutBalance)
+                : _toStdTrancheAmt(r.tokenOutAmt, tokenOutYield);
+            r.trancheInAmtUsed = _fromStdTrancheAmt(r.stdTrancheRolloverAmt, trancheInYield);
         }
 
-        uint256 perpRolloverAmt = (stdTrancheRolloverAmt * totalSupply()) / _stdTotalTrancheBalance;
-        return (perpRolloverAmt, tokenOutAmt, stdTrancheRolloverAmt, trancheInAmtUsed);
+        // When the rollover is measured as extractive (i.e valueOut > valueIn),
+        // the system skims a portion of the excess value.
+        if (skimPerc > 0) {
+            uint256 valueIn = r.trancheInAmtUsed * trancheInPrice;
+            uint256 valueOut = r.tokenOutAmt * tokenOutPrice;
+            if (valueOut > valueIn) {
+                uint256 adjustedValueOut = valueOut - ((skimPerc * (valueOut - valueIn)) / HUNDRED_PERC);
+                r.tokenOutAmt = (r.tokenOutAmt * adjustedValueOut) / valueOut;
+            }
+        }
+
+        r.perpRolloverAmt = (r.stdTrancheRolloverAmt * totalSupply()) / _stdTotalTrancheBalance;
+        r.remainingTrancheInAmt = trancheInAmtRequested - r.trancheInAmtUsed;
+        return r;
     }
 
     // @notice Returns the number of decimals used to get its user representation.
