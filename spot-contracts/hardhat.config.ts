@@ -64,6 +64,6 @@ export default {
     apiKey: process.env.ETHERSCAN_API_KEY,
   },
   mocha: {
-    bail: true
+    bail: true,
   },
 } as HardhatUserConfig;

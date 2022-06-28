@@ -13,7 +13,7 @@ import {
   toPriceFixedPtAmt,
   advancePerpQueue,
   mintCollteralToken,
-  advancePerpQueueToBondMaturity,
+  advancePerpQueueToRollover,
 } from "./helpers";
 
 let perp: Contract,
@@ -308,7 +308,7 @@ describe("RouterV1", function () {
       await reserveTranches[1].approve(perp.address, toFixedPtAmt("300"));
       await perp.deposit(reserveTranches[1].address, toFixedPtAmt("300"));
 
-      await advancePerpQueueToBondMaturity(perp, reserveBond);
+      await advancePerpQueueToRollover(perp, reserveBond);
 
       const depositBond = await bondAt(await perp.callStatic.getDepositBond());
       depositTranches = await getTranches(depositBond);
@@ -604,6 +604,8 @@ describe("RouterV1", function () {
 
         await feeToken.approve(router.address, constants.MaxUint256);
         await collateralToken.approve(router.address, constants.MaxUint256);
+        await mintCollteralToken(collateralToken, toFixedPtAmt("1"), deployer);
+        await collateralToken.transfer(router.address, toFixedPtAmt("1"));
         await router.trancheAndDeposit(perp.address, depositBond.address, toFixedPtAmt("1000"), toFixedPtAmt("25"));
       });
 
@@ -624,6 +626,7 @@ describe("RouterV1", function () {
       });
 
       it("should leave no dust", async function () {
+        expect(await collateralToken.balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
         expect(await depositTranches[0].balanceOf(router.address)).to.eq("0");
         expect(await depositTranches[1].balanceOf(router.address)).to.eq("0");
         expect(await perp.balanceOf(router.address)).to.eq("0");
@@ -667,7 +670,7 @@ describe("RouterV1", function () {
       await reserveTranches[1].approve(perp.address, toFixedPtAmt("300"));
       await perp.deposit(reserveTranches[1].address, toFixedPtAmt("300"));
 
-      await advancePerpQueueToBondMaturity(perp, reserveBond);
+      await advancePerpQueueToRollover(perp, reserveBond);
 
       depositBond = await bondAt(await perp.callStatic.getDepositBond());
       depositTranches = await getTranches(depositBond);
@@ -696,6 +699,8 @@ describe("RouterV1", function () {
         expect(await depositTranches[1].balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
         expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("1000"));
 
+        await mintCollteralToken(collateralToken, toFixedPtAmt("1"), deployer);
+        await collateralToken.transfer(router.address, toFixedPtAmt("1"));
         await router.trancheAndRollover(
           perp.address,
           depositBond.address,
@@ -711,7 +716,7 @@ describe("RouterV1", function () {
       });
 
       it("should transfer tranches out", async function () {
-        expect(await collateralToken.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("300"));
+        expect(await collateralToken.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("301"));
         expect(await holdingPenTranches[0].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("0"));
         expect(await holdingPenTranches[1].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("0"));
         expect(await reserveTranches[0].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("200"));
@@ -725,6 +730,65 @@ describe("RouterV1", function () {
       it("should transfer excess fees back", async function () {
         expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("996"));
       });
+
+      it("should leave no dust", async function () {
+        expect(await collateralToken.balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
+        expect(await perp.balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
+      });
     });
+
+    describe("successful tranche & rollover and return the remainder (with no fees)", function () {
+      beforeEach(async function () {
+        await await feeStrategy.setRolloverFee("0");
+        
+        await mintCollteralToken(collateralToken, toFixedPtAmt("2000"), deployer);
+        await collateralToken.approve(router.address, toFixedPtAmt("2000"));
+
+        expect(await collateralToken.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("2000"));
+        expect(await holdingPenTranches[0].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("0"));
+        expect(await holdingPenTranches[1].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("0"));
+        expect(await reserveTranches[0].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("0"));
+        expect(await depositTranches[0].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("0"));
+        expect(await depositTranches[1].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("0"));
+        expect(await depositTranches[0].balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
+        expect(await depositTranches[1].balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
+        expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("1000"));
+
+        await mintCollteralToken(collateralToken, toFixedPtAmt("1"), deployer);
+        await collateralToken.transfer(router.address, toFixedPtAmt("1"));
+        await router.trancheAndRollover(
+          perp.address,
+          depositBond.address,
+          toFixedPtAmt("1000"),
+          [
+            [depositTranches[0].address, reserveTranches[0].address, toFixedPtAmt("100")],
+            [depositTranches[1].address, reserveTranches[0].address, toFixedPtAmt("100")],
+            [depositTranches[1].address, reserveTranches[1].address, toFixedPtAmt("100")],
+          ],
+          "0",
+        );
+      });
+
+      it("should transfer tranches out", async function () {
+        expect(await collateralToken.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("1001"));
+        expect(await holdingPenTranches[0].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("0"));
+        expect(await holdingPenTranches[1].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("0"));
+        expect(await reserveTranches[0].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("200"));
+        expect(await reserveTranches[1].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("100"));
+        expect(await depositTranches[0].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("100"));
+        expect(await depositTranches[1].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("100"));
+        expect(await depositTranches[0].balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
+        expect(await depositTranches[1].balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
+      });
+
+      it("should transfer excess fees back", async function () {
+        expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("1000"));
+      });
+
+      it("should leave no dust", async function () {
+        expect(await collateralToken.balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
+        expect(await perp.balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
+      });
+    })
   });
 });

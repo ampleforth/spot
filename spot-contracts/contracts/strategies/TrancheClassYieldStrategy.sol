@@ -32,7 +32,7 @@ contract TrancheClassYieldStrategy is IYieldStrategy, OwnableUpgradeable {
     uint8 private constant DECIMALS = 18;
 
     // @notice Mapping between a tranche class and the yield to be applied.
-    mapping(bytes32 => uint256) public trancheYields;
+    mapping(bytes32 => uint256) private _trancheYields;
 
     // @notice Event emitted when the defined tranche yields are updated.
     // @param hash The tranche class hash.
@@ -49,9 +49,9 @@ contract TrancheClassYieldStrategy is IYieldStrategy, OwnableUpgradeable {
     // @param yield The yield factor.
     function updateDefinedYield(bytes32 classHash, uint256 yield) external onlyOwner {
         if (yield > 0) {
-            trancheYields[classHash] = yield;
+            _trancheYields[classHash] = yield;
         } else {
-            delete trancheYields[classHash];
+            delete _trancheYields[classHash];
         }
         emit UpdatedDefinedTrancheYields(classHash, yield);
     }
@@ -74,6 +74,6 @@ contract TrancheClassYieldStrategy is IYieldStrategy, OwnableUpgradeable {
 
     /// @inheritdoc IYieldStrategy
     function computeYield(IERC20Upgradeable token) public view override returns (uint256) {
-        return trancheYields[trancheClass(ITranche(address(token)))];
+        return _trancheYields[trancheClass(ITranche(address(token)))];
     }
 }

@@ -168,6 +168,12 @@ export const advancePerpQueue = async (perp: Contract, time: number): Promise<Tr
 };
 
 export const advancePerpQueueToBondMaturity = async (perp: Contract, bond: Contract): Promise<Transaction> => {
+  const matuirtyDate = await bond.maturityDate();
+  await TimeHelpers.setNextBlockTimestamp(matuirtyDate.toNumber() + 1);
+  return perp.updateState();
+};
+
+export const advancePerpQueueToRollover = async (perp: Contract, bond: Contract): Promise<Transaction> => {
   const bufferSec = await perp.minTrancheMaturiySec();
   const matuirtyDate = await bond.maturityDate();
   await TimeHelpers.setNextBlockTimestamp(matuirtyDate.sub(bufferSec).toNumber() + 1);

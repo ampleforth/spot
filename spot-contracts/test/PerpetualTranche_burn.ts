@@ -86,6 +86,24 @@ describe("PerpetualTranche", function () {
     await network.provider.send("hardhat_reset");
   });
 
+  describe("#burnWithoutRedemption", function () {
+    it("should not change the reserve composition", async function () {
+      await checkReserveComposition(
+        perp,
+        [collateralToken, initialDepositTranche],
+        [toFixedPtAmt("0"), toFixedPtAmt("500")],
+      );
+      expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("500"));
+      await perp.burnWithoutRedemption(toFixedPtAmt("500"));
+      expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("0"));
+      await checkReserveComposition(
+        perp,
+        [collateralToken, initialDepositTranche],
+        [toFixedPtAmt("0"), toFixedPtAmt("500")],
+      );
+    });
+  });
+
   describe("#burn", function () {
     describe("when user has insufficient balance", function () {
       beforeEach(async function () {

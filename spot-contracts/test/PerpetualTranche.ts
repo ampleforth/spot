@@ -228,6 +228,54 @@ describe("PerpetualTranche", function () {
     });
   });
 
+  describe("#updateYieldStrategy", function () {
+    let newYieldStrategy: Contract, tx: Transaction;
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(perp.connect(otherUser).updateYieldStrategy(constants.AddressZero)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    describe("when set address is NOT valid", function () {
+      it("should revert", async function () {
+        await expect(perp.updateYieldStrategy(constants.AddressZero)).to.be.revertedWith(
+          "UnacceptableYieldStrategy",
+        );
+      });
+    });
+
+    describe("when new strategy has different decimals", function () {
+      beforeEach(async function () {
+        const YieldStrategy = await ethers.getContractFactory("MockYieldStrategy");
+        newYieldStrategy = await YieldStrategy.deploy();
+        await newYieldStrategy.setDecimals(8);
+      });
+      it("should revert", async function () {
+        await expect(perp.updateYieldStrategy(newYieldStrategy.address)).to.be.revertedWith(
+          "InvalidYieldStrategyDecimals",
+        );
+      });
+    });
+
+    describe("when set address is valid", function () {
+      beforeEach(async function () {
+        const YieldStrategy = await ethers.getContractFactory("MockYieldStrategy");
+        newYieldStrategy = await YieldStrategy.deploy();
+        tx = perp.updateYieldStrategy(newYieldStrategy.address);
+        await tx;
+      });
+      it("should update reference", async function () {
+        expect(await perp.yieldStrategy()).to.eq(newYieldStrategy.address);
+      });
+      it("should emit event", async function () {
+        await expect(tx).to.emit(perp, "UpdatedYieldStrategy").withArgs(newYieldStrategy.address);
+      });
+    });
+  });
+
   describe("#updateTolerableTrancheMaturiy", function () {
     let tx: Transaction;
 

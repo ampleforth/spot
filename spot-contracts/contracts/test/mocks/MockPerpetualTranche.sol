@@ -12,7 +12,9 @@ contract MockPerpetualTranche is MockERC20 {
         return address(this);
     }
 
-    function reserveBalance(address /* token */) public view returns (uint256) {
+    function reserveBalance(
+        address /* token */
+    ) public view returns (uint256) {
         return _reserveBalance;
     }
 

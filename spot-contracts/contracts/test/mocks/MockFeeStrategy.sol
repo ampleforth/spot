@@ -27,15 +27,21 @@ contract MockFeeStrategy {
         return _feeToken;
     }
 
-    function computeMintFee(uint256 /* f */) external view returns (int256) {
+    function computeMintFee(
+        uint256 /* f */
+    ) external view returns (int256) {
         return _mintFee;
     }
 
-    function computeBurnFee(uint256 /* f */) external view returns (int256) {
+    function computeBurnFee(
+        uint256 /* f */
+    ) external view returns (int256) {
         return _burnFee;
     }
 
-    function computeRolloverFee(uint256 /* f */) external view returns (int256) {
+    function computeRolloverFee(
+        uint256 /* f */
+    ) external view returns (int256) {
         return _rolloverFee;
     }
 }

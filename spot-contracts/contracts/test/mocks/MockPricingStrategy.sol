@@ -32,7 +32,7 @@ contract MockPricingStrategy {
 
     function computeMatureTranchePrice(
         address t,
-        uint256 /* collateralBalance */,
+        uint256, /* collateralBalance */
         uint256 /* debt */
     ) external view returns (uint256) {
         return _tranchePriceSet[t] ? _tranchePrice[t] : _price;
