@@ -97,6 +97,9 @@ error ExceededMaxSupply(uint256 newSupply, uint256 currentMaxSupply);
 /// @param maxMintAmtPerTranche The amount of perps that can be minted per tranche.
 error ExceededMaxMintPerTranche(ITranche trancheIn, uint256 mintAmtForCurrentTranche, uint256 maxMintAmtPerTranche);
 
+/// @notice Expected the system to have no tranches and have a collateral balance.
+error InvalidRebootState();
+
 /*
  *  @title PerpetualTranche
  *
@@ -405,6 +408,28 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         token.safeTransfer(to, amount);
     }
 
+    // @notice Allows the owner to update the tranche balances to reboot rollovers.
+    // @param stdTrancheBalance The new tranche balance.
+    // @dev When the system moves into a state where it just holds mature collateral
+    //      such that the collateral balance below the `stdMatureTrancheBalance`,
+    //      rolling over will become unprofitable as it will involve redeeming
+    //      collateral for tranches at a premium (say 0.5 collateral token for
+    //      1 collateral token worth tranche). The contract owner can "re-denominate"
+    //      the internal tranche balances, effectively resetting the
+    //      difference between the tranche and collateral balances
+    //      thus allowing rollovers 1:1 again.
+    function reboot(uint256 stdTrancheBalance) external onlyOwner {
+        // The reboot is only allowed when:
+        //  - the system has no more tranches left i.e) all the tranches have mature
+        //  - the system has a collateral balance
+        if (reserveCount() > 1 || _tokenBalance(collateral) == 0) {
+            revert InvalidRebootState();
+        }
+        _stdTotalTrancheBalance = stdTrancheBalance;
+        _stdMatureTrancheBalance = stdTrancheBalance;
+        emit UpdatedStdTrancheBalances(stdTrancheBalance, stdTrancheBalance);
+    }
+
     //--------------------------------------------------------------------------
     // External methods
 
@@ -428,6 +453,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
         // updates reserve's tranche balance
         _stdTotalTrancheBalance += stdTrancheInAmt;
+        emit UpdatedStdTrancheBalances(_stdTotalTrancheBalance, _stdMatureTrancheBalance);
 
         // mints perp tokens to the sender
         _mint(_msgSender(), mintAmt);
@@ -474,6 +500,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // updates reserve's tranche balances
         _stdTotalTrancheBalance -= _perpsToReserveShare(perpAmtBurnt, perpSupply, _stdTotalTrancheBalance);
         _stdMatureTrancheBalance -= _perpsToReserveShare(perpAmtBurnt, perpSupply, _stdMatureTrancheBalance);
+        emit UpdatedStdTrancheBalances(_stdTotalTrancheBalance, _stdMatureTrancheBalance);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -515,6 +542,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // NOTE: `_stdTotalTrancheBalance` does not change on rollovers as `stdTrancheInAmt` == `stdTrancheOutAmt`
         if (tokenOut == collateral) {
             _stdMatureTrancheBalance -= r.stdTrancheRolloverAmt;
+            emit UpdatedStdTrancheBalances(_stdTotalTrancheBalance, _stdMatureTrancheBalance);
         }
     }
 
@@ -594,6 +622,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
             // Keeps track of the total tranches redeemed
             _stdMatureTrancheBalance += _toStdTrancheAmt(trancheBalance, computeYield(tranche));
+            emit UpdatedStdTrancheBalances(_stdTotalTrancheBalance, _stdMatureTrancheBalance);
         }
 
         // Keeps track of reserve's rebasing collateral token balance
