@@ -44,7 +44,7 @@ export default {
         },
       },
       {
-        version: "0.8.4",
+        version: "0.8.15",
         settings: {
           optimizer: {
             enabled: true,
@@ -64,6 +64,6 @@ export default {
     apiKey: process.env.ETHERSCAN_API_KEY,
   },
   mocha: {
-    bail: true,
+    bail: true
   },
 } as HardhatUserConfig;

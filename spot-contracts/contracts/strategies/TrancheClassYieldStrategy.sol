@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.15;
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { TrancheData, TrancheDataHelpers, BondHelpers } from "../_utils/BondHelpers.sol";
@@ -29,7 +29,7 @@ contract TrancheClassYieldStrategy is IYieldStrategy, OwnableUpgradeable {
     using BondHelpers for IBondController;
     using TrancheDataHelpers for TrancheData;
 
-    uint8 private constant DECIMALS = 8;
+    uint8 private constant DECIMALS = 18;
 
     // @notice Mapping between a tranche class and the yield to be applied.
     mapping(bytes32 => uint256) public trancheYields;

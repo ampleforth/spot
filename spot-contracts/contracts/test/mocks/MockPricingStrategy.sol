@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.15;
 
 contract MockPricingStrategy {
     uint8 private _decimals;
@@ -26,19 +26,19 @@ contract MockPricingStrategy {
         _tranchePriceSet[t] = true;
     }
 
-    function computeTranchePrice(address t) external returns (uint256) {
+    function computeTranchePrice(address t) external view returns (uint256) {
         return _tranchePriceSet[t] ? _tranchePrice[t] : _price;
     }
 
     function computeMatureTranchePrice(
         address t,
-        uint256 collateralBalance, // solhint-disable no-unused-vars
-        uint256 debt // solhint-disable no-unused-vars
-    ) external returns (uint256) {
+        uint256 /* collateralBalance */,
+        uint256 /* debt */
+    ) external view returns (uint256) {
         return _tranchePriceSet[t] ? _tranchePrice[t] : _price;
     }
 
-    function decimals() external returns (uint8) {
+    function decimals() external view returns (uint8) {
         return _decimals;
     }
 }

@@ -25,6 +25,12 @@ describe("TrancheClassYieldStrategy", function () {
     await yieldStrategy.init();
   });
 
+  describe("decimals", function () {
+    it("should be set", async function () {
+      expect(await pricingStrategy.decimals()).to.eq(18);
+    });
+  });
+
   describe("#updateDefinedYield", function () {
     let tx: Transaction, tranche: Contract, classHash: string;
 
