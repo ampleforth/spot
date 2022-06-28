@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ethers, upgrades } from "hardhat";
+import { network, ethers, upgrades } from "hardhat";
 import { Contract, Transaction, Signer, constants } from "ethers";
 
 import {
@@ -29,6 +29,8 @@ let perp: Contract,
   otherUser: Signer;
 describe("PerpetualTranche", function () {
   beforeEach(async function () {
+    await network.provider.send("hardhat_reset");
+
     const accounts = await ethers.getSigners();
     deployer = accounts[0];
     otherUser = accounts[1];
@@ -63,6 +65,10 @@ describe("PerpetualTranche", function () {
         initializer: "init(string,string,address,address,address,address,address)",
       },
     );
+  });
+
+  afterEach(async function () {
+    await network.provider.send("hardhat_reset");
   });
 
   describe("#init", function () {

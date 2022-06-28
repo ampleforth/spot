@@ -30,6 +30,8 @@ let perp: Contract,
   depositTrancheZ: Contract;
 describe("PerpetualTranche", function () {
   beforeEach(async function () {
+    await network.provider.send("hardhat_reset");
+
     const accounts = await ethers.getSigners();
     deployer = accounts[0];
     deployerAddress = await deployer.getAddress();

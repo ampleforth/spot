@@ -2,9 +2,7 @@
 pragma solidity ^0.8.4;
 
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
-import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
-import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 
 import { TrancheData, TrancheDataHelpers, BondHelpers } from "./_utils/BondHelpers.sol";
 
@@ -21,9 +19,7 @@ import { IPerpetualTranche } from "./_interfaces/IPerpetualTranche.sol";
  */
 contract RouterV1 {
     // math
-    using MathUpgradeable for uint256;
-    using SafeCastUpgradeable for uint256;
-    using SignedMathUpgradeable for int256;
+    using SafeCastUpgradeable for int256;
 
     // data handling
     using BondHelpers for IBondController;
