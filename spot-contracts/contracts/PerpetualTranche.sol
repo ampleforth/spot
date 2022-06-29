@@ -409,7 +409,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     }
 
     // @notice Allows the owner to update the tranche balances to reboot rollovers.
-    // @param stdTrancheBalance The new tranche balance.
+    // @param stdTrancheBalance The new tranche balance of matured collateral.
     // @dev When the system moves into a state where it just holds mature collateral
     //      such that the collateral balance is below the `stdMatureTrancheBalance`,
     //      rolling over will become unprofitable as it will involve redeeming
