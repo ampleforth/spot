@@ -408,18 +408,11 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         token.safeTransfer(to, amount);
     }
 
-    // @notice Allows the owner to update the tranche balances to reboot rollovers.
+    // @notice Redenominates Perp with respect to the outstanding debt.
     // @param stdTrancheBalance The new tranche balance of matured collateral.
-    // @dev When the system moves into a state where it just holds mature collateral
-    //      such that the collateral balance is below the `stdMatureTrancheBalance`,
-    //      rolling over will become unprofitable as it will involve redeeming
-    //      collateral for tranches at a premium (say 0.5 collateral token for
-    //      1 collateral token worth tranche). The contract owner can "re-denominate"
-    //      the internal tranche balances, effectively resetting the
-    //      difference between the tranche and collateral balances
-    //      thus allowing rollovers 1:1 again.
-    function reboot(uint256 stdTrancheBalance) external afterStateUpdate onlyOwner {
-        // The reboot is only allowed when:
+    // @dev Can only be used is perp is backed solely by matured collateral.
+    function redenominate(uint256 stdTrancheBalance) external afterStateUpdate onlyOwner {
+        // The redenomination is only allowed when:
         //  - the system has no more tranches left i.e) all the tranches have mature
         //  - the system has a collateral balance
         if (reserveCount() > 1 || _tokenBalance(collateral) == 0) {

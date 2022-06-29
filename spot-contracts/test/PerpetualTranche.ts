@@ -319,18 +319,18 @@ describe("PerpetualTranche", function () {
     });
   });
 
-  describe("#reboot", function () {
+  describe("#redenominate", function () {
     let tx: Transaction;
 
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
-        await expect(perp.connect(otherUser).reboot("1")).to.be.revertedWith("Ownable: caller is not the owner");
+        await expect(perp.connect(otherUser).redenominate("1")).to.be.revertedWith("Ownable: caller is not the owner");
       });
     });
 
     describe("when reserve has no collateral", function () {
       it("should revert", async function () {
-        await expect(perp.reboot("1")).to.be.revertedWith("InvalidRebootState");
+        await expect(perp.redenominate("1")).to.be.revertedWith("InvalidRebootState");
       });
     });
 
@@ -349,11 +349,11 @@ describe("PerpetualTranche", function () {
       });
 
       it("should revert", async function () {
-        await expect(perp.reboot("1")).to.be.revertedWith("InvalidRebootState");
+        await expect(perp.redenominate("1")).to.be.revertedWith("InvalidRebootState");
       });
     });
 
-    describe("when valid reboot", function () {
+    describe("when valid redenominate", function () {
       beforeEach(async function () {
         const bondFactory = await setupBondFactory();
         const bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 3600);
@@ -371,7 +371,7 @@ describe("PerpetualTranche", function () {
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("200"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("200"));
 
-        tx = perp.reboot(await perp.reserveBalance(collateralToken.address));
+        tx = perp.redenominate(await perp.reserveBalance(collateralToken.address));
         await tx;
       });
       it("should emit balance update", async function () {
