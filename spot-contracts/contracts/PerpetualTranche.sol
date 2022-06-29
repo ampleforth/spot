@@ -401,7 +401,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         IERC20Upgradeable token,
         address to,
         uint256 amount
-    ) external onlyOwner {
+    ) external afterStateUpdate onlyOwner {
         if (isReserveToken(token)) {
             revert UnauthorizedTransferOut(token);
         }
@@ -418,7 +418,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     //      the internal tranche balances, effectively resetting the
     //      difference between the tranche and collateral balances
     //      thus allowing rollovers 1:1 again.
-    function reboot(uint256 stdTrancheBalance) external onlyOwner {
+    function reboot(uint256 stdTrancheBalance) external afterStateUpdate onlyOwner {
         // The reboot is only allowed when:
         //  - the system has no more tranches left i.e) all the tranches have mature
         //  - the system has a collateral balance
