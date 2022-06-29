@@ -319,6 +319,71 @@ describe("PerpetualTranche", function () {
     });
   });
 
+  describe("#redenominate", function () {
+    let tx: Transaction;
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(perp.connect(otherUser).redenominate("1")).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+    });
+
+    describe("when reserve has no collateral", function () {
+      it("should revert", async function () {
+        await expect(perp.redenominate("1")).to.be.revertedWith("InvalidRebootState");
+      });
+    });
+
+    describe("when reserve has tranches", function () {
+      beforeEach(async function () {
+        const bondFactory = await setupBondFactory();
+        const bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 3600);
+        const tranches = await getTranches(bond);
+        await issuer.setLatestBond(bond.address);
+
+        await yieldStrategy.setTrancheYield(tranches[0].address, toYieldFixedPtAmt("1"));
+
+        await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
+        await tranches[0].approve(perp.address, toFixedPtAmt("200"));
+        await perp.deposit(tranches[0].address, toFixedPtAmt("200"));
+      });
+
+      it("should revert", async function () {
+        await expect(perp.redenominate("1")).to.be.revertedWith("InvalidRebootState");
+      });
+    });
+
+    describe("when valid redenominate", function () {
+      beforeEach(async function () {
+        const bondFactory = await setupBondFactory();
+        const bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 3600);
+        const tranches = await getTranches(bond);
+        await issuer.setLatestBond(bond.address);
+
+        await yieldStrategy.setTrancheYield(tranches[0].address, toYieldFixedPtAmt("1"));
+
+        await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
+        await tranches[0].approve(perp.address, toFixedPtAmt("200"));
+        await perp.deposit(tranches[0].address, toFixedPtAmt("200"));
+        await advancePerpQueue(perp, 7200);
+        await rebase(collateralToken, rebaseOracle, -0.5);
+
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("200"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("200"));
+
+        tx = perp.redenominate(await perp.reserveBalance(collateralToken.address));
+        await tx;
+      });
+      it("should emit balance update", async function () {
+        await expect(tx).to.emit(perp, "UpdatedStdTrancheBalances").withArgs(toFixedPtAmt("100"), toFixedPtAmt("100"));
+      });
+      it("should update balances", async function () {
+        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("100"));
+        expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("100"));
+      });
+    });
+  });
+
   describe("#transferERC20", function () {
     let transferToken: Contract, toAddress: string;
 
@@ -820,6 +885,12 @@ describe("PerpetualTranche", function () {
         expect(await perp.reserveCount()).to.eq("4");
       });
 
+      it("should emit tranche balance update", async function () {
+        await expect(tx)
+          .to.emit(perp, "UpdatedStdTrancheBalances")
+          .withArgs(toFixedPtAmt("2500"), toFixedPtAmt("1000"));
+      });
+
       it("should change mature tranche balances", async function () {
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2500"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("1000"));
@@ -903,6 +974,12 @@ describe("PerpetualTranche", function () {
 
       it("should change reserveCount", async function () {
         expect(await perp.reserveCount()).to.eq("4");
+      });
+
+      it("should emit tranche balance update", async function () {
+        await expect(tx)
+          .to.emit(perp, "UpdatedStdTrancheBalances")
+          .withArgs(toFixedPtAmt("2500"), toFixedPtAmt("1000"));
       });
 
       it("should change mature tranche balances", async function () {
@@ -991,6 +1068,10 @@ describe("PerpetualTranche", function () {
 
       it("should change reserveCount", async function () {
         expect(await perp.reserveCount()).to.eq("4");
+      });
+
+      it("should emit tranche balance update", async function () {
+        await expect(tx).to.emit(perp, "UpdatedStdTrancheBalances").withArgs(toFixedPtAmt("2250"), toFixedPtAmt("750"));
       });
 
       it("should change mature tranche balances", async function () {
