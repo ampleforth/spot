@@ -241,9 +241,7 @@ describe("PerpetualTranche", function () {
 
     describe("when set address is NOT valid", function () {
       it("should revert", async function () {
-        await expect(perp.updateYieldStrategy(constants.AddressZero)).to.be.revertedWith(
-          "UnacceptableYieldStrategy",
-        );
+        await expect(perp.updateYieldStrategy(constants.AddressZero)).to.be.revertedWith("UnacceptableYieldStrategy");
       });
     });
 

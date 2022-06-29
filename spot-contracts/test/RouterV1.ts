@@ -740,7 +740,7 @@ describe("RouterV1", function () {
     describe("successful tranche & rollover and return the remainder (with no fees)", function () {
       beforeEach(async function () {
         await await feeStrategy.setRolloverFee("0");
-        
+
         await mintCollteralToken(collateralToken, toFixedPtAmt("2000"), deployer);
         await collateralToken.approve(router.address, toFixedPtAmt("2000"));
 
@@ -789,6 +789,6 @@ describe("RouterV1", function () {
         expect(await collateralToken.balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
         expect(await perp.balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
       });
-    })
+    });
   });
 });

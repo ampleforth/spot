@@ -62,10 +62,10 @@ describe("TrancheClassYieldStrategy", function () {
           .to.emit(yieldStrategy, "UpdatedDefinedTrancheYields")
           .withArgs(classHash, toYieldFixedPtAmt("1"));
       });
-      it("should delete yield when set to zero", async function(){
-        await yieldStrategy.updateDefinedYield(classHash, "0")
+      it("should delete yield when set to zero", async function () {
+        await yieldStrategy.updateDefinedYield(classHash, "0");
         expect(await yieldStrategy.computeYield(tranche.address)).to.eq("0");
-      })
+      });
     });
   });
 
