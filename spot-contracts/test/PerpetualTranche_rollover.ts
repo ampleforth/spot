@@ -13,6 +13,7 @@ import {
   toYieldFixedPtAmt,
   toPriceFixedPtAmt,
   advancePerpQueue,
+  advancePerpQueueToBondMaturity,
   checkReserveComposition,
   rebase,
 } from "./helpers";
@@ -80,7 +81,7 @@ describe("PerpetualTranche", function () {
     await feeStrategy.setRolloverFee(toFixedPtAmt("0"));
 
     await perp.updateTolerableTrancheMaturiy(1200, 10800);
-    await advancePerpQueue(perp, 10800);
+    await advancePerpQueue(perp, 10900);
 
     holdingPenBond = await bondAt(await perp.callStatic.getDepositBond());
     [holdingPenTranche1] = await getTranches(holdingPenBond);
@@ -109,7 +110,7 @@ describe("PerpetualTranche", function () {
     await reserveTranche2.approve(perp.address, toFixedPtAmt("1000"));
     await perp.deposit(reserveTranche2.address, toFixedPtAmt("1000"));
 
-    await advancePerpQueue(perp, 9600);
+    await advancePerpQueueToBondMaturity(perp, holdingPenBond);
 
     rolloverInBond = await bondAt(await perp.callStatic.getDepositBond());
     [rolloverInTranche] = await getTranches(rolloverInBond);

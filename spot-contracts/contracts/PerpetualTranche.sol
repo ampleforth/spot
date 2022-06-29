@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.15;
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
@@ -154,7 +154,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     // Standard denomination: b'i = bi . yield(ti)
     //
     // Yield are typically expected to be ~1.0 for safe tranches,
-    // but could be less for risker junior tranches.
+    // but could be less for riskier junior tranches.
     //
     //
     // System reserve value:
@@ -812,9 +812,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         IERC20Upgradeable token,
         uint256 tokenAmt
     ) internal returns (uint256) {
-        if (tokenAmt > 0) {
-            token.safeTransfer(to, tokenAmt);
-        }
+        token.safeTransfer(to, tokenAmt);
         return _syncReserve(token);
     }
 

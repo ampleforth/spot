@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.15;
 
 contract MockBondIssuer {
     address private _bond;
@@ -8,7 +8,7 @@ contract MockBondIssuer {
         _bond = b;
     }
 
-    function getLatestBond() external returns (address) {
+    function getLatestBond() external view returns (address) {
         return _bond;
     }
 }

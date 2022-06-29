@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.15;
 
 contract MockFeeStrategy {
     int256 private _mintFee;
@@ -27,18 +27,21 @@ contract MockFeeStrategy {
         return _feeToken;
     }
 
-    // solhint-disable-next-line no-unused-vars
-    function computeMintFee(uint256 a) external view returns (int256) {
+    function computeMintFee(
+        uint256 /* f */
+    ) external view returns (int256) {
         return _mintFee;
     }
 
-    // solhint-disable-next-line no-unused-vars
-    function computeBurnFee(uint256 a) external view returns (int256) {
+    function computeBurnFee(
+        uint256 /* f */
+    ) external view returns (int256) {
         return _burnFee;
     }
 
-    // solhint-disable-next-line no-unused-vars
-    function computeRolloverFee(uint256 a) external view returns (int256) {
+    function computeRolloverFee(
+        uint256 /* f */
+    ) external view returns (int256) {
         return _rolloverFee;
     }
 }

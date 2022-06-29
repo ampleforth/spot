@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.15;
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { TrancheHelpers } from "../_utils/BondHelpers.sol";
@@ -30,8 +30,7 @@ contract CDRPricingStrategy is IPricingStrategy {
     /// @inheritdoc IPricingStrategy
     // @dev Selective handling for collateral for mature tranches are held by the perp reserve.
     function computeMatureTranchePrice(
-        // solhint-disable-next-line no-unused-vars
-        IERC20Upgradeable collateralToken,
+        IERC20Upgradeable, /* collateralToken */
         uint256 collateralBalance,
         uint256 debt
     ) external pure override returns (uint256) {

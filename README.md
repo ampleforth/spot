@@ -2,6 +2,10 @@
 
 SPOT is an inflation-resistant AMPL backed stable coin. [Learn more](https://docs.ampleforth.org/learn/about-the-spot-stablecoin).
 
+<br />
+
+[![Test](https://github.com/ampleforth/spot/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/ampleforth/spot/actions/workflows/test.yml)
+
 
 ### Package organization
 

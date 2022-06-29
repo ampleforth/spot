@@ -25,6 +25,12 @@ describe("TrancheClassYieldStrategy", function () {
     await yieldStrategy.init();
   });
 
+  describe("decimals", function () {
+    it("should be set", async function () {
+      expect(await yieldStrategy.decimals()).to.eq(18);
+    });
+  });
+
   describe("#updateDefinedYield", function () {
     let tx: Transaction, tranche: Contract, classHash: string;
 
@@ -55,6 +61,10 @@ describe("TrancheClassYieldStrategy", function () {
         await expect(tx)
           .to.emit(yieldStrategy, "UpdatedDefinedTrancheYields")
           .withArgs(classHash, toYieldFixedPtAmt("1"));
+      });
+      it("should delete yield when set to zero", async function () {
+        await yieldStrategy.updateDefinedYield(classHash, "0");
+        expect(await yieldStrategy.computeYield(tranche.address)).to.eq("0");
       });
     });
   });
