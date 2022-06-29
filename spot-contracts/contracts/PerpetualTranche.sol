@@ -812,9 +812,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         IERC20Upgradeable token,
         uint256 tokenAmt
     ) internal returns (uint256) {
-        if (tokenAmt > 0) {
-            token.safeTransfer(to, tokenAmt);
-        }
+        token.safeTransfer(to, tokenAmt);
         return _syncReserve(token);
     }
 
