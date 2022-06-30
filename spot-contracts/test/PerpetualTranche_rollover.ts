@@ -242,7 +242,7 @@ describe("PerpetualTranche", function () {
       });
 
       it("should rollover the correct amount", async function () {
-        const r = await perp.computeRolloverAmt(
+        const r = await perp.callStatic.computeRolloverAmt(
           newRotationInTranche.address,
           reserveTranche1.address,
           toFixedPtAmt("500"),
@@ -258,7 +258,7 @@ describe("PerpetualTranche", function () {
 
     describe("when tokenOut yield is 0.5", function () {
       it("should rollover the correct amount", async function () {
-        const r = await perp.computeRolloverAmt(
+        const r = await perp.callStatic.computeRolloverAmt(
           rolloverInTranche.address,
           reserveTranche2.address,
           toFixedPtAmt("500"),
@@ -280,7 +280,7 @@ describe("PerpetualTranche", function () {
         });
 
         it("should rollover the correct amount", async function () {
-          const r = await perp.computeRolloverAmt(
+          const r = await perp.callStatic.computeRolloverAmt(
             rolloverInTranche.address,
             reserveTranche1.address,
             toFixedPtAmt("500"),
@@ -301,7 +301,7 @@ describe("PerpetualTranche", function () {
         });
 
         it("should rollover the correct amount", async function () {
-          const r = await perp.computeRolloverAmt(
+          const r = await perp.callStatic.computeRolloverAmt(
             rolloverInTranche.address,
             reserveTranche1.address,
             toFixedPtAmt("500"),
@@ -322,7 +322,7 @@ describe("PerpetualTranche", function () {
         });
 
         it("should rollover the correct amount", async function () {
-          const r = await perp.computeRolloverAmt(
+          const r = await perp.callStatic.computeRolloverAmt(
             rolloverInTranche.address,
             reserveTranche1.address,
             toFixedPtAmt("500"),
@@ -343,7 +343,7 @@ describe("PerpetualTranche", function () {
         });
 
         it("should rollover the correct amount", async function () {
-          const r = await perp.computeRolloverAmt(
+          const r = await perp.callStatic.computeRolloverAmt(
             rolloverInTranche.address,
             reserveTranche1.address,
             toFixedPtAmt("500"),
@@ -370,7 +370,7 @@ describe("PerpetualTranche", function () {
         });
 
         it("should rollover the correct amount", async function () {
-          const r = await perp.computeRolloverAmt(
+          const r = await perp.callStatic.computeRolloverAmt(
             rolloverInTranche.address,
             reserveTranche1.address,
             toFixedPtAmt("500"),
@@ -391,7 +391,7 @@ describe("PerpetualTranche", function () {
         });
 
         it("should rollover the correct amount", async function () {
-          const r = await perp.computeRolloverAmt(
+          const r = await perp.callStatic.computeRolloverAmt(
             rolloverInTranche.address,
             reserveTranche1.address,
             toFixedPtAmt("500"),
@@ -412,7 +412,7 @@ describe("PerpetualTranche", function () {
         });
 
         it("should rollover the correct amount", async function () {
-          const r = await perp.computeRolloverAmt(
+          const r = await perp.callStatic.computeRolloverAmt(
             rolloverInTranche.address,
             reserveTranche1.address,
             toFixedPtAmt("500"),
@@ -433,7 +433,7 @@ describe("PerpetualTranche", function () {
         });
 
         it("should rollover the correct amount", async function () {
-          const r = await perp.computeRolloverAmt(
+          const r = await perp.callStatic.computeRolloverAmt(
             rolloverInTranche.address,
             reserveTranche1.address,
             toFixedPtAmt("500"),
@@ -460,7 +460,7 @@ describe("PerpetualTranche", function () {
         });
 
         it("should rollover the correct amount", async function () {
-          const r = await perp.computeRolloverAmt(
+          const r = await perp.callStatic.computeRolloverAmt(
             rolloverInTranche.address,
             reserveTranche1.address,
             toFixedPtAmt("500"),
@@ -481,7 +481,7 @@ describe("PerpetualTranche", function () {
         });
 
         it("should rollover the correct amount", async function () {
-          const r = await perp.computeRolloverAmt(
+          const r = await perp.callStatic.computeRolloverAmt(
             rolloverInTranche.address,
             reserveTranche1.address,
             toFixedPtAmt("500"),
@@ -498,7 +498,7 @@ describe("PerpetualTranche", function () {
 
     describe("when tokenOut is tranche and not covered", function () {
       it("should rollover the correct amount", async function () {
-        const r = await perp.computeRolloverAmt(
+        const r = await perp.callStatic.computeRolloverAmt(
           rolloverInTranche.address,
           reserveTranche1.address,
           toFixedPtAmt("500"),
@@ -514,7 +514,7 @@ describe("PerpetualTranche", function () {
 
     describe("when tokenOut is collateral and not covered", function () {
       it("should rollover the correct amount", async function () {
-        const r = await perp.computeRolloverAmt(
+        const r = await perp.callStatic.computeRolloverAmt(
           rolloverInTranche.address,
           collateralToken.address,
           toFixedPtAmt("500"),
@@ -533,7 +533,7 @@ describe("PerpetualTranche", function () {
         await rebase(collateralToken, rebaseOracle, -0.25);
       });
       it("should rollover the correct amount", async function () {
-        const r = await perp.computeRolloverAmt(
+        const r = await perp.callStatic.computeRolloverAmt(
           rolloverInTranche.address,
           collateralToken.address,
           toFixedPtAmt("500"),
@@ -552,7 +552,7 @@ describe("PerpetualTranche", function () {
         await rebase(collateralToken, rebaseOracle, 0.25);
       });
       it("should rollover the correct amount", async function () {
-        const r = await perp.computeRolloverAmt(
+        const r = await perp.callStatic.computeRolloverAmt(
           rolloverInTranche.address,
           collateralToken.address,
           toFixedPtAmt("500"),
@@ -576,7 +576,7 @@ describe("PerpetualTranche", function () {
         await rebase(collateralToken, rebaseOracle, -0.25);
       });
       it("should rollover the correct amount", async function () {
-        const r = await perp.computeRolloverAmt(
+        const r = await perp.callStatic.computeRolloverAmt(
           newRotationInTranche.address,
           collateralToken.address,
           toFixedPtAmt("500"),
@@ -600,7 +600,7 @@ describe("PerpetualTranche", function () {
         await rebase(collateralToken, rebaseOracle, 0.25);
       });
       it("should rollover the correct amount", async function () {
-        const r = await perp.computeRolloverAmt(
+        const r = await perp.callStatic.computeRolloverAmt(
           newRotationInTranche.address,
           collateralToken.address,
           toFixedPtAmt("500"),
@@ -624,7 +624,7 @@ describe("PerpetualTranche", function () {
         await rebase(collateralToken, rebaseOracle, -0.25);
       });
       it("should rollover the correct amount", async function () {
-        const r = await perp.computeRolloverAmt(
+        const r = await perp.callStatic.computeRolloverAmt(
           newRotationInTranche.address,
           collateralToken.address,
           toFixedPtAmt("500"),
@@ -648,7 +648,7 @@ describe("PerpetualTranche", function () {
         await rebase(collateralToken, rebaseOracle, 0.25);
       });
       it("should rollover the correct amount", async function () {
-        const r = await perp.computeRolloverAmt(
+        const r = await perp.callStatic.computeRolloverAmt(
           newRotationInTranche.address,
           collateralToken.address,
           toFixedPtAmt("500"),
@@ -680,7 +680,7 @@ describe("PerpetualTranche", function () {
           ).to.changeTokenBalance(perp, perp, toFixedPtAmt("0"));
         });
         it("should calculate rollover amt", async function () {
-          const r = await perp.computeRolloverAmt(
+          const r = await perp.callStatic.computeRolloverAmt(
             rolloverInTranche.address,
             reserveTranche1.address,
             toFixedPtAmt("500"),
@@ -714,7 +714,7 @@ describe("PerpetualTranche", function () {
           ).to.changeTokenBalance(perp, perp, toFixedPtAmt("1"));
         });
         it("should calculate rollover amt", async function () {
-          const r = await perp.computeRolloverAmt(
+          const r = await perp.callStatic.computeRolloverAmt(
             rolloverInTranche.address,
             reserveTranche1.address,
             toFixedPtAmt("500"),
@@ -749,7 +749,7 @@ describe("PerpetualTranche", function () {
           ).to.changeTokenBalance(perp, perp, toFixedPtAmt("-1"));
         });
         it("should calculate rollover amt", async function () {
-          const r = await perp.computeRolloverAmt(
+          const r = await perp.callStatic.computeRolloverAmt(
             rolloverInTranche.address,
             reserveTranche1.address,
             toFixedPtAmt("500"),
@@ -790,7 +790,7 @@ describe("PerpetualTranche", function () {
           ).to.changeTokenBalance(feeToken, perp, toFixedPtAmt("0"));
         });
         it("should calculate rollover amt", async function () {
-          const r = await perp.computeRolloverAmt(
+          const r = await perp.callStatic.computeRolloverAmt(
             rolloverInTranche.address,
             reserveTranche1.address,
             toFixedPtAmt("500"),
@@ -852,7 +852,7 @@ describe("PerpetualTranche", function () {
             ).to.changeTokenBalance(feeToken, perp, toFixedPtAmt("1"));
           });
           it("should calculate rollover amt", async function () {
-            const r = await perp.computeRolloverAmt(
+            const r = await perp.callStatic.computeRolloverAmt(
               rolloverInTranche.address,
               reserveTranche1.address,
               toFixedPtAmt("500"),
@@ -900,7 +900,7 @@ describe("PerpetualTranche", function () {
             ).to.changeTokenBalance(feeToken, perp, toFixedPtAmt("-1"));
           });
           it("should calculate rollover amt", async function () {
-            const r = await perp.computeRolloverAmt(
+            const r = await perp.callStatic.computeRolloverAmt(
               rolloverInTranche.address,
               reserveTranche1.address,
               toFixedPtAmt("500"),
@@ -929,7 +929,7 @@ describe("PerpetualTranche", function () {
 
         await newRotationInTranche.approve(perp.address, toFixedPtAmt("250"));
 
-        r = await perp.computeRolloverAmt(
+        r = await perp.callStatic.computeRolloverAmt(
           newRotationInTranche.address,
           reserveTranche1.address,
           toFixedPtAmt("250"),
@@ -972,7 +972,7 @@ describe("PerpetualTranche", function () {
         await checkReserveComposition(perp, [collateralToken, reserveTranche2, reserveTranche1, rolloverInTranche]);
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2000"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("500"));
-        r = await perp.computeRolloverAmt(
+        r = await perp.callStatic.computeRolloverAmt(
           rolloverInTranche.address,
           reserveTranche1.address,
           toFixedPtAmt("250"),
@@ -1015,7 +1015,7 @@ describe("PerpetualTranche", function () {
         await checkReserveComposition(perp, [collateralToken, reserveTranche2, reserveTranche1, rolloverInTranche]);
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2000"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("500"));
-        r = await perp.computeRolloverAmt(
+        r = await perp.callStatic.computeRolloverAmt(
           rolloverInTranche.address,
           collateralToken.address,
           toFixedPtAmt("250"),
@@ -1062,7 +1062,7 @@ describe("PerpetualTranche", function () {
         await checkReserveComposition(perp, [collateralToken, reserveTranche2, reserveTranche1, rolloverInTranche]);
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2000"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("500"));
-        r = await perp.computeRolloverAmt(
+        r = await perp.callStatic.computeRolloverAmt(
           rolloverInTranche.address,
           collateralToken.address,
           toFixedPtAmt("250"),
@@ -1109,7 +1109,7 @@ describe("PerpetualTranche", function () {
         await checkReserveComposition(perp, [collateralToken, reserveTranche2, reserveTranche1, rolloverInTranche]);
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2000"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("500"));
-        r = await perp.computeRolloverAmt(
+        r = await perp.callStatic.computeRolloverAmt(
           rolloverInTranche.address,
           collateralToken.address,
           toFixedPtAmt("250"),
@@ -1153,7 +1153,7 @@ describe("PerpetualTranche", function () {
       let tx: Transaction, r: any;
       beforeEach(async function () {
         await checkReserveComposition(perp, [collateralToken, reserveTranche2, reserveTranche1, rolloverInTranche]);
-        r = await perp.computeRolloverAmt(
+        r = await perp.callStatic.computeRolloverAmt(
           rolloverInTranche.address,
           reserveTranche1.address,
           toFixedPtAmt("500"),
@@ -1191,7 +1191,7 @@ describe("PerpetualTranche", function () {
       let tx: Transaction, r: any;
       beforeEach(async function () {
         await checkReserveComposition(perp, [collateralToken, reserveTranche2, reserveTranche1, rolloverInTranche]);
-        r = await perp.computeRolloverAmt(
+        r = await perp.callStatic.computeRolloverAmt(
           rolloverInTranche.address,
           collateralToken.address,
           toFixedPtAmt("500"),
@@ -1228,7 +1228,7 @@ describe("PerpetualTranche", function () {
       let tx: Transaction, r: any;
       beforeEach(async function () {
         await checkReserveComposition(perp, [collateralToken, reserveTranche2, reserveTranche1, rolloverInTranche]);
-        r = await perp.computeRolloverAmt(
+        r = await perp.callStatic.computeRolloverAmt(
           rolloverInTranche.address,
           reserveTranche1.address,
           toFixedPtAmt("100"),
@@ -1265,7 +1265,7 @@ describe("PerpetualTranche", function () {
     describe("when tokenOut is NOT covered", async function () {
       let tx: Transaction, r: any;
       beforeEach(async function () {
-        r = await perp.computeRolloverAmt(
+        r = await perp.callStatic.computeRolloverAmt(
           rolloverInTranche.address,
           reserveTranche1.address,
           toFixedPtAmt("2000"),
@@ -1305,7 +1305,7 @@ describe("PerpetualTranche", function () {
         await checkReserveComposition(perp, [collateralToken, reserveTranche2, reserveTranche1, rolloverInTranche]);
         await perp.updateSkimPerc("100000000");
         await pricingStrategy.setTranchePrice(collateralToken.address, toPriceFixedPtAmt("2"));
-        r = await perp.computeRolloverAmt(
+        r = await perp.callStatic.computeRolloverAmt(
           rolloverInTranche.address,
           collateralToken.address,
           toFixedPtAmt("100"),

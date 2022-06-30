@@ -141,7 +141,7 @@ describe("PerpetualTranche", function () {
           );
         });
         it("should return the redemption amounts", async function () {
-          const r = await perp.computeRedemptionAmts(toFixedPtAmt("500"));
+          const r = await perp.callStatic.computeRedemptionAmts(toFixedPtAmt("500"));
           expect(r[0][0]).to.eq(collateralToken.address);
           expect(r[0][1]).to.eq(initialDepositTranche.address);
           expect(r[1][0]).to.eq(toFixedPtAmt("0"));
@@ -174,7 +174,7 @@ describe("PerpetualTranche", function () {
           );
         });
         it("should return the redemption amounts", async function () {
-          const r = await perp.computeRedemptionAmts(toFixedPtAmt("500"));
+          const r = await perp.callStatic.computeRedemptionAmts(toFixedPtAmt("500"));
           expect(r[0][0]).to.eq(collateralToken.address);
           expect(r[0][1]).to.eq(initialDepositTranche.address);
           expect(r[1][0]).to.eq(toFixedPtAmt("0"));
@@ -208,7 +208,7 @@ describe("PerpetualTranche", function () {
           );
         });
         it("should return the redemption amounts", async function () {
-          const r = await perp.computeRedemptionAmts(toFixedPtAmt("500"));
+          const r = await perp.callStatic.computeRedemptionAmts(toFixedPtAmt("500"));
           expect(r[0][0]).to.eq(collateralToken.address);
           expect(r[0][1]).to.eq(initialDepositTranche.address);
           expect(r[1][0]).to.eq(toFixedPtAmt("0"));
@@ -249,7 +249,7 @@ describe("PerpetualTranche", function () {
           );
         });
         it("should return the redemption amounts", async function () {
-          const r = await perp.computeRedemptionAmts(toFixedPtAmt("500"));
+          const r = await perp.callStatic.computeRedemptionAmts(toFixedPtAmt("500"));
           expect(r[0][0]).to.eq(collateralToken.address);
           expect(r[0][1]).to.eq(initialDepositTranche.address);
           expect(r[1][0]).to.eq(toFixedPtAmt("0"));
@@ -307,7 +307,7 @@ describe("PerpetualTranche", function () {
             );
           });
           it("should return the redemption amounts", async function () {
-            const r = await perp.computeRedemptionAmts(toFixedPtAmt("500"));
+            const r = await perp.callStatic.computeRedemptionAmts(toFixedPtAmt("500"));
             expect(r[0][0]).to.eq(collateralToken.address);
             expect(r[0][1]).to.eq(initialDepositTranche.address);
             expect(r[1][0]).to.eq(toFixedPtAmt("0"));
@@ -344,7 +344,7 @@ describe("PerpetualTranche", function () {
           );
         });
         it("should return the redemption amounts", async function () {
-          const r = await perp.computeRedemptionAmts(toFixedPtAmt("500"));
+          const r = await perp.callStatic.computeRedemptionAmts(toFixedPtAmt("500"));
           expect(r[0][0]).to.eq(collateralToken.address);
           expect(r[0][1]).to.eq(initialDepositTranche.address);
           expect(r[1][0]).to.eq(toFixedPtAmt("0"));
@@ -391,9 +391,9 @@ describe("PerpetualTranche", function () {
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("750"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
-        expect(await perp.reserveBalance(collateralToken.address)).to.eq(toFixedPtAmt("0"));
-        expect(await perp.reserveBalance(initialDepositTranche.address)).to.eq(toFixedPtAmt("500"));
-        expect(await perp.reserveBalance(newRedemptionTranche.address)).to.eq(toFixedPtAmt("500"));
+        expect(await perp.callStatic.getReserveBalance(collateralToken.address)).to.eq(toFixedPtAmt("0"));
+        expect(await perp.callStatic.getReserveBalance(initialDepositTranche.address)).to.eq(toFixedPtAmt("500"));
+        expect(await perp.callStatic.getReserveBalance(newRedemptionTranche.address)).to.eq(toFixedPtAmt("500"));
 
         tx = perp.burn(toFixedPtAmt("375"));
         await tx;
@@ -531,9 +531,9 @@ describe("PerpetualTranche", function () {
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("750"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
-        expect(await perp.reserveBalance(collateralToken.address)).to.eq(toFixedPtAmt("0"));
-        expect(await perp.reserveBalance(initialDepositTranche.address)).to.eq(toFixedPtAmt("500"));
-        expect(await perp.reserveBalance(newRedemptionTranche.address)).to.eq(toFixedPtAmt("500"));
+        expect(await perp.callStatic.getReserveBalance(collateralToken.address)).to.eq(toFixedPtAmt("0"));
+        expect(await perp.callStatic.getReserveBalance(initialDepositTranche.address)).to.eq(toFixedPtAmt("500"));
+        expect(await perp.callStatic.getReserveBalance(newRedemptionTranche.address)).to.eq(toFixedPtAmt("500"));
 
         await advancePerpQueue(perp, 2400);
         await rebase(collateralToken, rebaseOracle, +0.5);

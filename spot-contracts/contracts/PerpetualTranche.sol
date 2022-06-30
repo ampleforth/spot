@@ -402,7 +402,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         address to,
         uint256 amount
     ) external afterStateUpdate onlyOwner {
-        if (isReserveToken(token)) {
+        if (_isReserveToken(token)) {
             revert UnauthorizedTransferOut(token);
         }
         token.safeTransfer(to, amount);
@@ -415,7 +415,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // The redenomination is only allowed when:
         //  - the system has no more tranches left i.e) all the tranches have mature
         //  - the system has a collateral balance
-        if (reserveCount() > 1 || _tokenBalance(collateral) == 0) {
+        if (_reserveCount() > 1 || _tokenBalance(collateral) == 0) {
             revert InvalidRebootState();
         }
         _stdTotalTrancheBalance = stdTrancheBalance;
@@ -433,7 +433,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         }
 
         // calculates the amount of perp tokens when depositing `trancheInAmt` of tranche tokens
-        (uint256 mintAmt, uint256 stdTrancheInAmt) = computeMintAmt(trancheIn, trancheInAmt);
+        (uint256 mintAmt, uint256 stdTrancheInAmt) = _computeMintAmt(trancheIn, trancheInAmt);
         if (trancheInAmt == 0 || mintAmt == 0) {
             revert UnacceptableMintAmt(stdTrancheInAmt, mintAmt);
         }
@@ -471,11 +471,11 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
             revert UnacceptableBurnAmt(perpAmtBurnt, perpSupply);
         }
 
+        // calculates share of reserve tokens to be redeemed
+        (IERC20Upgradeable[] memory tokensOuts, uint256[] memory tokenOutAmts) = _computeRedemptionAmts(perpAmtBurnt);
+
         // calculates the fee to burn `perpAmtBurnt` of perp token
         int256 burnFee = feeStrategy.computeBurnFee(perpAmtBurnt);
-
-        // calculates share of reserve tokens to be redeemed
-        (IERC20Upgradeable[] memory tokensOuts, uint256[] memory tokenOutAmts) = computeRedemptionAmts(perpAmtBurnt);
 
         // burns perp tokens from the sender
         _burn(_msgSender(), perpAmtBurnt);
@@ -507,7 +507,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         }
 
         // calculates the perp denominated amount rolled over and the tokenOutAmt
-        IPerpetualTranche.RolloverPreview memory r = computeRolloverAmt(
+        IPerpetualTranche.RolloverPreview memory r = _computeRolloverAmt(
             trancheIn,
             tokenOut,
             trancheInAmtRequested,
@@ -566,6 +566,82 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         return _isAcceptableRollover(trancheIn, tokenOut);
     }
 
+    /// @inheritdoc IPerpetualTranche
+    function getReserveCount() external override afterStateUpdate returns (uint256) {
+        return _reserveCount();
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    function getReserveAt(uint256 i) external override afterStateUpdate returns (IERC20Upgradeable) {
+        return _reserveAt(i);
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    function getReserveBalance(IERC20Upgradeable token) external override afterStateUpdate returns (uint256) {
+        return _isReserveToken(token) ? _tokenBalance(token) : 0;
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    function isReserveToken(IERC20Upgradeable token) external override afterStateUpdate returns (bool) {
+        return _isReserveToken(token);
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    function isReserveTranche(IERC20Upgradeable tranche) external override afterStateUpdate returns (bool) {
+        return _isReserveTranche(tranche);
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    // @dev Reserve tokens which are not up for rollover are marked by `address(0)`.
+    function getReserveTokensUpForRollover() external override afterStateUpdate returns (IERC20Upgradeable[] memory) {
+        uint256 reserveCount = _reserveCount();
+        IERC20Upgradeable[] memory rolloverTokens = new IERC20Upgradeable[](reserveCount);
+        for (uint256 i = 0; i < reserveCount; i++) {
+            IERC20Upgradeable token = _reserveAt(i);
+            if (i == 0 || !_isAcceptableForReserve(IBondController(ITranche(address(token)).bond()))) {
+                rolloverTokens[i] = token;
+            }
+        }
+        return rolloverTokens;
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    // @dev Returns a fixed point with {PRICE_DECIMALS} decimals.
+    function getReserveValue() external override afterStateUpdate returns (uint256) {
+        return _reserveValue();
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    function computeMintAmt(ITranche trancheIn, uint256 trancheInAmt)
+        external
+        override
+        afterStateUpdate
+        returns (uint256, uint256)
+    {
+        return _computeMintAmt(trancheIn, trancheInAmt);
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    function computeRedemptionAmts(uint256 perpAmtBurnt)
+        external
+        override
+        afterStateUpdate
+        returns (IERC20Upgradeable[] memory, uint256[] memory)
+    {
+        return _computeRedemptionAmts(perpAmtBurnt);
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    // @dev Set `maxTokenOutAmtCovered` to max(uint256) to use the reserve balance.
+    function computeRolloverAmt(
+        ITranche trancheIn,
+        IERC20Upgradeable tokenOut,
+        uint256 trancheInAmtRequested,
+        uint256 maxTokenOutAmtCovered
+    ) external override afterStateUpdate returns (IPerpetualTranche.RolloverPreview memory) {
+        return _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtRequested, maxTokenOutAmtCovered);
+    }
+
     //--------------------------------------------------------------------------
     // Public methods
 
@@ -593,9 +669,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         //       end of the list and removing the last element.
         //       We also skip the `reserveAt(0)`, ie the mature tranche,
         //       which is never removed.
-        uint256 reserveCount_ = reserveCount();
-        for (uint256 i = reserveCount_ - 1; i > 0; i--) {
-            ITranche tranche = ITranche(address(reserveAt(i)));
+        uint256 reserveCount = _reserveCount();
+        for (uint256 i = reserveCount - 1; i > 0; i--) {
+            ITranche tranche = ITranche(address(_reserveAt(i)));
             IBondController bond = IBondController(tranche.bond());
 
             // If bond is not mature yet, move to the next tranche
@@ -635,51 +711,12 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         return _self();
     }
 
-    /// @inheritdoc IPerpetualTranche
-    function reserveBalance(IERC20Upgradeable token) external view override returns (uint256) {
-        return isReserveToken(token) ? token.balanceOf(_self()) : 0;
-    }
-
     //--------------------------------------------------------------------------
     // Public view methods
 
     /// @inheritdoc IPerpetualTranche
     function feeToken() public view override returns (IERC20Upgradeable) {
         return feeStrategy.feeToken();
-    }
-
-    /// @inheritdoc IPerpetualTranche
-    // @dev The reserve comprises of the list of tranches and the mature collateral.
-    //      The `reserveCount` will always be 1 even if it's empty.
-    function reserveCount() public view override returns (uint256) {
-        return _reserveTranches.length() + 1;
-    }
-
-    /// @inheritdoc IPerpetualTranche
-    function reserveAt(uint256 i) public view override returns (IERC20Upgradeable) {
-        return (i == 0) ? collateral : IERC20Upgradeable(_reserveTranches.at(i - 1));
-    }
-
-    /// @inheritdoc IPerpetualTranche
-    function isReserveToken(IERC20Upgradeable token) public view override returns (bool) {
-        return isReserveTranche(token) || token == collateral;
-    }
-
-    /// @inheritdoc IPerpetualTranche
-    function isReserveTranche(IERC20Upgradeable tranche) public view override returns (bool) {
-        return _reserveTranches.contains(address(tranche));
-    }
-
-    /// @inheritdoc IPerpetualTranche
-    // @dev Returns a fixed point with {PRICE_DECIMALS} decimals.
-    function reserveValue() public view override returns (uint256) {
-        uint256 totalVal = 0;
-        for (uint256 i = 0; i < reserveCount(); i++) {
-            IERC20Upgradeable token = reserveAt(i);
-            uint256 stdTokenAmt = _toStdTrancheAmt(_tokenBalance(token), computeYield(token));
-            totalVal += (stdTokenAmt * computePrice(token));
-        }
-        return totalVal;
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -698,43 +735,51 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
                 : pricingStrategy.computeTranchePrice(ITranche(address(token)));
     }
 
-    /// @inheritdoc IPerpetualTranche
-    function computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) public view override returns (uint256, uint256) {
+    // @notice Returns the number of decimals used to get its user representation.
+    // @dev For example, if `decimals` equals `2`, a balance of `505` tokens should
+    //      be displayed to a user as `5.05` (`505 / 10 ** 2`).
+    function decimals() public view override returns (uint8) {
+        return IERC20MetadataUpgradeable(address(collateral)).decimals();
+    }
+
+    //--------------------------------------------------------------------------
+    // Private/Internal helper methods
+
+    // @dev Computes the perp mint amount for given amount of tranche tokens deposited into the reserve.
+    function _computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) private view returns (uint256, uint256) {
         uint256 totalSupply_ = totalSupply();
         uint256 stdTrancheAmt = _toStdTrancheAmt(trancheInAmt, computeYield(trancheIn));
         uint256 price = computePrice(trancheIn);
         uint256 mintAmt = (totalSupply_ > 0)
-            ? (stdTrancheAmt * totalSupply_ * price) / reserveValue()
+            ? (stdTrancheAmt * price * totalSupply_) / _reserveValue()
             : (stdTrancheAmt * price) / UNIT_PRICE;
         return (mintAmt, stdTrancheAmt);
     }
 
-    /// @inheritdoc IPerpetualTranche
-    function computeRedemptionAmts(uint256 perpAmtBurnt)
-        public
+    // @dev Computes the reserve token amounts redeemed when a given number of perps are burnt.
+    function _computeRedemptionAmts(uint256 perpAmtBurnt)
+        private
         view
-        override
         returns (IERC20Upgradeable[] memory, uint256[] memory)
     {
         uint256 totalSupply_ = totalSupply();
-        uint256 reserveCount_ = reserveCount();
-        IERC20Upgradeable[] memory reserveTokens = new IERC20Upgradeable[](reserveCount_);
-        uint256[] memory redemptionAmts = new uint256[](reserveCount_);
-        for (uint256 i = 0; i < reserveCount_; i++) {
-            reserveTokens[i] = reserveAt(i);
+        uint256 reserveCount = _reserveCount();
+        IERC20Upgradeable[] memory reserveTokens = new IERC20Upgradeable[](reserveCount);
+        uint256[] memory redemptionAmts = new uint256[](reserveCount);
+        for (uint256 i = 0; i < reserveCount; i++) {
+            reserveTokens[i] = _reserveAt(i);
             redemptionAmts[i] = _perpsToReserveShare(perpAmtBurnt, totalSupply_, _tokenBalance(reserveTokens[i]));
         }
         return (reserveTokens, redemptionAmts);
     }
 
-    /// @inheritdoc IPerpetualTranche
-    // @dev Set `maxTokenOutAmtCovered` to max(uint256) to use the reserve balance.
-    function computeRolloverAmt(
+    // @dev Computes the amount of tranches that can be rolled out for the given amount of tranches deposited.
+    function _computeRolloverAmt(
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtRequested,
         uint256 maxTokenOutAmtCovered
-    ) public view override returns (IPerpetualTranche.RolloverPreview memory) {
+    ) private view returns (IPerpetualTranche.RolloverPreview memory) {
         uint256 trancheInYield = computeYield(trancheIn);
         uint256 tokenOutYield = computeYield(tokenOut);
         uint256 trancheInPrice = computePrice(trancheIn);
@@ -784,16 +829,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         return r;
     }
 
-    // @notice Returns the number of decimals used to get its user representation.
-    // @dev For example, if `decimals` equals `2`, a balance of `505` tokens should
-    //      be displayed to a user as `5.05` (`505 / 10 ** 2`).
-    function decimals() public view override returns (uint8) {
-        return IERC20MetadataUpgradeable(address(collateral)).decimals();
-    }
-
-    //--------------------------------------------------------------------------
-    // Private/Internal helper methods
-
     // @dev Transfers tokens from the given address to self and updates the reserve list.
     // @return Reserve's token balance after transfer in.
     function _transferIntoReserve(
@@ -824,7 +859,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
         // If token is a tranche
         if (token != collateral) {
-            bool isReserveTranche_ = isReserveTranche(token);
+            bool isReserveTranche_ = _isReserveTranche(token);
             if (balance > 0 && !isReserveTranche_) {
                 // Inserts new tranche into reserve list.
                 _reserveTranches.add(address(token));
@@ -911,7 +946,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         IBondController bondOut = IBondController(trancheOut.bond());
         return (bondIn == _depositBond &&
             bondOut != _depositBond &&
-            isReserveTranche(trancheOut) &&
+            _isReserveTranche(trancheOut) &&
             !_isAcceptableForReserve(bondOut));
     }
 
@@ -939,6 +974,40 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         if (_mintedSupplyPerTranche[trancheIn] > maxMintAmtPerTranche) {
             revert ExceededMaxMintPerTranche(trancheIn, _mintedSupplyPerTranche[trancheIn], maxMintAmtPerTranche);
         }
+    }
+
+    // @dev Counts the number of tokens currently in the reserve.
+    //      The reserve comprises of the list of tranches and the mature collateral.
+    //      The `reserveCount` will always be 1 even if it's empty.
+    function _reserveCount() private view returns (uint256) {
+        return _reserveTranches.length() + 1;
+    }
+
+    // @dev Fetches the reserve token by index.
+    //      NOTE: index=0 returns the mature collateral.
+    function _reserveAt(uint256 i) private view returns (IERC20Upgradeable) {
+        return (i == 0) ? collateral : IERC20Upgradeable(_reserveTranches.at(i - 1));
+    }
+
+    // @dev Checks if the given token is in the reserve.
+    function _isReserveToken(IERC20Upgradeable token) private view returns (bool) {
+        return _isReserveTranche(token) || token == collateral;
+    }
+
+    // @dev Checks if the given token is a tranche in the reserve.
+    function _isReserveTranche(IERC20Upgradeable tranche) private view returns (bool) {
+        return _reserveTranches.contains(address(tranche));
+    }
+
+    // @dev Calculates the total value of all the tokens in the reserve (value = (yield . balance) . price).
+    function _reserveValue() private view returns (uint256) {
+        uint256 totalVal = 0;
+        for (uint256 i = 0; i < _reserveCount(); i++) {
+            IERC20Upgradeable token = _reserveAt(i);
+            uint256 stdTokenAmt = _toStdTrancheAmt(_tokenBalance(token), computeYield(token));
+            totalVal += (stdTokenAmt * computePrice(token));
+        }
+        return totalVal;
     }
 
     // @dev Fetches the perp contract's token balance.

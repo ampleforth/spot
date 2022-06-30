@@ -125,26 +125,29 @@ interface IPerpetualTranche is IERC20Upgradeable {
     function feeToken() external view returns (IERC20Upgradeable);
 
     // @notice Total count of tokens held in the reserve.
-    function reserveCount() external view returns (uint256);
+    function getReserveCount() external returns (uint256);
 
     // @notice The token address from the reserve list by index.
     // @param index The index of a token.
-    function reserveAt(uint256 index) external view returns (IERC20Upgradeable);
+    function getReserveAt(uint256 index) external returns (IERC20Upgradeable);
 
     // @notice Checks if the given token is part of the reserve.
     // @param token The address of a token to check.
-    function isReserveToken(IERC20Upgradeable token) external view returns (bool);
+    function isReserveToken(IERC20Upgradeable token) external returns (bool);
 
     // @notice Checks if the given token is a tranche token part of the reserve.
     // @param token The address of a reserve token to check.
-    function isReserveTranche(IERC20Upgradeable token) external view returns (bool);
+    function isReserveTranche(IERC20Upgradeable token) external returns (bool);
 
     // @notice Fetches the reserve's token balance.
     // @param token The address of the reserve token.
-    function reserveBalance(IERC20Upgradeable token) external view returns (uint256);
+    function getReserveBalance(IERC20Upgradeable token) external returns (uint256);
 
     // @notice Computes the total value of all reserve assets.
-    function reserveValue() external view returns (uint256);
+    function getReserveValue() external returns (uint256);
+
+    // @notice Fetches the list of reserve tokens which are up for rollover.
+    function getReserveTokensUpForRollover() external returns (IERC20Upgradeable[] memory);
 
     // @notice Computes the amount of perp tokens minted when `trancheInAmt` `trancheIn` tokens
     //         are deposited into the system.
@@ -154,7 +157,6 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @return stdTrancheAmt The standardized tranche amount deposited.
     function computeMintAmt(ITranche trancheIn, uint256 trancheInAmt)
         external
-        view
         returns (uint256 perpAmtMinted, uint256 stdTrancheAmt);
 
     // @notice Computes the amount reserve tokens redeemed when burning given number of perp tokens.
@@ -163,7 +165,6 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @return tokenOutAmts The list of reserve token amounts redeemed.
     function computeRedemptionAmts(uint256 perpAmtBurnt)
         external
-        view
         returns (IERC20Upgradeable[] memory tokensOut, uint256[] memory tokenOutAmts);
 
     struct RolloverPreview {
@@ -191,7 +192,7 @@ interface IPerpetualTranche is IERC20Upgradeable {
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtRequested,
         uint256 maxTokenOutAmtCovered
-    ) external view returns (RolloverPreview memory);
+    ) external returns (RolloverPreview memory);
 
     // @notice The yield to be applied given the reserve token.
     // @param token The address of the reserve token.
