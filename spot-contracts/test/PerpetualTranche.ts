@@ -1150,8 +1150,8 @@ describe("PerpetualTranche", function () {
     });
   });
 
-  describe("#getReserveTokensUpForRollover", async function(){
-    let depositTranches:Contract[]=[]
+  describe("#getReserveTokensUpForRollover", async function () {
+    const depositTranches: Contract[] = [];
     beforeEach(async function () {
       const bondFactory = await setupBondFactory();
       const BondIssuer = await ethers.getContractFactory("BondIssuer");
@@ -1170,17 +1170,17 @@ describe("PerpetualTranche", function () {
         depositTranches[i] = tranches[0];
         await advancePerpQueue(perp, 1200);
       }
-      await advancePerpQueueToRollover(perp, await bondAt(depositTranches[2].bond())); 
+      await advancePerpQueueToRollover(perp, await bondAt(depositTranches[2].bond()));
     });
 
-    it("should get the rollover ready tranches", async function(){
-      const r = await perp.callStatic.getReserveTokensUpForRollover()
-      expect(r).to.include(collateralToken.address)
-      expect(r).to.include(depositTranches[2].address)
-      expect(r).not.to.include(depositTranches[0].address)
-      expect(r).not.to.include(depositTranches[1].address)
-      expect(r).not.to.include(depositTranches[3].address)
-      expect(r).not.to.include(depositTranches[4].address)
-    })
-  })
+    it("should get the rollover ready tranches", async function () {
+      const r = await perp.callStatic.getReserveTokensUpForRollover();
+      expect(r).to.include(collateralToken.address);
+      expect(r).to.include(depositTranches[2].address);
+      expect(r).not.to.include(depositTranches[0].address);
+      expect(r).not.to.include(depositTranches[1].address);
+      expect(r).not.to.include(depositTranches[3].address);
+      expect(r).not.to.include(depositTranches[4].address);
+    });
+  });
 });
