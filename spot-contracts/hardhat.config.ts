@@ -7,6 +7,12 @@ import "@openzeppelin/hardhat-upgrades";
 import "solidity-coverage";
 import "hardhat-gas-reporter";
 
+// Loads custom tasks
+import "./tasks/tools/verify";
+import "./tasks/accounts";
+import "./tasks/deploy";
+import "./tasks/ops";
+
 // Loads env variables from .env file
 import * as dotenv from "dotenv";
 dotenv.config();
@@ -19,11 +25,15 @@ export default {
         mnemonic: process.env.DEV_MNEMONIC || Wallet.createRandom().mnemonic.phrase,
       },
     },
-    kovan: {
-      url: `https://kovan.infura.io/v3/${process.env.INFURA_SECRET}`,
+    ganache: {
+      url: "http://127.0.0.1:8545",
+    },
+    goerli: {
+      url: `https://eth-goerli.g.alchemy.com/v2/${process.env.ALCHEMY_SECRET}`,
       accounts: {
         mnemonic: process.env.DEV_MNEMONIC || Wallet.createRandom().mnemonic.phrase,
       },
+      gasMultiplier: 1.1,
     },
     mainnet: {
       url: `https://mainnet.infura.io/v3/${process.env.INFURA_SECRET}`,
@@ -34,6 +44,15 @@ export default {
   },
   solidity: {
     compilers: [
+      {
+        version: "0.7.6",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+        },
+      },
       {
         version: "0.8.3",
         settings: {
