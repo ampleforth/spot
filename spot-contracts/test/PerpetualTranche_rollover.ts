@@ -1026,7 +1026,9 @@ describe("PerpetualTranche", function () {
       });
 
       it("should emit tranche balance update", async function () {
-        await expect(tx).to.emit(perp, "UpdatedStdTrancheBalances").withArgs(toFixedPtAmt("2000"), toFixedPtAmt("250"));
+        await expect(tx)
+          .to.emit(perp, "UpdatedStdTotalTrancheBalance").withArgs(toFixedPtAmt("2000"))
+          .to.emit(perp, "UpdatedStdMatureTrancheBalance").withArgs(toFixedPtAmt("250"));
       });
       it("should update mature tranche balance", async function () {
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2000"));
@@ -1073,7 +1075,9 @@ describe("PerpetualTranche", function () {
       });
 
       it("should emit tranche balance update", async function () {
-        await expect(tx).to.emit(perp, "UpdatedStdTrancheBalances").withArgs(toFixedPtAmt("2000"), toFixedPtAmt("250"));
+        await expect(tx)
+          .to.emit(perp, "UpdatedStdTotalTrancheBalance").withArgs(toFixedPtAmt("2000"))
+          .to.emit(perp, "UpdatedStdMatureTrancheBalance").withArgs(toFixedPtAmt("250"));
       });
       it("should update mature tranche balance", async function () {
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2000"));
@@ -1120,7 +1124,9 @@ describe("PerpetualTranche", function () {
       });
 
       it("should emit tranche balance update", async function () {
-        await expect(tx).to.emit(perp, "UpdatedStdTrancheBalances").withArgs(toFixedPtAmt("2000"), toFixedPtAmt("250"));
+        await expect(tx)
+          .to.emit(perp, "UpdatedStdTotalTrancheBalance").withArgs(toFixedPtAmt("2000"))
+          .to.emit(perp, "UpdatedStdMatureTrancheBalance").withArgs(toFixedPtAmt("250"));
       });
       it("should update mature tranche balance", async function () {
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2000"));
