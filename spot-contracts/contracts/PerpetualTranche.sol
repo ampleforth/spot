@@ -1034,7 +1034,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         return totalVal;
     }
 
-    // @dev Calculates the "unstandardized" mature tranche balance.
+    // @dev Calculates the mature tranche balance.
     function _matureTrancheBalance() private view returns (uint256) {
         return _fromStdTrancheAmt(_stdMatureTrancheBalance, computeYield(collateral));
     }
