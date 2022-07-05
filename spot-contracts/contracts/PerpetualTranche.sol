@@ -732,7 +732,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     function computePrice(IERC20Upgradeable token) public view override returns (uint256) {
         return
             (token == collateral)
-                ? pricingStrategy.computeMatureTranchePrice(token, _tokenBalance(token), _stdMatureTrancheBalance)
+                ? pricingStrategy.computeMatureTranchePrice(token, _tokenBalance(token), _matureTrancheBalance())
                 : pricingStrategy.computeTranchePrice(ITranche(address(token)));
     }
 
@@ -749,12 +749,12 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     // @dev Computes the perp mint amount for given amount of tranche tokens deposited into the reserve.
     function _computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) private view returns (uint256, uint256) {
         uint256 totalSupply_ = totalSupply();
-        uint256 stdTrancheAmt = _toStdTrancheAmt(trancheInAmt, computeYield(trancheIn));
-        uint256 price = computePrice(trancheIn);
+        uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmt, computeYield(trancheIn));
+        uint256 trancheInPrice = computePrice(trancheIn);
         uint256 mintAmt = (totalSupply_ > 0)
-            ? (stdTrancheAmt * price * totalSupply_) / _reserveValue()
-            : (stdTrancheAmt * price) / UNIT_PRICE;
-        return (mintAmt, stdTrancheAmt);
+            ? (stdTrancheInAmt * trancheInPrice * totalSupply_) / _reserveValue()
+            : (stdTrancheInAmt * trancheInPrice) / UNIT_PRICE;
+        return (mintAmt, stdTrancheInAmt);
     }
 
     // @dev Computes the reserve token amounts redeemed when a given number of perps are burnt.
@@ -782,12 +782,13 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         uint256 maxTokenOutAmtCovered
     ) private view returns (IPerpetualTranche.RolloverPreview memory) {
         uint256 trancheInYield = computeYield(trancheIn);
-        uint256 tokenOutYield = computeYield(tokenOut);
+        uint256 trancheOutYield = computeYield(tokenOut);
         uint256 trancheInPrice = computePrice(trancheIn);
-        uint256 tokenOutPrice = computePrice(tokenOut);
+        uint256 trancheOutPrice = computePrice(tokenOut);
+        uint256 matureTrancheBalance = _matureTrancheBalance();
 
         IPerpetualTranche.RolloverPreview memory r;
-        if (trancheInYield == 0 || tokenOutYield == 0 || trancheInPrice == 0 || tokenOutPrice == 0) {
+        if (trancheInYield == 0 || trancheOutYield == 0 || trancheInPrice == 0 || trancheOutPrice == 0) {
             r.remainingTrancheInAmt = trancheInAmtRequested;
             return r;
         }
@@ -800,28 +801,35 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
         // In the case token out is the mature tranche (held as naked collateral):
         // Token balance is calculated from the tranche denomination
-        uint256 trancheOutAmt = _fromStdTrancheAmt(r.stdTrancheRolloverAmt, tokenOutYield);
+        uint256 trancheOutAmt = _fromStdTrancheAmt(r.stdTrancheRolloverAmt, trancheOutYield);
         r.tokenOutAmt = (tokenOut == collateral)
-            ? ((trancheOutAmt * tokenOutBalance) / _stdMatureTrancheBalance)
+            ? ((trancheOutAmt * tokenOutBalance) / matureTrancheBalance)
             : trancheOutAmt;
 
         // When the token out balance is NOT covered
         if (r.tokenOutAmt > maxTokenOutAmtCovered) {
             r.tokenOutAmt = maxTokenOutAmtCovered;
-            r.stdTrancheRolloverAmt = (tokenOut == collateral)
-                ? ((r.tokenOutAmt * _stdMatureTrancheBalance) / tokenOutBalance)
-                : _toStdTrancheAmt(r.tokenOutAmt, tokenOutYield);
+            trancheOutAmt = (tokenOut == collateral)
+                ? (r.tokenOutAmt * matureTrancheBalance) / tokenOutBalance
+                : r.tokenOutAmt;
+            r.stdTrancheRolloverAmt = _toStdTrancheAmt(trancheOutAmt, trancheOutYield);
             r.trancheInAmtUsed = _fromStdTrancheAmt(r.stdTrancheRolloverAmt, trancheInYield);
         }
 
+        // value(tranche) = (trancheAmt * trancheYield) * tranchePrice
+        //
         // When the rollover is measured as extractive (i.e valueOut > valueIn),
         // the system skims a portion of the excess value.
+        //
+        // valueIn = (trancheInYield * r.trancheInAmtUsed) * trancheInPrice
+        // valueOut = (trancheOutYield * trancheOutAmt) * trancheOutPrice
+        // w.k.t (trancheInYield * r.trancheInAmtUsed) = (trancheOutYield * trancheOutAmt) = r.stdTrancheRolloverAmt
+        // Thus, valueOut/valueIn => trancheOutPrice/trancheInPrice
         if (skimPerc > 0) {
-            uint256 valueIn = r.trancheInAmtUsed * trancheInPrice;
-            uint256 valueOut = r.tokenOutAmt * tokenOutPrice;
-            if (valueOut > valueIn) {
-                uint256 adjustedValueOut = valueOut - ((skimPerc * (valueOut - valueIn)) / HUNDRED_PERC);
-                r.tokenOutAmt = (r.tokenOutAmt * adjustedValueOut) / valueOut;
+            if (trancheOutPrice > trancheInPrice) {
+                uint256 adjustedTrancheOutPrice = trancheOutPrice -
+                    ((skimPerc * (trancheOutPrice - trancheInPrice)) / HUNDRED_PERC);
+                r.tokenOutAmt = (r.tokenOutAmt * adjustedTrancheOutPrice) / trancheOutPrice;
             }
         }
 
@@ -1012,15 +1020,23 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         return _reserveTranches.contains(address(tranche));
     }
 
-    // @dev Calculates the total value of all the tokens in the reserve (value = (yield . balance) . price).
+    // @dev Calculates the total value of all the tranches in the reserve.
+    //      Value of each reserve tranche is calculated as = (trancheYield . trancheBalance) . tranchePrice.
     function _reserveValue() private view returns (uint256) {
         uint256 totalVal = 0;
         for (uint256 i = 0; i < _reserveCount(); i++) {
             IERC20Upgradeable token = _reserveAt(i);
-            uint256 stdTokenAmt = _toStdTrancheAmt(_tokenBalance(token), computeYield(token));
-            totalVal += (stdTokenAmt * computePrice(token));
+            uint256 stdTrancheAmt = (i == 0)
+                ? _stdMatureTrancheBalance
+                : _toStdTrancheAmt(_tokenBalance(token), computeYield(token));
+            totalVal += (stdTrancheAmt * computePrice(token));
         }
         return totalVal;
+    }
+
+    // @dev Calculates the "unstandardized" mature tranche balance.
+    function _matureTrancheBalance() private view returns (uint256) {
+        return _fromStdTrancheAmt(_stdMatureTrancheBalance, computeYield(collateral));
     }
 
     // @dev Fetches the perp contract's token balance.
