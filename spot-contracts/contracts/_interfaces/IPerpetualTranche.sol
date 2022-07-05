@@ -58,10 +58,13 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @param bond Address of the new deposit bond.
     event UpdatedDepositBond(IBondController bond);
 
-    // @notice Event emitted when the tranche balances are updated.
+    // @notice Event emitted when the standardized total tranche balance is updated.
     // @param stdTotalTrancheBalance The "standardized" total tranche balance.
+    event UpdatedStdTotalTrancheBalance(uint256 stdTotalTrancheBalance);
+
+    // @notice Event emitted when the standardized mature tranche balance is updated.
     // @param stdMatureTrancheBalance The "standardized" mature tranche balance.
-    event UpdatedStdTrancheBalances(uint256 stdTotalTrancheBalance, uint256 stdMatureTrancheBalance);
+    event UpdatedStdMatureTrancheBalance(uint256 stdMatureTrancheBalance);
 
     //--------------------------------------------------------------------------
     // Methods

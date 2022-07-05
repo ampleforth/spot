@@ -422,7 +422,9 @@ describe("PerpetualTranche", function () {
         await tx;
       });
       it("should emit balance update", async function () {
-        await expect(tx).to.emit(perp, "UpdatedStdTrancheBalances").withArgs(toFixedPtAmt("100"), toFixedPtAmt("100"));
+        await expect(tx)
+          .to.emit(perp, "UpdatedStdTotalTrancheBalance").withArgs(toFixedPtAmt("100"))
+          .to.emit(perp, "UpdatedStdMatureTrancheBalance").withArgs(toFixedPtAmt("100"));
       });
       it("should update balances", async function () {
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("100"));
@@ -933,9 +935,7 @@ describe("PerpetualTranche", function () {
       });
 
       it("should emit tranche balance update", async function () {
-        await expect(tx)
-          .to.emit(perp, "UpdatedStdTrancheBalances")
-          .withArgs(toFixedPtAmt("2500"), toFixedPtAmt("1000"));
+         await expect(tx).to.emit(perp, "UpdatedStdMatureTrancheBalance").withArgs(toFixedPtAmt("1000"));
       });
 
       it("should change mature tranche balances", async function () {
@@ -1025,8 +1025,7 @@ describe("PerpetualTranche", function () {
 
       it("should emit tranche balance update", async function () {
         await expect(tx)
-          .to.emit(perp, "UpdatedStdTrancheBalances")
-          .withArgs(toFixedPtAmt("2500"), toFixedPtAmt("1000"));
+          .to.emit(perp, "UpdatedStdMatureTrancheBalance").withArgs(toFixedPtAmt("1000"));
       });
 
       it("should change mature tranche balances", async function () {
@@ -1118,7 +1117,8 @@ describe("PerpetualTranche", function () {
       });
 
       it("should emit tranche balance update", async function () {
-        await expect(tx).to.emit(perp, "UpdatedStdTrancheBalances").withArgs(toFixedPtAmt("2250"), toFixedPtAmt("750"));
+        await expect(tx)
+          .to.emit(perp, "UpdatedStdMatureTrancheBalance").withArgs(toFixedPtAmt("750"));
       });
 
       it("should change mature tranche balances", async function () {

@@ -418,9 +418,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         if (_reserveCount() > 1 || _tokenBalance(collateral) == 0) {
             revert InvalidRebootState();
         }
-        _stdTotalTrancheBalance = stdTrancheBalance;
-        _stdMatureTrancheBalance = stdTrancheBalance;
-        emit UpdatedStdTrancheBalances(stdTrancheBalance, stdTrancheBalance);
+        _updateStdTotalTrancheBalance(stdTrancheBalance);
+        _updateStdMatureTrancheBalance(stdTrancheBalance);
     }
 
     //--------------------------------------------------------------------------
@@ -445,8 +444,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         _transferIntoReserve(_msgSender(), trancheIn, trancheInAmt);
 
         // updates reserve's tranche balance
-        _stdTotalTrancheBalance += stdTrancheInAmt;
-        emit UpdatedStdTrancheBalances(_stdTotalTrancheBalance, _stdMatureTrancheBalance);
+        _updateStdTotalTrancheBalance(_stdTotalTrancheBalance + stdTrancheInAmt);
 
         // mints perp tokens to the sender
         _mint(_msgSender(), mintAmt);
@@ -491,9 +489,12 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         }
 
         // updates reserve's tranche balances
-        _stdTotalTrancheBalance -= _perpsToReserveShare(perpAmtBurnt, perpSupply, _stdTotalTrancheBalance);
-        _stdMatureTrancheBalance -= _perpsToReserveShare(perpAmtBurnt, perpSupply, _stdMatureTrancheBalance);
-        emit UpdatedStdTrancheBalances(_stdTotalTrancheBalance, _stdMatureTrancheBalance);
+        _updateStdTotalTrancheBalance(
+            _stdTotalTrancheBalance - _perpsToReserveShare(perpAmtBurnt, perpSupply, _stdTotalTrancheBalance)
+        );
+        _updateStdMatureTrancheBalance(
+            _stdMatureTrancheBalance - _perpsToReserveShare(perpAmtBurnt, perpSupply, _stdMatureTrancheBalance)
+        );
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -534,8 +535,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // updates reserve's tranche balance
         // NOTE: `_stdTotalTrancheBalance` does not change on rollovers as `stdTrancheInAmt` == `stdTrancheOutAmt`
         if (tokenOut == collateral) {
-            _stdMatureTrancheBalance -= r.stdTrancheRolloverAmt;
-            emit UpdatedStdTrancheBalances(_stdTotalTrancheBalance, _stdMatureTrancheBalance);
+            _updateStdMatureTrancheBalance(_stdMatureTrancheBalance - r.stdTrancheRolloverAmt);
         }
     }
 
@@ -690,8 +690,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
             _syncReserve(tranche);
 
             // Keeps track of the total tranches redeemed
-            _stdMatureTrancheBalance += _toStdTrancheAmt(trancheBalance, computeYield(tranche));
-            emit UpdatedStdTrancheBalances(_stdTotalTrancheBalance, _stdMatureTrancheBalance);
+            _updateStdMatureTrancheBalance(
+                _stdMatureTrancheBalance + _toStdTrancheAmt(trancheBalance, computeYield(tranche))
+            );
         }
 
         // Keeps track of reserve's rebasing collateral token balance
@@ -923,6 +924,18 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
             delete _appliedYields[token];
         }
         emit YieldApplied(token, yield);
+    }
+
+    // @dev Updates the standardized total tranche balance in storage.
+    function _updateStdTotalTrancheBalance(uint256 stdTotalTrancheBalance) private {
+        _stdTotalTrancheBalance = stdTotalTrancheBalance;
+        emit UpdatedStdTotalTrancheBalance(stdTotalTrancheBalance);
+    }
+
+    // @dev Updates the standardized mature tranche balance in storage.
+    function _updateStdMatureTrancheBalance(uint256 stdMatureTrancheBalance) private {
+        _stdMatureTrancheBalance = stdMatureTrancheBalance;
+        emit UpdatedStdMatureTrancheBalance(stdMatureTrancheBalance);
     }
 
     // @dev Checks if the given token pair is a valid rollover.
