@@ -727,6 +727,94 @@ describe("PerpetualTranche", function () {
         expect(await perp.callStatic.getReserveValue()).to.eq(toFixedPtAmt("300").mul(toPriceFixedPtAmt("1")));
       });
     });
+
+    describe("when reserve has mature collateral which has rebased up and tranches", function () {
+      let issuer: Contract;
+      beforeEach(async function () {
+        const BondIssuer = await ethers.getContractFactory("BondIssuer");
+        issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, 3600, collateralToken.address, [200, 300, 500]);
+        await perp.updateBondIssuer(issuer.address);
+
+        await advancePerpQueue(perp, 3600);
+        bond = await bondAt(await perp.callStatic.getDepositBond());
+        tranches = await getTranches(bond);
+
+        await yieldStrategy.setTrancheYield(tranches[0].address, toYieldFixedPtAmt("1"));
+        await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
+        await tranches[0].approve(perp.address, toFixedPtAmt("200"));
+        await perp.deposit(tranches[0].address, toFixedPtAmt("200"));
+
+        await advancePerpQueue(perp, 1200);
+        bondNext = await bondAt(await perp.callStatic.getDepositBond());
+        tranchesNext = await getTranches(bondNext);
+
+        await yieldStrategy.setTrancheYield(tranchesNext[0].address, toYieldFixedPtAmt("1"));
+        await pricingStrategy.setTranchePrice(tranchesNext[0].address, toPriceFixedPtAmt("1"));
+        await depositIntoBond(bondNext, toFixedPtAmt("1000"), deployer);
+        await tranchesNext[0].approve(perp.address, toFixedPtAmt("100"));
+        await perp.deposit(tranchesNext[0].address, toFixedPtAmt("100"));
+
+        await advancePerpQueue(perp, 2400);
+
+        await rebase(collateralToken, rebaseOracle, 0.1);
+        await pricingStrategy.setTranchePrice(collateralToken.address, toPriceFixedPtAmt("1.1"));
+      });
+
+      it("should have expected reserve composition", async function () {
+        await checkReserveComposition(
+          perp,
+          [collateralToken, tranchesNext[0]],
+          [toFixedPtAmt("220"), toFixedPtAmt("100")],
+        );
+      });
+      it("should calculate the reserve value", async function () {
+        expect(await perp.callStatic.getReserveValue()).to.eq(toFixedPtAmt("320").mul(toPriceFixedPtAmt("1")));
+      });
+    });
+
+    describe("when reserve has mature collateral which has rebased down and tranches", function () {
+      let issuer: Contract;
+      beforeEach(async function () {
+        const BondIssuer = await ethers.getContractFactory("BondIssuer");
+        issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, 3600, collateralToken.address, [200, 300, 500]);
+        await perp.updateBondIssuer(issuer.address);
+
+        await advancePerpQueue(perp, 3600);
+        bond = await bondAt(await perp.callStatic.getDepositBond());
+        tranches = await getTranches(bond);
+
+        await yieldStrategy.setTrancheYield(tranches[0].address, toYieldFixedPtAmt("1"));
+        await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
+        await tranches[0].approve(perp.address, toFixedPtAmt("200"));
+        await perp.deposit(tranches[0].address, toFixedPtAmt("200"));
+
+        await advancePerpQueue(perp, 1200);
+        bondNext = await bondAt(await perp.callStatic.getDepositBond());
+        tranchesNext = await getTranches(bondNext);
+
+        await yieldStrategy.setTrancheYield(tranchesNext[0].address, toYieldFixedPtAmt("1"));
+        await pricingStrategy.setTranchePrice(tranchesNext[0].address, toPriceFixedPtAmt("1"));
+        await depositIntoBond(bondNext, toFixedPtAmt("1000"), deployer);
+        await tranchesNext[0].approve(perp.address, toFixedPtAmt("100"));
+        await perp.deposit(tranchesNext[0].address, toFixedPtAmt("100"));
+
+        await advancePerpQueue(perp, 2400);
+
+        await rebase(collateralToken, rebaseOracle, -0.1);
+        await pricingStrategy.setTranchePrice(collateralToken.address, toPriceFixedPtAmt("0.9"));
+      });
+
+      it("should have expected reserve composition", async function () {
+        await checkReserveComposition(
+          perp,
+          [collateralToken, tranchesNext[0]],
+          [toFixedPtAmt("180"), toFixedPtAmt("100")],
+        );
+      });
+      it("should calculate the reserve value", async function () {
+        expect(await perp.callStatic.getReserveValue()).to.eq(toFixedPtAmt("280").mul(toPriceFixedPtAmt("1")));
+      });
+    });
   });
 
   describe("updateState", async function () {
