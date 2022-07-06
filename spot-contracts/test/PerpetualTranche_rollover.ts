@@ -514,9 +514,9 @@ describe("PerpetualTranche", function () {
             toFixedPtAmt("500"),
             constants.MaxUint256,
           );
-          expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("375"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("375"));
-          expect(r.stdTrancheRolloverAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.stdTrancheRolloverAmt).to.eq(toFixedPtAmt("375"));
           expect(r.trancheInAmtUsed).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -557,9 +557,9 @@ describe("PerpetualTranche", function () {
             toFixedPtAmt("500"),
             constants.MaxUint256,
           );
-          expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("477.272727272727272727"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("525"));
-          expect(r.stdTrancheRolloverAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.stdTrancheRolloverAmt).to.eq(toFixedPtAmt("477.272727272727272727"));
           expect(r.trancheInAmtUsed).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -605,9 +605,9 @@ describe("PerpetualTranche", function () {
             toFixedPtAmt("500"),
             constants.MaxUint256,
           );
-          expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("250"));
+          expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("238.636363636363636363"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("262.5"));
-          expect(r.stdTrancheRolloverAmt).to.eq(toFixedPtAmt("250"));
+          expect(r.stdTrancheRolloverAmt).to.eq(toFixedPtAmt("238.636363636363636363"));
           expect(r.trancheInAmtUsed).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -658,9 +658,9 @@ describe("PerpetualTranche", function () {
             toFixedPtAmt("500"),
             constants.MaxUint256,
           );
-          expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("250"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("250"));
-          expect(r.stdTrancheRolloverAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.stdTrancheRolloverAmt).to.eq(toFixedPtAmt("250"));
           expect(r.trancheInAmtUsed).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -701,9 +701,9 @@ describe("PerpetualTranche", function () {
             toFixedPtAmt("500"),
             constants.MaxUint256,
           );
-          expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("454.545454545454545454"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheRolloverAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.stdTrancheRolloverAmt).to.eq(toFixedPtAmt("454.545454545454545454"));
           expect(r.trancheInAmtUsed).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -749,9 +749,9 @@ describe("PerpetualTranche", function () {
             toFixedPtAmt("500"),
             constants.MaxUint256,
           );
-          expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("250"));
+          expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("227.272727272727272727"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("250"));
-          expect(r.stdTrancheRolloverAmt).to.eq(toFixedPtAmt("250"));
+          expect(r.stdTrancheRolloverAmt).to.eq(toFixedPtAmt("227.272727272727272727"));
           expect(r.trancheInAmtUsed).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -1315,8 +1315,10 @@ describe("PerpetualTranche", function () {
 
       it("should emit tranche balance update", async function () {
         await expect(tx)
-          .to.emit(perp, "UpdatedStdTotalTrancheBalance").withArgs(toFixedPtAmt("2000"))
-          .to.emit(perp, "UpdatedStdMatureTrancheBalance").withArgs(toFixedPtAmt("250"));
+          .to.emit(perp, "UpdatedStdTotalTrancheBalance")
+          .withArgs(toFixedPtAmt("2000"))
+          .to.emit(perp, "UpdatedStdMatureTrancheBalance")
+          .withArgs(toFixedPtAmt("250"));
       });
       it("should update mature tranche balance", async function () {
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2000"));
@@ -1364,8 +1366,10 @@ describe("PerpetualTranche", function () {
 
       it("should emit tranche balance update", async function () {
         await expect(tx)
-          .to.emit(perp, "UpdatedStdTotalTrancheBalance").withArgs(toFixedPtAmt("2000"))
-          .to.emit(perp, "UpdatedStdMatureTrancheBalance").withArgs(toFixedPtAmt("250"));
+          .to.emit(perp, "UpdatedStdTotalTrancheBalance")
+          .withArgs(toFixedPtAmt("2000"))
+          .to.emit(perp, "UpdatedStdMatureTrancheBalance")
+          .withArgs(toFixedPtAmt("250"));
       });
       it("should update mature tranche balance", async function () {
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2000"));
@@ -1413,8 +1417,10 @@ describe("PerpetualTranche", function () {
 
       it("should emit tranche balance update", async function () {
         await expect(tx)
-          .to.emit(perp, "UpdatedStdTotalTrancheBalance").withArgs(toFixedPtAmt("2000"))
-          .to.emit(perp, "UpdatedStdMatureTrancheBalance").withArgs(toFixedPtAmt("250"));
+          .to.emit(perp, "UpdatedStdTotalTrancheBalance")
+          .withArgs(toFixedPtAmt("2000"))
+          .to.emit(perp, "UpdatedStdMatureTrancheBalance")
+          .withArgs(toFixedPtAmt("250"));
       });
       it("should update mature tranche balance", async function () {
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2000"));
@@ -1625,9 +1631,9 @@ describe("PerpetualTranche", function () {
           .withArgs(collateralToken.address, toFixedPtAmt("450"));
       });
       it("should compute the rollover amounts", async function () {
-        expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("100"));
+        expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("50"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("50"));
-        expect(r.stdTrancheRolloverAmt).to.eq(toFixedPtAmt("100"));
+        expect(r.stdTrancheRolloverAmt).to.eq(toFixedPtAmt("50"));
         expect(r.trancheInAmtUsed).to.eq(toFixedPtAmt("100"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
