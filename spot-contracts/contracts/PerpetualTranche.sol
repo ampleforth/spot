@@ -177,6 +177,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     // When `ai` tokens of type `ti` are rotated in for tokens of type `tj`:
     // Rotation: aj => ai * yield(ti) / yield(tj), ie) (a'i = a'j)
     //
+    //
     //-------------------------------------------------------------------------
     // Constants & Immutables
     uint8 public constant YIELD_DECIMALS = 18;
@@ -443,19 +444,17 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // transfers tranche tokens from the sender to the reserve
         _transferIntoReserve(_msgSender(), trancheIn, trancheInAmt);
 
-        // updates reserve's tranche balance
-        _updateStdTotalTrancheBalance(_stdTotalTrancheBalance + stdTrancheInAmt);
-
         // mints perp tokens to the sender
         _mint(_msgSender(), mintAmt);
 
         // settles fees
         _settleFee(_msgSender(), mintFee);
 
-        // updates the supply minted using the given tranche
-        _mintedSupplyPerTranche[trancheIn] += mintAmt;
+        // updates reserve's tranche balance
+        _updateStdTotalTrancheBalance(_stdTotalTrancheBalance + stdTrancheInAmt);
 
-        // enforces supply cap and tranche mint cap
+        // updates & enforces supply cap and tranche mint cap
+        _mintedSupplyPerTranche[trancheIn] += mintAmt;
         _enforceMintingLimits(trancheIn);
     }
 
@@ -475,11 +474,15 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // calculates the fee to burn `perpAmtBurnt` of perp token
         int256 burnFee = feeStrategy.computeBurnFee(perpAmtBurnt);
 
-        // burns perp tokens from the sender
-        _burn(_msgSender(), perpAmtBurnt);
+        // updates reserve's tranche balances
+        _updateStdTotalTrancheBalance((_stdTotalTrancheBalance * (perpSupply - perpAmtBurnt)) / perpSupply);
+        _updateStdMatureTrancheBalance((_stdMatureTrancheBalance * (perpSupply - perpAmtBurnt)) / perpSupply);
 
         // settles fees
         _settleFee(_msgSender(), burnFee);
+
+        // burns perp tokens from the sender
+        _burn(_msgSender(), perpAmtBurnt);
 
         // transfers reserve tokens out
         for (uint256 i = 0; i < tokensOuts.length; i++) {
@@ -487,14 +490,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
                 _transferOutOfReserve(_msgSender(), tokensOuts[i], tokenOutAmts[i]);
             }
         }
-
-        // updates reserve's tranche balances
-        _updateStdTotalTrancheBalance(
-            _stdTotalTrancheBalance - _perpsToReserveShare(perpAmtBurnt, perpSupply, _stdTotalTrancheBalance)
-        );
-        _updateStdMatureTrancheBalance(
-            _stdMatureTrancheBalance - _perpsToReserveShare(perpAmtBurnt, perpSupply, _stdMatureTrancheBalance)
-        );
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -529,14 +524,15 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // settles fees
         _settleFee(_msgSender(), rolloverFee);
 
-        // transfers tranche from the reserve to the sender
-        _transferOutOfReserve(_msgSender(), tokenOut, r.tokenOutAmt);
-
-        // updates reserve's tranche balance
-        // NOTE: `_stdTotalTrancheBalance` does not change on rollovers as `stdTrancheInAmt` == `stdTrancheOutAmt`
+        // updates mature tranche balance
+        // NOTE: total tranche balance does not change on rollovers
+        //        as `stdTrancheInAmt` == `stdTrancheOutAmt`
         if (tokenOut == collateral) {
             _updateStdMatureTrancheBalance(_stdMatureTrancheBalance - r.stdTrancheRolloverAmt);
         }
+
+        // transfers tranche from the reserve to the sender
+        _transferOutOfReserve(_msgSender(), tokenOut, r.tokenOutAmt);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -1074,15 +1070,5 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     //      trancheAmt = stdTrancheAmt / yield.
     function _fromStdTrancheAmt(uint256 stdTrancheAmt, uint256 yield) private pure returns (uint256) {
         return ((stdTrancheAmt * UNIT_YIELD) / yield);
-    }
-
-    // @dev Calculates share of the reserve's balance redeemable for given perp amount.
-    //      tokenAmt = (perpAmt * reserveBalance_) / perpSupply
-    function _perpsToReserveShare(
-        uint256 perpAmt,
-        uint256 perpSupply,
-        uint256 reserveBalance_
-    ) private pure returns (uint256) {
-        return ((perpAmt * reserveBalance_) / (perpSupply));
     }
 }
