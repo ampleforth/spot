@@ -21,7 +21,7 @@ yarn hardhat --network goerli deploy:PerpetualTranche \
   --max-matuirty-sec "3600"
 
 yarn hardhat --network goerli deploy:YieldStrategy:setYield \
-  --yield-strategy-address "0xA8F366602BC0dd45EC191616BCaF4147cb9263B0" \
+  --yield-strategy-address "0x67d82378B5a6E78549C619E8514d97D6FE7fCCbB" \
   --collateral-token-address "0x14f6e47F3237213E4B7E1dAEc273545df524039F" \
   --tranche-ratios "[500,500]" \
   --tranche-index "0" \
@@ -31,16 +31,16 @@ yarn hardhat --network goerli deploy:Router
 
 ########################################################################
 ## OPS
-yarn hardhat --network goerli ops:info 0x534e2cA3Ce918321BDd6F151B7D1A0f8832Ab1c6
+yarn hardhat --network goerli ops:info 0x0cF0bcE1d837AF29AB81eCC2F7383a175f538706
 
 yarn hardhat --network goerli ops:trancheAndDeposit \
   --router-address 0x948e4869fAEF267406F896290209Ca229cFAF220 \
-  --perp-address 0x534e2cA3Ce918321BDd6F151B7D1A0f8832Ab1c6 \
+  --perp-address 0x0cF0bcE1d837AF29AB81eCC2F7383a175f538706 \
   --collateral-amount 250
 
 yarn hardhat --network goerli ops:redeem \
   --router-address 0x948e4869fAEF267406F896290209Ca229cFAF220 \
-  --perp-address 0x534e2cA3Ce918321BDd6F151B7D1A0f8832Ab1c6 \
+  --perp-address 0x0cF0bcE1d837AF29AB81eCC2F7383a175f538706 \
   --amount 10
 
 yarn hardhat --network goerli ops:redeemTranches \
@@ -48,9 +48,8 @@ yarn hardhat --network goerli ops:redeemTranches \
 
 yarn hardhat --network goerli ops:trancheAndRollover \
   --router-address 0x948e4869fAEF267406F896290209Ca229cFAF220 \
-  --perp-address 0x534e2cA3Ce918321BDd6F151B7D1A0f8832Ab1c6 \
+  --perp-address 0x0cF0bcE1d837AF29AB81eCC2F7383a175f538706 \
   --collateral-amount 200
-
 
 yarn hardhat --network goerli ops:rebase:MockAMPL \
   --ampl-address "0x14f6e47F3237213E4B7E1dAEc273545df524039F" \
