@@ -769,25 +769,24 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         uint256[] memory redemptionAmts = new uint256[](reserveCount);
         for (uint256 i = 0; i < reserveCount; i++) {
             reserveTokens[i] = _reserveAt(i);
-            redemptionAmts[i] = _perpsToReserveShare(perpAmtBurnt, totalSupply_, _tokenBalance(reserveTokens[i]));
+            redemptionAmts[i] = (_tokenBalance(reserveTokens[i]) * perpAmtBurnt) / totalSupply_;
         }
         return (reserveTokens, redemptionAmts);
     }
 
-    // @dev Computes the amount of tranches that can be rolled out for the given amount of tranches deposited.
+    // @dev Computes the amount of reserve tokens that can be rolled out for the given amount of tranches deposited.
     function _computeRolloverAmt(
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtRequested,
         uint256 maxTokenOutAmtCovered
     ) private view returns (IPerpetualTranche.RolloverPreview memory) {
+        IPerpetualTranche.RolloverPreview memory r;
+
         uint256 trancheInYield = computeYield(trancheIn);
         uint256 trancheOutYield = computeYield(tokenOut);
         uint256 trancheInPrice = computePrice(trancheIn);
         uint256 trancheOutPrice = computePrice(tokenOut);
-        uint256 matureTrancheBalance = _matureTrancheBalance();
-
-        IPerpetualTranche.RolloverPreview memory r;
         if (trancheInYield == 0 || trancheOutYield == 0 || trancheInPrice == 0 || trancheOutPrice == 0) {
             r.remainingTrancheInAmt = trancheInAmtRequested;
             return r;
@@ -799,23 +798,35 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         r.trancheInAmtUsed = trancheInAmtRequested;
         r.stdTrancheRolloverAmt = _toStdTrancheAmt(trancheInAmtRequested, trancheInYield);
 
-        // In the case token out is the mature tranche (held as naked collateral):
-        // Token balance is calculated from the tranche denomination
+        // Rollovers are denominated in tranche amounts.
+        // ie) 1 "standardized" trancheIn tokens are rolled over for 1 "standardized" tokenOut tokens.
+        //
+        // However, if the tokenOut is the mature tranche (held as naked collateral),
+        // we infer the tokenOut amount from the tranche denomination.
+        // (tokenOutAmt = trancheOutAmt * collateralBalance / matureTrancheBalance)
+
+        uint256 matureTrancheBalance = _matureTrancheBalance();
+        bool isTokenOutCollateral = tokenOut == collateral;
+
+        // Basic rollover:
+        // (trancheInAmtRequested . trancheInYield) = (trancheOutAmt. trancheOutYield)
         uint256 trancheOutAmt = _fromStdTrancheAmt(r.stdTrancheRolloverAmt, trancheOutYield);
-        r.tokenOutAmt = (tokenOut == collateral)
-            ? ((trancheOutAmt * tokenOutBalance) / matureTrancheBalance)
+        r.tokenOutAmt = isTokenOutCollateral
+            ? ((tokenOutBalance * trancheOutAmt) / matureTrancheBalance)
             : trancheOutAmt;
 
-        // When the token out balance is NOT covered
+        // When the token out balance is NOT covered:
+        // we fix tokenOutAmt = maxTokenOutAmtCovered and back calculate other values
         if (r.tokenOutAmt > maxTokenOutAmtCovered) {
             r.tokenOutAmt = maxTokenOutAmtCovered;
-            trancheOutAmt = (tokenOut == collateral)
-                ? (r.tokenOutAmt * matureTrancheBalance) / tokenOutBalance
+            trancheOutAmt = isTokenOutCollateral
+                ? (matureTrancheBalance * r.tokenOutAmt) / tokenOutBalance
                 : r.tokenOutAmt;
             r.stdTrancheRolloverAmt = _toStdTrancheAmt(trancheOutAmt, trancheOutYield);
             r.trancheInAmtUsed = _fromStdTrancheAmt(r.stdTrancheRolloverAmt, trancheInYield);
         }
 
+        // When skimming:
         // value(tranche) = (trancheAmt * trancheYield) * tranchePrice
         //
         // When the rollover is measured as extractive (i.e valueOut > valueIn),
@@ -825,15 +836,19 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // valueOut = (trancheOutYield * trancheOutAmt) * trancheOutPrice
         // w.k.t (trancheInYield * r.trancheInAmtUsed) = (trancheOutYield * trancheOutAmt) = r.stdTrancheRolloverAmt
         // Thus, valueOut/valueIn => trancheOutPrice/trancheInPrice
-        if (skimPerc > 0) {
-            if (trancheOutPrice > trancheInPrice) {
-                uint256 adjustedTrancheOutPrice = trancheOutPrice -
-                    ((skimPerc * (trancheOutPrice - trancheInPrice)) / HUNDRED_PERC);
-                r.tokenOutAmt = (r.tokenOutAmt * adjustedTrancheOutPrice) / trancheOutPrice;
-            }
+        if (skimPerc > 0 && (trancheOutPrice > trancheInPrice)) {
+            // We calculate the adjusted `tokenOutAmt` after skimming and
+            // back calculate the `stdTrancheRolloverAmt`
+            uint256 adjustedTrancheOutPrice = trancheOutPrice -
+                ((skimPerc * (trancheOutPrice - trancheInPrice)) / HUNDRED_PERC);
+            r.tokenOutAmt = (r.tokenOutAmt * adjustedTrancheOutPrice) / trancheOutPrice;
+            trancheOutAmt = isTokenOutCollateral
+                ? (matureTrancheBalance * r.tokenOutAmt) / tokenOutBalance
+                : r.tokenOutAmt;
+            r.stdTrancheRolloverAmt = _toStdTrancheAmt(trancheOutAmt, trancheOutYield);
         }
 
-        r.perpRolloverAmt = (r.stdTrancheRolloverAmt * totalSupply()) / _stdTotalTrancheBalance;
+        r.perpRolloverAmt = (totalSupply() * r.stdTrancheRolloverAmt) / _stdTotalTrancheBalance;
         r.remainingTrancheInAmt = trancheInAmtRequested - r.trancheInAmtUsed;
         return r;
     }
