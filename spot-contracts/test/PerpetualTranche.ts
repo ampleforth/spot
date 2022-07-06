@@ -466,7 +466,7 @@ describe("PerpetualTranche", function () {
 
     describe("when reserve asset", function () {
       it("should revert", async function () {
-        expect(await perp.callStatic.isReserveToken(collateralToken.address)).to.eq(true);
+        expect(await perp.callStatic.inReserve(collateralToken.address)).to.eq(true);
         await expect(perp.transferERC20(collateralToken.address, toAddress, toFixedPtAmt("100"))).to.be.revertedWith(
           "UnauthorizedTransferOut",
         );
