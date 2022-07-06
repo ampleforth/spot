@@ -105,7 +105,7 @@ error InvalidRebootState();
  *
  *  @notice An opinionated implementation of a perpetual note ERC-20 token contract, backed by buttonwood tranches.
  *
- *          Perpetual note tokens (or perps for short) are backed by tokens held in this contract's reserve.
+ *          Perpetual note tokens (or perps for short) are backed by tranche tokens held in this contract's reserve.
  *          Users can mint perps by depositing tranche tokens into the reserve.
  *          They can redeem tokens from the reserve by burning their perps.
  *
@@ -403,15 +403,15 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         address to,
         uint256 amount
     ) external afterStateUpdate onlyOwner {
-        if (_isReserveToken(token)) {
+        if (_inReserve(token)) {
             revert UnauthorizedTransferOut(token);
         }
         token.safeTransfer(to, amount);
     }
 
     // @notice Redenominates Perp with respect to the outstanding debt.
-    // @param stdTrancheBalance The new tranche balance of matured collateral.
-    // @dev Can only be used is perp is backed solely by matured collateral.
+    // @param stdTrancheBalance The new standardized tranche balance.
+    // @dev Can only be used when perp is backed solely by matured collateral.
     function redenominate(uint256 stdTrancheBalance) external afterStateUpdate onlyOwner {
         // The redenomination is only allowed when:
         //  - the system has no more tranches left i.e) all the tranches have mature
@@ -574,17 +574,12 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
     /// @inheritdoc IPerpetualTranche
     function getReserveBalance(IERC20Upgradeable token) external override afterStateUpdate returns (uint256) {
-        return _isReserveToken(token) ? _tokenBalance(token) : 0;
+        return _inReserve(token) ? _tokenBalance(token) : 0;
     }
 
     /// @inheritdoc IPerpetualTranche
-    function isReserveToken(IERC20Upgradeable token) external override afterStateUpdate returns (bool) {
-        return _isReserveToken(token);
-    }
-
-    /// @inheritdoc IPerpetualTranche
-    function isReserveTranche(IERC20Upgradeable tranche) external override afterStateUpdate returns (bool) {
-        return _isReserveTranche(tranche);
+    function inReserve(IERC20Upgradeable token) external override afterStateUpdate returns (bool) {
+        return _inReserve(token);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -801,13 +796,13 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // we infer the tokenOut amount from the tranche denomination.
         // (tokenOutAmt = trancheOutAmt * collateralBalance / matureTrancheBalance)
 
+        bool isMatureTrancheOut = tokenOut == collateral;
         uint256 matureTrancheBalance = _matureTrancheBalance();
-        bool isTokenOutCollateral = tokenOut == collateral;
 
         // Basic rollover:
         // (trancheInAmtRequested . trancheInYield) = (trancheOutAmt. trancheOutYield)
         uint256 trancheOutAmt = _fromStdTrancheAmt(r.stdTrancheRolloverAmt, trancheOutYield);
-        r.tokenOutAmt = isTokenOutCollateral
+        r.tokenOutAmt = isMatureTrancheOut
             ? ((tokenOutBalance * trancheOutAmt) / matureTrancheBalance)
             : trancheOutAmt;
 
@@ -815,7 +810,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // we fix tokenOutAmt = maxTokenOutAmtCovered and back calculate other values
         if (r.tokenOutAmt > maxTokenOutAmtCovered) {
             r.tokenOutAmt = maxTokenOutAmtCovered;
-            trancheOutAmt = isTokenOutCollateral
+            trancheOutAmt = isMatureTrancheOut
                 ? (matureTrancheBalance * r.tokenOutAmt) / tokenOutBalance
                 : r.tokenOutAmt;
             r.stdTrancheRolloverAmt = _toStdTrancheAmt(trancheOutAmt, trancheOutYield);
@@ -838,7 +833,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
             uint256 adjustedTrancheOutPrice = trancheOutPrice -
                 ((skimPerc * (trancheOutPrice - trancheInPrice)) / HUNDRED_PERC);
             r.tokenOutAmt = (r.tokenOutAmt * adjustedTrancheOutPrice) / trancheOutPrice;
-            trancheOutAmt = isTokenOutCollateral
+            trancheOutAmt = isMatureTrancheOut
                 ? (matureTrancheBalance * r.tokenOutAmt) / tokenOutBalance
                 : r.tokenOutAmt;
             r.stdTrancheRolloverAmt = _toStdTrancheAmt(trancheOutAmt, trancheOutYield);
@@ -1022,7 +1017,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     }
 
     // @dev Checks if the given token is in the reserve.
-    function _isReserveToken(IERC20Upgradeable token) private view returns (bool) {
+    function _inReserve(IERC20Upgradeable token) private view returns (bool) {
         return _isReserveTranche(token) || token == collateral;
     }
 
