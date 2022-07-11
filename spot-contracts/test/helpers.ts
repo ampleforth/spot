@@ -107,6 +107,11 @@ export const bondAt = async (bond: string): Promise<Contract> => {
   return BondController.attach(bond);
 };
 
+export const trancheAt = async (tranche: string): Promise<Contract> => {
+  const Tranche = await getContractFactoryFromExternalArtifacts("Tranche");
+  return Tranche.attach(tranche);
+};
+
 export const createBondWithFactory = async (
   bondFactory: Contract,
   collateralToken: Contract,
@@ -181,26 +186,26 @@ export const advancePerpQueueToRollover = async (perp: Contract, bond: Contract)
 };
 
 export const logReserveComposition = async (perp: Contract) => {
-  const count = await perp.reserveCount();
+  const count = await perp.callStatic.getReserveCount();
   console.log("Reserve count", count);
   for (let i = 0; i < count; i++) {
-    const token = await perp.reserveAt(i);
-    console.log(i, token, await perp.reserveBalance(token));
+    const token = await perp.callStatic.getReserveAt(i);
+    console.log(i, token, await perp.callStatic.getReserveBalance(token));
   }
 };
 
 export const checkReserveComposition = async (perp: Contract, tokens: Contract[], balances: BigNumber[] = []) => {
   const checkBalances = balances.length > 0;
-  expect(await perp.reserveCount()).to.eq(tokens.length);
+  expect(await perp.callStatic.getReserveCount()).to.eq(tokens.length);
   for (const i in tokens) {
-    expect(await perp.isReserveToken(tokens[i].address)).to.eq(true);
+    expect(await perp.callStatic.isReserveToken(tokens[i].address)).to.eq(true);
     if (parseInt(i) > 0) {
-      expect(await perp.isReserveTranche(tokens[i].address)).to.eq(true);
+      expect(await perp.callStatic.isReserveTranche(tokens[i].address)).to.eq(true);
     }
-    expect(await perp.reserveAt(i)).to.eq(tokens[i].address);
+    expect(await perp.callStatic.getReserveAt(i)).to.eq(tokens[i].address);
     if (checkBalances) {
-      expect(await perp.reserveBalance(tokens[i].address)).to.eq(balances[i]);
+      expect(await perp.callStatic.getReserveBalance(tokens[i].address)).to.eq(balances[i]);
     }
   }
-  await expect(perp.reserveAt(tokens.length)).to.be.reverted;
+  await expect(perp.callStatic.getReserveAt(tokens.length)).to.be.reverted;
 };

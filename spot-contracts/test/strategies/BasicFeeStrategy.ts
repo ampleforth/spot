@@ -19,14 +19,14 @@ describe("BasicFeeStrategy", function () {
   describe("#computeMintFee", function () {
     describe("when perc > 0", function () {
       it("should return the mint fee", async function () {
-        const feeStrategy = await factory.deploy(perp.address, perp.address, "15000", "0", "0");
+        const feeStrategy = await factory.deploy(perp.address, perp.address, "1500000", "0", "0");
         expect(await feeStrategy.computeMintFee(toFixedPtAmt("1000"))).to.eq(toFixedPtAmt("15"));
       });
     });
 
     describe("when perc < 0", function () {
       it("should return the mint fee", async function () {
-        const feeStrategy = await factory.deploy(perp.address, perp.address, "-25000", "0", "0");
+        const feeStrategy = await factory.deploy(perp.address, perp.address, "-2500000", "0", "0");
         expect(await feeStrategy.computeMintFee(toFixedPtAmt("1000"))).to.eq(toFixedPtAmt("-25"));
       });
     });
@@ -42,14 +42,14 @@ describe("BasicFeeStrategy", function () {
   describe("#computeBurnFee", function () {
     describe("when perc > 0", function () {
       it("should return the mint fee", async function () {
-        const feeStrategy = await factory.deploy(perp.address, perp.address, "0", "25000", "0");
+        const feeStrategy = await factory.deploy(perp.address, perp.address, "0", "2500000", "0");
         expect(await feeStrategy.computeBurnFee(toFixedPtAmt("1000"))).to.eq(toFixedPtAmt("25"));
       });
     });
 
     describe("when perc < 0", function () {
       it("should return the mint fee", async function () {
-        const feeStrategy = await factory.deploy(perp.address, perp.address, "0", "-15000", "0");
+        const feeStrategy = await factory.deploy(perp.address, perp.address, "0", "-1500000", "0");
         expect(await feeStrategy.computeBurnFee(toFixedPtAmt("1000"))).to.eq(toFixedPtAmt("-15"));
       });
     });
@@ -69,14 +69,14 @@ describe("BasicFeeStrategy", function () {
 
     describe("when perc > 0", function () {
       it("should return the mint fee", async function () {
-        const feeStrategy = await factory.deploy(perp.address, perp.address, "0", "0", "10000");
+        const feeStrategy = await factory.deploy(perp.address, perp.address, "0", "0", "1000000");
         expect(await feeStrategy.computeRolloverFee(toFixedPtAmt("100000"))).to.eq(toFixedPtAmt("1000"));
       });
     });
 
     describe("when perc < 0", function () {
       it("should return the mint fee", async function () {
-        const feeStrategy = await factory.deploy(perp.address, perp.address, "0", "0", "-50000");
+        const feeStrategy = await factory.deploy(perp.address, perp.address, "0", "0", "-5000000");
         expect(await feeStrategy.computeRolloverFee(toFixedPtAmt("100000"))).to.eq(toFixedPtAmt("-5000"));
       });
     });

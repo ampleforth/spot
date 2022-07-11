@@ -34,12 +34,12 @@ contract CDRPricingStrategy is IPricingStrategy {
         uint256 collateralBalance,
         uint256 debt
     ) external pure override returns (uint256) {
-        return (collateralBalance * UNIT_PRICE) / debt;
+        return (debt > 0) ? ((collateralBalance * UNIT_PRICE) / debt) : UNIT_PRICE;
     }
 
     /// @inheritdoc IPricingStrategy
     function computeTranchePrice(ITranche tranche) external view override returns (uint256) {
         (uint256 collateralBalance, uint256 debt) = tranche.getTrancheCollateralization();
-        return (collateralBalance * UNIT_PRICE) / debt;
+        return (debt > 0) ? ((collateralBalance * UNIT_PRICE) / debt) : UNIT_PRICE;
     }
 }
