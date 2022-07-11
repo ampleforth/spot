@@ -22,9 +22,10 @@ contract BasicFeeStrategy is IFeeStrategy {
     using SignedMathHelpers for int256;
     using SafeCastUpgradeable for uint256;
 
-    // @dev {10 ** PCT_DECIMALS} is considered 100%
-    uint256 public constant PCT_DECIMALS = 6;
-    uint256 public constant HUNDRED_PCT = (10**PCT_DECIMALS);
+    // @dev {10 ** PERC_DECIMALS} is considered 1%
+    uint256 public constant PERC_DECIMALS = 6;
+    uint256 public constant UNIT_PERC = (10**PERC_DECIMALS);
+    uint256 public constant HUNDRED_PERC = 100 * UNIT_PERC;
 
     // @notice Address of the parent perpetual ERC-20 token contract which uses this strategy.
     IPerpetualTranche public immutable perp;
@@ -66,20 +67,20 @@ contract BasicFeeStrategy is IFeeStrategy {
 
     /// @inheritdoc IFeeStrategy
     function computeMintFee(uint256 mintAmt) external view override returns (int256) {
-        uint256 absoluteFee = (mintFeePct.abs() * mintAmt) / HUNDRED_PCT;
+        uint256 absoluteFee = (mintFeePct.abs() * mintAmt) / HUNDRED_PERC;
         return mintFeePct.sign() * absoluteFee.toInt256();
     }
 
     /// @inheritdoc IFeeStrategy
     function computeBurnFee(uint256 burnAmt) external view override returns (int256) {
-        uint256 absoluteFee = (burnFeePct.abs() * burnAmt) / HUNDRED_PCT;
+        uint256 absoluteFee = (burnFeePct.abs() * burnAmt) / HUNDRED_PERC;
         return burnFeePct.sign() * absoluteFee.toInt256();
     }
 
     /// @inheritdoc IFeeStrategy
     function computeRolloverFee(uint256 rolloverAmt) external view override returns (int256) {
         uint256 share = (feeToken.balanceOf(perp.feeCollector()) * rolloverAmt) / perp.totalSupply();
-        uint256 absoluteFee = (rolloverFeePct.abs() * share) / HUNDRED_PCT;
+        uint256 absoluteFee = (rolloverFeePct.abs() * share) / HUNDRED_PERC;
         return rolloverFeePct.sign() * absoluteFee.toInt256();
     }
 }
