@@ -796,7 +796,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // we infer the tokenOut amount from the tranche denomination.
         // (tokenOutAmt = trancheOutAmt * collateralBalance / matureTrancheBalance)
 
-        bool isMatureTrancheOut = tokenOut == collateral;
+        bool isMatureTrancheOut = (tokenOut == collateral);
         uint256 matureTrancheBalance = _matureTrancheBalance();
 
         // Basic rollover:
