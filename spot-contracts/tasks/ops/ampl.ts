@@ -22,13 +22,13 @@ task("ops:rebase:MockAMPL")
     const supply = await ampl.totalSupply();
     const newSupply = ADJ_PERC.mul(supply).div(UNIT_PERC);
     const supplyDiff = newSupply.sub(supply);
-    const decimals = await ampl.decimals()
+    const decimals = await ampl.decimals();
 
-    console.log("Supply before", utils.formatUnits(supply, decimals))
-    console.log("Applied diff", utils.formatUnits(supplyDiff, decimals))
+    console.log("Supply before", utils.formatUnits(supply, decimals));
+    console.log("Applied diff", utils.formatUnits(supplyDiff, decimals));
     console.log("Rebase:");
     const tx = await ampl.rebase(1, supplyDiff);
     await tx.wait();
     console.log("Tx", tx.hash);
-    console.log("Supply after", utils.formatUnits(await ampl.totalSupply(), decimals))
+    console.log("Supply after", utils.formatUnits(await ampl.totalSupply(), decimals));
   });
