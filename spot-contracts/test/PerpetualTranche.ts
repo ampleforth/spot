@@ -107,11 +107,18 @@ describe("PerpetualTranche", function () {
       expect(await perp.callStatic.getReserveCount()).to.eq(1);
     });
 
+    it("should initialize tranche balances", async function () {
+      expect(await perp.callStatic.getReserveTrancheBalance(collateralToken.address)).to.eq(0);
+      expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(0);
+      expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(0);
+    });
+
     it("should set hyper parameters", async function () {
-      expect(await perp.minTrancheMaturiySec()).to.eq(1);
-      expect(await perp.maxTrancheMaturiySec()).to.eq(constants.MaxUint256);
-      expect(await perp.maxSupply()).to.eq(toFixedPtAmt("1000000"));
-      expect(await perp.maxMintAmtPerTranche()).to.eq(toFixedPtAmt("200000"));
+      expect(await perp.minTrancheMaturitySec()).to.eq(1);
+      expect(await perp.maxTrancheMaturitySec()).to.eq(constants.MaxUint256);
+      expect(await perp.maxSupply()).to.eq(constants.MaxUint256);
+      expect(await perp.maxMintAmtPerTranche()).to.eq(constants.MaxUint256);
+      expect(await perp.skimPerc()).to.eq(0);
     });
   });
 
@@ -275,12 +282,12 @@ describe("PerpetualTranche", function () {
     });
   });
 
-  describe("#updateTolerableTrancheMaturiy", function () {
+  describe("#updateTolerableTrancheMaturity", function () {
     let tx: Transaction;
 
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
-        await expect(perp.connect(otherUser).updateTolerableTrancheMaturiy(0, 0)).to.be.revertedWith(
+        await expect(perp.connect(otherUser).updateTolerableTrancheMaturity(0, 0)).to.be.revertedWith(
           "Ownable: caller is not the owner",
         );
       });
@@ -288,7 +295,7 @@ describe("PerpetualTranche", function () {
 
     describe("when set values are not valid", function () {
       it("should revert", async function () {
-        await expect(perp.updateTolerableTrancheMaturiy(86400, 3600)).to.be.revertedWith(
+        await expect(perp.updateTolerableTrancheMaturity(86400, 3600)).to.be.revertedWith(
           "InvalidTrancheMaturityBounds",
         );
       });
@@ -296,15 +303,15 @@ describe("PerpetualTranche", function () {
 
     describe("when set values are valid", function () {
       beforeEach(async function () {
-        tx = perp.updateTolerableTrancheMaturiy(3600, 86400);
+        tx = perp.updateTolerableTrancheMaturity(3600, 86400);
         await tx;
       });
       it("should update reference", async function () {
-        expect(await perp.minTrancheMaturiySec()).to.eq(3600);
-        expect(await perp.maxTrancheMaturiySec()).to.eq(86400);
+        expect(await perp.minTrancheMaturitySec()).to.eq(3600);
+        expect(await perp.maxTrancheMaturitySec()).to.eq(86400);
       });
       it("should emit event", async function () {
-        await expect(tx).to.emit(perp, "UpdatedTolerableTrancheMaturiy").withArgs(3600, 86400);
+        await expect(tx).to.emit(perp, "UpdatedTolerableTrancheMaturity").withArgs(3600, 86400);
       });
     });
   });
@@ -418,7 +425,7 @@ describe("PerpetualTranche", function () {
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("200"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("200"));
 
-        tx = perp.redenominate(await perp.callStatic.getReserveBalance(collateralToken.address));
+        tx = perp.redenominate(await collateralToken.balanceOf(perp.address));
         await tx;
       });
       it("should emit balance update", async function () {
@@ -823,7 +830,7 @@ describe("PerpetualTranche", function () {
     let bond: Contract, bondFactory: Contract;
     beforeEach(async function () {
       bondFactory = await setupBondFactory();
-      await perp.updateTolerableTrancheMaturiy(1200, 7200);
+      await perp.updateTolerableTrancheMaturity(1200, 7200);
       await advancePerpQueue(perp, 7300);
     });
 
@@ -842,7 +849,7 @@ describe("PerpetualTranche", function () {
 
       describe("when deposit bond matures too late", async function () {
         beforeEach(async function () {
-          await perp.updateTolerableTrancheMaturiy(1200, 7200);
+          await perp.updateTolerableTrancheMaturity(1200, 7200);
           bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 7210);
           await issuer.setLatestBond(bond.address);
           await perp.updateState();
@@ -855,7 +862,7 @@ describe("PerpetualTranche", function () {
 
       describe("when deposit bond belongs to a different collateral token", async function () {
         beforeEach(async function () {
-          await perp.updateTolerableTrancheMaturiy(1200, 7200);
+          await perp.updateTolerableTrancheMaturity(1200, 7200);
           const r = await setupCollateralToken("Ethereum", "ETH");
           bond = await createBondWithFactory(bondFactory, r.collateralToken, [200, 300, 500], 3600);
           await issuer.setLatestBond(bond.address);
@@ -870,7 +877,7 @@ describe("PerpetualTranche", function () {
       describe("when deposit bond is acceptable", async function () {
         let tx: Transaction;
         beforeEach(async function () {
-          await perp.updateTolerableTrancheMaturiy(1200, 7200);
+          await perp.updateTolerableTrancheMaturity(1200, 7200);
           bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 3600);
           await issuer.setLatestBond(bond.address);
           tx = perp.updateState();
@@ -894,7 +901,7 @@ describe("PerpetualTranche", function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
         issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, 10800, collateralToken.address, [500, 500]);
         await perp.updateBondIssuer(issuer.address);
-        await perp.updateTolerableTrancheMaturiy(0, 10800);
+        await perp.updateTolerableTrancheMaturity(0, 10800);
         await advancePerpQueue(perp, 10900);
         for (let i = 0; i < 5; i++) {
           const depositBond = await bondAt(await perp.callStatic.getDepositBond());
@@ -924,7 +931,7 @@ describe("PerpetualTranche", function () {
         expect(await perp.callStatic.getReserveCount()).to.eq("6");
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2500"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq("0");
-        expect(await perp.callStatic.getReserveBalance(collateralToken.address)).to.eq("0");
+        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq("0");
 
         await TimeHelpers.increaseTime(1200);
         tx = await perp.updateState();
@@ -960,7 +967,7 @@ describe("PerpetualTranche", function () {
       });
 
       it("should NOT update the reserve balance", async function () {
-        expect(await perp.callStatic.getReserveBalance(collateralToken.address)).to.eq("0");
+        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq("0");
       });
     });
 
@@ -972,7 +979,7 @@ describe("PerpetualTranche", function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
         issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, 10800, collateralToken.address, [500, 500]);
         await perp.updateBondIssuer(issuer.address);
-        await perp.updateTolerableTrancheMaturiy(0, 10800);
+        await perp.updateTolerableTrancheMaturity(0, 10800);
         await advancePerpQueue(perp, 10900);
         for (let i = 0; i < 5; i++) {
           const depositBond = await bondAt(await perp.callStatic.getDepositBond());
@@ -1001,7 +1008,7 @@ describe("PerpetualTranche", function () {
         expect(await perp.callStatic.getReserveCount()).to.eq("6");
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2500"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq("0");
-        expect(await perp.callStatic.getReserveBalance(collateralToken.address)).to.eq("0");
+        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq("0");
 
         await TimeHelpers.increaseTime(6000);
         // NOTE: invoking mature on reserveTranches[0],
@@ -1052,7 +1059,7 @@ describe("PerpetualTranche", function () {
       });
 
       it("should update the reserve balance", async function () {
-        expect(await perp.callStatic.getReserveBalance(collateralToken.address)).to.eq(toFixedPtAmt("1000"));
+        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq(toFixedPtAmt("1000"));
       });
     });
 
@@ -1064,7 +1071,7 @@ describe("PerpetualTranche", function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
         issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, 10800, collateralToken.address, [500, 500]);
         await perp.updateBondIssuer(issuer.address);
-        await perp.updateTolerableTrancheMaturiy(0, 10800);
+        await perp.updateTolerableTrancheMaturity(0, 10800);
         await advancePerpQueue(perp, 10900);
         for (let i = 0; i < 5; i++) {
           const depositBond = await bondAt(await perp.callStatic.getDepositBond());
@@ -1094,7 +1101,7 @@ describe("PerpetualTranche", function () {
         expect(await perp.callStatic.getReserveCount()).to.eq("6");
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2500"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq("0");
-        expect(await perp.callStatic.getReserveBalance(collateralToken.address)).to.eq("0");
+        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq("0");
 
         await TimeHelpers.increaseTime(6000);
         tx = perp.updateState();
@@ -1140,8 +1147,8 @@ describe("PerpetualTranche", function () {
           .withArgs(reserveTranches[1].address, "0");
       });
 
-      it("should update the reserve balance", async function () {
-        expect(await perp.callStatic.getReserveBalance(collateralToken.address)).to.eq("553710919999999999999");
+      it("should update the reserve balance", async function () {        
+        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq("553710919999999999999");
       });
     });
 
@@ -1153,7 +1160,7 @@ describe("PerpetualTranche", function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
         issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, 10800, collateralToken.address, [500, 500]);
         await perp.updateBondIssuer(issuer.address);
-        await perp.updateTolerableTrancheMaturiy(0, 10800);
+        await perp.updateTolerableTrancheMaturity(0, 10800);
         await advancePerpQueue(perp, 10900);
         for (let i = 0; i < 5; i++) {
           const depositBond = await bondAt(await perp.callStatic.getDepositBond());
@@ -1186,7 +1193,7 @@ describe("PerpetualTranche", function () {
         expect(await perp.callStatic.getReserveCount()).to.eq("6");
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("2250"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq("0");
-        expect(await perp.callStatic.getReserveBalance(collateralToken.address)).to.eq("0");
+        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq("0");
 
         await TimeHelpers.increaseTime(6000);
         tx = perp.updateState();
@@ -1233,7 +1240,7 @@ describe("PerpetualTranche", function () {
       });
 
       it("should update the reserve balance", async function () {
-        expect(await perp.callStatic.getReserveBalance(collateralToken.address)).to.eq(toFixedPtAmt("1000"));
+        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq(toFixedPtAmt("1000"));
       });
     });
   });
@@ -1245,7 +1252,7 @@ describe("PerpetualTranche", function () {
       const BondIssuer = await ethers.getContractFactory("BondIssuer");
       const issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, 10800, collateralToken.address, [500, 500]);
       await perp.updateBondIssuer(issuer.address);
-      await perp.updateTolerableTrancheMaturiy(600, 10800);
+      await perp.updateTolerableTrancheMaturity(600, 10800);
       await advancePerpQueue(perp, 10900);
       for (let i = 0; i < 5; i++) {
         const depositBond = await bondAt(await perp.callStatic.getDepositBond());

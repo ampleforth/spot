@@ -368,7 +368,7 @@ describe("PerpetualTranche", function () {
     describe("when reserve has more than one tranche", function () {
       let newRedemptionTranche: Contract, tx: Transaction;
       beforeEach(async function () {
-        await perp.updateTolerableTrancheMaturiy(1200, 3600);
+        await perp.updateTolerableTrancheMaturity(1200, 3600);
 
         await advancePerpQueue(perp, 1200);
 
@@ -391,9 +391,9 @@ describe("PerpetualTranche", function () {
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("750"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
-        expect(await perp.callStatic.getReserveBalance(collateralToken.address)).to.eq(toFixedPtAmt("0"));
-        expect(await perp.callStatic.getReserveBalance(initialDepositTranche.address)).to.eq(toFixedPtAmt("500"));
-        expect(await perp.callStatic.getReserveBalance(newRedemptionTranche.address)).to.eq(toFixedPtAmt("500"));
+        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq(toFixedPtAmt("0"));
+        expect(await perp.callStatic.getReserveTrancheBalance(initialDepositTranche.address)).to.eq(toFixedPtAmt("500"));
+        expect(await perp.callStatic.getReserveTrancheBalance(newRedemptionTranche.address)).to.eq(toFixedPtAmt("500"));
 
         tx = perp.burn(toFixedPtAmt("375"));
         await tx;
@@ -443,7 +443,7 @@ describe("PerpetualTranche", function () {
     describe("when reserve has mature collateral and tranches", function () {
       let newRedemptionTranche: Contract, tx: Transaction;
       beforeEach(async function () {
-        await perp.updateTolerableTrancheMaturiy(1200, 3600);
+        await perp.updateTolerableTrancheMaturity(1200, 3600);
 
         await advancePerpQueue(perp, 1200);
 
@@ -515,7 +515,7 @@ describe("PerpetualTranche", function () {
     describe("when the collateralToken balance is over the tranche balance", function () {
       let newRedemptionTranche: Contract, tx: Transaction;
       beforeEach(async function () {
-        await perp.updateTolerableTrancheMaturiy(1200, 3600);
+        await perp.updateTolerableTrancheMaturity(1200, 3600);
 
         await advancePerpQueue(perp, 1200);
 
@@ -539,9 +539,9 @@ describe("PerpetualTranche", function () {
         expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("750"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("750"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
-        expect(await perp.callStatic.getReserveBalance(collateralToken.address)).to.eq(toFixedPtAmt("0"));
-        expect(await perp.callStatic.getReserveBalance(initialDepositTranche.address)).to.eq(toFixedPtAmt("500"));
-        expect(await perp.callStatic.getReserveBalance(newRedemptionTranche.address)).to.eq(toFixedPtAmt("500"));
+        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq(toFixedPtAmt("0"));
+        expect(await perp.callStatic.getReserveTrancheBalance(initialDepositTranche.address)).to.eq(toFixedPtAmt("500"));
+        expect(await perp.callStatic.getReserveTrancheBalance(newRedemptionTranche.address)).to.eq(toFixedPtAmt("500"));
 
         await advancePerpQueue(perp, 2400);
         await rebase(collateralToken, rebaseOracle, +0.5);
@@ -592,7 +592,7 @@ describe("PerpetualTranche", function () {
     describe("when the collateralToken balance is over the tranche balance", function () {
       let newRedemptionTranche: Contract, tx: Transaction;
       beforeEach(async function () {
-        await perp.updateTolerableTrancheMaturiy(1200, 3600);
+        await perp.updateTolerableTrancheMaturity(1200, 3600);
 
         await advancePerpQueue(perp, 1200);
 
@@ -665,7 +665,7 @@ describe("PerpetualTranche", function () {
     describe("when reserve has only mature collateral", function () {
       let newRedemptionTranche: Contract, tx: Transaction;
       beforeEach(async function () {
-        await perp.updateTolerableTrancheMaturiy(1200, 3600);
+        await perp.updateTolerableTrancheMaturity(1200, 3600);
 
         await advancePerpQueue(perp, 1200);
 

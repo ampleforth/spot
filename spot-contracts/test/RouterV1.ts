@@ -68,7 +68,7 @@ describe("RouterV1", function () {
         initializer: "init(string,string,address,address,address,address,address)",
       },
     );
-    await perp.updateTolerableTrancheMaturiy(600, 3600);
+    await perp.updateTolerableTrancheMaturity(600, 3600);
     await advancePerpQueue(perp, 3600);
 
     depositBond = await bondAt(await perp.callStatic.getDepositBond());

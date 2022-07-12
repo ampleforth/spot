@@ -4,7 +4,7 @@ pragma solidity ^0.8.15;
 import { MockERC20 } from "./MockERC20.sol";
 
 contract MockPerpetualTranche is MockERC20 {
-    uint256 private _reserveBalance;
+    uint256 private _reserveTrancheBalance;
     uint256 public matureTrancheBalance;
     address public collateral;
 
@@ -12,14 +12,14 @@ contract MockPerpetualTranche is MockERC20 {
         return address(this);
     }
 
-    function getReserveBalance(
+    function getReserveTrancheBalance(
         address /* token */
     ) public view returns (uint256) {
-        return _reserveBalance;
+        return _reserveTrancheBalance;
     }
 
-    function setReserveBalance(uint256 b) external {
-        _reserveBalance = b;
+    function setReserveTrancheBalance(uint256 b) external {
+        _reserveTrancheBalance = b;
     }
 
     function setMatureTrancheBalance(uint256 b) external {
