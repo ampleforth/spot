@@ -92,7 +92,7 @@ task("deploy:PerpetualTranche")
       yieldStrategy.address,
     );
     await initTx.wait();
-    await perp.updateTolerableTrancheMaturiy(minMatuirtySec, maxMatuirtySec);
+    await perp.updateTolerableTrancheMaturity(minMatuirtySec, maxMatuirtySec);
 
     await hre.run("verify:contract", {
       address: feeStrategy.address,
