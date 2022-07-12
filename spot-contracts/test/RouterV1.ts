@@ -339,7 +339,7 @@ describe("RouterV1", function () {
         );
         expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("0"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("0"));
-        expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("0"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("0"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("200"));
         expect(r[1]).to.eq(perp.address);
         expect(r[2]).to.eq(toFixedPtAmt("0"));
@@ -360,7 +360,7 @@ describe("RouterV1", function () {
         );
         expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("200"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("200"));
-        expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("200"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("200"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("50"));
         expect(r[1]).to.eq(perp.address);
         expect(r[2]).to.eq(toFixedPtAmt("1"));
@@ -381,7 +381,7 @@ describe("RouterV1", function () {
         );
         expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("187.5"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("187.5"));
-        expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("250"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("250"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         expect(r[1]).to.eq(perp.address);
         expect(r[2]).to.eq(toFixedPtAmt("1"));
@@ -402,7 +402,7 @@ describe("RouterV1", function () {
         );
         expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("225"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("300"));
-        expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("225"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("225"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("25"));
         expect(r[1]).to.eq(perp.address);
         expect(r[2]).to.eq(toFixedPtAmt("1"));
@@ -423,7 +423,7 @@ describe("RouterV1", function () {
         );
         expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("200"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("200"));
-        expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("200"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("200"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         expect(r[1]).to.eq(perp.address);
         expect(r[2]).to.eq(toFixedPtAmt("1"));
@@ -444,7 +444,7 @@ describe("RouterV1", function () {
         );
         expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("190"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("190"));
-        expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("190"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("190"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("10"));
         expect(r[1]).to.eq(perp.address);
         expect(r[2]).to.eq(toFixedPtAmt("1"));
@@ -465,7 +465,7 @@ describe("RouterV1", function () {
         );
         expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("190"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("190"));
-        expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("190"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("190"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         expect(r[1]).to.eq(perp.address);
         expect(r[2]).to.eq(toFixedPtAmt("1"));
@@ -486,7 +486,7 @@ describe("RouterV1", function () {
         );
         expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("250"));
         expect(r[0].tokenOutAmt).to.eq("294117647058823529411");
-        expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("250"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("250"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         expect(r[1]).to.eq(perp.address);
         expect(r[2]).to.eq(toFixedPtAmt("1"));
@@ -507,7 +507,7 @@ describe("RouterV1", function () {
         );
         expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("200"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("200"));
-        expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("200"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("200"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         expect(r[1]).to.eq(perp.address);
         expect(r[2]).to.eq(toFixedPtAmt("-1"));
@@ -533,7 +533,7 @@ describe("RouterV1", function () {
         );
         expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("200"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("200"));
-        expect(r[0].trancheInAmtUsed).to.eq(toFixedPtAmt("200"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("200"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         expect(r[1]).to.eq(feeToken.address);
         expect(r[2]).to.eq(toFixedPtAmt("1"));
