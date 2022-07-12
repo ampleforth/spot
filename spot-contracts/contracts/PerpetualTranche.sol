@@ -890,27 +890,31 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         uint256 balance = _tokenBalance(token);
         emit ReserveSynced(token, balance);
 
-        // If token is a tranche
-        if (token != collateral) {
-            bool isReserveTranche_ = _isReserveTranche(token);
-            if (balance > 0 && !isReserveTranche_) {
-                // Inserts new tranche into reserve list.
-                _reserveTranches.add(address(token));
+        // If token is the mature tranche,
+        // it NEVER gets removed from the `_reserves` list.
+        if (_isMatureTranche(token)) {
+            return balance;
+        }
 
-                // Stores the yield for future usage.
-                _applyYield(token, computeYield(token));
-            }
+        // Otherwise `_reserves` list gets updated.
+        bool inReserve_ = _inReserve(token);
+        if (balance > 0 && !inReserve_) {
+            // Inserts new tranche into reserve list.
+            _reserves.add(address(token));
 
-            if (balance == 0 && isReserveTranche_) {
-                // Removes tranche from reserve list.
-                _reserveTranches.remove(address(token));
+            // Stores the yield for future usage.
+            _applyYield(token, computeYield(token));
+        }
 
-                // Frees up stored yield.
-                _applyYield(token, 0);
+        if (balance == 0 && inReserve_) {
+            // Removes tranche from reserve list.
+            _reserves.remove(address(token));
 
-                // Frees up minted supply.
-                delete _mintedSupplyPerTranche[ITranche(address(token))];
-            }
+            // Frees up stored yield.
+            _applyYield(token, 0);
+
+            // Frees up minted supply.
+            delete _mintedSupplyPerTranche[ITranche(address(token))];
         }
 
         return balance;
