@@ -47,9 +47,9 @@ error InvalidYieldStrategyDecimals();
 error UnacceptableSkimPerc(uint256 skimPerc);
 
 /// @notice Expected minTrancheMaturity be less than or equal to maxTrancheMaturity.
-/// @param minTrancheMaturiySec Minimum tranche maturity time in seconds.
-/// @param minTrancheMaturiySec Maximum tranche maturity time in seconds.
-error InvalidTrancheMaturityBounds(uint256 minTrancheMaturiySec, uint256 maxTrancheMaturiySec);
+/// @param minTrancheMaturitySec Minimum tranche maturity time in seconds.
+/// @param minTrancheMaturitySec Maximum tranche maturity time in seconds.
+error InvalidTrancheMaturityBounds(uint256 minTrancheMaturitySec, uint256 maxTrancheMaturitySec);
 
 /// @notice Expected transfer out asset to not be a reserve asset.
 /// @param token Address of the token transferred.
@@ -221,11 +221,11 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
     // @notice The minimum maturity time in seconds for a tranche below which
     //         it can be rolled over.
-    uint256 public minTrancheMaturiySec;
+    uint256 public minTrancheMaturitySec;
 
     // @notice The maximum maturity time in seconds for a tranche above which
     //         it can NOT get added into the reserve.
-    uint256 public maxTrancheMaturiySec;
+    uint256 public maxTrancheMaturitySec;
 
     // @notice The maximum supply of perps that can exist at any given time.
     uint256 public maxSupply;
@@ -987,9 +987,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     function _isAcceptableForReserve(IBondController bond) internal view returns (bool) {
         // NOTE: `timeToMaturity` will be 0 if the bond is past maturity.
         uint256 timeToMaturity = bond.timeToMaturity();
-        return (address(collateral) == bond.collateralToken() &&
-            timeToMaturity >= minTrancheMaturiySec &&
-            timeToMaturity < maxTrancheMaturiySec);
+        return (address(_reserveAt(0)) == bond.collateralToken() &&
+            timeToMaturity >= minTrancheMaturitySec &&
+            timeToMaturity < maxTrancheMaturitySec);
     }
 
     // @dev Enforces the mint limits. To be invoked AFTER the mint operation.

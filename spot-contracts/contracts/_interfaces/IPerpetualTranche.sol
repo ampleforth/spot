@@ -33,7 +33,7 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @notice Event emitted when maturity tolerance parameters are updated.
     // @param min The minimum maturity time.
     // @param max The maximum maturity time.
-    event UpdatedTolerableTrancheMaturiy(uint256 min, uint256 max);
+    event UpdatedTolerableTrancheMaturity(uint256 min, uint256 max);
 
     // @notice Event emitted when the max total supply is updated.
     // @param maxSupply The max total supply.
