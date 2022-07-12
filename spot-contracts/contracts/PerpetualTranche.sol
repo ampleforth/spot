@@ -304,11 +304,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         updatePricingStrategy(pricingStrategy_);
         updateYieldStrategy(yieldStrategy_);
 
-        minTrancheMaturiySec = 1;
-        maxTrancheMaturiySec = type(uint256).max;
-
-        maxSupply = 1000000 * (10**decimals()); // 1M
-        maxMintAmtPerTranche = 200000 * (10**decimals()); // 200k
+        updateTolerableTrancheMaturity(1, type(uint256).max);
+        updateMintingLimits(type(uint256).max, type(uint256).max);
+        updateSkimPerc(0);
     }
 
     //--------------------------------------------------------------------------
@@ -361,24 +359,24 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     }
 
     // @notice Update the maturity tolerance parameters.
-    // @param minTrancheMaturiySec_ New minimum maturity time.
-    // @param maxTrancheMaturiySec_ New maximum maturity time.
-    function updateTolerableTrancheMaturiy(uint256 minTrancheMaturiySec_, uint256 maxTrancheMaturiySec_)
-        external
+    // @param minTrancheMaturitySec_ New minimum maturity time.
+    // @param maxTrancheMaturitySec_ New maximum maturity time.
+    function updateTolerableTrancheMaturity(uint256 minTrancheMaturitySec_, uint256 maxTrancheMaturitySec_)
+        public
         onlyOwner
     {
-        if (minTrancheMaturiySec_ > maxTrancheMaturiySec_) {
-            revert InvalidTrancheMaturityBounds(minTrancheMaturiySec_, maxTrancheMaturiySec_);
+        if (minTrancheMaturitySec_ > maxTrancheMaturitySec_) {
+            revert InvalidTrancheMaturityBounds(minTrancheMaturitySec_, maxTrancheMaturitySec_);
         }
-        minTrancheMaturiySec = minTrancheMaturiySec_;
-        maxTrancheMaturiySec = maxTrancheMaturiySec_;
-        emit UpdatedTolerableTrancheMaturiy(minTrancheMaturiySec_, maxTrancheMaturiySec_);
+        minTrancheMaturitySec = minTrancheMaturitySec_;
+        maxTrancheMaturitySec = maxTrancheMaturitySec_;
+        emit UpdatedTolerableTrancheMaturity(minTrancheMaturitySec_, maxTrancheMaturitySec_);
     }
 
     // @notice Update parameters controlling the perp token mint limits.
     // @param maxSupply_ New max total supply.
     // @param maxMintAmtPerTranche_ New max total for per tranche in minting bond.
-    function updateMintingLimits(uint256 maxSupply_, uint256 maxMintAmtPerTranche_) external onlyOwner {
+    function updateMintingLimits(uint256 maxSupply_, uint256 maxMintAmtPerTranche_) public onlyOwner {
         maxSupply = maxSupply_;
         maxMintAmtPerTranche = maxMintAmtPerTranche_;
         emit UpdatedMintingLimits(maxSupply_, maxMintAmtPerTranche_);
@@ -386,7 +384,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
     // @notice Updates the skim percentage parameter.
     // @param skimPerc_ New skim percentage.
-    function updateSkimPerc(uint256 skimPerc_) external onlyOwner {
+    function updateSkimPerc(uint256 skimPerc_) public onlyOwner {
         if (skimPerc_ > HUNDRED_PERC) {
             revert UnacceptableSkimPerc(skimPerc_);
         }
