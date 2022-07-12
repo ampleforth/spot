@@ -297,7 +297,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // and is to be never updated.
         _reserves.add(address(collateral_));
         assert(_reserveAt(0) == collateral_);
-        _applyYield(collateral_, UNIT_YIELD);
 
         updateBondIssuer(bondIssuer_);
         updateFeeStrategy(feeStrategy_);
@@ -576,7 +575,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
     /// @inheritdoc IPerpetualTranche
     function getReserveTrancheBalance(IERC20Upgradeable tranche) external override afterStateUpdate returns (uint256) {
-        if(!_inReserve(tranche)) {
+        if (!_inReserve(tranche)) {
             return 0;
         }
         return _isMatureTranche(tranche) ? _matureTrancheBalance() : _tokenBalance(tranche);
@@ -729,7 +728,13 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     //      if NOT computes the yield.
     function computeYield(IERC20Upgradeable token) public view override returns (uint256) {
         uint256 yield = _appliedYields[token];
-        return (yield > 0) ? yield : yieldStrategy.computeYield(token);
+        if (yield > 0) {
+            return yield;
+        }
+        return
+            _isMatureTranche(token)
+                ? yieldStrategy.computeMatureTrancheYield(token)
+                : yieldStrategy.computeTrancheYield(token);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -814,7 +819,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // However, if the tokenOut is the mature tranche (held as naked collateral),
         // we infer the tokenOut amount from the tranche denomination.
         // (tokenOutAmt = trancheOutAmt * collateralBalance / matureTrancheBalance)
-
         bool isMatureTrancheOut = _isMatureTranche(tokenOut);
         uint256 matureTrancheBalance = _matureTrancheBalance();
         r.tokenOutAmt = isMatureTrancheOut ? ((tokenOutBalance * trancheOutAmt) / matureTrancheBalance) : trancheOutAmt;

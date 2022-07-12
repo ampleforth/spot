@@ -24,12 +24,15 @@ import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
  *        - All AMPL [50-50] bonds can be configured to have a yield of [0.8,0]
  *        => An AMPL-A tranche token from any [50-50] bond will be applied a yield factor of 0.8.
  *
+ *      For mature tranches, we use a yield=1.
+ *
  */
 contract TrancheClassYieldStrategy is IYieldStrategy, OwnableUpgradeable {
     using BondHelpers for IBondController;
     using TrancheDataHelpers for TrancheData;
 
     uint8 private constant DECIMALS = 18;
+    uint256 public constant UNIT_YIELD = (10**DECIMALS);
 
     // @notice Mapping between a tranche class and the yield to be applied.
     mapping(bytes32 => uint256) private _trancheYields;
@@ -73,7 +76,14 @@ contract TrancheClassYieldStrategy is IYieldStrategy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IYieldStrategy
-    function computeYield(IERC20Upgradeable token) public view override returns (uint256) {
+    function computeTrancheYield(IERC20Upgradeable token) external view override returns (uint256) {
         return _trancheYields[trancheClass(ITranche(address(token)))];
+    }
+
+    /// @inheritdoc IYieldStrategy
+    function computeMatureTrancheYield(
+        IERC20Upgradeable /*collateralToken*/
+    ) external pure override returns (uint256) {
+        return UNIT_YIELD;
     }
 }

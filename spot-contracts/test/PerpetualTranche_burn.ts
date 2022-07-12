@@ -392,7 +392,9 @@ describe("PerpetualTranche", function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("750"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
         expect(await collateralToken.balanceOf(await perp.reserve())).to.eq(toFixedPtAmt("0"));
-        expect(await perp.callStatic.getReserveTrancheBalance(initialDepositTranche.address)).to.eq(toFixedPtAmt("500"));
+        expect(await perp.callStatic.getReserveTrancheBalance(initialDepositTranche.address)).to.eq(
+          toFixedPtAmt("500"),
+        );
         expect(await perp.callStatic.getReserveTrancheBalance(newRedemptionTranche.address)).to.eq(toFixedPtAmt("500"));
 
         tx = perp.burn(toFixedPtAmt("375"));
@@ -540,7 +542,9 @@ describe("PerpetualTranche", function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("750"));
         expect((await perp.callStatic.getStdTrancheBalances())[1]).to.eq(toFixedPtAmt("0"));
         expect(await collateralToken.balanceOf(await perp.reserve())).to.eq(toFixedPtAmt("0"));
-        expect(await perp.callStatic.getReserveTrancheBalance(initialDepositTranche.address)).to.eq(toFixedPtAmt("500"));
+        expect(await perp.callStatic.getReserveTrancheBalance(initialDepositTranche.address)).to.eq(
+          toFixedPtAmt("500"),
+        );
         expect(await perp.callStatic.getReserveTrancheBalance(newRedemptionTranche.address)).to.eq(toFixedPtAmt("500"));
 
         await advancePerpQueue(perp, 2400);

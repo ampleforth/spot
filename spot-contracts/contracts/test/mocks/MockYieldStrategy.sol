@@ -18,8 +18,14 @@ contract MockYieldStrategy {
         _yields[t] = y;
     }
 
-    function computeYield(address t) external view returns (uint256) {
+    function computeTrancheYield(address t) external view returns (uint256) {
         return _yields[t];
+    }
+
+    function computeMatureTrancheYield(
+        address /*t*/
+    ) external view returns (uint256) {
+        return 10**(_decimals);
     }
 
     function decimals() external view returns (uint8) {

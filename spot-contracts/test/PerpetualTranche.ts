@@ -1147,7 +1147,7 @@ describe("PerpetualTranche", function () {
           .withArgs(reserveTranches[1].address, "0");
       });
 
-      it("should update the reserve balance", async function () {        
+      it("should update the reserve balance", async function () {
         expect(await collateralToken.balanceOf(await perp.reserve())).to.eq("553710919999999999999");
       });
     });
