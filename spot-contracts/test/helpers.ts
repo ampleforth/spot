@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import hre, { ethers } from "hardhat";
-import { Signer, Contract, BigNumber, ContractFactory, Transaction } from "ethers";
+import { Signer, Contract, BigNumber, ContractFactory, Transaction, utils } from "ethers";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -8,9 +8,9 @@ const TOKEN_DECIMALS = 18;
 const PRICE_DECIMALS = 8;
 const YIELD_DECIMALS = 18;
 
-export const toFixedPtAmt = (a: string): BigNumber => ethers.utils.parseUnits(a, TOKEN_DECIMALS);
-export const toPriceFixedPtAmt = (a: string): BigNumber => ethers.utils.parseUnits(a, PRICE_DECIMALS);
-export const toYieldFixedPtAmt = (a: string): BigNumber => ethers.utils.parseUnits(a, YIELD_DECIMALS);
+export const toFixedPtAmt = (a: string): BigNumber => utils.parseUnits(a, TOKEN_DECIMALS);
+export const toPriceFixedPtAmt = (a: string): BigNumber => utils.parseUnits(a, PRICE_DECIMALS);
+export const toYieldFixedPtAmt = (a: string): BigNumber => utils.parseUnits(a, YIELD_DECIMALS);
 
 const ORACLE_BASE_PRICE = toPriceFixedPtAmt("1");
 
@@ -158,7 +158,7 @@ export const getTranches = async (bond: Contract): Promise<Contract[]> => {
   return tranches;
 };
 
-export const getStdTrancheBalances = async (bond: Contract, user: string): Promise<BigNumber[]> => {
+export const getTrancheBalances = async (bond: Contract, user: string): Promise<BigNumber[]> => {
   const tranches = await getTranches(bond);
   const balances: BigNumber[] = [];
   for (let i = 0; i < tranches.length; i++) {
@@ -190,7 +190,13 @@ export const logReserveComposition = async (perp: Contract) => {
   console.log("Reserve count", count);
   for (let i = 0; i < count; i++) {
     const token = await perp.callStatic.getReserveAt(i);
-    console.log(i, token, await perp.callStatic.getReserveTrancheBalance(token));
+    console.log(
+      i,
+      token,
+      utils.formatUnits(await perp.callStatic.getReserveTrancheBalance(token), await perp.decimals()),
+      utils.formatUnits(await perp.computeYield(token), await perp.YIELD_DECIMALS()),
+      utils.formatUnits(await perp.computePrice(token), await perp.PRICE_DECIMALS()),
+    );
   }
 };
 

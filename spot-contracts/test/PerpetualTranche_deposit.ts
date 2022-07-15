@@ -211,8 +211,7 @@ describe("PerpetualTranche", function () {
 
         it("should mint the correct amount", async function () {
           const r = await perp.callStatic.computeMintAmt(depositTrancheA.address, toFixedPtAmt("500"));
-          expect(r[0]).to.eq(toFixedPtAmt("250"));
-          expect(r[1]).to.eq(toFixedPtAmt("500"));
+          expect(r).to.eq(toFixedPtAmt("250"));
         });
       });
 
@@ -223,8 +222,7 @@ describe("PerpetualTranche", function () {
 
         it("should mint the correct amount", async function () {
           const r = await perp.callStatic.computeMintAmt(depositTrancheA.address, toFixedPtAmt("500"));
-          expect(r[0]).to.eq(toFixedPtAmt("250"));
-          expect(r[1]).to.eq(toFixedPtAmt("250"));
+          expect(r).to.eq(toFixedPtAmt("250"));
         });
       });
 
@@ -236,8 +234,7 @@ describe("PerpetualTranche", function () {
 
         it("should mint the correct amount", async function () {
           const r = await perp.callStatic.computeMintAmt(depositTrancheA.address, toFixedPtAmt("500"));
-          expect(r[0]).to.eq(toFixedPtAmt("125"));
-          expect(r[1]).to.eq(toFixedPtAmt("250"));
+          expect(r).to.eq(toFixedPtAmt("125"));
         });
       });
     });
@@ -266,8 +263,7 @@ describe("PerpetualTranche", function () {
 
           it("should mint the correct amount", async function () {
             const r = await perp.callStatic.computeMintAmt(newTranche.address, toFixedPtAmt("250"));
-            expect(r[0]).to.eq(toFixedPtAmt("250"));
-            expect(r[1]).to.eq(toFixedPtAmt("250"));
+            expect(r).to.eq(toFixedPtAmt("250"));
           });
         });
 
@@ -279,8 +275,7 @@ describe("PerpetualTranche", function () {
 
           it("should mint the correct amount", async function () {
             const r = await perp.callStatic.computeMintAmt(newTranche.address, toFixedPtAmt("250"));
-            expect(r[0]).to.eq(toFixedPtAmt("125"));
-            expect(r[1]).to.eq(toFixedPtAmt("125"));
+            expect(r).to.eq(toFixedPtAmt("125"));
           });
         });
 
@@ -292,8 +287,7 @@ describe("PerpetualTranche", function () {
 
           it("should mint the correct amount", async function () {
             const r = await perp.callStatic.computeMintAmt(newTranche.address, toFixedPtAmt("250"));
-            expect(r[0]).to.eq(toFixedPtAmt("500"));
-            expect(r[1]).to.eq(toFixedPtAmt("500"));
+            expect(r).to.eq(toFixedPtAmt("500"));
           });
         });
       });
@@ -307,8 +301,7 @@ describe("PerpetualTranche", function () {
 
         it("should mint the correct amount", async function () {
           const r = await perp.callStatic.computeMintAmt(newTranche.address, toFixedPtAmt("250"));
-          expect(r[0]).to.eq(toFixedPtAmt("500"));
-          expect(r[1]).to.eq(toFixedPtAmt("250"));
+          expect(r).to.eq(toFixedPtAmt("500"));
         });
       });
 
@@ -321,8 +314,7 @@ describe("PerpetualTranche", function () {
 
         it("should mint the correct amount", async function () {
           const r = await perp.callStatic.computeMintAmt(newTranche.address, toFixedPtAmt("250"));
-          expect(r[0]).to.eq(toFixedPtAmt("125"));
-          expect(r[1]).to.eq(toFixedPtAmt("250"));
+          expect(r).to.eq(toFixedPtAmt("125"));
         });
       });
     });
@@ -350,10 +342,9 @@ describe("PerpetualTranche", function () {
             [toFixedPtAmt("-500"), toFixedPtAmt("500")],
           );
         });
-        it("should return the mintAmt and std tranche amt", async function () {
+        it("should return the mintAmt", async function () {
           const r = await perp.callStatic.computeMintAmt(depositTrancheA.address, toFixedPtAmt("500"));
-          expect(r[0]).to.eq(toFixedPtAmt("500"));
-          expect(r[1]).to.eq(toFixedPtAmt("500"));
+          expect(r).to.eq(toFixedPtAmt("500"));
         });
       });
       describe("when fee > 0", function () {
@@ -381,10 +372,9 @@ describe("PerpetualTranche", function () {
             [toFixedPtAmt("-500"), toFixedPtAmt("500")],
           );
         });
-        it("should return the mintAmt and std tranche amt", async function () {
+        it("should return the mintAmt", async function () {
           const r = await perp.callStatic.computeMintAmt(depositTrancheA.address, toFixedPtAmt("500"));
-          expect(r[0]).to.eq(toFixedPtAmt("500"));
-          expect(r[1]).to.eq(toFixedPtAmt("500"));
+          expect(r).to.eq(toFixedPtAmt("500"));
         });
       });
       describe("when fee < 0", function () {
@@ -416,10 +406,9 @@ describe("PerpetualTranche", function () {
             [toFixedPtAmt("-500"), toFixedPtAmt("500")],
           );
         });
-        it("should return the mintAmt and std tranche amt", async function () {
+        it("should return the mintAmt", async function () {
           const r = await perp.callStatic.computeMintAmt(depositTrancheA.address, toFixedPtAmt("500"));
-          expect(r[0]).to.eq(toFixedPtAmt("500"));
-          expect(r[1]).to.eq(toFixedPtAmt("500"));
+          expect(r).to.eq(toFixedPtAmt("500"));
         });
       });
     });
@@ -455,10 +444,9 @@ describe("PerpetualTranche", function () {
             [toFixedPtAmt("-500"), toFixedPtAmt("500")],
           );
         });
-        it("should return the mintAmt and std tranche amt", async function () {
+        it("should return the mintAmt", async function () {
           const r = await perp.callStatic.computeMintAmt(depositTrancheA.address, toFixedPtAmt("500"));
-          expect(r[0]).to.eq(toFixedPtAmt("500"));
-          expect(r[1]).to.eq(toFixedPtAmt("500"));
+          expect(r).to.eq(toFixedPtAmt("500"));
         });
       });
       describe("when fee > 0", async function () {
@@ -514,10 +502,9 @@ describe("PerpetualTranche", function () {
               [toFixedPtAmt("-500"), toFixedPtAmt("500")],
             );
           });
-          it("should return the mintAmt and std tranche amt", async function () {
+          it("should return the mintAmt", async function () {
             const r = await perp.callStatic.computeMintAmt(depositTrancheA.address, toFixedPtAmt("500"));
-            expect(r[0]).to.eq(toFixedPtAmt("500"));
-            expect(r[1]).to.eq(toFixedPtAmt("500"));
+            expect(r).to.eq(toFixedPtAmt("500"));
           });
         });
       });
@@ -548,10 +535,9 @@ describe("PerpetualTranche", function () {
             [toFixedPtAmt("-500"), toFixedPtAmt("500")],
           );
         });
-        it("should return the mintAmt and std tranche amt", async function () {
+        it("should return the mintAmt", async function () {
           const r = await perp.callStatic.computeMintAmt(depositTrancheA.address, toFixedPtAmt("500"));
-          expect(r[0]).to.eq(toFixedPtAmt("500"));
-          expect(r[1]).to.eq(toFixedPtAmt("500"));
+          expect(r).to.eq(toFixedPtAmt("500"));
         });
       });
     });
@@ -562,7 +548,6 @@ describe("PerpetualTranche", function () {
         expect(await perp.callStatic.getDepositBond()).to.eq(depositBond.address);
 
         await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("0")]);
-        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(0);
         expect(await perp.totalSupply()).to.eq(0);
 
         tx = perp.deposit(depositTrancheA.address, toFixedPtAmt("500"));
@@ -585,12 +570,6 @@ describe("PerpetualTranche", function () {
           [toFixedPtAmt("0"), toFixedPtAmt("500")],
         );
       });
-      it("should emit tranche balance update", async function () {
-        await expect(tx).to.emit(perp, "UpdatedStdTotalTrancheBalance").withArgs(toFixedPtAmt("500"));
-      });
-      it("should update totalTrancheBalance", async function () {
-        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("500"));
-      });
       it("should update the total supply", async function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("500"));
       });
@@ -607,7 +586,6 @@ describe("PerpetualTranche", function () {
           [toFixedPtAmt("0"), toFixedPtAmt("200")],
         );
 
-        expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("200"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("200"));
       });
 
@@ -634,12 +612,6 @@ describe("PerpetualTranche", function () {
             [toFixedPtAmt("0"), toFixedPtAmt("500")],
           );
         });
-        it("should emit tranche balance update", async function () {
-          await expect(tx).to.emit(perp, "UpdatedStdTotalTrancheBalance").withArgs(toFixedPtAmt("500"));
-        });
-        it("should update totalTrancheBalance", async function () {
-          expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("500"));
-        });
         it("should update the total supply", async function () {
           expect(await perp.totalSupply()).to.eq(toFixedPtAmt("500"));
         });
@@ -662,7 +634,7 @@ describe("PerpetualTranche", function () {
             [collateralToken, depositTrancheA],
             [toFixedPtAmt("0"), toFixedPtAmt("200")],
           );
-          expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("200"));
+
           expect(await perp.totalSupply()).to.eq(toFixedPtAmt("200"));
 
           await newTranche.approve(perp.address, toFixedPtAmt("250"));
@@ -685,12 +657,6 @@ describe("PerpetualTranche", function () {
             [collateralToken, depositTrancheA, newTranche],
             [toFixedPtAmt("0"), toFixedPtAmt("200"), toFixedPtAmt("250")],
           );
-        });
-        it("should emit tranche balance update", async function () {
-          await expect(tx).to.emit(perp, "UpdatedStdTotalTrancheBalance").withArgs(toFixedPtAmt("325"));
-        });
-        it("should update totalTrancheBalance", async function () {
-          expect((await perp.callStatic.getStdTrancheBalances())[0]).to.eq(toFixedPtAmt("325"));
         });
         it("should update the total supply", async function () {
           expect(await perp.totalSupply()).to.eq(toFixedPtAmt("225"));

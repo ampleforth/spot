@@ -65,7 +65,7 @@ task("deploy:PerpetualTranche")
     await perp.deployed();
 
     const BasicFeeStrategy = await hre.ethers.getContractFactory("BasicFeeStrategy");
-    const feeStrategy = await BasicFeeStrategy.deploy(perp.address, perp.address, "10000", "10000", "0");
+    const feeStrategy = await BasicFeeStrategy.deploy(perp.address, perp.address, "1000000", "1000000", "0");
     await feeStrategy.deployed();
 
     const CDRPricingStrategy = await hre.ethers.getContractFactory("CDRPricingStrategy");
@@ -93,10 +93,11 @@ task("deploy:PerpetualTranche")
     );
     await initTx.wait();
     await perp.updateTolerableTrancheMaturity(minMatuirtySec, maxMatuirtySec);
+    await perp.updateSkimPerc("100000000");
 
     await hre.run("verify:contract", {
       address: feeStrategy.address,
-      constructorArguments: [perp.address, perp.address, "10000", "10000", "0"],
+      constructorArguments: [perp.address, perp.address, "1000000", "1000000", "0"],
     });
 
     await hre.run("verify:contract", {

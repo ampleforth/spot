@@ -11,7 +11,7 @@ import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC2
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 
-import { TrancheData, TrancheDataHelpers, BondHelpers } from "./_utils/BondHelpers.sol";
+import { BondHelpers } from "./_utils/BondHelpers.sol";
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
@@ -44,7 +44,7 @@ error InvalidYieldStrategyDecimals();
 
 /// @notice Expected skim percentage to be less than 100 with {PERC_DECIMALS}.
 /// @param skimPerc The skim percentage.
-error UnacceptableSkimPerc(uint256 skimPerc);
+error UnacceptableSkimPerc(int256 skimPerc);
 
 /// @notice Expected minTrancheMaturity be less than or equal to maxTrancheMaturity.
 /// @param minTrancheMaturitySec Minimum tranche maturity time in seconds.
@@ -115,7 +115,7 @@ error InvalidRebootState();
  *
  *          Once tranche tokens held in the reserve mature the underlying collateral is extracted
  *          into the reserve. The system keeps track of total mature tranches held by the reserve.
- *          This acts as an "implied" tranche balance for all collateral extracted from the mature tranches.
+ *          This acts as an "virtual" tranche balance for all collateral extracted from the mature tranches.
  *
  *          At any time, the reserve holds at most 2 classes of tokens
  *          ie) the normal tranche tokens and mature tranche (which is essentially the underlying collateral token).
@@ -130,15 +130,9 @@ error InvalidRebootState();
  *
  */
 contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTranche {
-    // math
-    using MathUpgradeable for uint256;
-    using SafeCastUpgradeable for uint256;
-    using SignedMathUpgradeable for int256;
-
     // data handling
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
     using BondHelpers for IBondController;
-    using TrancheDataHelpers for TrancheData;
 
     // ERC20 operations
     using SafeERC20Upgradeable for IERC20Upgradeable;
@@ -174,8 +168,10 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     // Redeem: ForEach ti => (p / supply(perps)) * bi
     //
     //
-    // When `ai` tokens of type `ti` are rotated in for tokens of type `tj`:
-    // Rotation: aj => ai * yield(ti) / yield(tj), ie) (a'i = a'j)
+    // When `ai` tokens of type `ti` are rotated in for tokens of type `tj`
+    // we conserve the total value: a'i * price(ti) = a'j * price(tj)
+    //  => ai * yield(ti) * price(ti) =  aj * yield(tj) * price(tj)
+    // Rotation: aj => ai * yield(ti) * price(ti) / (yield(tj) * price(tj))
     //
     //
     //-------------------------------------------------------------------------
@@ -187,8 +183,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     uint256 public constant UNIT_PRICE = (10**PRICE_DECIMALS);
 
     uint8 public constant PERC_DECIMALS = 6;
-    uint256 public constant UNIT_PERC = (10**PERC_DECIMALS);
-    uint256 public constant HUNDRED_PERC = 100 * UNIT_PERC;
+    int256 public constant UNIT_PERC = int256(10**uint256(PERC_DECIMALS));
+    int256 public constant HUNDRED_PERC = 100 * UNIT_PERC;
 
     //-------------------------------------------------------------------------
     // Storage
@@ -236,9 +232,13 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     // @notice The max number of perps that can be minted for each tranche in the minting bond.
     uint256 public maxMintAmtPerTranche;
 
-    // @notice The percentage of the excess value the system retains on rotation.
+    // @notice The percentage of the value the system retains on every rollover operation.
     // @dev Skim percentage is stored as fixed point number with {PERC_DECIMALS}.
-    uint256 public skimPerc;
+    //      Skimming is a tax paid by users who rollover collateral, which over-collateralizes
+    //      the system. When negative, it acts as a subsidy to incentivize rollovers by diluting perp holders.
+    //      eg) If skim is 5%, user can rollover 1x worth tranches for 0.95x worth tranches from the reserve.
+    //          Or if skim is -5%, user can rollover 1x worth tranches for 1.05x worth tranches from the reserve.
+    int256 public skimPerc;
 
     // @notice The total number of perps that have been minted using a given tranche.
     mapping(ITranche => uint256) private _mintedSupplyPerTranche;
@@ -255,12 +255,11 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     // @notice A record of all tokens in the reserve which back the perps.
     EnumerableSetUpgradeable.AddressSet private _reserves;
 
-    // @notice The standardized amount of all tranches deposited into the system.
-    uint256 private _stdTotalTrancheBalance;
-
-    // @notice The standardized amount of all the mature tranches extracted and
-    //         held as the collateral token.
-    uint256 private _stdMatureTrancheBalance;
+    // @notice The amount of all the mature tranches extracted and held as the collateral token,
+    //         i.e) the reserve's "virtual" mature tranche balance.
+    // @dev The mature tranche is assumed to have {UNIT_YIELD}. So we do NOT have to
+    //      scale using the yield factor when dealing with the mature tranche balance.
+    uint256 private _matureTrancheBalance;
 
     //--------------------------------------------------------------------------
     // Modifiers
@@ -384,8 +383,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
     // @notice Updates the skim percentage parameter.
     // @param skimPerc_ New skim percentage.
-    function updateSkimPerc(uint256 skimPerc_) public onlyOwner {
-        if (skimPerc_ > HUNDRED_PERC) {
+    function updateSkimPerc(int256 skimPerc_) public onlyOwner {
+        if (skimPerc_ < -HUNDRED_PERC || skimPerc_ > HUNDRED_PERC) {
             revert UnacceptableSkimPerc(skimPerc_);
         }
         skimPerc = skimPerc_;
@@ -408,17 +407,16 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     }
 
     // @notice Redenominates Perp with respect to the outstanding debt.
-    // @param stdTrancheBalance The new standardized tranche balance.
+    // @param matureTrancheBalance The new mature tranche balance.
     // @dev Can only be used when perp is backed solely by mature collateral.
-    function redenominate(uint256 stdTrancheBalance) external afterStateUpdate onlyOwner {
+    function redenominate(uint256 matureTrancheBalance) external afterStateUpdate onlyOwner {
         // The redenomination is only allowed when:
         //  - the system has no more tranches left i.e) all the tranches have mature
         //  - the system has a collateral balance
         if (_reserveCount() > 1 || _tokenBalance(_reserveAt(0)) == 0) {
             revert InvalidRebootState();
         }
-        _updateStdTotalTrancheBalance(stdTrancheBalance);
-        _updateStdMatureTrancheBalance(stdTrancheBalance);
+        _updateMatureTrancheBalance(matureTrancheBalance);
     }
 
     //--------------------------------------------------------------------------
@@ -431,9 +429,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         }
 
         // calculates the amount of perp tokens when depositing `trancheInAmt` of tranche tokens
-        (uint256 mintAmt, uint256 stdTrancheInAmt) = _computeMintAmt(trancheIn, trancheInAmt);
+        uint256 mintAmt = _computeMintAmt(trancheIn, trancheInAmt);
         if (trancheInAmt == 0 || mintAmt == 0) {
-            revert UnacceptableMintAmt(stdTrancheInAmt, mintAmt);
+            revert UnacceptableMintAmt(trancheInAmt, mintAmt);
         }
 
         // calculates the fee to mint `mintAmt` of perp token
@@ -447,9 +445,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
         // settles fees
         _settleFee(_msgSender(), mintFee);
-
-        // updates reserve's tranche balance
-        _updateStdTotalTrancheBalance(_stdTotalTrancheBalance + stdTrancheInAmt);
 
         // updates & enforces supply cap and tranche mint cap
         _mintedSupplyPerTranche[trancheIn] += mintAmt;
@@ -472,9 +467,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // calculates the fee to burn `perpAmtBurnt` of perp token
         int256 burnFee = feeStrategy.computeBurnFee(perpAmtBurnt);
 
-        // updates reserve's tranche balances
-        _updateStdTotalTrancheBalance((_stdTotalTrancheBalance * (perpSupply - perpAmtBurnt)) / perpSupply);
-        _updateStdMatureTrancheBalance((_stdMatureTrancheBalance * (perpSupply - perpAmtBurnt)) / perpSupply);
+        // updates the mature tranche balance
+        _updateMatureTrancheBalance((_matureTrancheBalance * (perpSupply - perpAmtBurnt)) / perpSupply);
 
         // settles fees
         _settleFee(_msgSender(), burnFee);
@@ -522,10 +516,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // settles fees
         _settleFee(_msgSender(), rolloverFee);
 
-        // updates mature tranche balance
-        _updateStdTotalTrancheBalance(_stdTotalTrancheBalance + r.stdTrancheInAmt - r.stdTrancheOutAmt);
+        // updates the mature tranche balance
         if (_isMatureTranche(tokenOut)) {
-            _updateStdMatureTrancheBalance(_stdMatureTrancheBalance - r.stdTrancheOutAmt);
+            _updateMatureTrancheBalance(_matureTrancheBalance - r.stdTrancheOutAmt);
         }
 
         // transfers tranche from the reserve to the sender
@@ -540,8 +533,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     }
 
     /// @inheritdoc IPerpetualTranche
-    function getStdTrancheBalances() external override afterStateUpdate returns (uint256, uint256) {
-        return (_stdTotalTrancheBalance, _stdMatureTrancheBalance);
+    function getMatureTrancheBalance() external override afterStateUpdate returns (uint256) {
+        return _matureTrancheBalance;
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -576,10 +569,10 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
     /// @inheritdoc IPerpetualTranche
     function getReserveTrancheBalance(IERC20Upgradeable tranche) external override afterStateUpdate returns (uint256) {
-        if(!_inReserve(tranche)) {
+        if (!_inReserve(tranche)) {
             return 0;
         }
-        return _isMatureTranche(tranche) ? _matureTrancheBalance() : _tokenBalance(tranche);
+        return _isMatureTranche(tranche) ? _matureTrancheBalance : _tokenBalance(tranche);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -604,7 +597,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Returns a fixed point with {PRICE_DECIMALS} decimals.
+    // @dev Returns a fixed point with {DECIMALS + PRICE_DECIMALS} decimals.
     function getReserveValue() external override afterStateUpdate returns (uint256) {
         return _reserveValue();
     }
@@ -614,7 +607,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         external
         override
         afterStateUpdate
-        returns (uint256, uint256)
+        returns (uint256)
     {
         return _computeMintAmt(trancheIn, trancheInAmt);
     }
@@ -688,8 +681,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
             _syncReserve(tranche);
 
             // Keeps track of the total tranches redeemed
-            _updateStdMatureTrancheBalance(
-                _stdMatureTrancheBalance + _toStdTrancheAmt(trancheBalance, computeYield(tranche))
+            _updateMatureTrancheBalance(
+                _matureTrancheBalance + _toStdTrancheAmt(trancheBalance, computeYield(tranche))
             );
         }
 
@@ -729,14 +722,14 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     //      if NOT computes the yield.
     function computeYield(IERC20Upgradeable token) public view override returns (uint256) {
         uint256 yield = _appliedYields[token];
-        return (yield > 0) ? yield : yieldStrategy.computeYield(token);
+        return (yield > 0) ? yield : yieldStrategy.computeTrancheYield(token);
     }
 
     /// @inheritdoc IPerpetualTranche
     function computePrice(IERC20Upgradeable token) public view override returns (uint256) {
         return
             _isMatureTranche(token)
-                ? pricingStrategy.computeMatureTranchePrice(token, _tokenBalance(token), _matureTrancheBalance())
+                ? pricingStrategy.computeMatureTranchePrice(token, _tokenBalance(token), _matureTrancheBalance)
                 : pricingStrategy.computeTranchePrice(ITranche(address(token)));
     }
 
@@ -751,14 +744,14 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     // Private/Internal helper methods
 
     // @dev Computes the perp mint amount for given amount of tranche tokens deposited into the reserve.
-    function _computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) private view returns (uint256, uint256) {
+    function _computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) private view returns (uint256) {
         uint256 totalSupply_ = totalSupply();
         uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmt, computeYield(trancheIn));
         uint256 trancheInPrice = computePrice(trancheIn);
         uint256 mintAmt = (totalSupply_ > 0)
             ? (stdTrancheInAmt * trancheInPrice * totalSupply_) / _reserveValue()
             : (stdTrancheInAmt * trancheInPrice) / UNIT_PRICE;
-        return (mintAmt, stdTrancheInAmt);
+        return (mintAmt);
     }
 
     // @dev Computes the reserve token amounts redeemed when a given number of perps are burnt.
@@ -791,73 +784,50 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         uint256 trancheOutYield = computeYield(tokenOut);
         uint256 trancheInPrice = computePrice(trancheIn);
         uint256 trancheOutPrice = computePrice(tokenOut);
+        uint256 tokenOutBalance = _tokenBalance(tokenOut);
+        maxTokenOutAmtCovered = MathUpgradeable.min(maxTokenOutAmtCovered, tokenOutBalance);
+
         if (trancheInYield == 0 || trancheOutYield == 0 || trancheInPrice == 0 || trancheOutPrice == 0) {
             r.remainingTrancheInAmt = trancheInAmtRequested;
             return r;
         }
 
-        uint256 tokenOutBalance = _tokenBalance(tokenOut);
-        maxTokenOutAmtCovered = MathUpgradeable.min(maxTokenOutAmtCovered, tokenOutBalance);
+        // We scale the trancheInPrice up or down to account for skimming
+        // and form here on we use the scaled price.
+        // trancheInPrice' = trancheInPrice * (100-skimPerc)/100
+        trancheInPrice =
+            (trancheInPrice * SafeCastUpgradeable.toUint256(HUNDRED_PERC - skimPerc)) /
+            SafeCastUpgradeable.toUint256(HUNDRED_PERC);
 
         r.trancheInAmt = trancheInAmtRequested;
         r.stdTrancheInAmt = _toStdTrancheAmt(trancheInAmtRequested, trancheInYield);
 
         // Basic rollover:
-        // Rollovers are usually denominated in tranche amounts.
-        // ie) 1 "standardized" trancheIn tokens are rolled over for 1 "standardized" tokenOut tokens.
-        //
-        // stdTrancheInAmt = stdTrancheOutAmt
-        // (trancheInAmtRequested . trancheInYield) = (trancheOutAmt. trancheOutYield)
-        r.stdTrancheOutAmt = r.stdTrancheInAmt;
+        // (stdTrancheInAmt . trancheInPrice) = (stdTrancheOutAmt . trancheOutPrice)
+        r.stdTrancheOutAmt = (r.stdTrancheInAmt * trancheInPrice) / trancheOutPrice;
         uint256 trancheOutAmt = _fromStdTrancheAmt(r.stdTrancheOutAmt, trancheOutYield);
 
         // However, if the tokenOut is the mature tranche (held as naked collateral),
         // we infer the tokenOut amount from the tranche denomination.
         // (tokenOutAmt = trancheOutAmt * collateralBalance / matureTrancheBalance)
-
         bool isMatureTrancheOut = _isMatureTranche(tokenOut);
-        uint256 matureTrancheBalance = _matureTrancheBalance();
-        r.tokenOutAmt = isMatureTrancheOut ? ((tokenOutBalance * trancheOutAmt) / matureTrancheBalance) : trancheOutAmt;
+        r.tokenOutAmt = isMatureTrancheOut
+            ? ((tokenOutBalance * trancheOutAmt) / _matureTrancheBalance)
+            : trancheOutAmt;
 
         // When the token out balance is NOT covered:
         // we fix tokenOutAmt = maxTokenOutAmtCovered and back calculate other values
         if (r.tokenOutAmt > maxTokenOutAmtCovered) {
             r.tokenOutAmt = maxTokenOutAmtCovered;
             trancheOutAmt = isMatureTrancheOut
-                ? (matureTrancheBalance * r.tokenOutAmt) / tokenOutBalance
+                ? (_matureTrancheBalance * r.tokenOutAmt) / tokenOutBalance
                 : r.tokenOutAmt;
             r.stdTrancheOutAmt = _toStdTrancheAmt(trancheOutAmt, trancheOutYield);
-            r.stdTrancheInAmt = r.stdTrancheOutAmt;
+            r.stdTrancheInAmt = (r.stdTrancheOutAmt * trancheOutPrice) / trancheInPrice;
             r.trancheInAmt = _fromStdTrancheAmt(r.stdTrancheInAmt, trancheInYield);
         }
 
-        // When skimming:
-        // value(tranche) = (trancheAmt * trancheYield) * tranchePrice
-        //
-        // The rollover is measured as extractive (i.e valueOut > valueIn),
-        // the system skims a portion of the excess value.
-        // tokenOutAmt = tokenOutAmt * (valueOut - (skimPerc * (valueOut-valueIn) / 100)) / valueOut
-        //
-        // valueIn = (trancheInYield * r.trancheInAmt) * trancheInPrice
-        // valueOut = (trancheOutYield * trancheOutAmt) * trancheOutPrice
-        //
-        // Since, valueOut/valueIn = trancheOutPrice/trancheInPrice,
-        // tokenOutAmt = tokenOutAmt * (trancheOutPrice - (skimPerc * (trancheOutPrice-trancheInPrice) / 100)) / trancheOutPrice
-        //
-        if (skimPerc > 0 && (trancheOutPrice > trancheInPrice)) {
-            uint256 adjustedTrancheOutPrice = (trancheOutPrice -
-                ((skimPerc * (trancheOutPrice - trancheInPrice)) / HUNDRED_PERC));
-            r.tokenOutAmt = (r.tokenOutAmt * adjustedTrancheOutPrice) / trancheOutPrice;
-            trancheOutAmt = isMatureTrancheOut
-                ? (matureTrancheBalance * r.tokenOutAmt) / tokenOutBalance
-                : r.tokenOutAmt;
-
-            // NOTE after skimming we recalculate stdTrancheOutAmt,
-            // as now stdTrancheInAmt > stdTrancheOutAmt,
-            r.stdTrancheOutAmt = _toStdTrancheAmt(trancheOutAmt, trancheOutYield);
-        }
-
-        r.perpRolloverAmt = (totalSupply() * r.stdTrancheOutAmt) / _stdTotalTrancheBalance;
+        r.perpRolloverAmt = (r.stdTrancheOutAmt * trancheOutPrice * totalSupply()) / _reserveValue();
         r.remainingTrancheInAmt = trancheInAmtRequested - r.trancheInAmt;
         return r;
     }
@@ -932,7 +902,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
             return isNativeFeeToken;
         }
 
-        uint256 fee_ = fee.abs();
+        uint256 fee_ = SignedMathUpgradeable.abs(fee);
         if (fee > 0) {
             // Funds are coming in
             // Handling a special case, when the fee is to be charged as the perp token itself
@@ -962,16 +932,10 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         emit YieldApplied(token, yield);
     }
 
-    // @dev Updates the standardized total tranche balance in storage.
-    function _updateStdTotalTrancheBalance(uint256 stdTotalTrancheBalance) private {
-        _stdTotalTrancheBalance = stdTotalTrancheBalance;
-        emit UpdatedStdTotalTrancheBalance(stdTotalTrancheBalance);
-    }
-
-    // @dev Updates the standardized mature tranche balance in storage.
-    function _updateStdMatureTrancheBalance(uint256 stdMatureTrancheBalance) private {
-        _stdMatureTrancheBalance = stdMatureTrancheBalance;
-        emit UpdatedStdMatureTrancheBalance(stdMatureTrancheBalance);
+    // @dev Updates the mature tranche balance in storage.
+    function _updateMatureTrancheBalance(uint256 matureTrancheBalance) private {
+        _matureTrancheBalance = matureTrancheBalance;
+        emit UpdatedMatureTrancheBalance(matureTrancheBalance);
     }
 
     // @dev Checks if the given token pair is a valid rollover.
@@ -1043,8 +1007,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     // @dev Calculates the total value of all the tranches in the reserve.
     //      Value of each reserve tranche is calculated as = (trancheYield . trancheBalance) . tranchePrice.
     function _reserveValue() private view returns (uint256) {
-        // For the mature tranche we use the "implied" tranche balance
-        uint256 totalVal = (_stdMatureTrancheBalance * computePrice(_reserveAt(0)));
+        // For the mature tranche we use the "virtual" tranche balance
+        uint256 totalVal = (_matureTrancheBalance * computePrice(_reserveAt(0)));
 
         // For normal tranches we use the tranche token balance
         for (uint256 i = 1; i < _reserveCount(); i++) {
@@ -1059,11 +1023,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     // @dev Checks if the given token is the mature tranche, ie) the underlying collateral token.
     function _isMatureTranche(IERC20Upgradeable token) private view returns (bool) {
         return (token == _reserveAt(0));
-    }
-
-    // @dev Calculates the mature tranche balance.
-    function _matureTrancheBalance() private view returns (uint256) {
-        return _fromStdTrancheAmt(_stdMatureTrancheBalance, computeYield(_reserveAt(0)));
     }
 
     // @dev Fetches the perp contract's token balance.
