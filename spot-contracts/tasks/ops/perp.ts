@@ -37,6 +37,7 @@ task("ops:info")
     console.log(`maturityTolarance: [${await perp.minTrancheMaturitySec()}, ${await perp.maxTrancheMaturitySec()}]`);
     console.log("depositBond:", depositBond.address);
     console.log("issued:", issued);
+    console.log("skimPerc:", utils.formatUnits(await perp.skimPerc(), await perp.PERC_DECIMALS()));
     console.log("TotalSupply:", utils.formatUnits(perpSupply, perpDecimals));
 
     const matureTrancheBalance = await perp.callStatic.getMatureTrancheBalance();
@@ -49,21 +50,21 @@ task("ops:info")
     const perpPrice = await perp.callStatic.getPrice();
     const reserveValue = (await perp.totalSupply()).mul(perpPrice);
     let totalTrancheBalance = BigNumber.from(0);
-    console.log("token\tbalance\tyield\tprice\tupForRollover");
+    const data = [];
     for (let i = 0; i < reserveCount; i++) {
       const tokenAddress = await perp.callStatic.getReserveAt(i);
       const balance = await perp.callStatic.getReserveTrancheBalance(tokenAddress);
       totalTrancheBalance = totalTrancheBalance.add(balance);
       const yieldF = await perp.computeYield(tokenAddress);
       const price = await perp.computePrice(tokenAddress);
-      console.log(
-        `reserve(${i}):${tokenAddress}`,
-        `\t${utils.formatUnits(balance, await perp.decimals())}`,
-        `\t${utils.formatUnits(yieldF, await yieldStrategy.decimals())}`,
-        `\t${utils.formatUnits(price, priceDecimals)}`,
-        `\t${upForRollover[i] !== constants.AddressZero && balance.gt(0)}`,
-      );
+      data.push({
+        balance: utils.formatUnits(balance, await perp.decimals()),
+        yieldFactor: utils.formatUnits(yieldF, await yieldStrategy.decimals()),
+        price: utils.formatUnits(price, priceDecimals),
+        upForRollover: upForRollover[i] !== constants.AddressZero && balance.gt(0),
+      });
     }
+    console.table(data);
 
     console.log("reserveCount:", reserveCount);
     console.log("reserveValue:", utils.formatUnits(reserveValue, perpDecimals + priceDecimals));

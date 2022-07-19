@@ -117,7 +117,6 @@ describe("PerpetualTranche", function () {
       expect(await perp.maxTrancheMaturitySec()).to.eq(constants.MaxUint256);
       expect(await perp.maxSupply()).to.eq(constants.MaxUint256);
       expect(await perp.maxMintAmtPerTranche()).to.eq(constants.MaxUint256);
-      expect(await perp.rolloverDiscountPerc()).to.eq(0);
     });
   });
 
@@ -337,39 +336,6 @@ describe("PerpetualTranche", function () {
       });
       it("should emit event", async function () {
         await expect(tx).to.emit(perp, "UpdatedMintingLimits").withArgs(toFixedPtAmt("100"), toFixedPtAmt("20"));
-      });
-    });
-  });
-
-  describe("#updateRolloverDiscountPerc", function () {
-    let tx: Transaction;
-
-    describe("when triggered by non-owner", function () {
-      it("should revert", async function () {
-        await expect(perp.connect(otherUser).updateRolloverDiscountPerc("1")).to.be.revertedWith(
-          "Ownable: caller is not the owner",
-        );
-      });
-    });
-
-    describe("when set discount perc is NOT valid", function () {
-      it("should revert", async function () {
-        await expect(perp.updateRolloverDiscountPerc("100000001")).to.be.revertedWith(
-          "UnacceptableRolloverDiscountPerc",
-        );
-      });
-    });
-
-    describe("when set discount perc is valid", function () {
-      beforeEach(async function () {
-        tx = perp.updateRolloverDiscountPerc("50000000");
-        await tx;
-      });
-      it("should update reference", async function () {
-        expect(await perp.rolloverDiscountPerc()).to.eq("50000000");
-      });
-      it("should emit event", async function () {
-        await expect(tx).to.emit(perp, "UpdatedRolloverDiscountPerc").withArgs("50000000");
       });
     });
   });

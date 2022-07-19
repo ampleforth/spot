@@ -472,7 +472,7 @@ describe("PerpetualTranche", function () {
 
     describe("when discount perc is 50%", async function () {
       beforeEach(async function () {
-        await perp.updateRolloverDiscountPerc("50000000");
+        await feeStrategy.setRolloverDiscountPerc("50000000");
       });
 
       describe("when trancheIn price is zero", function () {
@@ -666,7 +666,7 @@ describe("PerpetualTranche", function () {
 
     describe("when discount perc is -50%", async function () {
       beforeEach(async function () {
-        await perp.updateRolloverDiscountPerc("-50000000");
+        await feeStrategy.setRolloverDiscountPerc("-50000000");
       });
 
       describe("when trancheIn price is 0.5", function () {
@@ -1634,7 +1634,7 @@ describe("PerpetualTranche", function () {
       let tx: Transaction, r: any;
       beforeEach(async function () {
         await checkReserveComposition(perp, [collateralToken, reserveTranche2, reserveTranche1, rolloverInTranche]);
-        await perp.updateRolloverDiscountPerc("50000000");
+        await feeStrategy.setRolloverDiscountPerc("50000000");
         await pricingStrategy.setTranchePrice(collateralToken.address, toPriceFixedPtAmt("2"));
         expect(await perp.callStatic.getMatureTrancheBalance()).to.eq(toFixedPtAmt("500"));
         r = await perp.callStatic.computeRolloverAmt(
