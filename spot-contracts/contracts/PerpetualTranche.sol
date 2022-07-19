@@ -42,7 +42,7 @@ error UnacceptableYieldStrategy();
 /// @notice Expected yield strategy to return a fixed point with exactly {YIELD_DECIMALS} decimals.
 error InvalidYieldStrategyDecimals();
 
-/// @notice Expected rollover discount percentage to NOT be less than 100 with {PERC_DECIMALS}.
+/// @notice Expected rollover discount percentage to be no greater than 100 with {PERC_DECIMALS}.
 /// @param rolloverDiscountPerc The rollover discount percentage.
 error UnacceptableRolloverDiscountPerc(int256 rolloverDiscountPerc);
 
