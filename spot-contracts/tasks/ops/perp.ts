@@ -1,6 +1,6 @@
 import { task, types } from "hardhat/config";
 import { TaskArguments } from "hardhat/types";
-import { BigNumber, utils, constants, Contract } from "ethers";
+import { utils, constants, Contract, BigNumber } from "ethers";
 
 task("ops:info")
   .addPositionalParam("perpAddress", "the address of the perp contract", undefined, types.string, false)
@@ -46,7 +46,8 @@ task("ops:info")
     console.log("Reserve:");
     const reserveCount = (await perp.callStatic.getReserveCount()).toNumber();
     const upForRollover = await perp.callStatic.getReserveTokensUpForRollover();
-    const reserveValue = await perp.callStatic.getReserveValue();
+    const perpPrice = await perp.callStatic.getPrice();
+    const reserveValue = (await perp.totalSupply()).mul(perpPrice);
     let totalTrancheBalance = BigNumber.from(0);
     console.log("token\tbalance\tyield\tprice\tupForRollover");
     for (let i = 0; i < reserveCount; i++) {
@@ -67,7 +68,7 @@ task("ops:info")
     console.log("reserveCount:", reserveCount);
     console.log("reserveValue:", utils.formatUnits(reserveValue, perpDecimals + priceDecimals));
     if (perpSupply.gt("0")) {
-      console.log("price:", utils.formatUnits(reserveValue.div(perpSupply), priceDecimals));
+      console.log("price:", utils.formatUnits(perpPrice, priceDecimals));
       console.log(
         "impliedPrice:",
         utils.formatUnits(totalTrancheBalance.mul(10 ** priceDecimals).div(perpSupply), priceDecimals),

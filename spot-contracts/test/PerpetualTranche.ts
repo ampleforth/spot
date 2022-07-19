@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { network, ethers, upgrades } from "hardhat";
-import { Contract, Transaction, Signer, constants, BigNumber } from "ethers";
+import { Contract, Transaction, Signer, constants } from "ethers";
 
 import {
   setupCollateralToken,
@@ -593,8 +593,8 @@ describe("PerpetualTranche", function () {
       it("should have expected reserve composition", async function () {
         await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("0")]);
       });
-      it("should calculate the reserve value", async function () {
-        expect(await perp.callStatic.getReserveValue()).to.eq(0);
+      it("should calculate the avg. perp price", async function () {
+        expect(await perp.callStatic.getPrice()).to.eq(0);
       });
     });
 
@@ -614,8 +614,8 @@ describe("PerpetualTranche", function () {
       it("should have expected reserve composition", async function () {
         await checkReserveComposition(perp, [collateralToken, tranches[0]], [toFixedPtAmt("0"), toFixedPtAmt("200")]);
       });
-      it("should calculate the reserve value", async function () {
-        expect(await perp.callStatic.getReserveValue()).to.eq(BigNumber.from("200").mul(toPriceFixedPtAmt("1")));
+      it("should calculate the avg. perp price", async function () {
+        expect(await perp.callStatic.getPrice()).to.eq(toPriceFixedPtAmt("1"));
       });
     });
 
@@ -649,8 +649,8 @@ describe("PerpetualTranche", function () {
           [toFixedPtAmt("0"), toFixedPtAmt("200"), toFixedPtAmt("100")],
         );
       });
-      it("should calculate the reserve value", async function () {
-        expect(await perp.callStatic.getReserveValue()).to.eq(BigNumber.from("225").mul(toPriceFixedPtAmt("1")));
+      it("should calculate the avg. perp price", async function () {
+        expect(await perp.callStatic.getPrice()).to.eq(toPriceFixedPtAmt("1"));
       });
     });
 
@@ -686,8 +686,8 @@ describe("PerpetualTranche", function () {
       it("should have expected reserve composition", async function () {
         await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("300")]);
       });
-      it("should calculate the reserve value", async function () {
-        expect(await perp.callStatic.getReserveValue()).to.eq(BigNumber.from("300").mul(toPriceFixedPtAmt("1")));
+      it("should calculate the avg. perp price", async function () {
+        expect(await perp.callStatic.getPrice()).to.eq(toPriceFixedPtAmt("1"));
       });
     });
 
@@ -727,8 +727,8 @@ describe("PerpetualTranche", function () {
           [toFixedPtAmt("200"), toFixedPtAmt("100")],
         );
       });
-      it("should calculate the reserve value", async function () {
-        expect(await perp.callStatic.getReserveValue()).to.eq(BigNumber.from("300").mul(toPriceFixedPtAmt("1")));
+      it("should calculate the avg. perp price", async function () {
+        expect(await perp.callStatic.getPrice()).to.eq(toPriceFixedPtAmt("1"));
       });
     });
 
@@ -771,8 +771,8 @@ describe("PerpetualTranche", function () {
           [toFixedPtAmt("220"), toFixedPtAmt("100")],
         );
       });
-      it("should calculate the reserve value", async function () {
-        expect(await perp.callStatic.getReserveValue()).to.eq(BigNumber.from("320").mul(toPriceFixedPtAmt("1")));
+      it("should calculate the avg. perp price", async function () {
+        expect(await perp.callStatic.getPrice()).to.eq(toPriceFixedPtAmt("1.06666666"));
       });
     });
 
@@ -815,8 +815,8 @@ describe("PerpetualTranche", function () {
           [toFixedPtAmt("180"), toFixedPtAmt("100")],
         );
       });
-      it("should calculate the reserve value", async function () {
-        expect(await perp.callStatic.getReserveValue()).to.eq(BigNumber.from("280").mul(toPriceFixedPtAmt("1")));
+      it("should calculate the avg. perp price", async function () {
+        expect(await perp.callStatic.getPrice()).to.eq(toPriceFixedPtAmt("0.93333333"));
       });
     });
   });
