@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { network, ethers, upgrades } from "hardhat";
-import { Contract, Transaction, Signer, constants } from "ethers";
+import { Contract, Transaction, Signer, constants, BigNumber } from "ethers";
 
 import {
   setupCollateralToken,
@@ -117,7 +117,7 @@ describe("PerpetualTranche", function () {
       expect(await perp.maxTrancheMaturitySec()).to.eq(constants.MaxUint256);
       expect(await perp.maxSupply()).to.eq(constants.MaxUint256);
       expect(await perp.maxMintAmtPerTranche()).to.eq(constants.MaxUint256);
-      expect(await perp.skimPerc()).to.eq(0);
+      expect(await perp.rolloverDiscountPerc()).to.eq(0);
     });
   });
 
@@ -341,39 +341,35 @@ describe("PerpetualTranche", function () {
     });
   });
 
-  describe("#updateSkimPerc", function () {
+  describe("#updateRolloverDiscountPerc", function () {
     let tx: Transaction;
 
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
-        await expect(perp.connect(otherUser).updateSkimPerc("1")).to.be.revertedWith(
+        await expect(perp.connect(otherUser).updateRolloverDiscountPerc("1")).to.be.revertedWith(
           "Ownable: caller is not the owner",
         );
       });
     });
 
-    describe("when set skim perc is NOT valid", function () {
+    describe("when set discount perc is NOT valid", function () {
       it("should revert", async function () {
-        await expect(perp.updateSkimPerc("100000001")).to.be.revertedWith("UnacceptableSkimPerc");
+        await expect(perp.updateRolloverDiscountPerc("100000001")).to.be.revertedWith(
+          "UnacceptableRolloverDiscountPerc",
+        );
       });
     });
 
-    describe("when set skim perc is NOT valid", function () {
-      it("should revert", async function () {
-        await expect(perp.updateSkimPerc("-100000001")).to.be.revertedWith("UnacceptableSkimPerc");
-      });
-    });
-
-    describe("when set skim perc is valid", function () {
+    describe("when set discount perc is valid", function () {
       beforeEach(async function () {
-        tx = perp.updateSkimPerc("50000000");
+        tx = perp.updateRolloverDiscountPerc("50000000");
         await tx;
       });
       it("should update reference", async function () {
-        expect(await perp.skimPerc()).to.eq("50000000");
+        expect(await perp.rolloverDiscountPerc()).to.eq("50000000");
       });
       it("should emit event", async function () {
-        await expect(tx).to.emit(perp, "UpdatedSkimPerc").withArgs("50000000");
+        await expect(tx).to.emit(perp, "UpdatedRolloverDiscountPerc").withArgs("50000000");
       });
     });
   });
@@ -619,7 +615,7 @@ describe("PerpetualTranche", function () {
         await checkReserveComposition(perp, [collateralToken, tranches[0]], [toFixedPtAmt("0"), toFixedPtAmt("200")]);
       });
       it("should calculate the reserve value", async function () {
-        expect(await perp.callStatic.getReserveValue()).to.eq(toFixedPtAmt("200").mul(toPriceFixedPtAmt("1")));
+        expect(await perp.callStatic.getReserveValue()).to.eq(BigNumber.from("200").mul(toPriceFixedPtAmt("1")));
       });
     });
 
@@ -654,7 +650,7 @@ describe("PerpetualTranche", function () {
         );
       });
       it("should calculate the reserve value", async function () {
-        expect(await perp.callStatic.getReserveValue()).to.eq(toFixedPtAmt("225").mul(toPriceFixedPtAmt("1")));
+        expect(await perp.callStatic.getReserveValue()).to.eq(BigNumber.from("225").mul(toPriceFixedPtAmt("1")));
       });
     });
 
@@ -691,7 +687,7 @@ describe("PerpetualTranche", function () {
         await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("300")]);
       });
       it("should calculate the reserve value", async function () {
-        expect(await perp.callStatic.getReserveValue()).to.eq(toFixedPtAmt("300").mul(toPriceFixedPtAmt("1")));
+        expect(await perp.callStatic.getReserveValue()).to.eq(BigNumber.from("300").mul(toPriceFixedPtAmt("1")));
       });
     });
 
@@ -732,7 +728,7 @@ describe("PerpetualTranche", function () {
         );
       });
       it("should calculate the reserve value", async function () {
-        expect(await perp.callStatic.getReserveValue()).to.eq(toFixedPtAmt("300").mul(toPriceFixedPtAmt("1")));
+        expect(await perp.callStatic.getReserveValue()).to.eq(BigNumber.from("300").mul(toPriceFixedPtAmt("1")));
       });
     });
 
@@ -776,7 +772,7 @@ describe("PerpetualTranche", function () {
         );
       });
       it("should calculate the reserve value", async function () {
-        expect(await perp.callStatic.getReserveValue()).to.eq(toFixedPtAmt("320").mul(toPriceFixedPtAmt("1")));
+        expect(await perp.callStatic.getReserveValue()).to.eq(BigNumber.from("320").mul(toPriceFixedPtAmt("1")));
       });
     });
 
@@ -820,7 +816,7 @@ describe("PerpetualTranche", function () {
         );
       });
       it("should calculate the reserve value", async function () {
-        expect(await perp.callStatic.getReserveValue()).to.eq(toFixedPtAmt("280").mul(toPriceFixedPtAmt("1")));
+        expect(await perp.callStatic.getReserveValue()).to.eq(BigNumber.from("280").mul(toPriceFixedPtAmt("1")));
       });
     });
   });

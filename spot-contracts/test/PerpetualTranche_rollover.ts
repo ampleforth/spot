@@ -274,7 +274,7 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when skim perc is zero", async function () {
+    describe("when discount perc is zero", async function () {
       describe("when trancheIn price is zero", function () {
         beforeEach(async function () {
           await pricingStrategy.setTranchePrice(rolloverInTranche.address, toPriceFixedPtAmt("0"));
@@ -470,9 +470,9 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when skim perc is 50%", async function () {
+    describe("when discount perc is 50%", async function () {
       beforeEach(async function () {
-        await perp.updateSkimPerc("50000000");
+        await perp.updateRolloverDiscountPerc("50000000");
       });
 
       describe("when trancheIn price is zero", function () {
@@ -664,9 +664,9 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when skim perc is -50%", async function () {
+    describe("when discount perc is -50%", async function () {
       beforeEach(async function () {
-        await perp.updateSkimPerc("-50000000");
+        await perp.updateRolloverDiscountPerc("-50000000");
       });
 
       describe("when trancheIn price is 0.5", function () {
@@ -1630,11 +1630,11 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when skim perc is set to 50%", async function () {
+    describe("when discount perc is set to 50%", async function () {
       let tx: Transaction, r: any;
       beforeEach(async function () {
         await checkReserveComposition(perp, [collateralToken, reserveTranche2, reserveTranche1, rolloverInTranche]);
-        await perp.updateSkimPerc("50000000");
+        await perp.updateRolloverDiscountPerc("50000000");
         await pricingStrategy.setTranchePrice(collateralToken.address, toPriceFixedPtAmt("2"));
         expect(await perp.callStatic.getMatureTrancheBalance()).to.eq(toFixedPtAmt("500"));
         r = await perp.callStatic.computeRolloverAmt(

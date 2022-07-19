@@ -42,9 +42,9 @@ error UnacceptableYieldStrategy();
 /// @notice Expected yield strategy to return a fixed point with exactly {YIELD_DECIMALS} decimals.
 error InvalidYieldStrategyDecimals();
 
-/// @notice Expected skim percentage to be less than 100 with {PERC_DECIMALS}.
-/// @param skimPerc The skim percentage.
-error UnacceptableSkimPerc(int256 skimPerc);
+/// @notice Expected rollover discount percentage to NOT be less than 100 with {PERC_DECIMALS}.
+/// @param rolloverDiscountPerc The rollover discount percentage.
+error UnacceptableRolloverDiscountPerc(int256 rolloverDiscountPerc);
 
 /// @notice Expected minTrancheMaturity be less than or equal to maxTrancheMaturity.
 /// @param minTrancheMaturitySec Minimum tranche maturity time in seconds.
@@ -169,7 +169,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     //
     //
     // When `ai` tokens of type `ti` are rotated in for tokens of type `tj`
-    // we conserve the total value: a'i * price(ti) = a'j * price(tj)
     //  => ai * yield(ti) * price(ti) =  aj * yield(tj) * price(tj)
     // Rotation: aj => ai * yield(ti) * price(ti) / (yield(tj) * price(tj))
     //
@@ -232,13 +231,13 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     // @notice The max number of perps that can be minted for each tranche in the minting bond.
     uint256 public maxMintAmtPerTranche;
 
-    // @notice The percentage of the value the system retains on every rollover operation.
-    // @dev Skim percentage is stored as fixed point number with {PERC_DECIMALS}.
-    //      Skimming is a tax paid by users who rollover collateral, which over-collateralizes
+    // @notice The percentage of the value the system retains or disburses on every rollover operation.
+    // @dev Discount percentage is stored as fixed point number with {PERC_DECIMALS}.
+    //      The discount percentage is a tax paid by users who rollover collateral, which over-collateralizes
     //      the system. When negative, it acts as a subsidy to incentivize rollovers by diluting perp holders.
-    //      eg) If skim is 5%, user can rollover 1x worth tranches for 0.95x worth tranches from the reserve.
-    //          Or if skim is -5%, user can rollover 1x worth tranches for 1.05x worth tranches from the reserve.
-    int256 public skimPerc;
+    //      eg) If discount is 5%, user can rollover 1x worth tranches for 0.95x worth tranches from the reserve.
+    //          Or if discount is -5%, user can rollover 1x worth tranches for 1.05x worth tranches from the reserve.
+    int256 public rolloverDiscountPerc;
 
     // @notice The total number of perps that have been minted using a given tranche.
     mapping(ITranche => uint256) private _mintedSupplyPerTranche;
@@ -305,7 +304,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
         updateTolerableTrancheMaturity(1, type(uint256).max);
         updateMintingLimits(type(uint256).max, type(uint256).max);
-        updateSkimPerc(0);
+        updateRolloverDiscountPerc(0);
     }
 
     //--------------------------------------------------------------------------
@@ -381,14 +380,14 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         emit UpdatedMintingLimits(maxSupply_, maxMintAmtPerTranche_);
     }
 
-    // @notice Updates the skim percentage parameter.
-    // @param skimPerc_ New skim percentage.
-    function updateSkimPerc(int256 skimPerc_) public onlyOwner {
-        if (skimPerc_ < -HUNDRED_PERC || skimPerc_ > HUNDRED_PERC) {
-            revert UnacceptableSkimPerc(skimPerc_);
+    // @notice Updates the discount percentage parameter.
+    // @param rolloverDiscountPerc_ New discount percentage.
+    function updateRolloverDiscountPerc(int256 rolloverDiscountPerc_) public onlyOwner {
+        if (rolloverDiscountPerc_ > HUNDRED_PERC) {
+            revert UnacceptableRolloverDiscountPerc(rolloverDiscountPerc_);
         }
-        skimPerc = skimPerc_;
-        emit UpdatedSkimPerc(skimPerc_);
+        rolloverDiscountPerc = rolloverDiscountPerc_;
+        emit UpdatedRolloverDiscountPerc(rolloverDiscountPerc_);
     }
 
     // @notice Allows the owner to transfer non-reserve assets out of the system if required.
@@ -597,9 +596,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Returns a fixed point with {DECIMALS + PRICE_DECIMALS} decimals.
+    // @dev Returns a fixed point with {PRICE_DECIMALS} decimals.
     function getReserveValue() external override afterStateUpdate returns (uint256) {
-        return _reserveValue();
+        return _reserveValue() / (10**decimals());
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -792,11 +791,11 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
             return r;
         }
 
-        // We scale the trancheInPrice up or down to account for skimming
+        // We scale the trancheInPrice up or down to account for rollover discount
         // and from here on we use the scaled price.
-        // trancheInPrice' = trancheInPrice * (100-skimPerc)/100
+        // trancheInPrice' = trancheInPrice * (100-rolloverDiscountPerc)/100
         trancheInPrice =
-            (trancheInPrice * SafeCastUpgradeable.toUint256(HUNDRED_PERC - skimPerc)) /
+            (trancheInPrice * SafeCastUpgradeable.toUint256(HUNDRED_PERC - rolloverDiscountPerc)) /
             SafeCastUpgradeable.toUint256(HUNDRED_PERC);
 
         r.trancheInAmt = trancheInAmtRequested;

@@ -93,7 +93,7 @@ task("deploy:PerpetualTranche")
     );
     await initTx.wait();
     await perp.updateTolerableTrancheMaturity(minMatuirtySec, maxMatuirtySec);
-    await perp.updateSkimPerc("100000000");
+    await perp.updateRolloverDiscountPerc("100000000");
 
     await hre.run("verify:contract", {
       address: feeStrategy.address,
