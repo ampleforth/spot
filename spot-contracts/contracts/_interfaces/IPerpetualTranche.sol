@@ -136,11 +136,7 @@ interface IPerpetualTranche is IERC20Upgradeable {
 
     // @notice Checks if the given token is part of the reserve.
     // @param token The address of a token to check.
-    function isReserveToken(IERC20Upgradeable token) external returns (bool);
-
-    // @notice Checks if the given token is a tranche token part of the reserve.
-    // @param token The address of a reserve token to check.
-    function isReserveTranche(IERC20Upgradeable token) external returns (bool);
+    function inReserve(IERC20Upgradeable token) external returns (bool);
 
     // @notice Fetches the reserve's token balance.
     // @param token The address of the reserve token.
@@ -175,12 +171,14 @@ interface IPerpetualTranche is IERC20Upgradeable {
         uint256 perpRolloverAmt;
         // @notice The amount of tokens to be withdrawn.
         uint256 tokenOutAmt;
-        // @notice The standardized tranche amount rolled over.
-        uint256 stdTrancheRolloverAmt;
         // @notice The amount of trancheIn tokens used in the roll over operation.
-        uint256 trancheInAmtUsed;
+        uint256 trancheInAmt;
         // @notice The difference between the requested trancheIn amount and the amount used for the rollover.
         uint256 remainingTrancheInAmt;
+        // @notice The standardized tranche amount deposited.
+        uint256 stdTrancheInAmt;
+        // @notice The standardized tranche amount withdrawn.
+        uint256 stdTrancheOutAmt;
     }
 
     // @notice Computes the amount reserve tokens that can be swapped out for the given number

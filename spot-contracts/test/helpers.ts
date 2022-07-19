@@ -198,10 +198,7 @@ export const checkReserveComposition = async (perp: Contract, tokens: Contract[]
   const checkBalances = balances.length > 0;
   expect(await perp.callStatic.getReserveCount()).to.eq(tokens.length);
   for (const i in tokens) {
-    expect(await perp.callStatic.isReserveToken(tokens[i].address)).to.eq(true);
-    if (parseInt(i) > 0) {
-      expect(await perp.callStatic.isReserveTranche(tokens[i].address)).to.eq(true);
-    }
+    expect(await perp.callStatic.inReserve(tokens[i].address)).to.eq(true);
     expect(await perp.callStatic.getReserveAt(i)).to.eq(tokens[i].address);
     if (checkBalances) {
       expect(await perp.callStatic.getReserveBalance(tokens[i].address)).to.eq(balances[i]);

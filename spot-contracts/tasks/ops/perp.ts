@@ -183,9 +183,11 @@ task("ops:redeem")
     console.log("Signer", deployerAddress);
 
     console.log("Approving router to spend tokens:");
-    const tx1 = await perp.approve(router.address, fixedPtAmount);
-    await tx1.wait();
-    console.log("Tx", tx1.hash);
+    if ((await perp.allowance(deployerAddress, router.address)).lt(fixedPtAmount)) {
+      const tx1 = await perp.approve(router.address, fixedPtAmount);
+      await tx1.wait();
+      console.log("Tx", tx1.hash);
+    }
 
     let fee = BigNumber.from("0");
     if (burnFee.gt("0")) {
@@ -374,7 +376,7 @@ task("ops:trancheAndRollover")
         rolloverData.push({
           trancheIn: trancheIn,
           tokenOut: tokenOut,
-          trancheInAmt: rd.trancheInAmtUsed,
+          trancheInAmt: rd.trancheInAmt,
           tokenOutAmt: rd.tokenOutAmt,
         });
 
