@@ -47,9 +47,9 @@ error InvalidYieldStrategyDecimals();
 error UnacceptableSkimPerc(uint256 skimPerc);
 
 /// @notice Expected minTrancheMaturity be less than or equal to maxTrancheMaturity.
-/// @param minTrancheMaturiySec Minimum tranche maturity time in seconds.
-/// @param minTrancheMaturiySec Maximum tranche maturity time in seconds.
-error InvalidTrancheMaturityBounds(uint256 minTrancheMaturiySec, uint256 maxTrancheMaturiySec);
+/// @param minTrancheMaturitySec Minimum tranche maturity time in seconds.
+/// @param minTrancheMaturitySec Maximum tranche maturity time in seconds.
+error InvalidTrancheMaturityBounds(uint256 minTrancheMaturitySec, uint256 maxTrancheMaturitySec);
 
 /// @notice Expected transfer out asset to not be a reserve asset.
 /// @param token Address of the token transferred.
@@ -118,9 +118,9 @@ error InvalidRebootState();
  *          This acts as an "implied" tranche balance for all collateral extracted from the mature tranches.
  *
  *          At any time, the reserve holds at most 2 classes of tokens
- *          ie) the tranche tokens and mature collateral.
+ *          ie) the normal tranche tokens and mature tranche (which is essentially the underlying collateral token).
  *
- *          Incentivized parties can "rollover" tranches approaching maturity or the mature collateral,
+ *          Incentivized parties can "rollover" tranches approaching maturity or the mature tranche,
  *          for newer tranche tokens that belong to the current "depositBond".
  *
  *          The time dependent system state is updated "lazily" without a need for an explicit poke
@@ -193,6 +193,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     //-------------------------------------------------------------------------
     // Storage
 
+    // @dev The perp token balances are represented as a fixed point unsigned integer with these many decimals.
+    uint8 private _decimals;
+
     //--------------------------------------------------------------------------
     // CONFIG
 
@@ -221,11 +224,11 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
     // @notice The minimum maturity time in seconds for a tranche below which
     //         it can be rolled over.
-    uint256 public minTrancheMaturiySec;
+    uint256 public minTrancheMaturitySec;
 
     // @notice The maximum maturity time in seconds for a tranche above which
     //         it can NOT get added into the reserve.
-    uint256 public maxTrancheMaturiySec;
+    uint256 public maxTrancheMaturitySec;
 
     // @notice The maximum supply of perps that can exist at any given time.
     uint256 public maxSupply;
@@ -249,15 +252,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     //--------------------------------------------------------------------------
     // RESERVE
 
-    // @notice Address of the "underlying" collateral token backing the tranches.
-    // @dev ONLY tranches backed by this collateral token can be deposited into the reserve.
-    //      Tranches which are not rotated out before maturity, are redeemed and this
-    //      collateral is held in the reserve till its rotated out for tranches.
-    //      The collateral token is expected to be a rebasing ERC-20.
-    IERC20Upgradeable public override collateral;
-
-    // @notice A record of all tranche tokens in the reserve which back the perps.
-    EnumerableSetUpgradeable.AddressSet private _reserveTranches;
+    // @notice A record of all tokens in the reserve which back the perps.
+    EnumerableSetUpgradeable.AddressSet private _reserves;
 
     // @notice The standardized amount of all tranches deposited into the system.
     uint256 private _stdTotalTrancheBalance;
@@ -295,8 +291,12 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     ) public initializer {
         __ERC20_init(name, symbol);
         __Ownable_init();
+        _decimals = IERC20MetadataUpgradeable(address(collateral_)).decimals();
 
-        collateral = collateral_;
+        // NOTE: `_reserveAt(0)` always points to the underling collateral token
+        // and is to be never updated.
+        _reserves.add(address(collateral_));
+        assert(_reserveAt(0) == collateral_);
         _applyYield(collateral_, UNIT_YIELD);
 
         updateBondIssuer(bondIssuer_);
@@ -304,11 +304,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         updatePricingStrategy(pricingStrategy_);
         updateYieldStrategy(yieldStrategy_);
 
-        minTrancheMaturiySec = 1;
-        maxTrancheMaturiySec = type(uint256).max;
-
-        maxSupply = 1000000 * (10**decimals()); // 1M
-        maxMintAmtPerTranche = 200000 * (10**decimals()); // 200k
+        updateTolerableTrancheMaturity(1, type(uint256).max);
+        updateMintingLimits(type(uint256).max, type(uint256).max);
+        updateSkimPerc(0);
     }
 
     //--------------------------------------------------------------------------
@@ -361,24 +359,24 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     }
 
     // @notice Update the maturity tolerance parameters.
-    // @param minTrancheMaturiySec_ New minimum maturity time.
-    // @param maxTrancheMaturiySec_ New maximum maturity time.
-    function updateTolerableTrancheMaturiy(uint256 minTrancheMaturiySec_, uint256 maxTrancheMaturiySec_)
-        external
+    // @param minTrancheMaturitySec_ New minimum maturity time.
+    // @param maxTrancheMaturitySec_ New maximum maturity time.
+    function updateTolerableTrancheMaturity(uint256 minTrancheMaturitySec_, uint256 maxTrancheMaturitySec_)
+        public
         onlyOwner
     {
-        if (minTrancheMaturiySec_ > maxTrancheMaturiySec_) {
-            revert InvalidTrancheMaturityBounds(minTrancheMaturiySec_, maxTrancheMaturiySec_);
+        if (minTrancheMaturitySec_ > maxTrancheMaturitySec_) {
+            revert InvalidTrancheMaturityBounds(minTrancheMaturitySec_, maxTrancheMaturitySec_);
         }
-        minTrancheMaturiySec = minTrancheMaturiySec_;
-        maxTrancheMaturiySec = maxTrancheMaturiySec_;
-        emit UpdatedTolerableTrancheMaturiy(minTrancheMaturiySec_, maxTrancheMaturiySec_);
+        minTrancheMaturitySec = minTrancheMaturitySec_;
+        maxTrancheMaturitySec = maxTrancheMaturitySec_;
+        emit UpdatedTolerableTrancheMaturity(minTrancheMaturitySec_, maxTrancheMaturitySec_);
     }
 
     // @notice Update parameters controlling the perp token mint limits.
     // @param maxSupply_ New max total supply.
     // @param maxMintAmtPerTranche_ New max total for per tranche in minting bond.
-    function updateMintingLimits(uint256 maxSupply_, uint256 maxMintAmtPerTranche_) external onlyOwner {
+    function updateMintingLimits(uint256 maxSupply_, uint256 maxMintAmtPerTranche_) public onlyOwner {
         maxSupply = maxSupply_;
         maxMintAmtPerTranche = maxMintAmtPerTranche_;
         emit UpdatedMintingLimits(maxSupply_, maxMintAmtPerTranche_);
@@ -386,7 +384,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
     // @notice Updates the skim percentage parameter.
     // @param skimPerc_ New skim percentage.
-    function updateSkimPerc(uint256 skimPerc_) external onlyOwner {
+    function updateSkimPerc(uint256 skimPerc_) public onlyOwner {
         if (skimPerc_ > HUNDRED_PERC) {
             revert UnacceptableSkimPerc(skimPerc_);
         }
@@ -411,12 +409,12 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
     // @notice Redenominates Perp with respect to the outstanding debt.
     // @param stdTrancheBalance The new standardized tranche balance.
-    // @dev Can only be used when perp is backed solely by matured collateral.
+    // @dev Can only be used when perp is backed solely by mature collateral.
     function redenominate(uint256 stdTrancheBalance) external afterStateUpdate onlyOwner {
         // The redenomination is only allowed when:
         //  - the system has no more tranches left i.e) all the tranches have mature
         //  - the system has a collateral balance
-        if (_reserveCount() > 1 || _tokenBalance(collateral) == 0) {
+        if (_reserveCount() > 1 || _tokenBalance(_reserveAt(0)) == 0) {
             revert InvalidRebootState();
         }
         _updateStdTotalTrancheBalance(stdTrancheBalance);
@@ -524,9 +522,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // settles fees
         _settleFee(_msgSender(), rolloverFee);
 
-        // updates tranche balances
+        // updates mature tranche balance
         _updateStdTotalTrancheBalance(_stdTotalTrancheBalance + r.stdTrancheInAmt - r.stdTrancheOutAmt);
-        if (tokenOut == collateral) {
+        if (_isMatureTranche(tokenOut)) {
             _updateStdMatureTrancheBalance(_stdMatureTrancheBalance - r.stdTrancheOutAmt);
         }
 
@@ -572,13 +570,16 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     }
 
     /// @inheritdoc IPerpetualTranche
-    function getReserveBalance(IERC20Upgradeable token) external override afterStateUpdate returns (uint256) {
-        return _inReserve(token) ? _tokenBalance(token) : 0;
+    function inReserve(IERC20Upgradeable token) external override afterStateUpdate returns (bool) {
+        return _inReserve(token);
     }
 
     /// @inheritdoc IPerpetualTranche
-    function inReserve(IERC20Upgradeable token) external override afterStateUpdate returns (bool) {
-        return _inReserve(token);
+    function getReserveTrancheBalance(IERC20Upgradeable tranche) external override afterStateUpdate returns (uint256) {
+        if(!_inReserve(tranche)) {
+            return 0;
+        }
+        return _isMatureTranche(tranche) ? _matureTrancheBalance() : _tokenBalance(tranche);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -586,12 +587,19 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     function getReserveTokensUpForRollover() external override afterStateUpdate returns (IERC20Upgradeable[] memory) {
         uint256 reserveCount = _reserveCount();
         IERC20Upgradeable[] memory rolloverTokens = new IERC20Upgradeable[](reserveCount);
-        for (uint256 i = 0; i < reserveCount; i++) {
+
+        // The mature tranche is always up for rollover.
+        rolloverTokens[0] = _reserveAt(0);
+
+        // Iterating through the reserve to find tokens that are no longer "acceptable"
+        for (uint256 i = 1; i < reserveCount; i++) {
             IERC20Upgradeable token = _reserveAt(i);
-            if (i == 0 || !_isAcceptableForReserve(IBondController(ITranche(address(token)).bond()))) {
+            IBondController bond = IBondController(ITranche(address(token)).bond());
+            if (!_isAcceptableForReserve(bond)) {
                 rolloverTokens[i] = token;
             }
         }
+
         return rolloverTokens;
     }
 
@@ -657,7 +665,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // NOTE: We traverse the reserve list in the reverse order
         //       as deletions involve swapping the deleted element to the
         //       end of the list and removing the last element.
-        //       We also skip the `reserveAt(0)`, ie the mature tranche,
+        //       We also skip the `reserveAt(0)`, i.e) the mature tranche,
         //       which is never removed.
         uint256 reserveCount = _reserveCount();
         for (uint256 i = reserveCount - 1; i > 0; i--) {
@@ -674,7 +682,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
                 bond.mature();
             }
 
-            // Redeeming collateral
+            // Redeeming the underlying collateral token
             uint256 trancheBalance = _tokenBalance(tranche);
             bond.redeemMature(address(tranche), trancheBalance);
             _syncReserve(tranche);
@@ -685,8 +693,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
             );
         }
 
-        // Keeps track of reserve's rebasing collateral token balance
-        _syncReserve(collateral);
+        // Keeps track of the mature tranche's underlying balance
+        // ie) the rebasing collateral token
+        _syncReserve(_reserveAt(0));
     }
 
     //--------------------------------------------------------------------------
@@ -700,6 +709,11 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     /// @inheritdoc IPerpetualTranche
     function feeCollector() external view override returns (address) {
         return _self();
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    function collateral() external view override returns (IERC20Upgradeable) {
+        return _reserveAt(0);
     }
 
     //--------------------------------------------------------------------------
@@ -721,7 +735,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     /// @inheritdoc IPerpetualTranche
     function computePrice(IERC20Upgradeable token) public view override returns (uint256) {
         return
-            (token == collateral)
+            _isMatureTranche(token)
                 ? pricingStrategy.computeMatureTranchePrice(token, _tokenBalance(token), _matureTrancheBalance())
                 : pricingStrategy.computeTranchePrice(ITranche(address(token)));
     }
@@ -730,7 +744,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     // @dev For example, if `decimals` equals `2`, a balance of `505` tokens should
     //      be displayed to a user as `5.05` (`505 / 10 ** 2`).
     function decimals() public view override returns (uint8) {
-        return IERC20MetadataUpgradeable(address(collateral)).decimals();
+        return _decimals;
     }
 
     //--------------------------------------------------------------------------
@@ -800,7 +814,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         // However, if the tokenOut is the mature tranche (held as naked collateral),
         // we infer the tokenOut amount from the tranche denomination.
         // (tokenOutAmt = trancheOutAmt * collateralBalance / matureTrancheBalance)
-        bool isMatureTrancheOut = (tokenOut == collateral);
+
+        bool isMatureTrancheOut = _isMatureTranche(tokenOut);
         uint256 matureTrancheBalance = _matureTrancheBalance();
         r.tokenOutAmt = isMatureTrancheOut ? ((tokenOutBalance * trancheOutAmt) / matureTrancheBalance) : trancheOutAmt;
 
@@ -875,27 +890,31 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         uint256 balance = _tokenBalance(token);
         emit ReserveSynced(token, balance);
 
-        // If token is a tranche
-        if (token != collateral) {
-            bool isReserveTranche_ = _isReserveTranche(token);
-            if (balance > 0 && !isReserveTranche_) {
-                // Inserts new tranche into reserve list.
-                _reserveTranches.add(address(token));
+        // If token is the mature tranche,
+        // it NEVER gets removed from the `_reserves` list.
+        if (_isMatureTranche(token)) {
+            return balance;
+        }
 
-                // Stores the yield for future usage.
-                _applyYield(token, computeYield(token));
-            }
+        // Otherwise `_reserves` list gets updated.
+        bool inReserve_ = _inReserve(token);
+        if (balance > 0 && !inReserve_) {
+            // Inserts new tranche into reserve list.
+            _reserves.add(address(token));
 
-            if (balance == 0 && isReserveTranche_) {
-                // Removes tranche from reserve list.
-                _reserveTranches.remove(address(token));
+            // Stores the yield for future usage.
+            _applyYield(token, computeYield(token));
+        }
 
-                // Frees up stored yield.
-                _applyYield(token, 0);
+        if (balance == 0 && inReserve_) {
+            // Removes tranche from reserve list.
+            _reserves.remove(address(token));
 
-                // Frees up minted supply.
-                delete _mintedSupplyPerTranche[ITranche(address(token))];
-            }
+            // Frees up stored yield.
+            _applyYield(token, 0);
+
+            // Frees up minted supply.
+            delete _mintedSupplyPerTranche[ITranche(address(token))];
         }
 
         return balance;
@@ -956,7 +975,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     }
 
     // @dev Checks if the given token pair is a valid rollover.
-    //      * When rolling out mature collateral,
+    //      * When rolling out mature tranche,
     //          - expects incoming tranche to be part of the deposit bond
     //      * When rolling out immature tranches,
     //          - expects incoming tranche to be part of the deposit bond
@@ -966,17 +985,17 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     function _isAcceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut) internal view returns (bool) {
         IBondController bondIn = IBondController(trancheIn.bond());
 
-        // when rolling out the mature collateral
-        if (tokenOut == collateral) {
+        // when rolling out the mature tranche
+        if (_isMatureTranche(tokenOut)) {
             return (bondIn == _depositBond);
         }
 
-        // when rolling out an immature tranche
+        // when rolling out a normal tranche
         ITranche trancheOut = ITranche(address(tokenOut));
         IBondController bondOut = IBondController(trancheOut.bond());
         return (bondIn == _depositBond &&
             bondOut != _depositBond &&
-            _isReserveTranche(trancheOut) &&
+            _inReserve(trancheOut) &&
             !_isAcceptableForReserve(bondOut));
     }
 
@@ -987,9 +1006,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     function _isAcceptableForReserve(IBondController bond) internal view returns (bool) {
         // NOTE: `timeToMaturity` will be 0 if the bond is past maturity.
         uint256 timeToMaturity = bond.timeToMaturity();
-        return (address(collateral) == bond.collateralToken() &&
-            timeToMaturity >= minTrancheMaturiySec &&
-            timeToMaturity < maxTrancheMaturiySec);
+        return (address(_reserveAt(0)) == bond.collateralToken() &&
+            timeToMaturity >= minTrancheMaturitySec &&
+            timeToMaturity < maxTrancheMaturitySec);
     }
 
     // @dev Enforces the mint limits. To be invoked AFTER the mint operation.
@@ -1007,45 +1026,44 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     }
 
     // @dev Counts the number of tokens currently in the reserve.
-    //      The reserve comprises of the list of tranches and the mature collateral.
-    //      The `reserveCount` will always be 1 even if it's empty.
     function _reserveCount() private view returns (uint256) {
-        return _reserveTranches.length() + 1;
+        return _reserves.length();
     }
 
     // @dev Fetches the reserve token by index.
-    //      NOTE: index=0 returns the mature collateral.
     function _reserveAt(uint256 i) private view returns (IERC20Upgradeable) {
-        return (i == 0) ? collateral : IERC20Upgradeable(_reserveTranches.at(i - 1));
+        return IERC20Upgradeable(_reserves.at(i));
     }
 
     // @dev Checks if the given token is in the reserve.
     function _inReserve(IERC20Upgradeable token) private view returns (bool) {
-        return _isReserveTranche(token) || token == collateral;
-    }
-
-    // @dev Checks if the given token is a tranche in the reserve.
-    function _isReserveTranche(IERC20Upgradeable tranche) private view returns (bool) {
-        return _reserveTranches.contains(address(tranche));
+        return _reserves.contains(address(token));
     }
 
     // @dev Calculates the total value of all the tranches in the reserve.
     //      Value of each reserve tranche is calculated as = (trancheYield . trancheBalance) . tranchePrice.
     function _reserveValue() private view returns (uint256) {
-        uint256 totalVal = 0;
-        for (uint256 i = 0; i < _reserveCount(); i++) {
+        // For the mature tranche we use the "implied" tranche balance
+        uint256 totalVal = (_stdMatureTrancheBalance * computePrice(_reserveAt(0)));
+
+        // For normal tranches we use the tranche token balance
+        for (uint256 i = 1; i < _reserveCount(); i++) {
             IERC20Upgradeable token = _reserveAt(i);
-            uint256 stdTrancheAmt = (i == 0)
-                ? _stdMatureTrancheBalance
-                : _toStdTrancheAmt(_tokenBalance(token), computeYield(token));
-            totalVal += (stdTrancheAmt * computePrice(token));
+            uint256 stdTrancheBalance = _toStdTrancheAmt(_tokenBalance(token), computeYield(token));
+            totalVal += (stdTrancheBalance * computePrice(token));
         }
+
         return totalVal;
+    }
+
+    // @dev Checks if the given token is the mature tranche, ie) the underlying collateral token.
+    function _isMatureTranche(IERC20Upgradeable token) private view returns (bool) {
+        return (token == _reserveAt(0));
     }
 
     // @dev Calculates the mature tranche balance.
     function _matureTrancheBalance() private view returns (uint256) {
-        return _fromStdTrancheAmt(_stdMatureTrancheBalance, computeYield(collateral));
+        return _fromStdTrancheAmt(_stdMatureTrancheBalance, computeYield(_reserveAt(0)));
     }
 
     // @dev Fetches the perp contract's token balance.

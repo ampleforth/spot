@@ -172,7 +172,7 @@
             "src": "contracts/PerpetualTranche.sol:219"
           },
           {
-            "label": "minTrancheMaturiySec",
+            "label": "minTrancheMaturitySec",
             "offset": 0,
             "slot": "156",
             "type": "t_uint256",
@@ -180,7 +180,7 @@
             "src": "contracts/PerpetualTranche.sol:223"
           },
           {
-            "label": "maxTrancheMaturiySec",
+            "label": "maxTrancheMaturitySec",
             "offset": 0,
             "slot": "157",
             "type": "t_uint256",
@@ -517,7 +517,7 @@
             "src": "contracts/PerpetualTranche.sol:219"
           },
           {
-            "label": "minTrancheMaturiySec",
+            "label": "minTrancheMaturitySec",
             "offset": 0,
             "slot": "156",
             "type": "t_uint256",
@@ -525,7 +525,7 @@
             "src": "contracts/PerpetualTranche.sol:223"
           },
           {
-            "label": "maxTrancheMaturiySec",
+            "label": "maxTrancheMaturitySec",
             "offset": 0,
             "slot": "157",
             "type": "t_uint256",
@@ -862,7 +862,7 @@
             "src": "contracts/PerpetualTranche.sol:220"
           },
           {
-            "label": "minTrancheMaturiySec",
+            "label": "minTrancheMaturitySec",
             "offset": 0,
             "slot": "156",
             "type": "t_uint256",
@@ -870,7 +870,7 @@
             "src": "contracts/PerpetualTranche.sol:224"
           },
           {
-            "label": "maxTrancheMaturiySec",
+            "label": "maxTrancheMaturitySec",
             "offset": 0,
             "slot": "157",
             "type": "t_uint256",

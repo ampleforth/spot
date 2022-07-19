@@ -80,7 +80,7 @@ describe("PerpetualTranche", function () {
     await feeStrategy.setBurnFee(toFixedPtAmt("0"));
     await feeStrategy.setRolloverFee(toFixedPtAmt("0"));
 
-    await perp.updateTolerableTrancheMaturiy(1200, 10800);
+    await perp.updateTolerableTrancheMaturity(1200, 10800);
     await advancePerpQueue(perp, 10900);
 
     holdingPenBond = await bondAt(await perp.callStatic.getDepositBond());

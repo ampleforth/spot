@@ -1,13 +1,14 @@
-import { BigNumber } from "ethers";
+import { BigNumber, utils } from "ethers";
 import { task, types } from "hardhat/config";
 import { TaskArguments } from "hardhat/types";
 import { getContractFactoryFromExternalArtifacts } from "../helpers";
 
 task("ops:rebase:MockAMPL")
   .addParam("amplAddress", "the address of the AMPL contract", undefined, types.string, false)
-  .addParam("rebasePerc", "the rebase percentage", 0.0, types.float)
+  .addParam("rebasePerc", "the rebase percentage", "0.0", types.string)
   .setAction(async function (args: TaskArguments, hre) {
     const { amplAddress, rebasePerc } = args;
+    const rebasePercFloat = parseFloat(rebasePerc);
 
     const deployer = await (await hre.ethers.getSigners())[0].getAddress();
     console.log("Signer", deployer);
@@ -16,14 +17,18 @@ task("ops:rebase:MockAMPL")
     const ampl = await UFragments.attach(amplAddress);
 
     const UNIT_PERC = BigNumber.from(1e8);
-    const PERC = BigNumber.from(Math.floor(Math.abs(rebasePerc) * 1e8));
-    const ADJ_PERC = rebasePerc >= 0 ? PERC.add(UNIT_PERC) : PERC.sub(UNIT_PERC);
+    const PERC = BigNumber.from(Math.floor(Math.abs(rebasePercFloat) * 1e8));
+    const ADJ_PERC = rebasePercFloat >= 0 ? UNIT_PERC.add(PERC) : UNIT_PERC.sub(PERC);
     const supply = await ampl.totalSupply();
     const newSupply = ADJ_PERC.mul(supply).div(UNIT_PERC);
     const supplyDiff = newSupply.sub(supply);
+    const decimals = await ampl.decimals()
 
+    console.log("Supply before", utils.formatUnits(supply, decimals))
+    console.log("Applied diff", utils.formatUnits(supplyDiff, decimals))
     console.log("Rebase:");
     const tx = await ampl.rebase(1, supplyDiff);
     await tx.wait();
     console.log("Tx", tx.hash);
+    console.log("Supply after", utils.formatUnits(await ampl.totalSupply(), decimals))
   });

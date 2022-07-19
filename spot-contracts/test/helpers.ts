@@ -179,7 +179,7 @@ export const advancePerpQueueToBondMaturity = async (perp: Contract, bond: Contr
 };
 
 export const advancePerpQueueToRollover = async (perp: Contract, bond: Contract): Promise<Transaction> => {
-  const bufferSec = await perp.minTrancheMaturiySec();
+  const bufferSec = await perp.minTrancheMaturitySec();
   const matuirtyDate = await bond.maturityDate();
   await TimeHelpers.setNextBlockTimestamp(matuirtyDate.sub(bufferSec).toNumber() + 1);
   return perp.updateState();
@@ -190,7 +190,7 @@ export const logReserveComposition = async (perp: Contract) => {
   console.log("Reserve count", count);
   for (let i = 0; i < count; i++) {
     const token = await perp.callStatic.getReserveAt(i);
-    console.log(i, token, await perp.callStatic.getReserveBalance(token));
+    console.log(i, token, await perp.callStatic.getReserveTrancheBalance(token));
   }
 };
 
@@ -201,7 +201,7 @@ export const checkReserveComposition = async (perp: Contract, tokens: Contract[]
     expect(await perp.callStatic.inReserve(tokens[i].address)).to.eq(true);
     expect(await perp.callStatic.getReserveAt(i)).to.eq(tokens[i].address);
     if (checkBalances) {
-      expect(await perp.callStatic.getReserveBalance(tokens[i].address)).to.eq(balances[i]);
+      expect(await tokens[i].balanceOf(perp.reserve())).to.eq(balances[i]);
     }
   }
   await expect(perp.callStatic.getReserveAt(tokens.length)).to.be.reverted;

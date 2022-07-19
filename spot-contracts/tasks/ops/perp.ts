@@ -26,12 +26,13 @@ task("ops:info")
 
     console.log("---------------------------------------------------------------");
     console.log("PerpetualTranche:", perp.address);
+    console.log("reserve:", await perp.reserve());
     console.log("collateralToken", collateralToken.address);
     console.log("feeStrategy:", feeStrategy.address);
     console.log("yieldStrategy:", yieldStrategy.address);
     console.log("feeToken:", await feeStrategy.feeToken());
     console.log("pricingStrategy:", pricingStrategy.address);
-    console.log(`maturityTolarance: [${await perp.minTrancheMaturiySec()}, ${await perp.maxTrancheMaturiySec()}]`);
+    console.log(`maturityTolarance: [${await perp.minTrancheMaturitySec()}, ${await perp.maxTrancheMaturitySec()}]`);
     console.log("depositBond:", depositBond.address);
     console.log("issued:", issued);
     console.log("TotalSupply:", utils.formatUnits(await perp.totalSupply(), perpDecimals));
@@ -51,7 +52,7 @@ task("ops:info")
     console.log("token\tbalance\tyield\tprice\tupForRollover");
     for (let i = 0; i < reserveCount; i++) {
       const tokenAddress = await perp.callStatic.getReserveAt(i);
-      const balance = await perp.callStatic.getReserveBalance(tokenAddress);
+      const balance = await perp.callStatic.getReserveTrancheBalance(tokenAddress);
       const yieldF = await perp.computeYield(tokenAddress);
       const price = await perp.computePrice(tokenAddress);
       console.log(
@@ -339,7 +340,7 @@ task("ops:trancheAndRollover")
     const rotationTokenBalances = [];
     for (let i = 0; i < reserveCount; i++) {
       const tranche = await hre.ethers.getContractAt("ITranche", await perp.callStatic.getReserveAt(i));
-      const balance = await perp.callStatic.getReserveBalance(tranche.address);
+      const balance = await perp.callStatic.getReserveTrancheBalance(tranche.address);
       reserveTokens.push(tranche);
       reserveTokenBalances.push(balance);
       if (upForRotation[i] !== constants.AddressZero && balance.gt(0)) {
