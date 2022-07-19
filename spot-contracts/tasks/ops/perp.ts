@@ -1,6 +1,6 @@
 import { task, types } from "hardhat/config";
 import { TaskArguments } from "hardhat/types";
-import { BigNumber, utils, constants, Contract } from "ethers";
+import { utils, constants, Contract, BigNumber } from "ethers";
 
 task("ops:info")
   .addPositionalParam("perpAddress", "the address of the perp contract", undefined, types.string, false)
@@ -19,6 +19,8 @@ task("ops:info")
     const yieldStrategy = await hre.ethers.getContractAt("TrancheClassYieldStrategy", await perp.yieldStrategy());
     const depositBond = await hre.ethers.getContractAt("IBondController", await perp.callStatic.getDepositBond());
     const issued = (await hre.ethers.provider.getCode(depositBond.address)) !== "0x";
+    const perpSupply = await perp.totalSupply();
+    const priceDecimals = await pricingStrategy.decimals();
 
     console.log("---------------------------------------------------------------");
     console.log("BondIssuer:", bondIssuer.address);
@@ -35,35 +37,96 @@ task("ops:info")
     console.log(`maturityTolarance: [${await perp.minTrancheMaturitySec()}, ${await perp.maxTrancheMaturitySec()}]`);
     console.log("depositBond:", depositBond.address);
     console.log("issued:", issued);
-    console.log("TotalSupply:", utils.formatUnits(await perp.totalSupply(), perpDecimals));
+    console.log("TotalSupply:", utils.formatUnits(perpSupply, perpDecimals));
 
-    const trancheBalances = await perp.callStatic.getStdTrancheBalances();
-    console.log("TotalStdTrancheBalance:", utils.formatUnits(trancheBalances[0], perpDecimals));
-    console.log("MatureStdTrancheBalance:", utils.formatUnits(trancheBalances[0], perpDecimals));
+    const matureTrancheBalance = await perp.callStatic.getMatureTrancheBalance();
+    console.log("MatureTrancheBalance:", utils.formatUnits(matureTrancheBalance, perpDecimals));
 
     console.log("---------------------------------------------------------------");
     console.log("Reserve:");
     const reserveCount = (await perp.callStatic.getReserveCount()).toNumber();
-    console.log("reserveCount:", reserveCount);
-
     const upForRollover = await perp.callStatic.getReserveTokensUpForRollover();
-    const reserveValue = await perp.callStatic.getReserveValue();
-    console.log("reserveValue:", utils.formatUnits(reserveValue, perpDecimals + (await pricingStrategy.decimals())));
+    const perpPrice = await perp.callStatic.getPrice();
+    const reserveValue = (await perp.totalSupply()).mul(perpPrice);
+    let totalTrancheBalance = BigNumber.from(0);
     console.log("token\tbalance\tyield\tprice\tupForRollover");
     for (let i = 0; i < reserveCount; i++) {
       const tokenAddress = await perp.callStatic.getReserveAt(i);
       const balance = await perp.callStatic.getReserveTrancheBalance(tokenAddress);
+      totalTrancheBalance = totalTrancheBalance.add(balance);
       const yieldF = await perp.computeYield(tokenAddress);
       const price = await perp.computePrice(tokenAddress);
       console.log(
         `reserve(${i}):${tokenAddress}`,
         `\t${utils.formatUnits(balance, await perp.decimals())}`,
         `\t${utils.formatUnits(yieldF, await yieldStrategy.decimals())}`,
-        `\t${utils.formatUnits(price, await pricingStrategy.decimals())}`,
+        `\t${utils.formatUnits(price, priceDecimals)}`,
         `\t${upForRollover[i] !== constants.AddressZero && balance.gt(0)}`,
       );
     }
+
+    console.log("reserveCount:", reserveCount);
+    console.log("reserveValue:", utils.formatUnits(reserveValue, perpDecimals + priceDecimals));
+    if (perpSupply.gt("0")) {
+      console.log("price:", utils.formatUnits(perpPrice, priceDecimals));
+      console.log(
+        "impliedPrice:",
+        utils.formatUnits(totalTrancheBalance.mul(10 ** priceDecimals).div(perpSupply), priceDecimals),
+      );
+    }
     console.log("---------------------------------------------------------------");
+  });
+
+task("ops:updateState")
+  .addPositionalParam("perpAddress", "the address of the perp contract", undefined, types.string, false)
+  .addOptionalParam("from", "the address of sender", "0x", types.string)
+  .setAction(async function (args: TaskArguments, hre) {
+    const { perpAddress } = args;
+
+    const perp = await hre.ethers.getContractAt("PerpetualTranche", perpAddress);
+
+    console.log("---------------------------------------------------------------");
+    console.log("Execution:");
+    let deployerAddress = args.from;
+    if (deployerAddress === "0x") {
+      deployerAddress = await (await hre.ethers.getSigners())[0].getAddress();
+    }
+    console.log("Signer", deployerAddress);
+
+    console.log("Update state:");
+    const tx = await perp.updateState();
+    await tx.wait();
+    console.log("Tx", tx.hash);
+  });
+
+task("ops:redenominate")
+  .addPositionalParam("perpAddress", "the address of the perp contract", undefined, types.string, false)
+  .addOptionalParam("from", "the address of sender", "0x", types.string)
+  .setAction(async function (args: TaskArguments, hre) {
+    const { perpAddress } = args;
+
+    const perp = await hre.ethers.getContractAt("PerpetualTranche", perpAddress);
+    const collateral = await hre.ethers.getContractAt("MockERC20", await perp.collateral());
+    const collateralYield = await perp.computeYield(collateral.address);
+    const balance = await collateral.balanceOf(await perp.reserve());
+    const newStdBalance = balance.mul(collateralYield).div(await perp.UNIT_YIELD());
+
+    console.log("---------------------------------------------------------------");
+    console.log("Execution:");
+    let deployerAddress = args.from;
+    if (deployerAddress === "0x") {
+      deployerAddress = await (await hre.ethers.getSigners())[0].getAddress();
+    }
+    console.log("Signer", deployerAddress);
+
+    console.log("Redenominate:");
+    if (newStdBalance.gt("0")) {
+      const tx = await perp.redenominate(newStdBalance);
+      await tx.wait();
+      console.log("Tx", tx.hash);
+    } else {
+      console.error("Cannot redenominate now");
+    }
   });
 
 task("ops:trancheAndDeposit")
@@ -340,7 +403,7 @@ task("ops:trancheAndRollover")
     const rotationTokenBalances = [];
     for (let i = 0; i < reserveCount; i++) {
       const tranche = await hre.ethers.getContractAt("ITranche", await perp.callStatic.getReserveAt(i));
-      const balance = await perp.callStatic.getReserveTrancheBalance(tranche.address);
+      const balance = await tranche.balanceOf(await perp.reserve());
       reserveTokens.push(tranche);
       reserveTokenBalances.push(balance);
       if (upForRotation[i] !== constants.AddressZero && balance.gt(0)) {
@@ -357,6 +420,9 @@ task("ops:trancheAndRollover")
     const feeToken = await hre.ethers.getContractAt("PerpetualTranche", await perp.feeToken());
     let totalRolloverAmt = BigNumber.from("0");
     let totalRolloverFee = BigNumber.from("0");
+
+    // continues to the next token when only DUST remains
+    const DUST_AMOUNT = utils.parseUnits("1", await perp.decimals());
 
     const remainingTrancheInAmts: BigNumber[] = depositTrancheAmts.map((t: BigNumber) => t);
     const remainingTokenOutAmts: BigNumber[] = rotationTokenBalances.map(b => b);
@@ -387,16 +453,17 @@ task("ops:trancheAndRollover")
         remainingTrancheInAmts[i] = rd.remainingTrancheInAmt;
         remainingTokenOutAmts[j] = remainingTokenOutAmts[j].sub(rd.tokenOutAmt);
 
-        if (remainingTrancheInAmts[i].eq("0")) {
-          i++;
-        }
-        if (remainingTokenOutAmts[j].eq("0")) {
+        if (remainingTokenOutAmts[i].lte(DUST_AMOUNT)) {
           j++;
+        }
+        if (remainingTrancheInAmts[i].lte(DUST_AMOUNT)) {
+          i++;
         }
       } else {
         i++;
       }
     }
+
     console.log("rolloverAmt", utils.formatUnits(totalRolloverAmt, await perp.decimals()));
     console.log("rolloverFee", utils.formatUnits(totalRolloverFee, await feeToken.decimals()));
 

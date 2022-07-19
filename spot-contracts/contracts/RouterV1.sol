@@ -80,7 +80,7 @@ contract RouterV1 {
             int256
         )
     {
-        (uint256 mintAmt, ) = perp.computeMintAmt(trancheIn, trancheInAmt);
+        uint256 mintAmt = perp.computeMintAmt(trancheIn, trancheInAmt);
         IERC20Upgradeable feeToken = perp.feeToken();
         int256 mintFee = perp.feeStrategy().computeMintFee(mintAmt);
         return (mintAmt, feeToken, mintFee);
@@ -121,7 +121,7 @@ contract RouterV1 {
 
         for (uint8 i = 0; i < td.trancheCount; i++) {
             uint256 trancheAmt = td.tranches[i].balanceOf(address(this));
-            (uint256 mintAmt, ) = perp.computeMintAmt(td.tranches[i], trancheAmt);
+            uint256 mintAmt = perp.computeMintAmt(td.tranches[i], trancheAmt);
             if (mintAmt > 0) {
                 // approves tranches to be spent
                 _checkAndApproveMax(td.tranches[i], address(perp), trancheAmt);

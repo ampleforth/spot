@@ -10,7 +10,7 @@ import {
   toFixedPtAmt,
   rebase,
   depositIntoBond,
-  getStdTrancheBalances,
+  getTrancheBalances,
   getTranches,
 } from "../helpers";
 
@@ -133,7 +133,7 @@ describe("BondHelpers", function () {
 
         it("should be consistent with deposit", async function () {
           await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
-          const b = await getStdTrancheBalances(bond, deployerAddress);
+          const b = await getTrancheBalances(bond, deployerAddress);
           expect(b[0]).to.eq(toFixedPtAmt("500"));
           expect(b[1]).to.eq(toFixedPtAmt("500"));
         });
@@ -158,7 +158,7 @@ describe("BondHelpers", function () {
 
           it("should be consistent with deposit", async function () {
             await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
-            const b = await getStdTrancheBalances(bond, deployerAddress);
+            const b = await getTrancheBalances(bond, deployerAddress);
             expect(b[0]).to.eq(toFixedPtAmt("1000")); // 500 + 500
             expect(b[1]).to.eq(toFixedPtAmt("1000"));
           });
@@ -178,7 +178,7 @@ describe("BondHelpers", function () {
 
           it("should be consistent with deposit", async function () {
             await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
-            const b = await getStdTrancheBalances(bond, deployerAddress);
+            const b = await getTrancheBalances(bond, deployerAddress);
             expect(b[0]).to.eq(toFixedPtAmt("900")); // 500 + 400
             expect(b[1]).to.eq(toFixedPtAmt("900"));
           });
@@ -197,7 +197,7 @@ describe("BondHelpers", function () {
           });
           it("should be consistent with deposit", async function () {
             await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
-            const b = await getStdTrancheBalances(bond, deployerAddress);
+            const b = await getTrancheBalances(bond, deployerAddress);
             expect(b[0]).to.eq(toFixedPtAmt("1500")); // 500 + 1000
             expect(b[1]).to.eq(toFixedPtAmt("1500"));
           });
@@ -221,10 +221,10 @@ describe("BondHelpers", function () {
 
         it("should be consistent with deposit", async function () {
           await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
-          const b = await getStdTrancheBalances(bond, deployerAddress);
+          const b = await getTrancheBalances(bond, deployerAddress);
           expect(b[0]).to.eq(toFixedPtAmt("497.5"));
           expect(b[1]).to.eq(toFixedPtAmt("497.5"));
-          const c = await getStdTrancheBalances(bond, bond.address);
+          const c = await getTrancheBalances(bond, bond.address);
           expect(c[0]).to.eq(toFixedPtAmt("2.5"));
           expect(c[1]).to.eq(toFixedPtAmt("2.5"));
         });
@@ -249,10 +249,10 @@ describe("BondHelpers", function () {
 
           it("should be consistent with deposit", async function () {
             await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
-            const b = await getStdTrancheBalances(bond, deployerAddress);
+            const b = await getTrancheBalances(bond, deployerAddress);
             expect(b[0]).to.eq(toFixedPtAmt("995")); // 497.5 + 497.5
             expect(b[1]).to.eq(toFixedPtAmt("995"));
-            const c = await getStdTrancheBalances(bond, bond.address);
+            const c = await getTrancheBalances(bond, bond.address);
             expect(c[0]).to.eq(toFixedPtAmt("5")); // 2.5 + 2.5
             expect(c[1]).to.eq(toFixedPtAmt("5"));
           });
@@ -272,10 +272,10 @@ describe("BondHelpers", function () {
 
           it("should be consistent with deposit", async function () {
             await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
-            const b = await getStdTrancheBalances(bond, deployerAddress);
+            const b = await getTrancheBalances(bond, deployerAddress);
             expect(b[0]).to.eq(toFixedPtAmt("895.5")); // 497.5 + 398
             expect(b[1]).to.eq(toFixedPtAmt("895.5"));
-            const c = await getStdTrancheBalances(bond, bond.address);
+            const c = await getTrancheBalances(bond, bond.address);
             expect(c[0]).to.eq(toFixedPtAmt("4.5")); // 2.5 + 2
             expect(c[1]).to.eq(toFixedPtAmt("4.5"));
           });
@@ -294,10 +294,10 @@ describe("BondHelpers", function () {
           });
           it("should be consistent with deposit", async function () {
             await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
-            const b = await getStdTrancheBalances(bond, deployerAddress);
+            const b = await getTrancheBalances(bond, deployerAddress);
             expect(b[0]).to.eq(toFixedPtAmt("1492.5")); // 497.5 + 995
             expect(b[1]).to.eq(toFixedPtAmt("1492.5"));
-            const c = await getStdTrancheBalances(bond, bond.address);
+            const c = await getTrancheBalances(bond, bond.address);
             expect(c[0]).to.eq(toFixedPtAmt("7.5")); // 2.5 + 5
             expect(c[1]).to.eq(toFixedPtAmt("7.5"));
           });

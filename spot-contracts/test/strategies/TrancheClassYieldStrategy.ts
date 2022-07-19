@@ -55,7 +55,7 @@ describe("TrancheClassYieldStrategy", function () {
         await tx;
       });
       it("should update reference", async function () {
-        expect(await yieldStrategy.computeYield(tranche.address)).to.eq(toYieldFixedPtAmt("1"));
+        expect(await yieldStrategy.computeTrancheYield(tranche.address)).to.eq(toYieldFixedPtAmt("1"));
       });
       it("should emit event", async function () {
         await expect(tx)
@@ -64,7 +64,7 @@ describe("TrancheClassYieldStrategy", function () {
       });
       it("should delete yield when set to zero", async function () {
         await yieldStrategy.updateDefinedYield(classHash, "0");
-        expect(await yieldStrategy.computeYield(tranche.address)).to.eq("0");
+        expect(await yieldStrategy.computeTrancheYield(tranche.address)).to.eq("0");
       });
     });
   });
@@ -129,7 +129,7 @@ describe("TrancheClassYieldStrategy", function () {
     });
   });
 
-  describe("#trancheYield", function () {
+  describe("#computeTrancheYield", function () {
     let bondFactory: Contract, collateralToken: Contract, bond: Contract, tranches: Contract[];
     beforeEach(async function () {
       bondFactory = await setupBondFactory();
@@ -146,12 +146,12 @@ describe("TrancheClassYieldStrategy", function () {
 
     describe("when tranche instance is not in the system", function () {
       it("should return defined yield", async function () {
-        expect(await yieldStrategy.computeYield(tranches[0].address)).to.eq(toYieldFixedPtAmt("1"));
+        expect(await yieldStrategy.computeTrancheYield(tranches[0].address)).to.eq(toYieldFixedPtAmt("1"));
       });
       describe("when not defined", function () {
         it("should return 0", async function () {
-          expect(await yieldStrategy.computeYield(tranches[1].address)).to.eq(toYieldFixedPtAmt("0"));
-          expect(await yieldStrategy.computeYield(tranches[2].address)).to.eq(toYieldFixedPtAmt("0"));
+          expect(await yieldStrategy.computeTrancheYield(tranches[1].address)).to.eq(toYieldFixedPtAmt("0"));
+          expect(await yieldStrategy.computeTrancheYield(tranches[2].address)).to.eq(toYieldFixedPtAmt("0"));
         });
       });
       describe("when updated", function () {
@@ -162,7 +162,7 @@ describe("TrancheClassYieldStrategy", function () {
           );
         });
         it("should return defined yield", async function () {
-          expect(await yieldStrategy.computeYield(tranches[0].address)).to.eq(toYieldFixedPtAmt("0.5"));
+          expect(await yieldStrategy.computeTrancheYield(tranches[0].address)).to.eq(toYieldFixedPtAmt("0.5"));
         });
       });
     });
@@ -177,7 +177,7 @@ describe("TrancheClassYieldStrategy", function () {
         tranchesNext = await getTranches(bondNext);
       });
       it("should return defined yield", async function () {
-        expect(await yieldStrategy.computeYield(tranchesNext[0].address)).to.eq(toYieldFixedPtAmt("1"));
+        expect(await yieldStrategy.computeTrancheYield(tranchesNext[0].address)).to.eq(toYieldFixedPtAmt("1"));
       });
       describe("when updated", function () {
         beforeEach(async function () {
@@ -187,10 +187,10 @@ describe("TrancheClassYieldStrategy", function () {
           );
         });
         it("should return the updated yield", async function () {
-          expect(await yieldStrategy.computeYield(tranchesNext[0].address)).to.eq(toYieldFixedPtAmt("0.5"));
+          expect(await yieldStrategy.computeTrancheYield(tranchesNext[0].address)).to.eq(toYieldFixedPtAmt("0.5"));
         });
         it("should return the updated yield", async function () {
-          expect(await yieldStrategy.computeYield(tranches[0].address)).to.eq(toYieldFixedPtAmt("0.5"));
+          expect(await yieldStrategy.computeTrancheYield(tranches[0].address)).to.eq(toYieldFixedPtAmt("0.5"));
         });
       });
     });

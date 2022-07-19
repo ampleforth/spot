@@ -40,9 +40,9 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @param maxMintAmtPerTranche The max mint amount per tranche.
     event UpdatedMintingLimits(uint256 maxSupply, uint256 maxMintAmtPerTranche);
 
-    // @notice Event emitted when the skim percentage is updated.
-    // @param skimPerc The skim percentage.
-    event UpdatedSkimPerc(uint256 skimPerc);
+    // @notice Event emitted when the rollover discount percentage is updated.
+    // @param rolloverDiscountPerc The rollover discount percentage.
+    event UpdatedRolloverDiscountPerc(int256 rolloverDiscountPerc);
 
     // @notice Event emitted when the applied yield for a given token is set.
     // @param token The address of the token.
@@ -58,13 +58,9 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @param bond Address of the new deposit bond.
     event UpdatedDepositBond(IBondController bond);
 
-    // @notice Event emitted when the standardized total tranche balance is updated.
-    // @param stdTotalTrancheBalance The standardized total tranche balance.
-    event UpdatedStdTotalTrancheBalance(uint256 stdTotalTrancheBalance);
-
-    // @notice Event emitted when the standardized mature tranche balance is updated.
-    // @param stdMatureTrancheBalance The standardized mature tranche balance.
-    event UpdatedStdMatureTrancheBalance(uint256 stdMatureTrancheBalance);
+    // @notice Event emitted when the mature tranche balance is updated.
+    // @param matureTrancheBalance The mature tranche balance.
+    event UpdatedMatureTrancheBalance(uint256 matureTrancheBalance);
 
     //--------------------------------------------------------------------------
     // Methods
@@ -97,10 +93,9 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @return Address of the collateral token.
     function collateral() external view returns (IERC20Upgradeable);
 
-    // @notice The "standardized" balances of all tranches deposited into the system.
-    // @return stdTotalTrancheBalance The "standardized" total tranche balance.
-    // @return stdMatureTrancheBalance The "standardized" mature tranche balance.
-    function getStdTrancheBalances() external returns (uint256 stdTotalTrancheBalance, uint256 stdMatureTrancheBalance);
+    // @notice The "virtual" balance of all mature tranches held by the system.
+    // @return The mature tranche balance.
+    function getMatureTrancheBalance() external returns (uint256);
 
     // @notice The parent bond whose tranches are currently accepted to mint perp tokens.
     // @return Address of the deposit bond.
@@ -142,8 +137,8 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @param tranche The address of the tranche token held by the reserve.
     function getReserveTrancheBalance(IERC20Upgradeable tranche) external returns (uint256);
 
-    // @notice Computes the total value of all reserve assets.
-    function getReserveValue() external returns (uint256);
+    // @notice Computes the price of each perp token, i.e) reserve value / total supply.
+    function getPrice() external returns (uint256);
 
     // @notice Fetches the list of reserve tokens which are up for rollover.
     function getReserveTokensUpForRollover() external returns (IERC20Upgradeable[] memory);
@@ -152,11 +147,8 @@ interface IPerpetualTranche is IERC20Upgradeable {
     //         are deposited into the system.
     // @param trancheIn The tranche token deposited.
     // @param trancheInAmt The amount of tranche tokens deposited.
-    // @return perpAmtMinted The amount of perp tokens to be minted.
-    // @return stdTrancheAmt The standardized tranche amount deposited.
-    function computeMintAmt(ITranche trancheIn, uint256 trancheInAmt)
-        external
-        returns (uint256 perpAmtMinted, uint256 stdTrancheAmt);
+    // @return The amount of perp tokens to be minted.
+    function computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) external returns (uint256);
 
     // @notice Computes the amount reserve tokens redeemed when burning given number of perp tokens.
     // @param perpAmtBurnt The amount of perp tokens to be burnt.

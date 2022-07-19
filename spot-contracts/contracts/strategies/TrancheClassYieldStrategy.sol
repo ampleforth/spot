@@ -73,7 +73,7 @@ contract TrancheClassYieldStrategy is IYieldStrategy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IYieldStrategy
-    function computeYield(IERC20Upgradeable token) public view override returns (uint256) {
+    function computeTrancheYield(IERC20Upgradeable token) external view override returns (uint256) {
         return _trancheYields[trancheClass(ITranche(address(token)))];
     }
 }
