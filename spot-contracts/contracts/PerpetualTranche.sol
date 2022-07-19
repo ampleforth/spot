@@ -115,7 +115,7 @@ error InvalidRebootState();
  *
  *          Once tranche tokens held in the reserve mature the underlying collateral is extracted
  *          into the reserve. The system keeps track of total mature tranches held by the reserve.
- *          This acts as an "virtual" tranche balance for all collateral extracted from the mature tranches.
+ *          This acts as a "virtual" tranche balance for all collateral extracted from the mature tranches.
  *
  *          At any time, the reserve holds at most 2 classes of tokens
  *          ie) the normal tranche tokens and mature tranche (which is essentially the underlying collateral token).
@@ -793,7 +793,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         }
 
         // We scale the trancheInPrice up or down to account for skimming
-        // and form here on we use the scaled price.
+        // and from here on we use the scaled price.
         // trancheInPrice' = trancheInPrice * (100-skimPerc)/100
         trancheInPrice =
             (trancheInPrice * SafeCastUpgradeable.toUint256(HUNDRED_PERC - skimPerc)) /
