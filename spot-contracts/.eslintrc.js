@@ -20,5 +20,11 @@ module.exports = {
         tryExtensions: [".ts", ".js", ".json"],
       },
     ],
+    "node/no-unpublished-import": [
+      "error",
+      {
+        allowModules: ["hardhat", "ethers"],
+      },
+    ],
   },
 };
