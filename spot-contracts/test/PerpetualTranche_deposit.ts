@@ -86,6 +86,16 @@ describe("PerpetualTranche", function () {
   });
 
   describe("#deposit", function () {
+    describe("when paused", function () {
+      beforeEach(async function () {
+        await perp.pause();
+      });
+
+      it("should revert", async function () {
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWith("Pausable: paused");
+      });
+    });
+
     describe("when bond issuer is NOT set correctly", function () {
       beforeEach(async function () {
         await perp.updateBondIssuer(perp.address);

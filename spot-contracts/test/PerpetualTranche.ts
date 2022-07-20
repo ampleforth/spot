@@ -118,6 +118,44 @@ describe("PerpetualTranche", function () {
       expect(await perp.maxSupply()).to.eq(constants.MaxUint256);
       expect(await perp.maxMintAmtPerTranche()).to.eq(constants.MaxUint256);
     });
+
+    it("should NOT be paused", async function () {
+      expect(await perp.paused()).to.eq(false);
+    });
+  });
+
+  describe("#pause", function () {
+    let tx: Transaction;
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(perp.connect(otherUser).pause()).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+    });
+
+    describe("when already paused", function () {
+      beforeEach(async function () {
+        await perp.pause();
+      });
+      it("should revert", async function () {
+        await expect(perp.connect(deployer).pause()).to.be.revertedWith("Pausable: paused");
+      });
+    });
+
+    describe("when valid", function () {
+      beforeEach(async function () {
+        tx = await perp.connect(deployer).pause();
+        await tx;
+      });
+      it("should pause", async function () {
+        expect(await perp.paused()).to.eq(true);
+      });
+      it("should emit event", async function () {
+        await expect(tx)
+          .to.emit(perp, "Paused")
+          .withArgs(await deployer.getAddress());
+      });
+    });
   });
 
   describe("#updateBondIssuer", function () {

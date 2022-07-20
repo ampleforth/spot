@@ -134,6 +134,18 @@ describe("PerpetualTranche", function () {
   });
 
   describe("#rollover", function () {
+    describe("when paused", function () {
+      beforeEach(async function () {
+        await perp.pause();
+      });
+
+      it("should revert", async function () {
+        await expect(
+          perp.rollover(rolloverInTranche.address, reserveTranche2.address, toFixedPtAmt("500")),
+        ).to.revertedWith("Pausable: paused");
+      });
+    });
+
     describe("when trancheIn and tokenOut belong to the same bond", function () {
       let tranches: Contract[];
       beforeEach(async function () {

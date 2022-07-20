@@ -2,6 +2,7 @@
 pragma solidity ^0.8.15;
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
@@ -125,7 +126,7 @@ error InvalidRebootState();
  *          This brings the system storage state up to date.
  *
  */
-contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTranche {
+contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgradeable, IPerpetualTranche {
     // data handling
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
     using BondHelpers for IBondController;
@@ -293,6 +294,12 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     //--------------------------------------------------------------------------
     // ADMIN only methods
 
+    // @notice Pauses deposits, withdrawals and rollovers.
+    // @dev NOTE: ERC-20 functions, like transfers will always remain operational.
+    function pause() public onlyOwner {
+        _pause();
+    }
+
     // @notice Update the reference to the bond issuer contract.
     // @param bondIssuer_ New bond issuer address.
     function updateBondIssuer(IBondIssuer bondIssuer_) public onlyOwner {
@@ -395,7 +402,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     // External methods
 
     /// @inheritdoc IPerpetualTranche
-    function deposit(ITranche trancheIn, uint256 trancheInAmt) external override afterStateUpdate {
+    function deposit(ITranche trancheIn, uint256 trancheInAmt) external override afterStateUpdate whenNotPaused {
         if (IBondController(trancheIn.bond()) != _depositBond) {
             revert UnacceptableDepositTranche(trancheIn, _depositBond);
         }
@@ -424,7 +431,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     }
 
     /// @inheritdoc IPerpetualTranche
-    function burn(uint256 perpAmtBurnt) external override afterStateUpdate {
+    function burn(uint256 perpAmtBurnt) external override afterStateUpdate whenNotPaused {
         // gets the current perp supply
         uint256 perpSupply = totalSupply();
 
@@ -461,7 +468,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtRequested
-    ) external override afterStateUpdate {
+    ) external override afterStateUpdate whenNotPaused {
         // verifies if rollover is acceptable
         if (!_isAcceptableRollover(trancheIn, tokenOut)) {
             revert UnacceptableRollover(trancheIn, tokenOut);

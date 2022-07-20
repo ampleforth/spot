@@ -105,6 +105,16 @@ describe("PerpetualTranche", function () {
   });
 
   describe("#burn", function () {
+    describe("when paused", function () {
+      beforeEach(async function () {
+        await perp.pause();
+      });
+
+      it("should revert", async function () {
+        await expect(perp.burn(toFixedPtAmt("500"))).to.revertedWith("Pausable: paused");
+      });
+    });
+
     describe("when user has insufficient balance", function () {
       beforeEach(async function () {
         await perp.burn(toFixedPtAmt("250"));
