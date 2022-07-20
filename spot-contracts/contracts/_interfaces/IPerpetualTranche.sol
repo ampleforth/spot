@@ -159,14 +159,14 @@ interface IPerpetualTranche is IERC20Upgradeable {
         uint256 perpRolloverAmt;
         // @notice The amount of tokens to be withdrawn.
         uint256 tokenOutAmt;
-        // @notice The amount of trancheIn tokens used in the roll over operation.
+        // @notice The tranche denominated amount of tokens to be withdrawn.
+        // @dev tokenOutAmt and trancheOutAmt can only be different values 
+        //      in the case of rolling over the mature tranche.
+        uint256 trancheOutAmt;
+        // @notice The amount of trancheIn tokens used in the rollover operation.
         uint256 trancheInAmt;
         // @notice The difference between the requested trancheIn amount and the amount used for the rollover.
         uint256 remainingTrancheInAmt;
-        // @notice The standardized tranche amount deposited.
-        uint256 stdTrancheInAmt;
-        // @notice The standardized tranche amount withdrawn.
-        uint256 stdTrancheOutAmt;
     }
 
     // @notice Computes the amount reserve tokens that can be swapped out for the given number

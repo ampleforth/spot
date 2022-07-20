@@ -462,6 +462,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtRequested
     ) external override afterStateUpdate {
+        // verifies if rollover is acceptable
         if (!_isAcceptableRollover(trancheIn, tokenOut)) {
             revert UnacceptableRollover(trancheIn, tokenOut);
         }
@@ -490,7 +491,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
         // updates the mature tranche balance
         if (_isMatureTranche(tokenOut)) {
-            _updateMatureTrancheBalance(_matureTrancheBalance - r.stdTrancheOutAmt);
+            _updateMatureTrancheBalance(_matureTrancheBalance - r.trancheOutAmt);
         }
 
         // transfers tranche from the reserve to the sender
@@ -770,34 +771,34 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         trancheInPrice = feeStrategy.computeScaledRolloverValue(trancheInPrice);
 
         r.trancheInAmt = trancheInAmtRequested;
-        r.stdTrancheInAmt = _toStdTrancheAmt(trancheInAmtRequested, trancheInYield);
+        uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmtRequested, trancheInYield);
 
         // Basic rollover:
         // (stdTrancheInAmt . trancheInPrice) = (stdTrancheOutAmt . trancheOutPrice)
-        r.stdTrancheOutAmt = (r.stdTrancheInAmt * trancheInPrice) / trancheOutPrice;
-        uint256 trancheOutAmt = _fromStdTrancheAmt(r.stdTrancheOutAmt, trancheOutYield);
+        uint256 stdTrancheOutAmt = (stdTrancheInAmt * trancheInPrice) / trancheOutPrice;
+        r.trancheOutAmt = _fromStdTrancheAmt(stdTrancheOutAmt, trancheOutYield);
 
         // However, if the tokenOut is the mature tranche (held as naked collateral),
         // we infer the tokenOut amount from the tranche denomination.
-        // (tokenOutAmt = trancheOutAmt * collateralBalance / matureTrancheBalance)
+        // (tokenOutAmt = collateralBalance * trancheOutAmt / matureTrancheBalance)
         bool isMatureTrancheOut = _isMatureTranche(tokenOut);
         r.tokenOutAmt = isMatureTrancheOut
-            ? ((tokenOutBalance * trancheOutAmt) / _matureTrancheBalance)
-            : trancheOutAmt;
+            ? ((tokenOutBalance * r.trancheOutAmt) / _matureTrancheBalance)
+            : r.trancheOutAmt;
 
         // When the token out balance is NOT covered:
         // we fix tokenOutAmt = maxTokenOutAmtCovered and back calculate other values
         if (r.tokenOutAmt > maxTokenOutAmtCovered) {
             r.tokenOutAmt = maxTokenOutAmtCovered;
-            trancheOutAmt = isMatureTrancheOut
+            r.trancheOutAmt = isMatureTrancheOut
                 ? (_matureTrancheBalance * r.tokenOutAmt) / tokenOutBalance
                 : r.tokenOutAmt;
-            r.stdTrancheOutAmt = _toStdTrancheAmt(trancheOutAmt, trancheOutYield);
-            r.stdTrancheInAmt = (r.stdTrancheOutAmt * trancheOutPrice) / trancheInPrice;
-            r.trancheInAmt = _fromStdTrancheAmt(r.stdTrancheInAmt, trancheInYield);
+            stdTrancheOutAmt = _toStdTrancheAmt(r.trancheOutAmt, trancheOutYield);
+            stdTrancheInAmt = (stdTrancheOutAmt * trancheOutPrice) / trancheInPrice;
+            r.trancheInAmt = _fromStdTrancheAmt(stdTrancheInAmt, trancheInYield);
         }
 
-        r.perpRolloverAmt = (r.stdTrancheOutAmt * trancheOutPrice * totalSupply()) / _reserveValue();
+        r.perpRolloverAmt = (stdTrancheOutAmt * trancheOutPrice * totalSupply()) / _reserveValue();
         r.remainingTrancheInAmt = trancheInAmtRequested - r.trancheInAmt;
         return r;
     }
