@@ -37,7 +37,6 @@ task("ops:info")
     console.log(`maturityTolarance: [${await perp.minTrancheMaturitySec()}, ${await perp.maxTrancheMaturitySec()}]`);
     console.log("depositBond:", depositBond.address);
     console.log("issued:", issued);
-    console.log("skimPerc:", utils.formatUnits(await perp.skimPerc(), await perp.PERC_DECIMALS()));
     console.log("TotalSupply:", utils.formatUnits(perpSupply, perpDecimals));
 
     const matureTrancheBalance = await perp.callStatic.getMatureTrancheBalance();
