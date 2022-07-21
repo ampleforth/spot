@@ -53,7 +53,7 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
 
     // @notice The percentage of the value the system retains or disburses on every rollover operation.
     // @dev Discount percentage is stored as fixed point number with {PERC_DECIMALS}.
-    //      The discount percentage is a tax paid by users who rollover collateral, which over-collateralizes
+    //      When positive, the discount percentage is a tax paid by users who rollover collateral, which over-collateralizes
     //      the system. When negative, it acts as a subsidy to incentivize rollovers by diluting perp holders.
     //      eg) If discount is 5%, user can rollover 1x worth tranches for 0.95x worth tranches from the reserve.
     //          Or if discount is -5%, user can rollover 1x worth tranches for 1.05x worth tranches from the reserve.
