@@ -10,10 +10,6 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { IFeeStrategy } from "../_interfaces/IFeeStrategy.sol";
 import { IPerpetualTranche } from "../_interfaces/IPerpetualTranche.sol";
 
-/// @notice Expected perc value to be less than 100 with {PERC_DECIMALS}.
-/// @param perc The percentage value.
-error UnacceptablePercValue(int256 perc);
-
 /*
  *  @title BasicFeeStrategy
  *
@@ -119,7 +115,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     // @notice Updates the mint fee percentage.
     // @param mintFeePerc_ New mint fee percentage.
     function updateMintFeePerc(int256 mintFeePerc_) public onlyOwner {
-        _validatePercValue(mintFeePerc_);
         mintFeePerc = mintFeePerc_;
         emit UpdatedMintPerc(mintFeePerc_);
     }
@@ -127,7 +122,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     // @notice Updates the burn fee percentage.
     // @param burnFeePerc_ New burn fee percentage.
     function updateBurnFeePerc(int256 burnFeePerc_) public onlyOwner {
-        _validatePercValue(burnFeePerc_);
         burnFeePerc = burnFeePerc_;
         emit UpdatedBurnPerc(burnFeePerc_);
     }
@@ -135,7 +129,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     // @notice Updates the rollover fee percentage.
     // @param rolloverFeePerc_ New rollover fee percentage.
     function updateRolloverFeePerc(int256 rolloverFeePerc_) public onlyOwner {
-        _validatePercValue(rolloverFeePerc_);
         rolloverFeePerc = rolloverFeePerc_;
         emit UpdatedRolloverPerc(rolloverFeePerc_);
     }
@@ -143,7 +136,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     // @notice Updates the rollover discount percentage parameter.
     // @param rolloverDiscountPerc_ New rollover discount percentage.
     function updateRolloverDiscountPerc(int256 rolloverDiscountPerc_) public onlyOwner {
-        _validatePercValue(rolloverDiscountPerc_);
         rolloverDiscountPerc = rolloverDiscountPerc_;
         emit UpdatedRolloverDiscountPerc(rolloverDiscountPerc_);
     }
@@ -170,12 +162,5 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     /// @inheritdoc IFeeStrategy
     function computeScaledRolloverValue(uint256 value) external view override returns (uint256) {
         return (value * (int256(HUNDRED_PERC) - rolloverDiscountPerc).toUint256()) / HUNDRED_PERC;
-    }
-
-    // @dev Ensures that the given perc value is valid.
-    function _validatePercValue(int256 perc) private pure {
-        if (perc > int256(HUNDRED_PERC)) {
-            revert UnacceptablePercValue(perc);
-        }
     }
 }
