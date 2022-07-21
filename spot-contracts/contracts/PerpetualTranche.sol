@@ -280,6 +280,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         // and is to be never updated.
         _reserves.add(address(collateral_));
         assert(_reserveAt(0) == collateral_);
+        _syncReserve(collateral_);
         _applyYield(collateral_, UNIT_YIELD);
 
         updateBondIssuer(bondIssuer_);
@@ -773,10 +774,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
             return r;
         }
 
-        // We scale the trancheInPrice up or down to account for rollover discount or premium
-        // and from here on we use the scaled price.
-        trancheInPrice = feeStrategy.computeScaledRolloverValue(trancheInPrice);
-
         r.trancheInAmt = trancheInAmtRequested;
         uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmtRequested, trancheInYield);
 
@@ -883,18 +880,29 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         uint256 fee_ = SignedMathUpgradeable.abs(fee);
         if (fee > 0) {
             // Funds are coming in
-            // Handling a special case, when the fee is to be charged as the perp token itself
-            // In this case we don't need to make an external call to the token ERC-20 to "transferFrom"
-            // the payer, since this is still an internal call {msg.sender} will still point to the payer
-            // and we can just "transfer" from the payer's wallet.
             if (isNativeFeeToken) {
+                // Handling a special case, when the fee is to be charged as the perp token itself
+                // In this case we don't need to make an external call to the token ERC-20 to "transferFrom"
+                // the payer, since this is still an internal call {msg.sender} will still point to the payer
+                // and we can just "transfer" from the payer's wallet.
                 transfer(_self(), fee_);
             } else {
                 feeToken_.safeTransferFrom(payer, _self(), fee_);
             }
-        } else {
+        } else if (fee < 0) {
             // Funds are going out
-            feeToken_.safeTransfer(payer, fee_);
+            if (isNativeFeeToken) {
+                uint256 balance = _tokenBalance(feeToken_);
+                feeToken_.safeTransfer(payer, MathUpgradeable.min(fee_, balance));
+
+                // In case that the reserve's balance doesn't cover the entire fee amount,
+                // we mint perps to cover the difference.
+                if (balance < fee_) {
+                    _mint(payer, fee_ - balance);
+                }
+            } else {
+                feeToken_.safeTransfer(payer, fee_);
+            }
         }
 
         return isNativeFeeToken;

@@ -51,14 +51,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     //      the perp token amounts.
     int256 public rolloverFeePerc;
 
-    // @notice The percentage of the value the system retains or disburses on every rollover operation.
-    // @dev Discount percentage is stored as fixed point number with {PERC_DECIMALS}.
-    //      The discount percentage is a tax paid by users who rollover collateral, which over-collateralizes
-    //      the system. When negative, it acts as a subsidy to incentivize rollovers by diluting perp holders.
-    //      eg) If discount is 5%, user can rollover 1x worth tranches for 0.95x worth tranches from the reserve.
-    //          Or if discount is -5%, user can rollover 1x worth tranches for 1.05x worth tranches from the reserve.
-    int256 public rolloverDiscountPerc;
-
     // EVENTS
 
     // @notice Event emitted when the fee token is updated.
@@ -77,10 +69,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     // @param rolloverFeePerc Rollover fee percentage.
     event UpdatedRolloverPerc(int256 rolloverFeePerc);
 
-    // @notice Event emitted when the rollover discount percentage is updated.
-    // @param rolloverDiscountPerc The rollover discount percentage.
-    event UpdatedRolloverDiscountPerc(int256 rolloverDiscountPerc);
-
     // @notice Contract constructor.
     // @param perp_ Address of the perpetual ERC-20 token contract.
     constructor(IPerpetualTranche perp_) {
@@ -92,13 +80,11 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     // @param mintFeePerc_ Mint fee percentage.
     // @param burnFeePerc_ Burn fee percentage.
     // @param rolloverFeePerc_ Rollover fee percentage.
-    // @param rolloverDiscountPerc_ Rollover discount percentage.
     function init(
         IERC20Upgradeable feeToken_,
         int256 mintFeePerc_,
         int256 burnFeePerc_,
-        int256 rolloverFeePerc_,
-        int256 rolloverDiscountPerc_
+        int256 rolloverFeePerc_
     ) public initializer {
         __Ownable_init();
 
@@ -106,7 +92,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
         updateMintFeePerc(mintFeePerc_);
         updateBurnFeePerc(burnFeePerc_);
         updateRolloverFeePerc(rolloverFeePerc_);
-        updateRolloverDiscountPerc(rolloverDiscountPerc_);
     }
 
     // @notice Updates the fee token.
@@ -140,14 +125,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
         emit UpdatedRolloverPerc(rolloverFeePerc_);
     }
 
-    // @notice Updates the rollover discount percentage parameter.
-    // @param rolloverDiscountPerc_ New rollover discount percentage.
-    function updateRolloverDiscountPerc(int256 rolloverDiscountPerc_) public onlyOwner {
-        _validatePercValue(rolloverDiscountPerc_);
-        rolloverDiscountPerc = rolloverDiscountPerc_;
-        emit UpdatedRolloverDiscountPerc(rolloverDiscountPerc_);
-    }
-
     /// @inheritdoc IFeeStrategy
     function computeMintFee(uint256 mintAmt) external view override returns (int256) {
         uint256 absoluteFee = (mintFeePerc.abs() * mintAmt) / HUNDRED_PERC;
@@ -165,11 +142,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
         uint256 share = (feeToken.balanceOf(perp.feeCollector()) * rolloverAmt) / perp.totalSupply();
         uint256 absoluteFee = (rolloverFeePerc.abs() * share) / HUNDRED_PERC;
         return rolloverFeePerc.sign() * absoluteFee.toInt256();
-    }
-
-    /// @inheritdoc IFeeStrategy
-    function computeScaledRolloverValue(uint256 value) external view override returns (uint256) {
-        return (value * (int256(HUNDRED_PERC) - rolloverDiscountPerc).toUint256()) / HUNDRED_PERC;
     }
 
     // @dev Ensures that the given perc value is valid.

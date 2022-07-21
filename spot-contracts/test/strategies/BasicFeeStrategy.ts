@@ -24,7 +24,7 @@ describe("BasicFeeStrategy", function () {
   describe("#updateFeeToken", function () {
     let tx: Transaction;
     beforeEach(async function () {
-      await feeStrategy.init(perp.address, "0", "0", "0", "0");
+      await feeStrategy.init(perp.address, "0", "0", "0");
     });
 
     describe("when triggered by non-owner", function () {
@@ -52,7 +52,7 @@ describe("BasicFeeStrategy", function () {
   describe("#updateMintFeePerc", function () {
     let tx: Transaction;
     beforeEach(async function () {
-      await feeStrategy.init(perp.address, "0", "0", "0", "0");
+      await feeStrategy.init(perp.address, "0", "0", "0");
     });
 
     describe("when triggered by non-owner", function () {
@@ -86,7 +86,7 @@ describe("BasicFeeStrategy", function () {
   describe("#updateBurnFeePerc", function () {
     let tx: Transaction;
     beforeEach(async function () {
-      await feeStrategy.init(perp.address, "0", "0", "0", "0");
+      await feeStrategy.init(perp.address, "0", "0", "0");
     });
 
     describe("when triggered by non-owner", function () {
@@ -120,7 +120,7 @@ describe("BasicFeeStrategy", function () {
   describe("#updateRolloverFeePerc", function () {
     let tx: Transaction;
     beforeEach(async function () {
-      await feeStrategy.init(perp.address, "0", "0", "0", "0");
+      await feeStrategy.init(perp.address, "0", "0", "0");
     });
 
     describe("when triggered by non-owner", function () {
@@ -151,58 +151,24 @@ describe("BasicFeeStrategy", function () {
     });
   });
 
-  describe("#updateRolloverDiscountPerc", function () {
-    let tx: Transaction;
-    beforeEach(async function () {
-      await feeStrategy.init(perp.address, "0", "0", "0", "0");
-    });
-
-    describe("when triggered by non-owner", function () {
-      it("should revert", async function () {
-        await expect(feeStrategy.connect(otherUser).updateRolloverDiscountPerc("1")).to.be.revertedWith(
-          "Ownable: caller is not the owner",
-        );
-      });
-    });
-
-    describe("when set discount perc is NOT valid", function () {
-      it("should revert", async function () {
-        await expect(feeStrategy.updateRolloverDiscountPerc("100000001")).to.be.revertedWith("UnacceptablePercValue");
-      });
-    });
-
-    describe("when set discount perc is valid", function () {
-      beforeEach(async function () {
-        tx = feeStrategy.connect(deployer).updateRolloverDiscountPerc("50000000");
-        await tx;
-      });
-      it("should update reference", async function () {
-        expect(await feeStrategy.rolloverDiscountPerc()).to.eq("50000000");
-      });
-      it("should emit event", async function () {
-        await expect(tx).to.emit(feeStrategy, "UpdatedRolloverDiscountPerc").withArgs("50000000");
-      });
-    });
-  });
-
   describe("#computeMintFee", function () {
     describe("when perc > 0", function () {
       it("should return the mint fee", async function () {
-        await feeStrategy.init(perp.address, "1500000", "0", "0", "0");
+        await feeStrategy.init(perp.address, "1500000", "0", "0");
         expect(await feeStrategy.computeMintFee(toFixedPtAmt("1000"))).to.eq(toFixedPtAmt("15"));
       });
     });
 
     describe("when perc < 0", function () {
       it("should return the mint fee", async function () {
-        await feeStrategy.init(perp.address, "-2500000", "0", "0", "0");
+        await feeStrategy.init(perp.address, "-2500000", "0", "0");
         expect(await feeStrategy.computeMintFee(toFixedPtAmt("1000"))).to.eq(toFixedPtAmt("-25"));
       });
     });
 
     describe("when perc = 0", function () {
       it("should return the mint fee", async function () {
-        await feeStrategy.init(perp.address, "0", "0", "0", "0");
+        await feeStrategy.init(perp.address, "0", "0", "0");
         expect(await feeStrategy.computeMintFee(toFixedPtAmt("1000"))).to.eq(toFixedPtAmt("0"));
       });
     });
@@ -211,21 +177,21 @@ describe("BasicFeeStrategy", function () {
   describe("#computeBurnFee", function () {
     describe("when perc > 0", function () {
       it("should return the burn fee", async function () {
-        await feeStrategy.init(perp.address, "0", "2500000", "0", "0");
+        await feeStrategy.init(perp.address, "0", "2500000", "0");
         expect(await feeStrategy.computeBurnFee(toFixedPtAmt("1000"))).to.eq(toFixedPtAmt("25"));
       });
     });
 
     describe("when perc < 0", function () {
       it("should return the burn fee", async function () {
-        await feeStrategy.init(perp.address, "0", "-1500000", "0", "0");
+        await feeStrategy.init(perp.address, "0", "-1500000", "0");
         expect(await feeStrategy.computeBurnFee(toFixedPtAmt("1000"))).to.eq(toFixedPtAmt("-15"));
       });
     });
 
     describe("when perc = 0", function () {
       it("should return the burn fee", async function () {
-        await feeStrategy.init(perp.address, "0", "0", "0", "0");
+        await feeStrategy.init(perp.address, "0", "0", "0");
         expect(await feeStrategy.computeBurnFee(toFixedPtAmt("1000"))).to.eq(toFixedPtAmt("0"));
       });
     });
@@ -238,45 +204,22 @@ describe("BasicFeeStrategy", function () {
 
     describe("when perc > 0", function () {
       it("should return the rollover fee", async function () {
-        await feeStrategy.init(perp.address, "0", "0", "1000000", "0");
+        await feeStrategy.init(perp.address, "0", "0", "1000000");
         expect(await feeStrategy.computeRolloverFee(toFixedPtAmt("100000"))).to.eq(toFixedPtAmt("1000"));
       });
     });
 
     describe("when perc < 0", function () {
       it("should return the rollover fee", async function () {
-        await feeStrategy.init(perp.address, "0", "0", "-5000000", "0");
+        await feeStrategy.init(perp.address, "0", "0", "-5000000");
         expect(await feeStrategy.computeRolloverFee(toFixedPtAmt("100000"))).to.eq(toFixedPtAmt("-5000"));
       });
     });
 
     describe("when perc = 0", function () {
       it("should return the rollover fee", async function () {
-        await feeStrategy.init(perp.address, "0", "0", "0", "0");
+        await feeStrategy.init(perp.address, "0", "0", "0");
         expect(await feeStrategy.computeRolloverFee(toFixedPtAmt("100000"))).to.eq(toFixedPtAmt("0"));
-      });
-    });
-  });
-
-  describe("#computeScaledRolloverValue", function () {
-    describe("when perc > 0", function () {
-      it("should return the scaled value", async function () {
-        await feeStrategy.init(perp.address, "0", "0", "0", "1000000");
-        expect(await feeStrategy.computeScaledRolloverValue(toFixedPtAmt("100"))).to.eq(toFixedPtAmt("99"));
-      });
-    });
-
-    describe("when perc < 0", function () {
-      it("should return the scaled value", async function () {
-        await feeStrategy.init(perp.address, "0", "0", "0", "-1000000");
-        expect(await feeStrategy.computeScaledRolloverValue(toFixedPtAmt("100"))).to.eq(toFixedPtAmt("101"));
-      });
-    });
-
-    describe("when perc = 0", function () {
-      it("should return the scaled value", async function () {
-        await feeStrategy.init(perp.address, "0", "0", "0", "0");
-        expect(await feeStrategy.computeScaledRolloverValue(toFixedPtAmt("100"))).to.eq(toFixedPtAmt("100"));
       });
     });
   });

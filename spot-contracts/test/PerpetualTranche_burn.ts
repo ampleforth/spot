@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { network, ethers, upgrades } from "hardhat";
-import { Contract, Transaction, Signer } from "ethers";
+import { Contract, Transaction, Signer, constants } from "ethers";
 
 import {
   setupCollateralToken,
@@ -209,6 +209,45 @@ describe("PerpetualTranche", function () {
         });
         it("should transfer reward", async function () {
           await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(perp, perp, toFixedPtAmt("-1"));
+        });
+        it("should transfer the tranches out", async function () {
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalances(
+            initialDepositTranche,
+            [deployer, perp],
+            [toFixedPtAmt("500"), toFixedPtAmt("-500")],
+          );
+        });
+        it("should return the redemption amounts", async function () {
+          const r = await perp.callStatic.computeRedemptionAmts(toFixedPtAmt("500"));
+          expect(r[0][0]).to.eq(collateralToken.address);
+          expect(r[0][1]).to.eq(initialDepositTranche.address);
+          expect(r[1][0]).to.eq(toFixedPtAmt("0"));
+          expect(r[1][1]).to.eq(toFixedPtAmt("500"));
+        });
+      });
+
+      describe("when fee < 0 && abs(fee) < balance", function () {
+        beforeEach(async function () {
+          await depositIntoBond(await bondAt(await perp.callStatic.getDepositBond()), toFixedPtAmt("2"), deployer);
+          await initialDepositTranche.increaseAllowance(perp.address, toFixedPtAmt("1"));
+          await perp.deposit(initialDepositTranche.address, toFixedPtAmt("1"));
+          await perp.transfer(perp.address, toFixedPtAmt("0.5"));
+          await feeStrategy.setBurnFee(toFixedPtAmt("-1"));
+        });
+        it("should burn perp tokens", async function () {
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(
+            perp,
+            deployer,
+            toFixedPtAmt("-499"),
+          );
+        });
+        it("should transfer reward", async function () {
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(perp, perp, toFixedPtAmt("-0.5"));
+        });
+        it("should mint the delta", async function () {
+          await expect(perp.burn(toFixedPtAmt("500")))
+            .to.emit(perp, "Transfer")
+            .withArgs(constants.AddressZero, deployerAddress, toFixedPtAmt("0.5"));
         });
         it("should transfer the tranches out", async function () {
           await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalances(

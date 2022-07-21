@@ -27,12 +27,4 @@ interface IFeeStrategy {
     // @param amount The Perp-denominated value of the tranches being rolled over.
     // @return The rollover fee in fee tokens.
     function computeRolloverFee(uint256 amount) external view returns (int256);
-
-    // @notice Computes the adjusted value of tokens to be rolled out.
-    // @dev Applies a discount or premium to the value rolled in by scaling it down or up.
-    //      When valueOut > valueIn, then the system pays the delta as a subsidy to rollover.
-    //      When valueOut < valueIn, the system charges a tax on rollover.
-    // @param value The value of tokens rolled in.
-    // @return The adjusted value of tokens to be rolled out.
-    function computeScaledRolloverValue(uint256 value) external view returns (uint256);
 }
