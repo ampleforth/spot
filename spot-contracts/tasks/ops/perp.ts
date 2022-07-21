@@ -99,36 +99,6 @@ task("ops:updateState")
     console.log("Tx", tx.hash);
   });
 
-task("ops:redenominate")
-  .addPositionalParam("perpAddress", "the address of the perp contract", undefined, types.string, false)
-  .addOptionalParam("from", "the address of sender", "0x", types.string)
-  .setAction(async function (args: TaskArguments, hre) {
-    const { perpAddress } = args;
-
-    const perp = await hre.ethers.getContractAt("PerpetualTranche", perpAddress);
-    const collateral = await hre.ethers.getContractAt("MockERC20", await perp.collateral());
-    const collateralYield = await perp.computeYield(collateral.address);
-    const balance = await collateral.balanceOf(await perp.reserve());
-    const newStdBalance = balance.mul(collateralYield).div(await perp.UNIT_YIELD());
-
-    console.log("---------------------------------------------------------------");
-    console.log("Execution:");
-    let deployerAddress = args.from;
-    if (deployerAddress === "0x") {
-      deployerAddress = await (await hre.ethers.getSigners())[0].getAddress();
-    }
-    console.log("Signer", deployerAddress);
-
-    console.log("Redenominate:");
-    if (newStdBalance.gt("0")) {
-      const tx = await perp.redenominate(newStdBalance);
-      await tx.wait();
-      console.log("Tx", tx.hash);
-    } else {
-      console.error("Cannot redenominate now");
-    }
-  });
-
 task("ops:trancheAndDeposit")
   .addParam("perpAddress", "the address of the perp contract", undefined, types.string, false)
   .addParam("routerAddress", "the address of the router contract", undefined, types.string, false)

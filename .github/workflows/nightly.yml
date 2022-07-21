@@ -27,7 +27,7 @@ jobs:
         run: yarn install --immutable
 
       - name: spot-contracts run coverage
-        run: yarn workspace @ampleforthorg/spot-contracts run coverage
+        run: yarn workspace @ampleforthorg/spot-contracts run coverage && mv ./spot-contracts/coverage ./
 
       - name: spot-contracts report coverage
         uses: coverallsapp/github-action@1.1.3
