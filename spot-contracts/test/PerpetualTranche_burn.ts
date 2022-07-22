@@ -136,6 +136,18 @@ describe("PerpetualTranche", function () {
       });
     });
 
+    describe("when the supply cap is exceeded", function () {
+      beforeEach(async function () {
+        await feeStrategy.setBurnFee(toFixedPtAmt("-100"));
+        await perp.updateMintingLimits(toFixedPtAmt("100"), toFixedPtAmt("1"));
+      });
+
+      it("should revert", async function () {
+        await expect(perp.burn(toFixedPtAmt("0.01"))).to.revertedWith("ExceededMaxSupply");
+      });
+    });
+
+
     describe("when fee is in native token", function () {
       describe("when fee is zero", function () {
         it("should burn perp tokens", async function () {

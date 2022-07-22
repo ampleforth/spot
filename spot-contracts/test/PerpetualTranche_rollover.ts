@@ -247,6 +247,20 @@ describe("PerpetualTranche", function () {
       });
     });
 
+    describe("when the supply cap is exceeded", function () {
+      beforeEach(async function () {
+        await feeStrategy.setRolloverFee(toFixedPtAmt("-100"));
+        await perp.updateMintingLimits(toFixedPtAmt("100"), toFixedPtAmt("1"));
+      });
+
+      it("should revert", async function () {
+        await expect(
+          perp.rollover(rolloverInTranche.address, reserveTranche1.address, toFixedPtAmt("100")),
+        ).to.revertedWith("ExceededMaxSupply");
+      });
+    });
+
+
     describe("when trancheIn yield is 0.5", function () {
       let newRotationInTranche: Contract;
       beforeEach(async function () {
