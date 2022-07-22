@@ -1231,13 +1231,13 @@ describe("PerpetualTranche", function () {
     });
 
     it("should return the tranche balance", async function () {
-      expect(await perp.callStatic.getReserveTrancheBalance(perp.address)).to.eq('0')
-      expect(await perp.callStatic.getReserveTrancheBalance(collateralToken.address)).to.eq(toFixedPtAmt('750'))
-      expect(await perp.callStatic.getReserveTrancheBalance(depositTranches[0].address)).to.eq('0')
-      expect(await perp.callStatic.getReserveTrancheBalance(depositTranches[1].address)).to.eq('0')
-      expect(await perp.callStatic.getReserveTrancheBalance(depositTranches[2].address)).to.eq(toFixedPtAmt('500'))
-      expect(await perp.callStatic.getReserveTrancheBalance(depositTranches[3].address)).to.eq(toFixedPtAmt('500'))
-      expect(await perp.callStatic.getReserveTrancheBalance(depositTranches[4].address)).to.eq(toFixedPtAmt('500'))
+      expect(await perp.callStatic.getReserveTrancheBalance(perp.address)).to.eq("0");
+      expect(await perp.callStatic.getReserveTrancheBalance(collateralToken.address)).to.eq(toFixedPtAmt("750"));
+      expect(await perp.callStatic.getReserveTrancheBalance(depositTranches[0].address)).to.eq("0");
+      expect(await perp.callStatic.getReserveTrancheBalance(depositTranches[1].address)).to.eq("0");
+      expect(await perp.callStatic.getReserveTrancheBalance(depositTranches[2].address)).to.eq(toFixedPtAmt("500"));
+      expect(await perp.callStatic.getReserveTrancheBalance(depositTranches[3].address)).to.eq(toFixedPtAmt("500"));
+      expect(await perp.callStatic.getReserveTrancheBalance(depositTranches[4].address)).to.eq(toFixedPtAmt("500"));
     });
   });
 });
