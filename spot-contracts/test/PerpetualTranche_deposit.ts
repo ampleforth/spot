@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { network, ethers, upgrades } from "hardhat";
-import { Contract, Transaction, Signer } from "ethers";
+import { Contract, Transaction, Signer, constants } from "ethers";
 
 import {
   setupCollateralToken,
@@ -408,6 +408,45 @@ describe("PerpetualTranche", function () {
             perp,
             toFixedPtAmt("-1"),
           );
+        });
+        it("should transfer the tranches in", async function () {
+          await expect(() => perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.changeTokenBalances(
+            depositTrancheA,
+            [deployer, perp],
+            [toFixedPtAmt("-500"), toFixedPtAmt("500")],
+          );
+        });
+        it("should return the mintAmt", async function () {
+          const r = await perp.callStatic.computeMintAmt(depositTrancheA.address, toFixedPtAmt("500"));
+          expect(r).to.eq(toFixedPtAmt("500"));
+        });
+      });
+      describe("when fee < 0 and abs(fee) < balance", function () {
+        beforeEach(async function () {
+          await depositIntoBond(await bondAt(await perp.callStatic.getDepositBond()), toFixedPtAmt("2"), deployer);
+          await depositTrancheA.increaseAllowance(perp.address, toFixedPtAmt("1"));
+          await perp.deposit(depositTrancheA.address, toFixedPtAmt("1"));
+          await perp.transfer(perp.address, toFixedPtAmt("0.5"));
+          await feeStrategy.setMintFee(toFixedPtAmt("-1"));
+        });
+        it("should mint perp tokens", async function () {
+          await expect(() => perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.changeTokenBalance(
+            perp,
+            deployer,
+            toFixedPtAmt("501"),
+          );
+        });
+        it("should transfer reward amount", async function () {
+          await expect(() => perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.changeTokenBalance(
+            perp,
+            perp,
+            toFixedPtAmt("-0.5"),
+          );
+        });
+        it("should mint the delta", async function () {
+          await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500")))
+            .to.emit(perp, "Transfer")
+            .withArgs(constants.AddressZero, deployerAddress, toFixedPtAmt("0.5"));
         });
         it("should transfer the tranches in", async function () {
           await expect(() => perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.changeTokenBalances(
