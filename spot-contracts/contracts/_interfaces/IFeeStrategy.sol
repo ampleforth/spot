@@ -20,7 +20,7 @@ interface IFeeStrategy {
     // @notice Computes the fees while burning given amount of perp tokens.
     // @dev The burn fee can be either positive or negative. When positive it's paid by the burning users to the reserve.
     //      When negative its paid to the burning users by the reserve.
-    //      The protocol fee is always positive and is paid by the users burning to the
+    //      The protocol fee is always non-negative and is paid by the users burning to the
     //      perp contract's fee collector.
     // @param amount The amount of perp tokens to be burnt.
     // @return reserveFee The fee paid to the reserve to burn perp tokens.
