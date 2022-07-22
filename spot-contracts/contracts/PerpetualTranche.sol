@@ -58,8 +58,8 @@ error UnacceptableDepositTranche(ITranche trancheIn, IBondController depositBond
 
 /// @notice Expected to mint a non-zero amount of tokens.
 /// @param trancheInAmt The amount of tranche tokens deposited.
-/// @param mintAmt The amount of tranche tokens mint.
-error UnacceptableMintAmt(uint256 trancheInAmt, uint256 mintAmt);
+/// @param perpAmtMint The amount of tranche tokens mint.
+error UnacceptableMintAmt(uint256 trancheInAmt, uint256 perpAmtMint);
 
 /// @notice Expected to redeem current redemption tranche.
 /// @param trancheOut Address of the withdrawn tranche.
@@ -392,25 +392,25 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         }
 
         // calculates the amount of perp tokens when depositing `trancheInAmt` of tranche tokens
-        uint256 mintAmt = _computeMintAmt(trancheIn, trancheInAmt);
-        if (trancheInAmt == 0 || mintAmt == 0) {
-            revert UnacceptableMintAmt(trancheInAmt, mintAmt);
+        uint256 perpAmtMint = _computeMintAmt(trancheIn, trancheInAmt);
+        if (trancheInAmt == 0 || perpAmtMint == 0) {
+            revert UnacceptableMintAmt(trancheInAmt, perpAmtMint);
         }
 
-        // calculates the fee to mint `mintAmt` of perp token
-        int256 mintFee = feeStrategy.computeMintFee(mintAmt);
+        // calculates the fees to mint `perpAmtMint` of perp token
+        (int256 reserveFee, uint256 protocolFee) = feeStrategy.computeMintFees(perpAmtMint);
 
         // transfers tranche tokens from the sender to the reserve
         _transferIntoReserve(_msgSender(), trancheIn, trancheInAmt);
 
         // mints perp tokens to the sender
-        _mint(_msgSender(), mintAmt);
+        _mint(_msgSender(), perpAmtMint);
 
         // settles fees
-        _settleFee(_msgSender(), mintFee);
+        _settleFee(_msgSender(), reserveFee, protocolFee);
 
         // updates & enforces supply cap and tranche mint cap
-        _mintedSupplyPerTranche[trancheIn] += mintAmt;
+        _mintedSupplyPerTranche[trancheIn] += perpAmtMint;
         _enforceMintingLimits(trancheIn);
     }
 
@@ -427,14 +427,14 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         // calculates share of reserve tokens to be redeemed
         (IERC20Upgradeable[] memory tokensOuts, uint256[] memory tokenOutAmts) = _computeRedemptionAmts(perpAmtBurnt);
 
-        // calculates the fee to burn `perpAmtBurnt` of perp token
-        int256 burnFee = feeStrategy.computeBurnFee(perpAmtBurnt);
+        // calculates the fees to burn `perpAmtBurnt` of perp token
+        (int256 reserveFee, uint256 protocolFee) = feeStrategy.computeBurnFees(perpAmtBurnt);
 
         // updates the mature tranche balance
         _updateMatureTrancheBalance((_matureTrancheBalance * (perpSupply - perpAmtBurnt)) / perpSupply);
 
         // settles fees
-        _settleFee(_msgSender(), burnFee);
+        _settleFee(_msgSender(), reserveFee, protocolFee);
 
         // burns perp tokens from the sender
         _burn(_msgSender(), perpAmtBurnt);
@@ -471,14 +471,14 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
             revert UnacceptableRolloverAmt(r.trancheInAmt, r.tokenOutAmt, r.perpRolloverAmt);
         }
 
-        // calculates the fee to rollover `r.perpRolloverAmt` of perp token
-        int256 rolloverFee = feeStrategy.computeRolloverFee(r.perpRolloverAmt);
+        // calculates the fees to rollover `r.perpRolloverAmt` of perp token
+        (int256 reserveFee, uint256 protocolFee) = feeStrategy.computeRolloverFees(r.perpRolloverAmt);
 
         // transfers tranche tokens from the sender to the reserve
         _transferIntoReserve(_msgSender(), trancheIn, r.trancheInAmt);
 
         // settles fees
-        _settleFee(_msgSender(), rolloverFee);
+        _settleFee(_msgSender(), reserveFee, protocolFee);
 
         // updates the mature tranche balance
         if (_isMatureTranche(tokenOut)) {
@@ -660,22 +660,27 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     // External view methods
 
     /// @inheritdoc IPerpetualTranche
-    function reserve() external view override returns (address) {
-        return _self();
-    }
-
-    /// @inheritdoc IPerpetualTranche
-    function feeCollector() external view override returns (address) {
-        return _self();
-    }
-
-    /// @inheritdoc IPerpetualTranche
     function collateral() external view override returns (IERC20Upgradeable) {
         return _reserveAt(0);
     }
 
     //--------------------------------------------------------------------------
     // Public view methods
+
+    /// @inheritdoc IPerpetualTranche
+    function erc20() public view override returns (IERC20Upgradeable) {
+        return IERC20Upgradeable(address(this));
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    function reserve() public view override returns (address) {
+        return address(this);
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    function feeCollector() public view override returns (address) {
+        return owner();
+    }
 
     /// @inheritdoc IPerpetualTranche
     function feeToken() public view override returns (IERC20Upgradeable) {
@@ -713,10 +718,10 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         uint256 totalSupply_ = totalSupply();
         uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmt, computeYield(trancheIn));
         uint256 trancheInPrice = computePrice(trancheIn);
-        uint256 mintAmt = (totalSupply_ > 0)
+        uint256 perpAmtMint = (totalSupply_ > 0)
             ? (stdTrancheInAmt * trancheInPrice * totalSupply_) / _reserveValue()
             : (stdTrancheInAmt * trancheInPrice) / UNIT_PRICE;
-        return (mintAmt);
+        return (perpAmtMint);
     }
 
     // @dev Computes the reserve token amounts redeemed when a given number of perps are burnt.
@@ -797,7 +802,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         IERC20Upgradeable token,
         uint256 trancheAmt
     ) internal returns (uint256) {
-        token.safeTransferFrom(from, _self(), trancheAmt);
+        token.safeTransferFrom(from, reserve(), trancheAmt);
         return _syncReserve(token);
     }
 
@@ -848,47 +853,62 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         return balance;
     }
 
-    // @dev If the fee is positive, fee is transferred from the payer to the self
-    //      else it's transferred to the payer from the self.
-    //      NOTE: fee is a not-reserve asset.
-    // @return True if the fee token used for settlement is the perp token.
-    function _settleFee(address payer, int256 fee) internal returns (bool isNativeFeeToken) {
+    // @dev Handles fee transfer between the payer, the reserve and the protocol fee collector.
+    function _settleFee(
+        address payer,
+        int256 reserveFee,
+        uint256 protocolFee
+    ) internal {
+        // Handling reserve fees
+        uint256 reserveFee_ = SignedMathUpgradeable.abs(reserveFee);
+        if (reserveFee > 0) {
+            _handleFeeTransferIn(payer, reserve(), reserveFee_);
+        } else if (reserveFee < 0) {
+            _handleFeeTransferOut(payer, reserveFee_);
+        }
+        // Handling protocol fees
+        if (protocolFee > 0) {
+            _handleFeeTransferIn(payer, feeCollector(), protocolFee);
+        }
+    }
+
+    // @dev Transfers fee tokens from the payer to the destination.
+    function _handleFeeTransferIn(
+        address payer,
+        address destination,
+        uint256 feeAmt
+    ) internal {
         IERC20Upgradeable feeToken_ = feeToken();
-        isNativeFeeToken = (address(feeToken_) == _self());
-
-        if (fee == 0) {
-            return isNativeFeeToken;
+        bool isNativeFeeToken = (feeToken_ == erc20());
+        // Funds are coming in
+        if (isNativeFeeToken) {
+            // Handling a special case, when the fee is to be charged as the perp token itself
+            // In this case we don't need to make an external call to the token ERC-20 to "transferFrom"
+            // the payer, since this is still an internal call {msg.sender} will still point to the payer
+            // and we can just "transfer" from the payer's wallet.
+            transfer(destination, feeAmt);
+        } else {
+            feeToken_.safeTransferFrom(payer, destination, feeAmt);
         }
+    }
 
-        uint256 fee_ = SignedMathUpgradeable.abs(fee);
-        if (fee > 0) {
-            // Funds are coming in
-            if (isNativeFeeToken) {
-                // Handling a special case, when the fee is to be charged as the perp token itself
-                // In this case we don't need to make an external call to the token ERC-20 to "transferFrom"
-                // the payer, since this is still an internal call {msg.sender} will still point to the payer
-                // and we can just "transfer" from the payer's wallet.
-                transfer(_self(), fee_);
-            } else {
-                feeToken_.safeTransferFrom(payer, _self(), fee_);
-            }
-        } else if (fee < 0) {
-            // Funds are going out
-            if (isNativeFeeToken) {
-                uint256 balance = _tokenBalance(feeToken_);
-                feeToken_.safeTransfer(payer, MathUpgradeable.min(fee_, balance));
+    // @dev Transfers fee from the reserve to the destination.
+    function _handleFeeTransferOut(address destination, uint256 feeAmt) internal {
+        IERC20Upgradeable feeToken_ = feeToken();
+        bool isNativeFeeToken = (feeToken_ == erc20());
+        // Funds are going out
+        if (isNativeFeeToken) {
+            uint256 balance = _tokenBalance(feeToken_);
+            feeToken_.safeTransfer(destination, MathUpgradeable.min(feeAmt, balance));
 
-                // In case that the reserve's balance doesn't cover the entire fee amount,
-                // we mint perps to cover the difference.
-                if (balance < fee_) {
-                    _mint(payer, fee_ - balance);
-                }
-            } else {
-                feeToken_.safeTransfer(payer, fee_);
+            // In case that the reserve's balance doesn't cover the entire fee amount,
+            // we mint perps to cover the difference.
+            if (balance < feeAmt) {
+                _mint(destination, feeAmt - balance);
             }
+        } else {
+            feeToken_.safeTransfer(destination, feeAmt);
         }
-
-        return isNativeFeeToken;
     }
 
     // @dev Updates contract store with provided yield.
@@ -994,14 +1014,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         return (token == _reserveAt(0));
     }
 
-    // @dev Fetches the perp contract's token balance.
+    // @dev Fetches the reserve's token balance.
     function _tokenBalance(IERC20Upgradeable token) private view returns (uint256) {
-        return token.balanceOf(_self());
-    }
-
-    // @dev Alias to self.
-    function _self() private view returns (address) {
-        return address(this);
+        return token.balanceOf(reserve());
     }
 
     // @dev Calculates the standardized tranche amount for internal book keeping.

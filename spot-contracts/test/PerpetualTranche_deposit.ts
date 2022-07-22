@@ -25,6 +25,7 @@ let perp: Contract,
   yieldStrategy: Contract,
   deployer: Signer,
   deployerAddress: string,
+  otherUser: Signer,
   depositBond: Contract,
   depositTrancheA: Contract,
   depositTrancheZ: Contract;
@@ -34,6 +35,7 @@ describe("PerpetualTranche", function () {
 
     const accounts = await ethers.getSigners();
     deployer = accounts[0];
+    otherUser = accounts[1];
     deployerAddress = await deployer.getAddress();
 
     bondFactory = await setupBondFactory();
@@ -460,6 +462,45 @@ describe("PerpetualTranche", function () {
           expect(r).to.eq(toFixedPtAmt("500"));
         });
       });
+      describe("when protocol fee > 0", function () {
+        beforeEach(async function () {
+          await perp.transferOwnership(await otherUser.getAddress());
+          await feeStrategy.setMintFee(toFixedPtAmt("1"));
+          await feeStrategy.setProtocolFee(toFixedPtAmt("1"));
+        });
+        it("should mint perp tokens", async function () {
+          await expect(() => perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.changeTokenBalance(
+            perp,
+            deployer,
+            toFixedPtAmt("498"),
+          );
+        });
+        it("should withhold reserve fee amount", async function () {
+          await expect(() => perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.changeTokenBalance(
+            perp,
+            perp,
+            toFixedPtAmt("1"),
+          );
+        });
+        it("should withhold protocol fee amount", async function () {
+          await expect(() => perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.changeTokenBalance(
+            perp,
+            otherUser,
+            toFixedPtAmt("1"),
+          );
+        });
+        it("should transfer the tranches in", async function () {
+          await expect(() => perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.changeTokenBalances(
+            depositTrancheA,
+            [deployer, perp],
+            [toFixedPtAmt("-500"), toFixedPtAmt("500")],
+          );
+        });
+        it("should return the mintAmt", async function () {
+          const r = await perp.callStatic.computeMintAmt(depositTrancheA.address, toFixedPtAmt("500"));
+          expect(r).to.eq(toFixedPtAmt("500"));
+        });
+      });
     });
 
     describe("when fee is in non-native token", function () {
@@ -575,6 +616,41 @@ describe("PerpetualTranche", function () {
             feeToken,
             [deployer, perp],
             [toFixedPtAmt("1"), toFixedPtAmt("-1")],
+          );
+        });
+        it("should transfer the tranches in", async function () {
+          await expect(() => perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.changeTokenBalances(
+            depositTrancheA,
+            [deployer, perp],
+            [toFixedPtAmt("-500"), toFixedPtAmt("500")],
+          );
+        });
+        it("should return the mintAmt", async function () {
+          const r = await perp.callStatic.computeMintAmt(depositTrancheA.address, toFixedPtAmt("500"));
+          expect(r).to.eq(toFixedPtAmt("500"));
+        });
+      });
+      describe("when protocol fee > 0", async function () {
+        beforeEach(async function () {
+          await perp.transferOwnership(await otherUser.getAddress());
+          await feeStrategy.setMintFee(toFixedPtAmt("1"));
+          await feeStrategy.setProtocolFee(toFixedPtAmt("0.5"));
+          await feeToken.mint(deployerAddress, toFixedPtAmt("1.5"));
+          await feeToken.approve(perp.address, toFixedPtAmt("1.5"));
+        });
+
+        it("should mint perp tokens", async function () {
+          await expect(() => perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.changeTokenBalance(
+            perp,
+            deployer,
+            toFixedPtAmt("500"),
+          );
+        });
+        it("should transfer reserve & protocol fees", async function () {
+          await expect(() => perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.changeTokenBalances(
+            feeToken,
+            [deployer, perp, otherUser],
+            [toFixedPtAmt("-1.5"), toFixedPtAmt("1"), toFixedPtAmt("0.5")],
           );
         });
         it("should transfer the tranches in", async function () {

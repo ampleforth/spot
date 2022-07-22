@@ -25,6 +25,7 @@ let perp: Contract,
   pricingStrategy: Contract,
   yieldStrategy: Contract,
   deployer: Signer,
+  otherUser: Signer,
   deployerAddress: string,
   depositBond: Contract,
   initialDepositTranche: Contract;
@@ -35,6 +36,7 @@ describe("PerpetualTranche", function () {
 
     const accounts = await ethers.getSigners();
     deployer = accounts[0];
+    otherUser = accounts[1];
     deployerAddress = await deployer.getAddress();
 
     bondFactory = await setupBondFactory();
@@ -264,6 +266,48 @@ describe("PerpetualTranche", function () {
           expect(r[1][1]).to.eq(toFixedPtAmt("500"));
         });
       });
+
+      describe("when protocol fee > 0", function () {
+        beforeEach(async function () {
+          await perp.transferOwnership(await otherUser.getAddress());
+          await depositIntoBond(await bondAt(await perp.callStatic.getDepositBond()), toFixedPtAmt("3"), deployer);
+          await initialDepositTranche.increaseAllowance(perp.address, toFixedPtAmt("1.5"));
+          await perp.deposit(initialDepositTranche.address, toFixedPtAmt("1.5"));
+          await feeStrategy.setBurnFee(toFixedPtAmt("1"));
+          await feeStrategy.setProtocolFee(toFixedPtAmt("0.5"));
+        });
+        it("should burn perp tokens", async function () {
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(
+            perp,
+            deployer,
+            toFixedPtAmt("-501.5"),
+          );
+        });
+        it("should withhold reserve fee", async function () {
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(perp, perp, toFixedPtAmt("1"));
+        });
+        it("should withhold protocol fee", async function () {
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(
+            perp,
+            otherUser,
+            toFixedPtAmt("0.5"),
+          );
+        });
+        it("should transfer the tranches out", async function () {
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalances(
+            initialDepositTranche,
+            [deployer, perp],
+            [toFixedPtAmt("500"), toFixedPtAmt("-500")],
+          );
+        });
+        it("should return the redemption amounts", async function () {
+          const r = await perp.callStatic.computeRedemptionAmts(toFixedPtAmt("500"));
+          expect(r[0][0]).to.eq(collateralToken.address);
+          expect(r[0][1]).to.eq(initialDepositTranche.address);
+          expect(r[1][0]).to.eq(toFixedPtAmt("0"));
+          expect(r[1][1]).to.eq(toFixedPtAmt("500"));
+        });
+      });
     });
 
     describe("when fee is in non-native token", function () {
@@ -392,6 +436,48 @@ describe("PerpetualTranche", function () {
             [toFixedPtAmt("500"), toFixedPtAmt("-500")],
           );
         });
+        it("should return the redemption amounts", async function () {
+          const r = await perp.callStatic.computeRedemptionAmts(toFixedPtAmt("500"));
+          expect(r[0][0]).to.eq(collateralToken.address);
+          expect(r[0][1]).to.eq(initialDepositTranche.address);
+          expect(r[1][0]).to.eq(toFixedPtAmt("0"));
+          expect(r[1][1]).to.eq(toFixedPtAmt("500"));
+        });
+      });
+
+      describe("when protocol fee > 0", async function () {
+        beforeEach(async function () {
+          await perp.transferOwnership(await otherUser.getAddress());
+          await feeStrategy.setBurnFee(toFixedPtAmt("1"));
+          await feeStrategy.setProtocolFee(toFixedPtAmt("0.5"));
+          await feeToken.mint(deployerAddress, toFixedPtAmt("1.5"));
+          await feeToken.approve(perp.address, toFixedPtAmt("1.5"));
+        });
+
+        it("should burn perp tokens", async function () {
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalance(
+            perp,
+            deployer,
+            toFixedPtAmt("-500"),
+          );
+        });
+
+        it("should transfer fees from redeemer", async function () {
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalances(
+            feeToken,
+            [deployer, perp, otherUser],
+            [toFixedPtAmt("-1.5"), toFixedPtAmt("1"), toFixedPtAmt("0.5")],
+          );
+        });
+
+        it("should transfer the tranches out", async function () {
+          await expect(() => perp.burn(toFixedPtAmt("500"))).to.changeTokenBalances(
+            initialDepositTranche,
+            [deployer, perp],
+            [toFixedPtAmt("500"), toFixedPtAmt("-500")],
+          );
+        });
+
         it("should return the redemption amounts", async function () {
           const r = await perp.callStatic.computeRedemptionAmts(toFixedPtAmt("500"));
           expect(r[0][0]).to.eq(collateralToken.address);

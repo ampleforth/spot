@@ -111,20 +111,20 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeeStrategy
-    function computeMintFee(uint256 mintAmt) external view override returns (int256) {
+    function computeMintFees(uint256 mintAmt) external view override returns (int256, uint256) {
         uint256 absoluteFee = (mintFeePerc.abs() * mintAmt) / HUNDRED_PERC;
-        return mintFeePerc.sign() * absoluteFee.toInt256();
+        return (mintFeePerc.sign() * absoluteFee.toInt256(), 0);
     }
 
     /// @inheritdoc IFeeStrategy
-    function computeBurnFee(uint256 burnAmt) external view override returns (int256) {
+    function computeBurnFees(uint256 burnAmt) external view override returns (int256, uint256) {
         uint256 absoluteFee = (burnFeePerc.abs() * burnAmt) / HUNDRED_PERC;
-        return burnFeePerc.sign() * absoluteFee.toInt256();
+        return (burnFeePerc.sign() * absoluteFee.toInt256(), 0);
     }
 
     /// @inheritdoc IFeeStrategy
-    function computeRolloverFee(uint256 rolloverAmt) external view override returns (int256) {
+    function computeRolloverFees(uint256 rolloverAmt) external view override returns (int256, uint256) {
         uint256 absoluteFee = (rolloverFeePerc.abs() * rolloverAmt) / HUNDRED_PERC;
-        return rolloverFeePerc.sign() * absoluteFee.toInt256();
+        return (rolloverFeePerc.sign() * absoluteFee.toInt256(), 0);
     }
 }

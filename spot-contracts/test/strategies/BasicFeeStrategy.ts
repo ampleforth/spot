@@ -8,7 +8,7 @@ let factory: ContractFactory, feeStrategy: Contract, deployer: Signer, otherUser
 
 const mockFeeTokenAddress = "0x000000000000000000000000000000000000dEaD";
 
-describ("BasicFeeStrategy", function () {
+describe("BasicFeeStrategy", function () {
   beforeEach(async function () {
     const accounts = await ethers.getSigners();
     deployer = accounts[0];
@@ -22,9 +22,9 @@ describ("BasicFeeStrategy", function () {
     beforeEach(async function () {
       await feeStrategy.init(mockFeeTokenAddress, "0", "0", "0");
     });
-    it("should return the fee token", async function(){
-      expect(await feeStrategy.feeToken()).to.eq(mockFeeTokenAddress)
-    })
+    it("should return the fee token", async function () {
+      expect(await feeStrategy.feeToken()).to.eq(mockFeeTokenAddress);
+    });
   });
 
   describe("#updateFeeToken", function () {
@@ -139,71 +139,89 @@ describ("BasicFeeStrategy", function () {
     });
   });
 
-  describe("#computeMintFee", function () {
+  describe("#computeMintFees", function () {
     describe("when perc > 0", function () {
       it("should return the mint fee", async function () {
         await feeStrategy.init(mockFeeTokenAddress, "1500000", "0", "0");
-        expect(await feeStrategy.computeMintFee(toFixedPtAmt("1000"))).to.eq(toFixedPtAmt("15"));
+        const r = await feeStrategy.computeMintFees(toFixedPtAmt("1000"));
+        expect(r[0]).to.eq(toFixedPtAmt("15"));
+        expect(r[1]).to.eq("0");
       });
     });
 
     describe("when perc < 0", function () {
       it("should return the mint fee", async function () {
         await feeStrategy.init(mockFeeTokenAddress, "-2500000", "0", "0");
-        expect(await feeStrategy.computeMintFee(toFixedPtAmt("1000"))).to.eq(toFixedPtAmt("-25"));
+        const r = await feeStrategy.computeMintFees(toFixedPtAmt("1000"));
+        expect(r[0]).to.eq(toFixedPtAmt("-25"));
+        expect(r[1]).to.eq("0");
       });
     });
 
     describe("when perc = 0", function () {
       it("should return the mint fee", async function () {
         await feeStrategy.init(mockFeeTokenAddress, "0", "0", "0");
-        expect(await feeStrategy.computeMintFee(toFixedPtAmt("1000"))).to.eq(toFixedPtAmt("0"));
+        const r = await feeStrategy.computeMintFees(toFixedPtAmt("1000"));
+        expect(r[0]).to.eq(toFixedPtAmt("0"));
+        expect(r[1]).to.eq("0");
       });
     });
   });
 
-  describe("#computeBurnFee", function () {
+  describe("#computeBurnFees", function () {
     describe("when perc > 0", function () {
       it("should return the burn fee", async function () {
         await feeStrategy.init(mockFeeTokenAddress, "0", "2500000", "0");
-        expect(await feeStrategy.computeBurnFee(toFixedPtAmt("1000"))).to.eq(toFixedPtAmt("25"));
+        const r = await feeStrategy.computeBurnFees(toFixedPtAmt("1000"));
+        expect(r[0]).to.eq(toFixedPtAmt("25"));
+        expect(r[1]).to.eq("0");
       });
     });
 
     describe("when perc < 0", function () {
       it("should return the burn fee", async function () {
         await feeStrategy.init(mockFeeTokenAddress, "0", "-1500000", "0");
-        expect(await feeStrategy.computeBurnFee(toFixedPtAmt("1000"))).to.eq(toFixedPtAmt("-15"));
+        const r = await feeStrategy.computeBurnFees(toFixedPtAmt("1000"));
+        expect(r[0]).to.eq(toFixedPtAmt("-15"));
+        expect(r[1]).to.eq("0");
       });
     });
 
     describe("when perc = 0", function () {
       it("should return the burn fee", async function () {
         await feeStrategy.init(mockFeeTokenAddress, "0", "0", "0");
-        expect(await feeStrategy.computeBurnFee(toFixedPtAmt("1000"))).to.eq(toFixedPtAmt("0"));
+        const r = await feeStrategy.computeBurnFees(toFixedPtAmt("1000"));
+        expect(r[0]).to.eq(toFixedPtAmt("0"));
+        expect(r[1]).to.eq("0");
       });
     });
   });
 
-  describe("#computeRolloverFee", function () {
+  describe("#computeRolloverFees", function () {
     describe("when perc > 0", function () {
       it("should return the rollover fee", async function () {
         await feeStrategy.init(mockFeeTokenAddress, "0", "0", "1000000");
-        expect(await feeStrategy.computeRolloverFee(toFixedPtAmt("100000"))).to.eq(toFixedPtAmt("1000"));
+        const r = await feeStrategy.computeRolloverFees(toFixedPtAmt("100000"));
+        expect(r[0]).to.eq(toFixedPtAmt("1000"));
+        expect(r[1]).to.eq("0");
       });
     });
 
     describe("when perc < 0", function () {
       it("should return the rollover fee", async function () {
         await feeStrategy.init(mockFeeTokenAddress, "0", "0", "-5000000");
-        expect(await feeStrategy.computeRolloverFee(toFixedPtAmt("100000"))).to.eq(toFixedPtAmt("-5000"));
+        const r = await feeStrategy.computeRolloverFees(toFixedPtAmt("100000"));
+        expect(r[0]).to.eq(toFixedPtAmt("-5000"));
+        expect(r[1]).to.eq("0");
       });
     });
 
     describe("when perc = 0", function () {
       it("should return the rollover fee", async function () {
         await feeStrategy.init(mockFeeTokenAddress, "0", "0", "0");
-        expect(await feeStrategy.computeRolloverFee(toFixedPtAmt("100000"))).to.eq(toFixedPtAmt("0"));
+        const r = await feeStrategy.computeRolloverFees(toFixedPtAmt("100000"));
+        expect(r[0]).to.eq(toFixedPtAmt("0"));
+        expect(r[1]).to.eq("0");
       });
     });
   });

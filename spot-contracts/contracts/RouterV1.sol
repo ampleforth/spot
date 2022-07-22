@@ -19,7 +19,7 @@ import { IPerpetualTranche } from "./_interfaces/IPerpetualTranche.sol";
  */
 contract RouterV1 {
     // math
-    using SafeCastUpgradeable for int256;
+    using SafeCastUpgradeable for uint256;
 
     // data handling
     using BondHelpers for IBondController;
@@ -82,7 +82,8 @@ contract RouterV1 {
     {
         uint256 mintAmt = perp.computeMintAmt(trancheIn, trancheInAmt);
         IERC20Upgradeable feeToken = perp.feeToken();
-        int256 mintFee = perp.feeStrategy().computeMintFee(mintAmt);
+        (int256 reserveFee, uint256 protocolFee) = perp.feeStrategy().computeMintFees(mintAmt);
+        int256 mintFee = reserveFee + protocolFee.toInt256();
         return (mintAmt, feeToken, mintFee);
     }
 
@@ -172,7 +173,8 @@ contract RouterV1 {
         (IERC20Upgradeable[] memory reserveTokens, uint256[] memory redemptionAmts) = perp.computeRedemptionAmts(
             perpAmtBurnt
         );
-        int256 burnFee = perp.feeStrategy().computeBurnFee(perpAmtBurnt);
+        (int256 reserveFee, uint256 protocolFee) = perp.feeStrategy().computeBurnFees(perpAmtBurnt);
+        int256 burnFee = reserveFee + protocolFee.toInt256();
         IERC20Upgradeable feeToken = perp.feeToken();
         return (reserveTokens, redemptionAmts, feeToken, burnFee);
     }
@@ -208,13 +210,13 @@ contract RouterV1 {
         r.remainingTrancheInAmt = trancheInAmtRequested;
 
         IERC20Upgradeable feeToken = perp.feeToken();
-        int256 rolloverFee;
-
+        int256 reserveFee = 0;
+        uint256 protocolFee = 0;
         if (perp.isAcceptableRollover(trancheIn, tokenOut)) {
             r = perp.computeRolloverAmt(trancheIn, tokenOut, trancheInAmtRequested, maxTokenOutAmtUsed);
-            rolloverFee = perp.feeStrategy().computeRolloverFee(r.perpRolloverAmt);
+            (reserveFee, protocolFee) = perp.feeStrategy().computeRolloverFees(r.perpRolloverAmt);
         }
-
+        int256 rolloverFee = reserveFee + protocolFee.toInt256();
         return (r, feeToken, rolloverFee);
     }
 
