@@ -108,7 +108,7 @@ interface IPerpetualTranche is IERC20Upgradeable {
 
     // @notice The ERC-20 contract which holds perp balances.
     // @return Address of the token.
-    function erc20() external view returns (IERC20Upgradeable);
+    function perpERC20() external view returns (IERC20Upgradeable);
 
     // @notice The contract where the protocol holds funds which back the perp token supply.
     // @return Address of the reserve.
@@ -116,7 +116,7 @@ interface IPerpetualTranche is IERC20Upgradeable {
 
     // @notice The address which holds any revenue extracted by protocol.
     // @return Address of the fee collector.
-    function feeCollector() external view returns (address);
+    function protocolFeeCollector() external view returns (address);
 
     // @notice The fee token currently used to receive fees in.
     // @return Address of the fee token.

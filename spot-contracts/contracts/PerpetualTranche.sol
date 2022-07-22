@@ -649,7 +649,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     // Public view methods
 
     /// @inheritdoc IPerpetualTranche
-    function erc20() public view override returns (IERC20Upgradeable) {
+    function perpERC20() public view override returns (IERC20Upgradeable) {
         return IERC20Upgradeable(address(this));
     }
 
@@ -659,7 +659,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     }
 
     /// @inheritdoc IPerpetualTranche
-    function feeCollector() public view override returns (address) {
+    function protocolFeeCollector() public view override returns (address) {
         return owner();
     }
 
@@ -841,15 +841,15 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         uint256 protocolFee
     ) internal {
         // Handling reserve fees
-        uint256 reserveFee_ = SignedMathUpgradeable.abs(reserveFee);
+        uint256 reserveFeeAbs = SignedMathUpgradeable.abs(reserveFee);
         if (reserveFee > 0) {
-            _handleFeeTransferIn(payer, reserve(), reserveFee_);
+            _handleFeeTransferIn(payer, reserve(), reserveFeeAbs);
         } else if (reserveFee < 0) {
-            _handleFeeTransferOut(payer, reserveFee_);
+            _handleFeeTransferOut(payer, reserveFeeAbs);
         }
         // Handling protocol fees
         if (protocolFee > 0) {
-            _handleFeeTransferIn(payer, feeCollector(), protocolFee);
+            _handleFeeTransferIn(payer, protocolFeeCollector(), protocolFee);
         }
     }
 
@@ -860,7 +860,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         uint256 feeAmt
     ) internal {
         IERC20Upgradeable feeToken_ = feeToken();
-        bool isNativeFeeToken = (feeToken_ == erc20());
+        bool isNativeFeeToken = (feeToken_ == perpERC20());
         // Funds are coming in
         if (isNativeFeeToken) {
             // Handling a special case, when the fee is to be charged as the perp token itself
@@ -876,7 +876,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     // @dev Transfers fee from the reserve to the destination.
     function _handleFeeTransferOut(address destination, uint256 feeAmt) internal {
         IERC20Upgradeable feeToken_ = feeToken();
-        bool isNativeFeeToken = (feeToken_ == erc20());
+        bool isNativeFeeToken = (feeToken_ == perpERC20());
         // Funds are going out
         if (isNativeFeeToken) {
             uint256 balance = _tokenBalance(feeToken_);
