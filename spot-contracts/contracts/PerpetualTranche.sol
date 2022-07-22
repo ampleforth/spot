@@ -5,7 +5,6 @@ import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/O
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
-import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 
 import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
@@ -93,9 +92,6 @@ error ExceededMaxSupply(uint256 newSupply, uint256 currentMaxSupply);
 /// @param mintAmtForCurrentTranche The amount of perps that have been minted using the tranche.
 /// @param maxMintAmtPerTranche The amount of perps that can be minted per tranche.
 error ExceededMaxMintPerTranche(ITranche trancheIn, uint256 mintAmtForCurrentTranche, uint256 maxMintAmtPerTranche);
-
-/// @notice Expected the system to have no tranches and have a collateral balance.
-error InvalidRebootState();
 
 /*
  *  @title PerpetualTranche
@@ -384,19 +380,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
             revert UnauthorizedTransferOut(token);
         }
         token.safeTransfer(to, amount);
-    }
-
-    // @notice Redenominates Perp with respect to the outstanding debt.
-    // @param matureTrancheBalance The new mature tranche balance.
-    // @dev Can only be used when perp is backed solely by mature collateral.
-    function redenominate(uint256 matureTrancheBalance) external afterStateUpdate onlyOwner {
-        // The redenomination is only allowed when:
-        //  - the system has no more tranches left i.e) all the tranches have mature
-        //  - the system has a collateral balance
-        if (_reserveCount() > 1 || _tokenBalance(_reserveAt(0)) == 0) {
-            revert InvalidRebootState();
-        }
-        _updateMatureTrancheBalance(matureTrancheBalance);
     }
 
     //--------------------------------------------------------------------------

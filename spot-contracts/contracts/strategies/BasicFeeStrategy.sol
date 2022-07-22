@@ -104,7 +104,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     // @notice Updates the mint fee percentage.
     // @param mintFeePerc_ New mint fee percentage.
     function updateMintFeePerc(int256 mintFeePerc_) public onlyOwner {
-        _validatePercValue(mintFeePerc_);
         mintFeePerc = mintFeePerc_;
         emit UpdatedMintPerc(mintFeePerc_);
     }
@@ -112,7 +111,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     // @notice Updates the burn fee percentage.
     // @param burnFeePerc_ New burn fee percentage.
     function updateBurnFeePerc(int256 burnFeePerc_) public onlyOwner {
-        _validatePercValue(burnFeePerc_);
         burnFeePerc = burnFeePerc_;
         emit UpdatedBurnPerc(burnFeePerc_);
     }
@@ -120,7 +118,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     // @notice Updates the rollover fee percentage.
     // @param rolloverFeePerc_ New rollover fee percentage.
     function updateRolloverFeePerc(int256 rolloverFeePerc_) public onlyOwner {
-        _validatePercValue(rolloverFeePerc_);
         rolloverFeePerc = rolloverFeePerc_;
         emit UpdatedRolloverPerc(rolloverFeePerc_);
     }
@@ -142,12 +139,5 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
         uint256 share = (feeToken.balanceOf(perp.feeCollector()) * rolloverAmt) / perp.totalSupply();
         uint256 absoluteFee = (rolloverFeePerc.abs() * share) / HUNDRED_PERC;
         return rolloverFeePerc.sign() * absoluteFee.toInt256();
-    }
-
-    // @dev Ensures that the given perc value is valid.
-    function _validatePercValue(int256 perc) private pure {
-        if (perc > int256(HUNDRED_PERC)) {
-            revert UnacceptablePercValue(perc);
-        }
     }
 }
