@@ -114,7 +114,7 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @return Address of the reserve.
     function reserve() external view returns (address);
 
-    // @notice The address to which holds the revenue extracted by protocol.
+    // @notice The address which holds any revenue extracted by protocol.
     // @return Address of the fee collector.
     function feeCollector() external view returns (address);
 
