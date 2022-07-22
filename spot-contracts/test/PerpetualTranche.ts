@@ -378,45 +378,6 @@ describe("PerpetualTranche", function () {
     });
   });
 
-  describe("#transferERC20", function () {
-    let transferToken: Contract, toAddress: string;
-
-    beforeEach(async function () {
-      const Token = await ethers.getContractFactory("MockERC20");
-      transferToken = await Token.deploy();
-      await transferToken.init("Mock Token", "MOCK");
-      await transferToken.mint(perp.address, "100");
-      toAddress = await deployer.getAddress();
-    });
-
-    describe("when triggered by non-owner", function () {
-      it("should revert", async function () {
-        await expect(perp.connect(otherUser).transferERC20(transferToken.address, toAddress, "100")).to.be.revertedWith(
-          "Ownable: caller is not the owner",
-        );
-      });
-    });
-
-    describe("when non reserve asset", function () {
-      it("should transfer", async function () {
-        await expect(() => perp.transferERC20(transferToken.address, toAddress, "100")).to.changeTokenBalance(
-          transferToken,
-          deployer,
-          "100",
-        );
-      });
-    });
-
-    describe("when reserve asset", function () {
-      it("should revert", async function () {
-        expect(await perp.callStatic.inReserve(collateralToken.address)).to.eq(true);
-        await expect(perp.transferERC20(collateralToken.address, toAddress, toFixedPtAmt("100"))).to.be.revertedWith(
-          "UnauthorizedTransferOut",
-        );
-      });
-    });
-  });
-
   describe("#computeYield", function () {
     let bondFactory: Contract, bond: Contract, tranches: Contract[];
     beforeEach(async function () {

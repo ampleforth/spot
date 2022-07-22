@@ -47,10 +47,6 @@ error InvalidYieldStrategyDecimals();
 /// @param minTrancheMaturitySec Maximum tranche maturity time in seconds.
 error InvalidTrancheMaturityBounds(uint256 minTrancheMaturitySec, uint256 maxTrancheMaturitySec);
 
-/// @notice Expected transfer out asset to not be a reserve asset.
-/// @param token Address of the token transferred.
-error UnauthorizedTransferOut(IERC20Upgradeable token);
-
 /// @notice Expected deposited tranche to be of current deposit bond.
 /// @param trancheIn Address of the deposit tranche.
 /// @param depositBond Address of the currently accepted deposit bond.
@@ -365,21 +361,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         maxSupply = maxSupply_;
         maxMintAmtPerTranche = maxMintAmtPerTranche_;
         emit UpdatedMintingLimits(maxSupply_, maxMintAmtPerTranche_);
-    }
-
-    // @notice Allows the owner to transfer non-reserve assets out of the system if required.
-    // @param token The token address.
-    // @param to The destination address.
-    // @param amount The amount of tokens to be transferred.
-    function transferERC20(
-        IERC20Upgradeable token,
-        address to,
-        uint256 amount
-    ) external afterStateUpdate onlyOwner {
-        if (_inReserve(token)) {
-            revert UnauthorizedTransferOut(token);
-        }
-        token.safeTransfer(to, amount);
     }
 
     //--------------------------------------------------------------------------
