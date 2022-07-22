@@ -10,7 +10,7 @@ interface IFeeStrategy {
     // @notice Computes the fees while minting given amount of perp tokens.
     // @dev The mint fee can be either positive or negative. When positive it's paid by the minting users to the reserve.
     //      When negative its paid to the minting users by the reserve.
-    //      The protocol fee is always positive and is paid by the users minting to the
+    //      The protocol fee is always non-negative and is paid by the users minting to the
     //      perp contract's fee collector.
     // @param amount The amount of perp tokens to be minted.
     // @return reserveFee The fee paid to the reserve to mint perp tokens.
