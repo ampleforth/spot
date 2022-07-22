@@ -63,6 +63,12 @@ describe("BasicFeeStrategy", function () {
       });
     });
 
+    describe("when set mint fee perc is NOT valid", function () {
+      it("should revert", async function () {
+        await expect(feeStrategy.updateMintFeePerc("100000001")).to.be.revertedWith("UnacceptablePercValue");
+      });
+    });
+
     describe("when set mint fee perc is valid", function () {
       beforeEach(async function () {
         tx = feeStrategy.connect(deployer).updateMintFeePerc("50000000");
@@ -88,6 +94,12 @@ describe("BasicFeeStrategy", function () {
         await expect(feeStrategy.connect(otherUser).updateBurnFeePerc("1")).to.be.revertedWith(
           "Ownable: caller is not the owner",
         );
+      });
+    });
+
+    describe("when set burn fee perc is NOT valid", function () {
+      it("should revert", async function () {
+        await expect(feeStrategy.updateBurnFeePerc("100000001")).to.be.revertedWith("UnacceptablePercValue");
       });
     });
 
@@ -119,6 +131,12 @@ describe("BasicFeeStrategy", function () {
       });
     });
 
+    describe("when set rollover fee perc is NOT valid", function () {
+      it("should revert", async function () {
+        await expect(feeStrategy.updateRolloverFeePerc("100000001")).to.be.revertedWith("UnacceptablePercValue");
+      });
+    });
+
     describe("when set rollover fee perc is valid", function () {
       beforeEach(async function () {
         tx = feeStrategy.connect(deployer).updateRolloverFeePerc("50000000");
@@ -144,6 +162,12 @@ describe("BasicFeeStrategy", function () {
         await expect(feeStrategy.connect(otherUser).updateRolloverDiscountPerc("1")).to.be.revertedWith(
           "Ownable: caller is not the owner",
         );
+      });
+    });
+
+    describe("when set discount perc is NOT valid", function () {
+      it("should revert", async function () {
+        await expect(feeStrategy.updateRolloverDiscountPerc("100000001")).to.be.revertedWith("UnacceptablePercValue");
       });
     });
 

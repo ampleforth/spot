@@ -2,6 +2,7 @@
 pragma solidity ^0.8.15;
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
@@ -125,7 +126,7 @@ error InvalidRebootState();
  *          This brings the system storage state up to date.
  *
  */
-contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTranche {
+contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgradeable, IPerpetualTranche {
     // data handling
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
     using BondHelpers for IBondController;
@@ -293,6 +294,12 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     //--------------------------------------------------------------------------
     // ADMIN only methods
 
+    // @notice Pauses deposits, withdrawals and rollovers.
+    // @dev NOTE: ERC-20 functions, like transfers will always remain operational.
+    function pause() public onlyOwner {
+        _pause();
+    }
+
     // @notice Update the reference to the bond issuer contract.
     // @param bondIssuer_ New bond issuer address.
     function updateBondIssuer(IBondIssuer bondIssuer_) public onlyOwner {
@@ -395,7 +402,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     // External methods
 
     /// @inheritdoc IPerpetualTranche
-    function deposit(ITranche trancheIn, uint256 trancheInAmt) external override afterStateUpdate {
+    function deposit(ITranche trancheIn, uint256 trancheInAmt) external override afterStateUpdate whenNotPaused {
         if (IBondController(trancheIn.bond()) != _depositBond) {
             revert UnacceptableDepositTranche(trancheIn, _depositBond);
         }
@@ -424,7 +431,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     }
 
     /// @inheritdoc IPerpetualTranche
-    function burn(uint256 perpAmtBurnt) external override afterStateUpdate {
+    function burn(uint256 perpAmtBurnt) external override afterStateUpdate whenNotPaused {
         // gets the current perp supply
         uint256 perpSupply = totalSupply();
 
@@ -461,7 +468,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtRequested
-    ) external override afterStateUpdate {
+    ) external override afterStateUpdate whenNotPaused {
+        // verifies if rollover is acceptable
         if (!_isAcceptableRollover(trancheIn, tokenOut)) {
             revert UnacceptableRollover(trancheIn, tokenOut);
         }
@@ -490,7 +498,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
         // updates the mature tranche balance
         if (_isMatureTranche(tokenOut)) {
-            _updateMatureTrancheBalance(_matureTrancheBalance - r.stdTrancheOutAmt);
+            _updateMatureTrancheBalance(_matureTrancheBalance - r.trancheOutAmt);
         }
 
         // transfers tranche from the reserve to the sender
@@ -770,34 +778,34 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         trancheInPrice = feeStrategy.computeScaledRolloverValue(trancheInPrice);
 
         r.trancheInAmt = trancheInAmtRequested;
-        r.stdTrancheInAmt = _toStdTrancheAmt(trancheInAmtRequested, trancheInYield);
+        uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmtRequested, trancheInYield);
 
         // Basic rollover:
         // (stdTrancheInAmt . trancheInPrice) = (stdTrancheOutAmt . trancheOutPrice)
-        r.stdTrancheOutAmt = (r.stdTrancheInAmt * trancheInPrice) / trancheOutPrice;
-        uint256 trancheOutAmt = _fromStdTrancheAmt(r.stdTrancheOutAmt, trancheOutYield);
+        uint256 stdTrancheOutAmt = (stdTrancheInAmt * trancheInPrice) / trancheOutPrice;
+        r.trancheOutAmt = _fromStdTrancheAmt(stdTrancheOutAmt, trancheOutYield);
 
         // However, if the tokenOut is the mature tranche (held as naked collateral),
         // we infer the tokenOut amount from the tranche denomination.
-        // (tokenOutAmt = trancheOutAmt * collateralBalance / matureTrancheBalance)
+        // (tokenOutAmt = collateralBalance * trancheOutAmt / matureTrancheBalance)
         bool isMatureTrancheOut = _isMatureTranche(tokenOut);
         r.tokenOutAmt = isMatureTrancheOut
-            ? ((tokenOutBalance * trancheOutAmt) / _matureTrancheBalance)
-            : trancheOutAmt;
+            ? ((tokenOutBalance * r.trancheOutAmt) / _matureTrancheBalance)
+            : r.trancheOutAmt;
 
         // When the token out balance is NOT covered:
         // we fix tokenOutAmt = maxTokenOutAmtCovered and back calculate other values
         if (r.tokenOutAmt > maxTokenOutAmtCovered) {
             r.tokenOutAmt = maxTokenOutAmtCovered;
-            trancheOutAmt = isMatureTrancheOut
+            r.trancheOutAmt = isMatureTrancheOut
                 ? (_matureTrancheBalance * r.tokenOutAmt) / tokenOutBalance
                 : r.tokenOutAmt;
-            r.stdTrancheOutAmt = _toStdTrancheAmt(trancheOutAmt, trancheOutYield);
-            r.stdTrancheInAmt = (r.stdTrancheOutAmt * trancheOutPrice) / trancheInPrice;
-            r.trancheInAmt = _fromStdTrancheAmt(r.stdTrancheInAmt, trancheInYield);
+            stdTrancheOutAmt = _toStdTrancheAmt(r.trancheOutAmt, trancheOutYield);
+            stdTrancheInAmt = (stdTrancheOutAmt * trancheOutPrice) / trancheInPrice;
+            r.trancheInAmt = _fromStdTrancheAmt(stdTrancheInAmt, trancheInYield);
         }
 
-        r.perpRolloverAmt = (r.stdTrancheOutAmt * trancheOutPrice * totalSupply()) / _reserveValue();
+        r.perpRolloverAmt = (stdTrancheOutAmt * trancheOutPrice * totalSupply()) / _reserveValue();
         r.remainingTrancheInAmt = trancheInAmtRequested - r.trancheInAmt;
         return r;
     }

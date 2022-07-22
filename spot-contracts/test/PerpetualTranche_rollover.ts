@@ -134,6 +134,18 @@ describe("PerpetualTranche", function () {
   });
 
   describe("#rollover", function () {
+    describe("when paused", function () {
+      beforeEach(async function () {
+        await perp.pause();
+      });
+
+      it("should revert", async function () {
+        await expect(
+          perp.rollover(rolloverInTranche.address, reserveTranche2.address, toFixedPtAmt("500")),
+        ).to.revertedWith("Pausable: paused");
+      });
+    });
+
     describe("when trancheIn and tokenOut belong to the same bond", function () {
       let tranches: Contract[];
       beforeEach(async function () {
@@ -250,8 +262,7 @@ describe("PerpetualTranche", function () {
         );
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("250"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("250"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("250"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("250"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
@@ -267,8 +278,7 @@ describe("PerpetualTranche", function () {
         );
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("1000"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("1000"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
@@ -290,8 +300,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("0"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("0"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("0"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("0"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("0"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("0"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("500"));
         });
@@ -312,8 +321,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("0"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("0"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("0"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("0"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("0"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("0"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("500"));
         });
@@ -335,8 +343,7 @@ describe("PerpetualTranche", function () {
           // 250 / 1750 * 2000
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("285.714285714285714285"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("250"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("250"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("250"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -358,8 +365,7 @@ describe("PerpetualTranche", function () {
           // 250 / 1750 * 2000
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("285.714285714285714285"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("250"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("250"));
         });
@@ -382,8 +388,7 @@ describe("PerpetualTranche", function () {
           // 500 / 2500 * 2000
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("400"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("250"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("250"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -406,8 +411,7 @@ describe("PerpetualTranche", function () {
           // 250 / 1750 * 2000
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("285.714285714285714285"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("250"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("250"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("250"));
         });
@@ -434,8 +438,7 @@ describe("PerpetualTranche", function () {
           // 250 / 2500 * 2000
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("200"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("250"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("125"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("125"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -462,8 +465,7 @@ describe("PerpetualTranche", function () {
           // 250 / 1750 * 2000
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("285.714285714285714285"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("250"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -490,8 +492,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("0"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("0"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("0"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("0"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("0"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("0"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("500"));
         });
@@ -512,8 +513,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("0"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("0"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("0"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("0"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("0"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("0"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("500"));
         });
@@ -534,8 +534,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("142.857142857142857142"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("125"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("125"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("125"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -556,8 +555,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("285.714285714285714285"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -579,8 +577,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("200"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("250"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("125"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("125"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -602,8 +599,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("285.714285714285714285"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("250"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -629,8 +625,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("100"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("125"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("62.5"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("62.5"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -656,8 +651,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("142.857142857142857142"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("125"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("250"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("250"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -684,8 +678,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("428.571428571428571428"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("375"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("375"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("375"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -706,8 +699,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("285.714285714285714285"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("166.666666666666666666"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("166.666666666666666666"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("333.333333333333333334"));
         });
@@ -729,8 +721,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("600"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("750"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("375"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("375"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -752,8 +743,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("285.714285714285714285"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("250"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("166.666666666666666666"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("166.666666666666666666"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("333.333333333333333334"));
         });
@@ -779,8 +769,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("300"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("375"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("187.5"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("187.5"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -806,8 +795,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("285.714285714285714285"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("250"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("166.666666666666666666"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("333.333333333333333332"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("166.666666666666666668"));
         });
@@ -824,8 +812,7 @@ describe("PerpetualTranche", function () {
         );
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("250"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("250"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("250"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("250"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("250"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("250"));
       });
@@ -841,8 +828,7 @@ describe("PerpetualTranche", function () {
         );
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("250"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("250"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("250"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("250"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("250"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("250"));
       });
@@ -861,8 +847,7 @@ describe("PerpetualTranche", function () {
         );
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("375"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
@@ -881,8 +866,7 @@ describe("PerpetualTranche", function () {
         );
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("625"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
@@ -906,8 +890,7 @@ describe("PerpetualTranche", function () {
         );
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("250"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("187.5"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("250"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("250"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
@@ -931,8 +914,7 @@ describe("PerpetualTranche", function () {
         );
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("250"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("312.5"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("250"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("250"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
@@ -956,8 +938,7 @@ describe("PerpetualTranche", function () {
         );
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("125"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("93.75"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("125"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("125"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("125"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("250"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("250"));
       });
@@ -981,8 +962,7 @@ describe("PerpetualTranche", function () {
         );
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("125"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("156.25"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("125"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("125"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("125"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("250"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("250"));
       });
@@ -1014,8 +994,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -1049,8 +1028,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -1085,8 +1063,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -1127,8 +1104,7 @@ describe("PerpetualTranche", function () {
           );
           expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
           expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-          expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
           expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
@@ -1190,8 +1166,7 @@ describe("PerpetualTranche", function () {
             );
             expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
             expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-            expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-            expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+            expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
             expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
             expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
           });
@@ -1239,8 +1214,7 @@ describe("PerpetualTranche", function () {
             );
             expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
             expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-            expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-            expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+            expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
             expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
             expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
           });
@@ -1290,8 +1264,7 @@ describe("PerpetualTranche", function () {
       it("should compute the rollover amounts", async function () {
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("250"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("250"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("250"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("250"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("250"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
@@ -1332,8 +1305,7 @@ describe("PerpetualTranche", function () {
       it("should compute the rollover amounts", async function () {
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("250"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("250"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("250"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("250"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("250"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
@@ -1377,8 +1349,7 @@ describe("PerpetualTranche", function () {
       it("should compute the rollover amounts", async function () {
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("250"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("250"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("250"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("250"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("250"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
@@ -1423,8 +1394,7 @@ describe("PerpetualTranche", function () {
       it("should compute the rollover amounts", async function () {
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("250"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("375"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("250"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("250"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("250"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
@@ -1469,8 +1439,7 @@ describe("PerpetualTranche", function () {
       it("should compute the rollover amounts", async function () {
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("250"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("125"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("250"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("250"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("250"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("250"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
@@ -1508,8 +1477,7 @@ describe("PerpetualTranche", function () {
       it("should compute the rollover amounts", async function () {
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
@@ -1546,8 +1514,7 @@ describe("PerpetualTranche", function () {
       it("should compute the rollover amounts", async function () {
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
@@ -1585,8 +1552,7 @@ describe("PerpetualTranche", function () {
       it("should compute the rollover amounts", async function () {
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("100"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("100"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("100"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("100"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("100"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("100"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
@@ -1623,8 +1589,7 @@ describe("PerpetualTranche", function () {
       it("should compute the rollover amounts", async function () {
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("500"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("500"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("1500"));
       });
@@ -1673,8 +1638,7 @@ describe("PerpetualTranche", function () {
       it("should compute the rollover amounts", async function () {
         expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("40"));
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("25"));
-        expect(r.stdTrancheOutAmt).to.eq(toFixedPtAmt("25"));
-        expect(r.stdTrancheInAmt).to.eq(toFixedPtAmt("100"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("25"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("100"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
