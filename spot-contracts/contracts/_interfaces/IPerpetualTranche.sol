@@ -40,10 +40,6 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @param maxMintAmtPerTranche The max mint amount per tranche.
     event UpdatedMintingLimits(uint256 maxSupply, uint256 maxMintAmtPerTranche);
 
-    // @notice Event emitted when the rollover discount percentage is updated.
-    // @param rolloverDiscountPerc The rollover discount percentage.
-    event UpdatedRolloverDiscountPerc(int256 rolloverDiscountPerc);
-
     // @notice Event emitted when the applied yield for a given token is set.
     // @param token The address of the token.
     // @param yield The yield factor applied.

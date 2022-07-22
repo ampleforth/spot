@@ -42,10 +42,6 @@ error UnacceptableYieldStrategy();
 /// @notice Expected yield strategy to return a fixed point with exactly {YIELD_DECIMALS} decimals.
 error InvalidYieldStrategyDecimals();
 
-/// @notice Expected rollover discount percentage to be no greater than 100 with {PERC_DECIMALS}.
-/// @param rolloverDiscountPerc The rollover discount percentage.
-error UnacceptableRolloverDiscountPerc(int256 rolloverDiscountPerc);
-
 /// @notice Expected minTrancheMaturity be less than or equal to maxTrancheMaturity.
 /// @param minTrancheMaturitySec Minimum tranche maturity time in seconds.
 /// @param minTrancheMaturitySec Maximum tranche maturity time in seconds.
@@ -181,10 +177,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     uint8 public constant PRICE_DECIMALS = 8;
     uint256 public constant UNIT_PRICE = (10**PRICE_DECIMALS);
 
-    uint8 public constant PERC_DECIMALS = 6;
-    int256 public constant UNIT_PERC = int256(10**uint256(PERC_DECIMALS));
-    int256 public constant HUNDRED_PERC = 100 * UNIT_PERC;
-
     //-------------------------------------------------------------------------
     // Storage
 
@@ -194,7 +186,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
     //--------------------------------------------------------------------------
     // CONFIG
 
-    // @notice External contract points to the fee token and computes mint, burn and rollover fees.
+    // @notice External contract points controls fees & incentives.
     IFeeStrategy public override feeStrategy;
 
     // @notice External contract that computes a given reserve token's price.
@@ -230,14 +222,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
     // @notice The max number of perps that can be minted for each tranche in the minting bond.
     uint256 public maxMintAmtPerTranche;
-
-    // @notice The percentage of the value the system retains or disburses on every rollover operation.
-    // @dev Discount percentage is stored as fixed point number with {PERC_DECIMALS}.
-    //      The discount percentage is a tax paid by users who rollover collateral, which over-collateralizes
-    //      the system. When negative, it acts as a subsidy to incentivize rollovers by diluting perp holders.
-    //      eg) If discount is 5%, user can rollover 1x worth tranches for 0.95x worth tranches from the reserve.
-    //          Or if discount is -5%, user can rollover 1x worth tranches for 1.05x worth tranches from the reserve.
-    int256 public rolloverDiscountPerc;
 
     // @notice The total number of perps that have been minted using a given tranche.
     mapping(ITranche => uint256) private _mintedSupplyPerTranche;
@@ -304,7 +288,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
 
         updateTolerableTrancheMaturity(1, type(uint256).max);
         updateMintingLimits(type(uint256).max, type(uint256).max);
-        updateRolloverDiscountPerc(0);
     }
 
     //--------------------------------------------------------------------------
@@ -378,16 +361,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
         maxSupply = maxSupply_;
         maxMintAmtPerTranche = maxMintAmtPerTranche_;
         emit UpdatedMintingLimits(maxSupply_, maxMintAmtPerTranche_);
-    }
-
-    // @notice Updates the discount percentage parameter.
-    // @param rolloverDiscountPerc_ New discount percentage.
-    function updateRolloverDiscountPerc(int256 rolloverDiscountPerc_) public onlyOwner {
-        if (rolloverDiscountPerc_ > HUNDRED_PERC) {
-            revert UnacceptableRolloverDiscountPerc(rolloverDiscountPerc_);
-        }
-        rolloverDiscountPerc = rolloverDiscountPerc_;
-        emit UpdatedRolloverDiscountPerc(rolloverDiscountPerc_);
     }
 
     // @notice Allows the owner to transfer non-reserve assets out of the system if required.
@@ -792,12 +765,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, IPerpetualTra
             return r;
         }
 
-        // We scale the trancheInPrice up or down to account for rollover discount
+        // We scale the trancheInPrice up or down to account for rollover discount or premium
         // and from here on we use the scaled price.
-        // trancheInPrice' = trancheInPrice * (100-rolloverDiscountPerc)/100
-        trancheInPrice =
-            (trancheInPrice * SafeCastUpgradeable.toUint256(HUNDRED_PERC - rolloverDiscountPerc)) /
-            SafeCastUpgradeable.toUint256(HUNDRED_PERC);
+        trancheInPrice = feeStrategy.computeScaledRolloverValue(trancheInPrice);
 
         r.trancheInAmt = trancheInAmtRequested;
         r.stdTrancheInAmt = _toStdTrancheAmt(trancheInAmtRequested, trancheInYield);
