@@ -17,7 +17,7 @@ error UnacceptablePercValue(int256 perc);
 /*
  *  @title BasicFeeStrategy
  *
- *  @notice Basic fee strategy using fixed percentages.
+ *  @notice Basic fee strategy using fixed percentages. This strategy extracts NO protocol fees.
  *
  *  @dev IMPORTANT: If mint or burn fee is negative, the other must overcompensate in the positive direction.
  *       Otherwise, user could extract from the fee collector by constant mint/burn transactions.
