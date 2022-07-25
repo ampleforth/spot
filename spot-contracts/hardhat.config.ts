@@ -31,14 +31,14 @@ export default {
     goerli: {
       url: `https://eth-goerli.g.alchemy.com/v2/${process.env.ALCHEMY_SECRET}`,
       accounts: {
-        mnemonic: process.env.PROD_MNEMONIC,
+        mnemonic: process.env.PROD_MNEMONIC || Wallet.createRandom().mnemonic.phrase,
       },
       gasMultiplier: 1.1,
     },
     mainnet: {
       url: `https://mainnet.infura.io/v3/${process.env.INFURA_SECRET}`,
       accounts: {
-        mnemonic: process.env.PROD_MNEMONIC,
+        mnemonic: process.env.PROD_MNEMONIC || Wallet.createRandom().mnemonic.phrase,
       },
     },
   },
