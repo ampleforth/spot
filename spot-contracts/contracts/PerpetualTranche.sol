@@ -392,7 +392,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
 
         // updates & enforces supply cap and tranche mint cap
         _mintedSupplyPerTranche[trancheIn] += perpAmtMint;
-        _enforceMintingLimits(trancheIn);
+        _enforcePerTrancheSupplyCap(trancheIn);
+        _enforceTotalSupplyCap();
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -426,6 +427,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
                 _transferOutOfReserve(_msgSender(), tokensOuts[i], tokenOutAmts[i]);
             }
         }
+
+        // enforces supply cap
+        _enforceTotalSupplyCap();
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -468,6 +472,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
 
         // transfers tranche from the reserve to the sender
         _transferOutOfReserve(_msgSender(), tokenOut, r.tokenOutAmt);
+
+        // enforces supply cap
+        _enforceTotalSupplyCap();
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -945,14 +952,17 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
             timeToMaturity < maxTrancheMaturitySec);
     }
 
-    // @dev Enforces the mint limits. To be invoked AFTER the mint operation.
-    function _enforceMintingLimits(ITranche trancheIn) private view {
+    // @dev Enforces the total supply cap. To be invoked AFTER the mint operation.
+    function _enforceTotalSupplyCap() private view {
         // checks if new total supply is within the max supply cap
         uint256 newSupply = totalSupply();
         if (newSupply > maxSupply) {
             revert ExceededMaxSupply(newSupply, maxSupply);
         }
+    }
 
+    // @dev Enforces the per tranche supply cap. To be invoked AFTER the mint operation.
+    function _enforcePerTrancheSupplyCap(ITranche trancheIn) private view {
         // checks if supply minted using the given tranche is within the cap
         if (_mintedSupplyPerTranche[trancheIn] > maxMintAmtPerTranche) {
             revert ExceededMaxMintPerTranche(trancheIn, _mintedSupplyPerTranche[trancheIn], maxMintAmtPerTranche);
