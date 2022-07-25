@@ -411,8 +411,8 @@ task("ops:trancheAndRollover")
 
       if (rd.perpRolloverAmt.gt("0")) {
         rolloverData.push({
-          trancheIn: trancheIn,
-          tokenOut: tokenOut,
+          trancheIn,
+          tokenOut,
           trancheInAmt: rd.trancheInAmt,
           tokenOutAmt: rd.tokenOutAmt,
         });
