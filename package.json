@@ -1,8 +1,6 @@
 {
   "name": "@ampleforthorg/spot-monorepo",
-  "version": "0.0.9",
-  "description": "collection of everything spot",
-  "main": "index.js",
+  "description": "A collection of everything spot",
   "repository": "git@github.com:ampleforth/spot.git",
   "author": "eng@fragments.org",
   "license": "GNUV3",

@@ -23,8 +23,9 @@ contract CDRPricingStrategy is IPricingStrategy {
     uint256 private constant UNIT_PRICE = 10**DECIMALS;
 
     /// @inheritdoc IPricingStrategy
-    function decimals() external pure override returns (uint8) {
-        return DECIMALS;
+    function computeTranchePrice(ITranche tranche) external view override returns (uint256) {
+        (uint256 collateralBalance, uint256 debt) = tranche.getTrancheCollateralization();
+        return (debt > 0) ? ((collateralBalance * UNIT_PRICE) / debt) : UNIT_PRICE;
     }
 
     /// @inheritdoc IPricingStrategy
@@ -38,8 +39,7 @@ contract CDRPricingStrategy is IPricingStrategy {
     }
 
     /// @inheritdoc IPricingStrategy
-    function computeTranchePrice(ITranche tranche) external view override returns (uint256) {
-        (uint256 collateralBalance, uint256 debt) = tranche.getTrancheCollateralization();
-        return (debt > 0) ? ((collateralBalance * UNIT_PRICE) / debt) : UNIT_PRICE;
+    function decimals() external pure override returns (uint8) {
+        return DECIMALS;
     }
 }

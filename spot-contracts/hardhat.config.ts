@@ -22,7 +22,7 @@ export default {
     hardhat: {
       initialBaseFeePerGas: 0,
       accounts: {
-        mnemonic: process.env.DEV_MNEMONIC || Wallet.createRandom().mnemonic.phrase,
+        mnemonic: Wallet.createRandom().mnemonic.phrase,
       },
     },
     ganache: {
@@ -31,14 +31,14 @@ export default {
     goerli: {
       url: `https://eth-goerli.g.alchemy.com/v2/${process.env.ALCHEMY_SECRET}`,
       accounts: {
-        mnemonic: process.env.DEV_MNEMONIC || Wallet.createRandom().mnemonic.phrase,
+        mnemonic: process.env.PROD_MNEMONIC,
       },
       gasMultiplier: 1.1,
     },
     mainnet: {
       url: `https://mainnet.infura.io/v3/${process.env.INFURA_SECRET}`,
       accounts: {
-        mnemonic: process.env.PROD_MNEMONIC || Wallet.createRandom().mnemonic.phrase,
+        mnemonic: process.env.PROD_MNEMONIC,
       },
     },
   },

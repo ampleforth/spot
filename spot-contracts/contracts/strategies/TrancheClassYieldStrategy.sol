@@ -47,13 +47,23 @@ contract TrancheClassYieldStrategy is IYieldStrategy, OwnableUpgradeable {
     // @notice Updates the tranche class's yield.
     // @param classHash The tranche class (hash(collteralToken, trancheRatios, seniority)).
     // @param yield The yield factor.
-    function updateDefinedYield(bytes32 classHash, uint256 yield) external onlyOwner {
+    function updateDefinedYield(bytes32 classHash, uint256 yield) public onlyOwner {
         if (yield > 0) {
             _trancheYields[classHash] = yield;
         } else {
             delete _trancheYields[classHash];
         }
         emit UpdatedDefinedTrancheYields(classHash, yield);
+    }
+
+    /// @inheritdoc IYieldStrategy
+    function computeTrancheYield(IERC20Upgradeable token) external view override returns (uint256) {
+        return _trancheYields[trancheClass(ITranche(address(token)))];
+    }
+
+    /// @inheritdoc IYieldStrategy
+    function decimals() external pure override returns (uint8) {
+        return DECIMALS;
     }
 
     // @notice The computes the class hash of a given tranche.
@@ -65,15 +75,5 @@ contract TrancheClassYieldStrategy is IYieldStrategy, OwnableUpgradeable {
         IBondController bond = IBondController(tranche.bond());
         TrancheData memory td = bond.getTrancheData();
         return keccak256(abi.encode(bond.collateralToken(), td.trancheRatios, td.getTrancheIndex(tranche)));
-    }
-
-    /// @inheritdoc IYieldStrategy
-    function decimals() external pure override returns (uint8) {
-        return DECIMALS;
-    }
-
-    /// @inheritdoc IYieldStrategy
-    function computeTrancheYield(IERC20Upgradeable token) external view override returns (uint256) {
-        return _trancheYields[trancheClass(ITranche(address(token)))];
     }
 }

@@ -1,6 +1,6 @@
 ## Spot contracts
 
-This repository is a collection of smart contracts that implement the SPOT stablecoin on the Ethereum blockchain.
+This repository is a collection of smart contracts that implement the SPOT perpetual note on the Ethereum blockchain.
 
 ## Install
 

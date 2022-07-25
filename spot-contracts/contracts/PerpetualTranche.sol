@@ -699,7 +699,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     }
 
     //--------------------------------------------------------------------------
-    // Private/Internal helper methods
+    // Private methods
 
     // @dev Computes the perp mint amount for given amount of tranche tokens deposited into the reserve.
     function _computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) private view returns (uint256) {
@@ -789,7 +789,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         address from,
         IERC20Upgradeable token,
         uint256 trancheAmt
-    ) internal returns (uint256) {
+    ) private returns (uint256) {
         token.safeTransferFrom(from, reserve(), trancheAmt);
         return _syncReserve(token);
     }
@@ -800,14 +800,14 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         address to,
         IERC20Upgradeable token,
         uint256 tokenAmt
-    ) internal returns (uint256) {
+    ) private returns (uint256) {
         token.safeTransfer(to, tokenAmt);
         return _syncReserve(token);
     }
 
     // @dev Keeps the reserve storage up to date. Logs the token balance held by the reserve.
     // @return The Reserve's token balance.
-    function _syncReserve(IERC20Upgradeable token) internal returns (uint256) {
+    function _syncReserve(IERC20Upgradeable token) private returns (uint256) {
         uint256 balance = _tokenBalance(token);
         emit ReserveSynced(token, balance);
 
@@ -846,7 +846,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         address payer,
         int256 reserveFee,
         uint256 protocolFee
-    ) internal {
+    ) private {
         // Handling reserve fees
         uint256 reserveFeeAbs = SignedMathUpgradeable.abs(reserveFee);
         if (reserveFee > 0) {
@@ -865,7 +865,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         address payer,
         address destination,
         uint256 feeAmt
-    ) internal {
+    ) private {
         IERC20Upgradeable feeToken_ = feeToken();
         bool isNativeFeeToken = (feeToken_ == perpERC20());
         // Funds are coming in
@@ -881,7 +881,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     }
 
     // @dev Transfers fee from the reserve to the destination.
-    function _handleFeeTransferOut(address destination, uint256 feeAmt) internal {
+    function _handleFeeTransferOut(address destination, uint256 feeAmt) private {
         IERC20Upgradeable feeToken_ = feeToken();
         bool isNativeFeeToken = (feeToken_ == perpERC20());
         // Funds are going out
@@ -923,7 +923,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     //          - expects outgoing tranche to not be part of the deposit bond
     //          - expects outgoing tranche to be in the reserve
     //          - expects outgoing bond to not be "acceptable" any more
-    function _isAcceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut) internal view returns (bool) {
+    function _isAcceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut) private view returns (bool) {
         IBondController bondIn = IBondController(trancheIn.bond());
 
         // when rolling out the mature tranche
@@ -944,7 +944,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     //      * Expects the bond to to have the same collateral token as perp.
     //      * Expects the bond's maturity to be within expected bounds.
     // @return True if the bond is "acceptable".
-    function _isAcceptableForReserve(IBondController bond) internal view returns (bool) {
+    function _isAcceptableForReserve(IBondController bond) private view returns (bool) {
         // NOTE: `timeToMaturity` will be 0 if the bond is past maturity.
         uint256 timeToMaturity = bond.timeToMaturity();
         return (address(_reserveAt(0)) == bond.collateralToken() &&
