@@ -1,0 +1,268 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "contract IPerpetualTranche",
+        "name": "perp",
+        "type": "address"
+      },
+      {
+        "internalType": "contract ITranche",
+        "name": "trancheIn",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "trancheInAmt",
+        "type": "uint256"
+      }
+    ],
+    "name": "previewDeposit",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "contract IERC20Upgradeable",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "int256",
+        "name": "",
+        "type": "int256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "contract IPerpetualTranche",
+        "name": "perp",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "perpAmtBurnt",
+        "type": "uint256"
+      }
+    ],
+    "name": "previewRedeem",
+    "outputs": [
+      {
+        "internalType": "contract IERC20Upgradeable[]",
+        "name": "",
+        "type": "address[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "contract IERC20Upgradeable",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "int256",
+        "name": "",
+        "type": "int256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "contract IPerpetualTranche",
+        "name": "perp",
+        "type": "address"
+      },
+      {
+        "internalType": "contract ITranche",
+        "name": "trancheIn",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IERC20Upgradeable",
+        "name": "tokenOut",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "trancheInAmtRequested",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "maxTokenOutAmtUsed",
+        "type": "uint256"
+      }
+    ],
+    "name": "previewRollover",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "perpRolloverAmt",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "tokenOutAmt",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "trancheOutAmt",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "trancheInAmt",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "remainingTrancheInAmt",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IPerpetualTranche.RolloverPreview",
+        "name": "",
+        "type": "tuple"
+      },
+      {
+        "internalType": "contract IERC20Upgradeable",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "int256",
+        "name": "",
+        "type": "int256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "contract IPerpetualTranche",
+        "name": "perp",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "collateralAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "previewTranche",
+    "outputs": [
+      {
+        "internalType": "contract IBondController",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "contract ITranche[]",
+        "name": "",
+        "type": "address[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "",
+        "type": "uint256[]"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "contract IPerpetualTranche",
+        "name": "perp",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IBondController",
+        "name": "bond",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "collateralAmount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "feePaid",
+        "type": "uint256"
+      }
+    ],
+    "name": "trancheAndDeposit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "contract IPerpetualTranche",
+        "name": "perp",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IBondController",
+        "name": "bond",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "collateralAmount",
+        "type": "uint256"
+      },
+      {
+        "components": [
+          {
+            "internalType": "contract ITranche",
+            "name": "trancheIn",
+            "type": "address"
+          },
+          {
+            "internalType": "contract IERC20Upgradeable",
+            "name": "tokenOut",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "trancheInAmt",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct RouterV1.RolloverBatch[]",
+        "name": "rollovers",
+        "type": "tuple[]"
+      },
+      {
+        "internalType": "uint256",
+        "name": "feePaid",
+        "type": "uint256"
+      }
+    ],
+    "name": "trancheAndRollover",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]

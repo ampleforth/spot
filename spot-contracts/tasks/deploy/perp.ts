@@ -64,7 +64,7 @@ task("deploy:PerpetualTranche")
     await perp.deployed();
 
     const BasicFeeStrategy = await hre.ethers.getContractFactory("BasicFeeStrategy");
-    const feeStrategy = await BasicFeeStrategy.deploy(perp.address);
+    const feeStrategy = await BasicFeeStrategy.deploy();
     await feeStrategy.deployed();
     await feeStrategy.init(perp.address, "0", "0", "0");
 
