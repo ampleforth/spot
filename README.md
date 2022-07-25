@@ -1,6 +1,6 @@
 ## Spot
 
-SPOT is an inflation-resistant AMPL backed stable coin. [Learn more](https://docs.ampleforth.org/learn/about-the-spot-stablecoin).
+SPOT is an inflation-resistant AMPL backed perpetual note. [Learn more](https://docs.ampleforth.org/learn/about-the-spot-perpetual-note).
 
 <br />
 
