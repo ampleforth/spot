@@ -17,7 +17,7 @@ error UnacceptablePercValue(int256 perc);
 /*
  *  @title BasicFeeStrategy
  *
- *  @notice Basic fee strategy using fixed percentages.
+ *  @notice Basic fee strategy using fixed percentages. This strategy extracts NO protocol fees.
  *
  *  @dev IMPORTANT: If mint or burn fee is negative, the other must overcompensate in the positive direction.
  *       Otherwise, user could extract from the fee collector by constant mint/burn transactions.
@@ -33,9 +33,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     uint256 public constant UNIT_PERC = 10**PERC_DECIMALS;
     uint256 public constant HUNDRED_PERC = 100 * UNIT_PERC;
 
-    // @notice Address of the parent perpetual ERC-20 token contract which uses this strategy.
-    IPerpetualTranche public immutable perp;
-
     /// @inheritdoc IFeeStrategy
     IERC20Upgradeable public override feeToken;
 
@@ -45,10 +42,7 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     // @notice Fixed percentage of the burn amount to be used as fee.
     int256 public burnFeePerc;
 
-    // @notice Fixed percentage of the fee collector's balance to be used as the fee,
-    //         for rolling over the entire supply of the perp tokens.
-    // @dev NOTE: This is different from the mint/burn fees which are just a percentage of
-    //      the perp token amounts.
+    // @notice Fixed percentage of the rollover amount to be used as fee.
     int256 public rolloverFeePerc;
 
     // EVENTS
@@ -68,12 +62,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     // @notice Event emitted when the rollover fee percentage is updated.
     // @param rolloverFeePerc Rollover fee percentage.
     event UpdatedRolloverPerc(int256 rolloverFeePerc);
-
-    // @notice Contract constructor.
-    // @param perp_ Address of the perpetual ERC-20 token contract.
-    constructor(IPerpetualTranche perp_) {
-        perp = perp_;
-    }
 
     // @notice Contract initializer.
     // @param feeToken_ Address of the fee ERC-20 token contract.
@@ -123,21 +111,20 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeeStrategy
-    function computeMintFee(uint256 mintAmt) external view override returns (int256) {
+    function computeMintFees(uint256 mintAmt) external view override returns (int256, uint256) {
         uint256 absoluteFee = (mintFeePerc.abs() * mintAmt) / HUNDRED_PERC;
-        return mintFeePerc.sign() * absoluteFee.toInt256();
+        return (mintFeePerc.sign() * absoluteFee.toInt256(), 0);
     }
 
     /// @inheritdoc IFeeStrategy
-    function computeBurnFee(uint256 burnAmt) external view override returns (int256) {
+    function computeBurnFees(uint256 burnAmt) external view override returns (int256, uint256) {
         uint256 absoluteFee = (burnFeePerc.abs() * burnAmt) / HUNDRED_PERC;
-        return burnFeePerc.sign() * absoluteFee.toInt256();
+        return (burnFeePerc.sign() * absoluteFee.toInt256(), 0);
     }
 
     /// @inheritdoc IFeeStrategy
-    function computeRolloverFee(uint256 rolloverAmt) external view override returns (int256) {
-        uint256 share = (feeToken.balanceOf(perp.feeCollector()) * rolloverAmt) / perp.totalSupply();
-        uint256 absoluteFee = (rolloverFeePerc.abs() * share) / HUNDRED_PERC;
-        return rolloverFeePerc.sign() * absoluteFee.toInt256();
+    function computeRolloverFees(uint256 rolloverAmt) external view override returns (int256, uint256) {
+        uint256 absoluteFee = (rolloverFeePerc.abs() * rolloverAmt) / HUNDRED_PERC;
+        return (rolloverFeePerc.sign() * absoluteFee.toInt256(), 0);
     }
 }

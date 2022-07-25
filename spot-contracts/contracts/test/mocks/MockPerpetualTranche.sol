@@ -8,7 +8,7 @@ contract MockPerpetualTranche is MockERC20 {
     uint256 public matureTrancheBalance;
     address public collateral;
 
-    function feeCollector() public view returns (address) {
+    function protocolFeeCollector() public view returns (address) {
         return address(this);
     }
 

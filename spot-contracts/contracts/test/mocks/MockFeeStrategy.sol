@@ -5,6 +5,7 @@ contract MockFeeStrategy {
     int256 private _mintFee;
     int256 private _burnFee;
     int256 private _rolloverFee;
+    uint256 private _protocolFee;
     address private _feeToken;
 
     function setFeeToken(address t) external {
@@ -23,25 +24,29 @@ contract MockFeeStrategy {
         _rolloverFee = f;
     }
 
+    function setProtocolFee(uint256 f) external {
+        _protocolFee = f;
+    }
+
     function feeToken() external view returns (address) {
         return _feeToken;
     }
 
-    function computeMintFee(
+    function computeMintFees(
         uint256 /* f */
-    ) external view returns (int256) {
-        return _mintFee;
+    ) external view returns (int256, uint256) {
+        return (_mintFee, _protocolFee);
     }
 
-    function computeBurnFee(
+    function computeBurnFees(
         uint256 /* f */
-    ) external view returns (int256) {
-        return _burnFee;
+    ) external view returns (int256, uint256) {
+        return (_burnFee, _protocolFee);
     }
 
-    function computeRolloverFee(
+    function computeRolloverFees(
         uint256 /* f */
-    ) external view returns (int256) {
-        return _rolloverFee;
+    ) external view returns (int256, uint256) {
+        return (_rolloverFee, _protocolFee);
     }
 }

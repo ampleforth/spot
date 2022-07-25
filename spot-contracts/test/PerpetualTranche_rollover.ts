@@ -27,6 +27,7 @@ let perp: Contract,
   pricingStrategy: Contract,
   yieldStrategy: Contract,
   deployer: Signer,
+  otherUser: Signer,
   deployerAddress: string,
   holdingPenBond: Contract,
   holdingPenTranche1: Contract,
@@ -42,6 +43,7 @@ describe("PerpetualTranche", function () {
 
     const accounts = await ethers.getSigners();
     deployer = accounts[0];
+    otherUser = accounts[1];
     deployerAddress = await deployer.getAddress();
 
     bondFactory = await setupBondFactory();
@@ -776,6 +778,46 @@ describe("PerpetualTranche", function () {
           expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
       });
+
+      describe("when protocol fee > 0", function () {
+        beforeEach(async function () {
+          await perp.transferOwnership(await otherUser.getAddress());
+          await feeStrategy.setRolloverFee(toFixedPtAmt("1"));
+          await feeStrategy.setProtocolFee(toFixedPtAmt("0.5"));
+        });
+        it("should transfer the tranches in", async function () {
+          await expect(() =>
+            perp.rollover(rolloverInTranche.address, reserveTranche1.address, toFixedPtAmt("500")),
+          ).to.changeTokenBalances(rolloverInTranche, [deployer, perp], [toFixedPtAmt("-500"), toFixedPtAmt("500")]);
+        });
+        it("should transfer the tranches out", async function () {
+          await expect(() =>
+            perp.rollover(rolloverInTranche.address, reserveTranche1.address, toFixedPtAmt("500")),
+          ).to.changeTokenBalances(reserveTranche1, [deployer, perp], [toFixedPtAmt("500"), toFixedPtAmt("-500")]);
+        });
+        it("should charge fees", async function () {
+          await expect(() =>
+            perp.rollover(rolloverInTranche.address, reserveTranche1.address, toFixedPtAmt("500")),
+          ).to.changeTokenBalances(
+            perp,
+            [deployer, perp, otherUser],
+            [toFixedPtAmt("-1.5"), toFixedPtAmt("1"), toFixedPtAmt("0.5")],
+          );
+        });
+        it("should calculate rollover amt", async function () {
+          const r = await perp.callStatic.computeRolloverAmt(
+            rolloverInTranche.address,
+            reserveTranche1.address,
+            toFixedPtAmt("500"),
+            constants.MaxUint256,
+          );
+          expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
+        });
+      });
     });
 
     describe("when fee is in non-native token", function () {
@@ -926,6 +968,49 @@ describe("PerpetualTranche", function () {
             expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
             expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
           });
+        });
+      });
+
+      describe("when protocol fee > 0", async function () {
+        beforeEach(async function () {
+          await perp.transferOwnership(await otherUser.getAddress());
+          await feeStrategy.setRolloverFee(toFixedPtAmt("1"));
+          await feeStrategy.setProtocolFee(toFixedPtAmt("0.5"));
+          await feeToken.mint(deployerAddress, toFixedPtAmt("1.5"));
+          await feeToken.approve(perp.address, toFixedPtAmt("1.5"));
+        });
+
+        it("should transfer the tranches in", async function () {
+          await expect(() =>
+            perp.rollover(rolloverInTranche.address, reserveTranche1.address, toFixedPtAmt("500")),
+          ).to.changeTokenBalances(rolloverInTranche, [deployer, perp], [toFixedPtAmt("-500"), toFixedPtAmt("500")]);
+        });
+        it("should transfer the tranches out", async function () {
+          await expect(() =>
+            perp.rollover(rolloverInTranche.address, reserveTranche1.address, toFixedPtAmt("500")),
+          ).to.changeTokenBalances(reserveTranche1, [deployer, perp], [toFixedPtAmt("500"), toFixedPtAmt("-500")]);
+        });
+        it("should charge reserve and protocol fees", async function () {
+          await expect(() =>
+            perp.rollover(rolloverInTranche.address, reserveTranche1.address, toFixedPtAmt("500")),
+          ).to.changeTokenBalances(
+            feeToken,
+            [deployer, perp, otherUser],
+            [toFixedPtAmt("-1.5"), toFixedPtAmt("1"), toFixedPtAmt("0.5")],
+          );
+        });
+        it("should calculate rollover amt", async function () {
+          const r = await perp.callStatic.computeRolloverAmt(
+            rolloverInTranche.address,
+            reserveTranche1.address,
+            toFixedPtAmt("500"),
+            constants.MaxUint256,
+          );
+          expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.trancheOutAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
+          expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         });
       });
     });
