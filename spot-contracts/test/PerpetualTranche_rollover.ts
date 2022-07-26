@@ -260,7 +260,6 @@ describe("PerpetualTranche", function () {
       });
     });
 
-
     describe("when trancheIn yield is 0.5", function () {
       let newRotationInTranche: Contract;
       beforeEach(async function () {

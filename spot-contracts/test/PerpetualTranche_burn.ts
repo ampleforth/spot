@@ -147,7 +147,6 @@ describe("PerpetualTranche", function () {
       });
     });
 
-
     describe("when fee is in native token", function () {
       describe("when fee is zero", function () {
         it("should burn perp tokens", async function () {
