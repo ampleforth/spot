@@ -22,7 +22,7 @@ contract NonEquityCDRLBPricingStrategy is IPricingStrategy {
     /// @inheritdoc IPricingStrategy
     function computeTranchePrice(
         ITranche /* tranche */
-    ) external view override returns (uint256) {
+    ) external pure override returns (uint256) {
         // NOTE: The is an optimization. Non-equity tranches will never have a CDR > 1 before they mature.
         return UNIT_PRICE;
     }
