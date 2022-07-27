@@ -486,8 +486,8 @@ task("ops:trancheAndRolloverMax")
     );
 
     await hre.run("ops:trancheAndRollover", {
-      perpAddress: args.perpAddress,
-      routerAddress: args.routerAddress,
+      perpAddress,
+      routerAddress,
       collateralAmount: floatingPtCollateralAmount,
       fromIdx: args.fromIdx,
     });
