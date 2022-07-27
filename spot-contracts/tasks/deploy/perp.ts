@@ -62,7 +62,6 @@ task("deploy:PerpetualTranche")
     const PerpetualTranche = await hre.ethers.getContractFactory("PerpetualTranche");
     const perp = await hre.upgrades.deployProxy(PerpetualTranche.connect(deployer));
     await perp.deployed();
-    await perp.updateTolerableTrancheMaturity(minMatuirtySec, maxMatuirtySec);
 
     const BasicFeeStrategy = await hre.ethers.getContractFactory("BasicFeeStrategy");
     const feeStrategy = await BasicFeeStrategy.deploy();
