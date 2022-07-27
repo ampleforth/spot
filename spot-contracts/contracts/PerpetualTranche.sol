@@ -363,6 +363,11 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         emit UpdatedMintingLimits(maxSupply_, maxMintAmtPerTranche_);
     }
 
+    // @notice Redenominates perp with respect to the outstanding debt.
+    function redenominate() external afterStateUpdate onlyOwner {
+        _updateMatureTrancheBalance(_tokenBalance(_reserveAt(0)));
+    }
+
     //--------------------------------------------------------------------------
     // External methods
 

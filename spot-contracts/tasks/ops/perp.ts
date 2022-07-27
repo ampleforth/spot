@@ -497,3 +497,22 @@ task("ops:trancheAndRolloverMax")
       fromIdx: args.fromIdx,
     });
   });
+
+task("ops:redenominate")
+  .addPositionalParam("perpAddress", "the address of the perp contract", undefined, types.string, false)
+  .addParam("fromIdx", "the index of sender", 0, types.int)
+  .setAction(async function (args: TaskArguments, hre) {
+    const signer = (await hre.ethers.getSigners())[args.fromIdx];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
+
+    const { perpAddress } = args;
+    const perp = await hre.ethers.getContractAt("PerpetualTranche", perpAddress);
+
+    console.log("---------------------------------------------------------------");
+    console.log("Execution:");
+    console.log("Redenominate:");
+    const tx = await perp.redenominate();
+    await tx.wait();
+    console.log("Tx", tx.hash);
+  });

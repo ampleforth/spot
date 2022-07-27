@@ -65,4 +65,6 @@ yarn hardhat --network ganache ops:rebase:MockAMPL \
   --ampl-address "0x00404F73C76BC75b0D86F8AdDA8500e987BF8232" \
   --rebase-perc 0.05
 
+yarn hardhat --network ganache ops:redenominate 0x89967625335C35c5FE1F3C1c03D37fdEb6f415Ed
+
 ########################################################################

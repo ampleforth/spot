@@ -1202,4 +1202,42 @@ describe("PerpetualTranche", function () {
       expect(await perp.callStatic.getReserveTrancheBalance(depositTranches[4].address)).to.eq(toFixedPtAmt("500"));
     });
   });
+
+  describe("#redenominate", function () {
+    let tx: Transaction;
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(perp.connect(otherUser).redenominate()).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+    });
+
+    describe("when valid redenominate", function () {
+      beforeEach(async function () {
+        const bondFactory = await setupBondFactory();
+        const bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 3600);
+        const tranches = await getTranches(bond);
+        await issuer.setLatestBond(bond.address);
+
+        await yieldStrategy.setTrancheYield(tranches[0].address, toYieldFixedPtAmt("1"));
+
+        await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
+        await tranches[0].approve(perp.address, toFixedPtAmt("200"));
+        await perp.deposit(tranches[0].address, toFixedPtAmt("200"));
+        await advancePerpQueue(perp, 7200);
+        await rebase(collateralToken, rebaseOracle, -0.5);
+
+        expect(await perp.callStatic.getMatureTrancheBalance()).to.eq(toFixedPtAmt("200"));
+
+        tx = perp.redenominate();
+        await tx;
+      });
+      it("should emit balance update", async function () {
+        await expect(tx).to.emit(perp, "UpdatedMatureTrancheBalance").withArgs(toFixedPtAmt("100"));
+      });
+      it("should update balances", async function () {
+        expect(await perp.callStatic.getMatureTrancheBalance()).to.eq(toFixedPtAmt("100"));
+      });
+    });
+  });
 });
