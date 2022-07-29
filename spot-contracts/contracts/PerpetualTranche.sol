@@ -541,9 +541,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         uint256 reserveCount = _reserveCount();
         IERC20Upgradeable[] memory rolloverTokens = new IERC20Upgradeable[](reserveCount);
 
-        IERC20Upgradeable collateral_ = _reserveAt(0);
-        if (_tokenBalance(collateral_) > 0) {
-            rolloverTokens[0] = collateral_;
+        if (_matureTrancheBalance > 0) {
+            rolloverTokens[0] = _reserveAt(0);
         }
 
         // Iterating through the reserve to find tranches that are no longer "acceptable"
