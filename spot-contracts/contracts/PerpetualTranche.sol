@@ -846,8 +846,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
             delete _mintedSupplyPerTranche[ITranche(address(token))];
         }
 
-        // assert(_reserveAt(0) == collateral_);
-
         return balance;
     }
 
