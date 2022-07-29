@@ -118,6 +118,7 @@ describe("PerpetualTranche", function () {
       expect(await perp.maxTrancheMaturitySec()).to.eq(constants.MaxUint256);
       expect(await perp.maxSupply()).to.eq(constants.MaxUint256);
       expect(await perp.maxMintAmtPerTranche()).to.eq(constants.MaxUint256);
+      expect(await perp.matureValueTargetPerc()).to.eq(0);
     });
 
     it("should NOT be paused", async function () {
@@ -238,9 +239,7 @@ describe("PerpetualTranche", function () {
 
     describe("when set address is NOT valid", function () {
       it("should revert", async function () {
-        await expect(perp.updatePricingStrategy(constants.AddressZero)).to.be.revertedWith(
-          "UnacceptableReference",
-        );
+        await expect(perp.updatePricingStrategy(constants.AddressZero)).to.be.revertedWith("UnacceptableReference");
       });
     });
 
@@ -297,9 +296,7 @@ describe("PerpetualTranche", function () {
         await newYieldStrategy.setDecimals(8);
       });
       it("should revert", async function () {
-        await expect(perp.updateYieldStrategy(newYieldStrategy.address)).to.be.revertedWith(
-          "InvalidStrategyDecimals",
-        );
+        await expect(perp.updateYieldStrategy(newYieldStrategy.address)).to.be.revertedWith("InvalidStrategyDecimals");
       });
     });
 
@@ -375,6 +372,37 @@ describe("PerpetualTranche", function () {
       });
       it("should emit event", async function () {
         await expect(tx).to.emit(perp, "UpdatedMintingLimits").withArgs(toFixedPtAmt("100"), toFixedPtAmt("20"));
+      });
+    });
+  });
+
+  describe("#updateMatureValueTargetPerc", function () {
+    let tx: Transaction;
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(perp.connect(otherUser).updateMatureValueTargetPerc("1000000")).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    describe("when NOT valid", function () {
+      it("should revert", async function () {
+        await expect(perp.updateMatureValueTargetPerc("100000001")).to.be.revertedWith("InvalidPerc");
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      beforeEach(async function () {
+        tx = perp.updateMatureValueTargetPerc("1000000");
+        await tx;
+      });
+      it("should update reference", async function () {
+        expect(await perp.matureValueTargetPerc()).to.eq("1000000");
+      });
+      it("should emit event", async function () {
+        await expect(tx).to.emit(perp, "UpdatedMatureValueTargetPerc").withArgs("1000000");
       });
     });
   });

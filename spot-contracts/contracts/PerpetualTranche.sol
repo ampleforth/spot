@@ -14,16 +14,7 @@ import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/
 import { BondHelpers } from "./_utils/BondHelpers.sol";
 
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
-import {
-    IERC20Upgradeable,
-    IPerpetualTranche,
-    IBondIssuer,
-    IFeeStrategy,
-    IPricingStrategy,
-    IYieldStrategy,
-    IBondController,
-    ITranche
-} from "./_interfaces/IPerpetualTranche.sol";
+import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeeStrategy, IPricingStrategy, IYieldStrategy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
 
 /// @notice Expected a valid percentage value from 0-100 as a fixed point number with {PERC_DECIMALS}.
 /// @param value Invalid value.
@@ -81,6 +72,12 @@ error ExceededMaxSupply(uint256 newSupply, uint256 currentMaxSupply);
 /// @param mintAmtForCurrentTranche The amount of perps that have been minted using the tranche.
 /// @param maxMintAmtPerTranche The amount of perps that can be minted per tranche.
 error ExceededMaxMintPerTranche(ITranche trancheIn, uint256 mintAmtForCurrentTranche, uint256 maxMintAmtPerTranche);
+
+/// @notice Expected the percentage of reserve value held as mature tranches to be at least
+///         as much as the target percentage.
+/// @param matureValuePerc The current percentage of reserve value held as mature tranches.
+/// @param matureValueTargetPerc The target percentage.
+error BelowMatureValueTargetPerc(uint256 matureValuePerc, uint256 matureValueTargetPerc);
 
 /*
  *  @title PerpetualTranche
@@ -163,6 +160,10 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     uint8 public constant PRICE_DECIMALS = 8;
     uint256 public constant UNIT_PRICE = (10**PRICE_DECIMALS);
 
+    uint8 public constant PERC_DECIMALS = 6;
+    uint256 public constant UNIT_PERC = 10**PERC_DECIMALS;
+    uint256 public constant HUNDRED_PERC = 100 * UNIT_PERC;
+
     //-------------------------------------------------------------------------
     // Storage
 
@@ -202,6 +203,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     // @notice The maximum maturity time in seconds for a tranche above which
     //         it can NOT get added into the reserve.
     uint256 public maxTrancheMaturitySec;
+
+    // @notice The percentage of the reserve value to be held as mature tranches.
+    uint256 public matureValueTargetPerc;
 
     // @notice The maximum supply of perps that can exist at any given time.
     uint256 public maxSupply;
@@ -274,6 +278,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
 
         updateTolerableTrancheMaturity(1, type(uint256).max);
         updateMintingLimits(type(uint256).max, type(uint256).max);
+        updateMatureValueTargetPerc(0);
     }
 
     //--------------------------------------------------------------------------
@@ -353,6 +358,16 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         maxSupply = maxSupply_;
         maxMintAmtPerTranche = maxMintAmtPerTranche_;
         emit UpdatedMintingLimits(maxSupply_, maxMintAmtPerTranche_);
+    }
+
+    // @notice Update the mature value target percentage parameter.
+    // @param matureValueTargetPerc_ The new target percentage.
+    function updateMatureValueTargetPerc(uint256 matureValueTargetPerc_) public onlyOwner {
+        if (matureValueTargetPerc_ > HUNDRED_PERC) {
+            revert InvalidPerc(matureValueTargetPerc_);
+        }
+        matureValueTargetPerc = matureValueTargetPerc_;
+        emit UpdatedMatureValueTargetPerc(matureValueTargetPerc);
     }
 
     //--------------------------------------------------------------------------
@@ -465,8 +480,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         // transfers tranche from the reserve to the sender
         _transferOutOfReserve(_msgSender(), tokenOut, r.tokenOutAmt);
 
-        // enforces supply cap
+        // enforce limits
         _enforceTotalSupplyCap();
+        _enforceMatureValueTarget();
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -960,6 +976,16 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         // checks if supply minted using the given tranche is within the cap
         if (_mintedSupplyPerTranche[trancheIn] > maxMintAmtPerTranche) {
             revert ExceededMaxMintPerTranche(trancheIn, _mintedSupplyPerTranche[trancheIn], maxMintAmtPerTranche);
+        }
+    }
+
+    // @dev Enforces that the percentage of the reserve value is within the target percentage.
+    //      To be invoked AFTER the rollover operation.
+    function _enforceMatureValueTarget() private view {
+        uint256 matureValue = (_matureTrancheBalance * computePrice(_reserveAt(0)));
+        uint256 matureValuePerc = (matureValue * HUNDRED_PERC) / _reserveValue();
+        if (matureValuePerc < matureValueTargetPerc) {
+            revert BelowMatureValueTargetPerc(matureValuePerc, matureValueTargetPerc);
         }
     }
 
