@@ -271,7 +271,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         // NOTE: `_reserveAt(0)` always points to the underling collateral token
         // and is to be never updated.
         _reserves.add(address(collateral_));
-        assert(_reserveAt(0) == collateral_);
         _syncReserve(collateral_);
         _applyYield(collateral_, UNIT_YIELD);
 
@@ -837,6 +836,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
             // Frees up minted supply.
             delete _mintedSupplyPerTranche[ITranche(address(token))];
         }
+
+        // assert(_reserveAt(0) == collateral_);
 
         return balance;
     }
