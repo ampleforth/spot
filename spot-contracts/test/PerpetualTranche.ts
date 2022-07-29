@@ -172,7 +172,7 @@ describe("PerpetualTranche", function () {
 
     describe("when set address is NOT valid", function () {
       it("should revert", async function () {
-        await expect(perp.updateBondIssuer(constants.AddressZero)).to.be.revertedWith("UnacceptableBondIssuer");
+        await expect(perp.updateBondIssuer(constants.AddressZero)).to.be.revertedWith("UnacceptableReference");
       });
     });
 
@@ -205,7 +205,7 @@ describe("PerpetualTranche", function () {
 
     describe("when set address is NOT valid", function () {
       it("should revert", async function () {
-        await expect(perp.updateFeeStrategy(constants.AddressZero)).to.be.revertedWith("UnacceptableFeeStrategy");
+        await expect(perp.updateFeeStrategy(constants.AddressZero)).to.be.revertedWith("UnacceptableReference");
       });
     });
 
@@ -239,7 +239,7 @@ describe("PerpetualTranche", function () {
     describe("when set address is NOT valid", function () {
       it("should revert", async function () {
         await expect(perp.updatePricingStrategy(constants.AddressZero)).to.be.revertedWith(
-          "UnacceptablePricingStrategy",
+          "UnacceptableReference",
         );
       });
     });
@@ -252,7 +252,7 @@ describe("PerpetualTranche", function () {
       });
       it("should revert", async function () {
         await expect(perp.updatePricingStrategy(newPricingStrategy.address)).to.be.revertedWith(
-          "InvalidPricingStrategyDecimals",
+          "InvalidStrategyDecimals",
         );
       });
     });
@@ -286,7 +286,7 @@ describe("PerpetualTranche", function () {
 
     describe("when set address is NOT valid", function () {
       it("should revert", async function () {
-        await expect(perp.updateYieldStrategy(constants.AddressZero)).to.be.revertedWith("UnacceptableYieldStrategy");
+        await expect(perp.updateYieldStrategy(constants.AddressZero)).to.be.revertedWith("UnacceptableReference");
       });
     });
 
@@ -298,7 +298,7 @@ describe("PerpetualTranche", function () {
       });
       it("should revert", async function () {
         await expect(perp.updateYieldStrategy(newYieldStrategy.address)).to.be.revertedWith(
-          "InvalidYieldStrategyDecimals",
+          "InvalidStrategyDecimals",
         );
       });
     });

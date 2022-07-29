@@ -13,34 +13,27 @@ import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/
 
 import { BondHelpers } from "./_utils/BondHelpers.sol";
 
-import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
-import { ITranche } from "./_interfaces/buttonwood/ITranche.sol";
-import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
+import {
+    IERC20Upgradeable,
+    IPerpetualTranche,
+    IBondIssuer,
+    IFeeStrategy,
+    IPricingStrategy,
+    IYieldStrategy,
+    IBondController,
+    ITranche
+} from "./_interfaces/IPerpetualTranche.sol";
 
-import { IPerpetualTranche } from "./_interfaces/IPerpetualTranche.sol";
-import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
-import { IFeeStrategy } from "./_interfaces/IFeeStrategy.sol";
-import { IPricingStrategy } from "./_interfaces/IPricingStrategy.sol";
-import { IYieldStrategy } from "./_interfaces/IYieldStrategy.sol";
+/// @notice Expected a valid percentage value from 0-100 as a fixed point number with {PERC_DECIMALS}.
+/// @param value Invalid value.
+error InvalidPerc(uint256 value);
 
-/// @notice Expected bond issuer to not be `address(0)`.
-error UnacceptableBondIssuer();
+/// @notice Expected contract reference to not be `address(0)`.
+error UnacceptableReference();
 
-/// @notice Expected fee strategy to not be `address(0)`.
-error UnacceptableFeeStrategy();
-
-/// @notice Expected pricing strategy to not be `address(0)`.
-error UnacceptablePricingStrategy();
-
-/// @notice Expected pricing strategy to return a fixed point with exactly {PRICE_DECIMALS} decimals.
-error InvalidPricingStrategyDecimals();
-
-/// @notice Expected yield strategy to not be `address(0)`.
-error UnacceptableYieldStrategy();
-
-/// @notice Expected yield strategy to return a fixed point with exactly {YIELD_DECIMALS} decimals.
-error InvalidYieldStrategyDecimals();
+/// @notice Expected strategy to return a fixed point with exactly expected decimals.
+error InvalidStrategyDecimals(uint256 decimals, uint256 expectDecimals);
 
 /// @notice Expected minTrancheMaturity be less than or equal to maxTrancheMaturity.
 /// @param minTrancheMaturitySec Minimum tranche maturity time in seconds.
@@ -296,7 +289,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     // @param bondIssuer_ New bond issuer address.
     function updateBondIssuer(IBondIssuer bondIssuer_) public onlyOwner {
         if (address(bondIssuer_) == address(0)) {
-            revert UnacceptableBondIssuer();
+            revert UnacceptableReference();
         }
         bondIssuer = bondIssuer_;
         emit UpdatedBondIssuer(bondIssuer_);
@@ -306,7 +299,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     // @param feeStrategy_ New strategy address.
     function updateFeeStrategy(IFeeStrategy feeStrategy_) public onlyOwner {
         if (address(feeStrategy_) == address(0)) {
-            revert UnacceptableFeeStrategy();
+            revert UnacceptableReference();
         }
         feeStrategy = feeStrategy_;
         emit UpdatedFeeStrategy(feeStrategy_);
@@ -316,10 +309,10 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     // @param pricingStrategy_ New strategy address.
     function updatePricingStrategy(IPricingStrategy pricingStrategy_) public onlyOwner {
         if (address(pricingStrategy_) == address(0)) {
-            revert UnacceptablePricingStrategy();
+            revert UnacceptableReference();
         }
         if (pricingStrategy_.decimals() != PRICE_DECIMALS) {
-            revert InvalidPricingStrategyDecimals();
+            revert InvalidStrategyDecimals(pricingStrategy_.decimals(), PRICE_DECIMALS);
         }
         pricingStrategy = pricingStrategy_;
         emit UpdatedPricingStrategy(pricingStrategy_);
@@ -329,10 +322,10 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     // @param yieldStrategy_ New strategy address.
     function updateYieldStrategy(IYieldStrategy yieldStrategy_) public onlyOwner {
         if (address(yieldStrategy_) == address(0)) {
-            revert UnacceptableYieldStrategy();
+            revert UnacceptableReference();
         }
         if (yieldStrategy_.decimals() != YIELD_DECIMALS) {
-            revert InvalidYieldStrategyDecimals();
+            revert InvalidStrategyDecimals(yieldStrategy_.decimals(), YIELD_DECIMALS);
         }
         yieldStrategy = yieldStrategy_;
         emit UpdatedYieldStrategy(yieldStrategy_);
