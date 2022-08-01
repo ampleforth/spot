@@ -79,7 +79,7 @@ task("ops:info")
 
 task("ops:updateState")
   .addPositionalParam("perpAddress", "the address of the perp contract", undefined, types.string, false)
-  .addOptionalParam("from", "the address of sender", "0x", types.string)
+  .addParam("fromIdx", "the index of sender", 0, types.int)
   .setAction(async function (args: TaskArguments, hre) {
     const { perpAddress } = args;
 
@@ -87,14 +87,12 @@ task("ops:updateState")
 
     console.log("---------------------------------------------------------------");
     console.log("Execution:");
-    let deployerAddress = args.from;
-    if (deployerAddress === "0x") {
-      deployerAddress = await (await hre.ethers.getSigners())[0].getAddress();
-    }
-    console.log("Signer", deployerAddress);
+    const signer = (await hre.ethers.getSigners())[args.fromIdx];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
 
     console.log("Update state:");
-    const tx = await perp.updateState();
+    const tx = await perp.connect(signer).updateState();
     await tx.wait();
     console.log("Tx", tx.hash);
   });
@@ -109,7 +107,7 @@ task("ops:trancheAndDeposit")
     types.string,
     false,
   )
-  .addOptionalParam("from", "the address of sender", "0x", types.string)
+  .addParam("fromIdx", "the index of sender", 0, types.int)
   .setAction(async function (args: TaskArguments, hre) {
     const { perpAddress, routerAddress, collateralAmount } = args;
 
@@ -157,14 +155,12 @@ task("ops:trancheAndDeposit")
 
     console.log("---------------------------------------------------------------");
     console.log("Execution:");
-    let deployerAddress = args.from;
-    if (deployerAddress === "0x") {
-      deployerAddress = await (await hre.ethers.getSigners())[0].getAddress();
-    }
-    console.log("Signer", deployerAddress);
+    const signer = (await hre.ethers.getSigners())[args.fromIdx];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
 
     console.log("Approving router to spend tokens:");
-    const tx1 = await collateralToken.approve(router.address, fixedPtCollateralAmount);
+    const tx1 = await collateralToken.connect(signer).approve(router.address, fixedPtCollateralAmount);
     await tx1.wait();
     console.log("Tx", tx1.hash);
 
@@ -172,24 +168,26 @@ task("ops:trancheAndDeposit")
     if (totalMintFee.gt("0") && feeToken.address !== perp.address) {
       fee = totalMintFee;
       console.log("Approving fees to be spent:");
-      const tx2 = await feeToken.increaseAllowance(router.address, fee);
+      const tx2 = await feeToken.connect(signer).increaseAllowance(router.address, fee);
       await tx2.wait();
       console.log("Tx", tx2.hash);
     }
 
     console.log("Tranche and deposit:");
-    const tx3 = await router.trancheAndDeposit(perp.address, depositBondAddress, fixedPtCollateralAmount, fee);
+    const tx3 = await router
+      .connect(signer)
+      .trancheAndDeposit(perp.address, depositBondAddress, fixedPtCollateralAmount, fee);
     await tx3.wait();
     console.log("Tx", tx3.hash);
 
-    console.log("Signer balance", utils.formatUnits(await perp.balanceOf(deployerAddress), await perp.decimals()));
+    console.log("Signer balance", utils.formatUnits(await perp.balanceOf(signerAddress), await perp.decimals()));
   });
 
 task("ops:redeem")
   .addParam("perpAddress", "the address of the perp contract", undefined, types.string, false)
   .addParam("routerAddress", "the address of the router contract", undefined, types.string, false)
   .addParam("amount", "the total amount of perp tokens (in float) to redeem", undefined, types.string, false)
-  .addOptionalParam("from", "the address of sender", "0x", types.string)
+  .addParam("fromIdx", "the index of sender", 0, types.int)
   .setAction(async function (args: TaskArguments, hre) {
     const { perpAddress, routerAddress, amount } = args;
 
@@ -210,15 +208,13 @@ task("ops:redeem")
 
     console.log("---------------------------------------------------------------");
     console.log("Execution:");
-    let deployerAddress = args.from;
-    if (deployerAddress === "0x") {
-      deployerAddress = await (await hre.ethers.getSigners())[0].getAddress();
-    }
-    console.log("Signer", deployerAddress);
+    const signer = (await hre.ethers.getSigners())[args.fromIdx];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
 
     console.log("Approving router to spend tokens:");
-    if ((await perp.allowance(deployerAddress, router.address)).lt(fixedPtAmount)) {
-      const tx1 = await perp.approve(router.address, fixedPtAmount);
+    if ((await perp.allowance(signerAddress, router.address)).lt(fixedPtAmount)) {
+      const tx1 = await perp.connect(signer).approve(router.address, fixedPtAmount);
       await tx1.wait();
       console.log("Tx", tx1.hash);
     }
@@ -227,44 +223,42 @@ task("ops:redeem")
     if (burnFee.gt("0")) {
       fee = burnFee;
       console.log("Approving fees to be spent:");
-      const tx2 = await feeToken.increaseAllowance(router.address, fee);
+      const tx2 = await feeToken.connect(signer).increaseAllowance(router.address, fee);
       await tx2.wait();
       console.log("Tx", tx2.hash);
     }
 
     console.log("Redeem:");
-    const tx3 = await perp.burn(fixedPtAmount);
+    const tx3 = await perp.connect(signer).burn(fixedPtAmount);
     await tx3.wait();
     console.log("Tx", tx3.hash);
 
-    console.log("Signer balance", utils.formatUnits(await perp.balanceOf(deployerAddress), await perp.decimals()));
+    console.log("Signer balance", utils.formatUnits(await perp.balanceOf(signerAddress), await perp.decimals()));
   });
 
 task("ops:redeemTranches")
   .addParam("bondIssuerAddress", "the address of the bond issuer contract", undefined, types.string, false)
-  .addOptionalParam("from", "the address of sender", "0x", types.string)
+  .addParam("fromIdx", "the index of sender", 0, types.int)
   .setAction(async function (args: TaskArguments, hre) {
     const { bondIssuerAddress } = args;
     const bondIssuer = await hre.ethers.getContractAt("BondIssuer", bondIssuerAddress);
 
+    console.log("---------------------------------------------------------------");
+    console.log("Execution:");
+    const signer = (await hre.ethers.getSigners())[args.fromIdx];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
+
     const attemptMature = async (bond: Contract) => {
       try {
         console.log("Invoking Mature");
-        const tx = await bond.mature();
+        const tx = await bond.connect(signer).mature();
         await tx.wait();
         console.log("Tx:", tx.hash);
       } catch (e) {
         console.log("Not up for maturity");
       }
     };
-
-    console.log("---------------------------------------------------------------");
-    console.log("Execution:");
-    let deployerAddress = args.from;
-    if (deployerAddress === "0x") {
-      deployerAddress = await (await hre.ethers.getSigners())[0].getAddress();
-    }
-    console.log("Signer", deployerAddress);
 
     // iterate through the bonds
     const issuedCount = await bondIssuer.callStatic.issuedCount();
@@ -280,7 +274,7 @@ task("ops:redeemTranches")
       for (let j = 0; j < trancheCount; j++) {
         const [address, ratio] = await bond.tranches(j);
         const tranche = await hre.ethers.getContractAt("ITranche", address);
-        const balance = await tranche.balanceOf(deployerAddress);
+        const balance = await tranche.balanceOf(signerAddress);
         const scalar = balance.div(ratio).mul("1000");
         tranches.push({
           idx: j,
@@ -306,7 +300,7 @@ task("ops:redeemTranches")
             tranches.map(t => t.balance),
           );
           console.log("Redeeming tranches", redemptionAmounts);
-          const tx = await bond.redeem(redemptionAmounts);
+          const tx = await bond.connect(signer).redeem(redemptionAmounts);
           await tx.wait();
           console.log("Tx:", tx.hash);
         }
@@ -315,7 +309,7 @@ task("ops:redeemTranches")
         for (let j = 0; j < trancheCount; j++) {
           if (tranches[j].balance.gt(0)) {
             console.log("Redeeming", tranches[j].address);
-            const tx = await bond.redeemMature(tranches[j].address, tranches[j].balance);
+            const tx = await bond.connect(signer).redeemMature(tranches[j].address, tranches[j].balance);
             await tx.wait();
             console.log("Tx:", tx.hash);
           }
@@ -334,7 +328,7 @@ task("ops:trancheAndRollover")
     types.string,
     false,
   )
-  .addOptionalParam("from", "the address of sender", "0x", types.string)
+  .addParam("fromIdx", "the index of sender", 0, types.int)
   .setAction(async function (args: TaskArguments, hre) {
     const { perpAddress, routerAddress, collateralAmount } = args;
 
@@ -439,14 +433,12 @@ task("ops:trancheAndRollover")
 
     console.log("---------------------------------------------------------------");
     console.log("Execution:");
-    let deployerAddress = args.from;
-    if (deployerAddress === "0x") {
-      deployerAddress = await (await hre.ethers.getSigners())[0].getAddress();
-    }
-    console.log("Signer", deployerAddress);
+    const signer = (await hre.ethers.getSigners())[args.fromIdx];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
 
     console.log("Approving collateralToken to be spent");
-    const tx1 = await collateralToken.approve(router.address, fixedPtCollateralAmount);
+    const tx1 = await collateralToken.connect(signer).approve(router.address, fixedPtCollateralAmount);
     await tx1.wait();
     console.log("Tx", tx1.hash);
 
@@ -454,7 +446,7 @@ task("ops:trancheAndRollover")
     if (totalRolloverFee.gt("0")) {
       fee = totalRolloverFee;
       console.log("Approving fees to be spent:");
-      const tx2 = await feeToken.increaseAllowance(router.address, fee);
+      const tx2 = await feeToken.connect(signer).increaseAllowance(router.address, fee);
       await tx2.wait();
       console.log("Tx", tx2.hash);
     }
@@ -464,7 +456,7 @@ task("ops:trancheAndRollover")
 
     console.log("Executing rollover:");
     console.log(rolloverData.map(r => [r.trancheIn.address, r.tokenOut.address, r.trancheInAmt]));
-    const tx3 = await router.trancheAndRollover(
+    const tx3 = await router.connect(signer).trancheAndRollover(
       perp.address,
       depositBond.address,
       fixedPtCollateralAmount,
@@ -473,4 +465,35 @@ task("ops:trancheAndRollover")
     );
     await tx3.wait();
     console.log("Tx", tx3.hash);
+  });
+
+task("ops:trancheAndRolloverMax")
+  .addParam("perpAddress", "the address of the perp contract", undefined, types.string, false)
+  .addParam("routerAddress", "the address of the router contract", undefined, types.string, false)
+  .addParam("fromIdx", "the index of sender", 0, types.int)
+  .setAction(async function (args: TaskArguments, hre) {
+    const signer = (await hre.ethers.getSigners())[args.fromIdx];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
+
+    const { routerAddress, perpAddress } = args;
+    const perp = await hre.ethers.getContractAt("PerpetualTranche", perpAddress);
+    const bondIssuer = await hre.ethers.getContractAt("BondIssuer", await perp.bondIssuer());
+    const collateralToken = await hre.ethers.getContractAt("MockERC20", await bondIssuer.collateralToken());
+    const floatingPtCollateralAmount = utils.formatUnits(
+      await collateralToken.balanceOf(signerAddress),
+      await collateralToken.decimals(),
+    );
+
+    await hre.run("ops:trancheAndRollover", {
+      perpAddress,
+      routerAddress,
+      collateralAmount: floatingPtCollateralAmount,
+      fromIdx: args.fromIdx,
+    });
+
+    await hre.run("ops:redeemTranches", {
+      bondIssuerAddress: bondIssuer.address,
+      fromIdx: args.fromIdx,
+    });
   });

@@ -21,6 +21,7 @@ error UnacceptablePercValue(int256 perc);
  *
  *  @dev IMPORTANT: If mint or burn fee is negative, the other must overcompensate in the positive direction.
  *       Otherwise, user could extract from the fee collector by constant mint/burn transactions.
+ *
  */
 contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     using SignedMathUpgradeable for int256;

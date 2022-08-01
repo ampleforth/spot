@@ -53,10 +53,9 @@ task("deploy:PerpetualTranche")
   .addParam("collateralTokenAddress", "the address of the collateral token", undefined, types.string, false)
   .addParam("name", "the ERC20 name", undefined, types.string, false)
   .addParam("symbol", "the ERC20 symbol", undefined, types.string, false)
-  .addParam("minMatuirtySec", "the minimum maturity in seconds for bond to in reserve", 1, types.int)
-  .addParam("maxMatuirtySec", "the maximum maturity in seconds for bond to in reserve", 86400, types.int)
+  .addParam("pricingStrategyRef", "the pricing strategy to be used", "UnitPricingStrategy", types.string)
   .setAction(async function (args: TaskArguments, hre) {
-    const { bondIssuerAddress, collateralTokenAddress, name, symbol, minMatuirtySec, maxMatuirtySec } = args;
+    const { bondIssuerAddress, collateralTokenAddress, name, symbol, pricingStrategyRef } = args;
     const deployer = (await hre.ethers.getSigners())[0];
     console.log("Signer", await deployer.getAddress());
 
@@ -65,12 +64,12 @@ task("deploy:PerpetualTranche")
     await perp.deployed();
 
     const BasicFeeStrategy = await hre.ethers.getContractFactory("BasicFeeStrategy");
-    const feeStrategy = await BasicFeeStrategy.deploy(perp.address);
+    const feeStrategy = await BasicFeeStrategy.deploy();
     await feeStrategy.deployed();
-    await feeStrategy.init(perp.address, "1000000", "1000000", "0", "0");
+    await feeStrategy.init(perp.address, "0", "0", "0");
 
-    const CDRPricingStrategy = await hre.ethers.getContractFactory("CDRPricingStrategy");
-    const pricingStrategy = await CDRPricingStrategy.deploy();
+    const PricingStrategy = await hre.ethers.getContractFactory(pricingStrategyRef);
+    const pricingStrategy = await PricingStrategy.deploy();
     await pricingStrategy.deployed();
 
     const TrancheClassYieldStrategy = await hre.ethers.getContractFactory("TrancheClassYieldStrategy");
@@ -93,7 +92,6 @@ task("deploy:PerpetualTranche")
       yieldStrategy.address,
     );
     await initTx.wait();
-    await perp.updateTolerableTrancheMaturity(minMatuirtySec, maxMatuirtySec);
 
     await hre.run("verify:contract", {
       address: feeStrategy.address,
