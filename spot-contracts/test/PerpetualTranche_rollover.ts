@@ -1448,5 +1448,27 @@ describe("PerpetualTranche", function () {
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
     });
+
+    describe("when mature tranche target it set", async function () {
+      beforeEach(async function () {
+        await perp.updateMatureValueTargetPerc("20000000");
+      });
+
+      describe("when rolling over above the target", function () {
+        it("should NOT revert", async function () {
+          await expect(
+            perp.rollover(rolloverInTranche.address, collateralToken.address, toFixedPtAmt("100")),
+          ).not.to.be.revertedWith("BelowMatureValueTargetPerc");
+        });
+      });
+
+      describe("when rolling over below the target", function () {
+        it("should revert", async function () {
+          await expect(
+            perp.rollover(rolloverInTranche.address, collateralToken.address, toFixedPtAmt("100.000001")),
+          ).to.be.revertedWith("BelowMatureValueTargetPerc");
+        });
+      });
+    });
   });
 });

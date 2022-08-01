@@ -37,12 +37,12 @@ yarn hardhat --network ganache deploy:Router
 yarn hardhat --network ganache ops:info 0x89967625335C35c5FE1F3C1c03D37fdEb6f415Ed
 
 yarn hardhat --network ganache ops:trancheAndDeposit \
-  --router-address 0xc9130ad8c7f54a15338fBa0E78aF5B7546F1a2Ac \
+  --router-address 0x4a57d51af3a8a90905a5F756E0B28cC2888A1bD5 \
   --perp-address 0x89967625335C35c5FE1F3C1c03D37fdEb6f415Ed \
   --collateral-amount 200
 
 yarn hardhat --network ganache ops:redeem \
-  --router-address 0xc9130ad8c7f54a15338fBa0E78aF5B7546F1a2Ac \
+  --router-address 0x4a57d51af3a8a90905a5F756E0B28cC2888A1bD5 \
   --perp-address 0x89967625335C35c5FE1F3C1c03D37fdEb6f415Ed \
   --amount 10
 
@@ -50,9 +50,13 @@ yarn hardhat --network ganache ops:redeemTranches \
   --bond-issuer-address 0xeb289644a33df897B1E30f0aa5cC0F17DD29Bdc2 
 
 yarn hardhat --network ganache ops:trancheAndRollover \
-  --router-address 0xc9130ad8c7f54a15338fBa0E78aF5B7546F1a2Ac \
+  --router-address 0x4a57d51af3a8a90905a5F756E0B28cC2888A1bD5 \
   --perp-address 0x89967625335C35c5FE1F3C1c03D37fdEb6f415Ed \
   --collateral-amount 200
+
+yarn hardhat --network ganache ops:trancheAndRolloverMax \
+  --router-address 0x4a57d51af3a8a90905a5F756E0B28cC2888A1bD5 \
+  --perp-address 0x89967625335C35c5FE1F3C1c03D37fdEb6f415Ed
 
 yarn hardhat --network ganache ops:increaseTimeBy 300
 yarn hardhat --network ganache ops:updateState 0x89967625335C35c5FE1F3C1c03D37fdEb6f415Ed

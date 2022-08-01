@@ -35,10 +35,14 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @param max The maximum maturity time.
     event UpdatedTolerableTrancheMaturity(uint256 min, uint256 max);
 
-    // @notice Event emitted when the max total supply is updated.
+    // @notice Event emitted when the supply caps are updated.
     // @param maxSupply The max total supply.
     // @param maxMintAmtPerTranche The max mint amount per tranche.
     event UpdatedMintingLimits(uint256 maxSupply, uint256 maxMintAmtPerTranche);
+
+    // @notice Event emitted when the mature value target percentage is updated.
+    // @param matureValueTargetPerc The new target percentage.
+    event UpdatedMatureValueTargetPerc(uint256 matureValueTargetPerc);
 
     // @notice Event emitted when the applied yield for a given token is set.
     // @param token The address of the token.

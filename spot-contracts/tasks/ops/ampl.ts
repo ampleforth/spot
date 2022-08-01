@@ -6,12 +6,14 @@ import { getContractFactoryFromExternalArtifacts } from "../helpers";
 task("ops:rebase:MockAMPL")
   .addParam("amplAddress", "the address of the AMPL contract", undefined, types.string, false)
   .addParam("rebasePerc", "the rebase percentage", "0.0", types.string)
+  .addParam("fromIdx", "the index of sender", 0, types.int)
   .setAction(async function (args: TaskArguments, hre) {
     const { amplAddress, rebasePerc } = args;
     const rebasePercFloat = parseFloat(rebasePerc);
 
-    const deployer = await (await hre.ethers.getSigners())[0].getAddress();
-    console.log("Signer", deployer);
+    const signer = (await hre.ethers.getSigners())[args.fromIdx];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
 
     const UFragments = await getContractFactoryFromExternalArtifacts(hre.ethers, "UFragments");
     const ampl = await UFragments.attach(amplAddress);
@@ -27,7 +29,7 @@ task("ops:rebase:MockAMPL")
     console.log("Supply before", utils.formatUnits(supply, decimals));
     console.log("Applied diff", utils.formatUnits(supplyDiff, decimals));
     console.log("Rebase:");
-    const tx = await ampl.rebase(1, supplyDiff);
+    const tx = await ampl.connect(signer).rebase(1, supplyDiff);
     await tx.wait();
     console.log("Tx", tx.hash);
     console.log("Supply after", utils.formatUnits(await ampl.totalSupply(), decimals));
