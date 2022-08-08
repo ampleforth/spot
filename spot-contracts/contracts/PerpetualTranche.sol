@@ -726,7 +726,9 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         uint256[] memory redemptionAmts = new uint256[](reserveCount);
         for (uint256 i = 0; i < reserveCount; i++) {
             reserveTokens[i] = _reserveAt(i);
-            redemptionAmts[i] = (_reserveBalance(reserveTokens[i]) * perpAmtBurnt) / totalSupply_;
+            redemptionAmts[i] = (totalSupply_ > 0)
+                ? (_reserveBalance(reserveTokens[i]) * perpAmtBurnt) / totalSupply_
+                : 0;
         }
         return (reserveTokens, redemptionAmts);
     }

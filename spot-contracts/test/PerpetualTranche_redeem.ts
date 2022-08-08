@@ -106,7 +106,7 @@ describe("PerpetualTranche", function () {
     });
   });
 
-  describe("#burn", function () {
+  describe("#redeem", function () {
     describe("when paused", function () {
       beforeEach(async function () {
         await perp.pause();
@@ -133,6 +133,22 @@ describe("PerpetualTranche", function () {
     describe("when requested amount is zero", function () {
       it("should revert", async function () {
         await expect(perp.redeem(toFixedPtAmt("0"))).to.revertedWith("UnacceptableBurnAmt(0, 500000000000000000000)");
+      });
+    });
+
+    describe("when supply is zero", function () {
+      beforeEach(async function () {
+        await perp.burn(toFixedPtAmt("500"));
+      });
+
+      it("should revert", async function () {
+        await expect(perp.redeem(toFixedPtAmt("100"))).to.revertedWith("UnacceptableBurnAmt(100000000000000000000, 0)");
+      });
+
+      it("should return 0", async function () {
+        const r = await perp.callStatic.computeRedemptionAmts(toFixedPtAmt("100"));
+        await expect(r[1][0]).to.eq(toFixedPtAmt("0"));
+        await expect(r[1][1]).to.eq(toFixedPtAmt("0"));
       });
     });
 
