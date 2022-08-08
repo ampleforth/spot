@@ -214,7 +214,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     uint256 public maxMintAmtPerTranche;
 
     // @notice The total number of perps that have been minted using a given tranche.
-    mapping(ITranche => uint256) private _mintedSupplyPerTranche;
+    mapping(ITranche => uint256) public mintedSupplyPerTranche;
 
     // @notice Yield factor actually "applied" on each reserve token. It is computed and recorded when
     //         a token is deposited into the system for the first time.
@@ -398,7 +398,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         _settleFee(_msgSender(), reserveFee, protocolFee);
 
         // updates & enforces supply cap and tranche mint cap
-        _mintedSupplyPerTranche[trancheIn] += perpAmtMint;
+        mintedSupplyPerTranche[trancheIn] += perpAmtMint;
         _enforcePerTrancheSupplyCap(trancheIn);
         _enforceTotalSupplyCap();
     }
@@ -844,7 +844,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
             _applyYield(token, 0);
 
             // Frees up minted supply.
-            delete _mintedSupplyPerTranche[ITranche(address(token))];
+            delete mintedSupplyPerTranche[ITranche(address(token))];
         }
 
         return balance;
@@ -973,8 +973,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     // @dev Enforces the per tranche supply cap. To be invoked AFTER the mint operation.
     function _enforcePerTrancheSupplyCap(ITranche trancheIn) private view {
         // checks if supply minted using the given tranche is within the cap
-        if (_mintedSupplyPerTranche[trancheIn] > maxMintAmtPerTranche) {
-            revert ExceededMaxMintPerTranche(trancheIn, _mintedSupplyPerTranche[trancheIn], maxMintAmtPerTranche);
+        if (mintedSupplyPerTranche[trancheIn] > maxMintAmtPerTranche) {
+            revert ExceededMaxMintPerTranche(trancheIn, mintedSupplyPerTranche[trancheIn], maxMintAmtPerTranche);
         }
     }
 
