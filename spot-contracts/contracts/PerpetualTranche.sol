@@ -389,13 +389,13 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         (int256 reserveFee, uint256 protocolFee) = feeStrategy.computeMintFees(perpAmtMint);
 
         // transfers tranche tokens from the sender to the reserve
-        _transferIntoReserve(_msgSender(), trancheIn, trancheInAmt);
+        _transferIntoReserve(msg.sender, trancheIn, trancheInAmt);
 
         // mints perp tokens to the sender
-        _mint(_msgSender(), perpAmtMint);
+        _mint(msg.sender, perpAmtMint);
 
         // settles fees
-        _settleFee(_msgSender(), reserveFee, protocolFee);
+        _settleFee(msg.sender, reserveFee, protocolFee);
 
         // updates & enforces supply cap and tranche mint cap
         mintedSupplyPerTranche[trancheIn] += perpAmtMint;
@@ -423,15 +423,15 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         _updateMatureTrancheBalance((_matureTrancheBalance * (perpSupply - perpAmtBurnt)) / perpSupply);
 
         // settles fees
-        _settleFee(_msgSender(), reserveFee, protocolFee);
+        _settleFee(msg.sender, reserveFee, protocolFee);
 
         // burns perp tokens from the sender
-        _burn(_msgSender(), perpAmtBurnt);
+        _burn(msg.sender, perpAmtBurnt);
 
         // transfers reserve tokens out
         for (uint256 i = 0; i < tokensOuts.length; i++) {
             if (tokenOutAmts[i] > 0) {
-                _transferOutOfReserve(_msgSender(), tokensOuts[i], tokenOutAmts[i]);
+                _transferOutOfReserve(msg.sender, tokensOuts[i], tokenOutAmts[i]);
             }
         }
 
@@ -467,10 +467,10 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         (int256 reserveFee, uint256 protocolFee) = feeStrategy.computeRolloverFees(r.perpRolloverAmt);
 
         // transfers tranche tokens from the sender to the reserve
-        _transferIntoReserve(_msgSender(), trancheIn, r.trancheInAmt);
+        _transferIntoReserve(msg.sender, trancheIn, r.trancheInAmt);
 
         // settles fees
-        _settleFee(_msgSender(), reserveFee, protocolFee);
+        _settleFee(msg.sender, reserveFee, protocolFee);
 
         // updates the mature tranche balance
         if (_isMatureTranche(tokenOut)) {
@@ -478,7 +478,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         }
 
         // transfers tranche from the reserve to the sender
-        _transferOutOfReserve(_msgSender(), tokenOut, r.tokenOutAmt);
+        _transferOutOfReserve(msg.sender, tokenOut, r.tokenOutAmt);
 
         // enforce limits
         _enforceTotalSupplyCap();
@@ -488,7 +488,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     /// @inheritdoc IPerpetualTranche
     // @dev Used in case an altruistic party intends to increase the collaterlization ratio.
     function burnWithoutRedemption(uint256 amount) external override returns (bool) {
-        _burn(_msgSender(), amount);
+        _burn(msg.sender, amount);
         return true;
     }
 
