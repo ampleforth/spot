@@ -46,7 +46,7 @@ task("ops:info")
     console.log("Reserve:");
     const reserveCount = (await perp.callStatic.getReserveCount()).toNumber();
     const upForRollover = await perp.callStatic.getReserveTokensUpForRollover();
-    const perpPrice = await perp.callStatic.getPrice();
+    const perpPrice = await perp.callStatic.getAvgPrice();
     const reserveValue = (await perp.totalSupply()).mul(perpPrice);
     let totalTrancheBalance = BigNumber.from(0);
     const data = [];

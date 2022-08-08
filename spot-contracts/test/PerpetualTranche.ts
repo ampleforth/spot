@@ -525,7 +525,7 @@ describe("PerpetualTranche", function () {
         await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("0")]);
       });
       it("should calculate the avg. perp price", async function () {
-        expect(await perp.callStatic.getPrice()).to.eq(0);
+        expect(await perp.callStatic.getAvgPrice()).to.eq(0);
       });
     });
 
@@ -546,7 +546,7 @@ describe("PerpetualTranche", function () {
         await checkReserveComposition(perp, [collateralToken, tranches[0]], [toFixedPtAmt("0"), toFixedPtAmt("200")]);
       });
       it("should calculate the avg. perp price", async function () {
-        expect(await perp.callStatic.getPrice()).to.eq(toPriceFixedPtAmt("1"));
+        expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1"));
       });
     });
 
@@ -581,7 +581,7 @@ describe("PerpetualTranche", function () {
         );
       });
       it("should calculate the avg. perp price", async function () {
-        expect(await perp.callStatic.getPrice()).to.eq(toPriceFixedPtAmt("1"));
+        expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1"));
       });
     });
 
@@ -618,7 +618,7 @@ describe("PerpetualTranche", function () {
         await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("300")]);
       });
       it("should calculate the avg. perp price", async function () {
-        expect(await perp.callStatic.getPrice()).to.eq(toPriceFixedPtAmt("1"));
+        expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1"));
       });
     });
 
@@ -659,7 +659,7 @@ describe("PerpetualTranche", function () {
         );
       });
       it("should calculate the avg. perp price", async function () {
-        expect(await perp.callStatic.getPrice()).to.eq(toPriceFixedPtAmt("1"));
+        expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1"));
       });
     });
 
@@ -703,7 +703,7 @@ describe("PerpetualTranche", function () {
         );
       });
       it("should calculate the avg. perp price", async function () {
-        expect(await perp.callStatic.getPrice()).to.eq(toPriceFixedPtAmt("1.06666666"));
+        expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1.06666666"));
       });
     });
 
@@ -747,7 +747,7 @@ describe("PerpetualTranche", function () {
         );
       });
       it("should calculate the avg. perp price", async function () {
-        expect(await perp.callStatic.getPrice()).to.eq(toPriceFixedPtAmt("0.93333333"));
+        expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("0.93333333"));
       });
     });
   });

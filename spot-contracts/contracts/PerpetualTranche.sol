@@ -559,7 +559,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
 
     /// @inheritdoc IPerpetualTranche
     // @dev Returns a fixed point with {PRICE_DECIMALS} decimals.
-    function getPrice() external override afterStateUpdate returns (uint256) {
+    function getAvgPrice() external override afterStateUpdate returns (uint256) {
         uint256 totalSupply_ = totalSupply();
         return totalSupply_ > 0 ? _reserveValue() / totalSupply_ : 0;
     }
