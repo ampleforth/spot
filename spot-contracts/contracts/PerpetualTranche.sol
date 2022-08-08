@@ -532,7 +532,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         if (!_inReserve(tranche)) {
             return 0;
         }
-        return _isMatureTranche(tranche) ? _matureTrancheBalance : _tokenBalance(tranche);
+        return _isMatureTranche(tranche) ? _matureTrancheBalance : _reserveBalance(tranche);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -638,7 +638,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
             }
 
             // Redeeming the underlying collateral token
-            uint256 trancheBalance = _tokenBalance(tranche);
+            uint256 trancheBalance = _reserveBalance(tranche);
             bond.redeemMature(address(tranche), trancheBalance);
             _syncReserve(tranche);
 
@@ -696,7 +696,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     function computePrice(IERC20Upgradeable token) public view override returns (uint256) {
         return
             _isMatureTranche(token)
-                ? pricingStrategy.computeMatureTranchePrice(token, _tokenBalance(token), _matureTrancheBalance)
+                ? pricingStrategy.computeMatureTranchePrice(token, _reserveBalance(token), _matureTrancheBalance)
                 : pricingStrategy.computeTranchePrice(ITranche(address(token)));
     }
 
@@ -733,7 +733,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         uint256[] memory redemptionAmts = new uint256[](reserveCount);
         for (uint256 i = 0; i < reserveCount; i++) {
             reserveTokens[i] = _reserveAt(i);
-            redemptionAmts[i] = (_tokenBalance(reserveTokens[i]) * perpAmtBurnt) / totalSupply_;
+            redemptionAmts[i] = (_reserveBalance(reserveTokens[i]) * perpAmtBurnt) / totalSupply_;
         }
         return (reserveTokens, redemptionAmts);
     }
@@ -751,7 +751,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         uint256 trancheOutYield = computeYield(tokenOut);
         uint256 trancheInPrice = computePrice(trancheIn);
         uint256 trancheOutPrice = computePrice(tokenOut);
-        uint256 tokenOutBalance = _tokenBalance(tokenOut);
+        uint256 tokenOutBalance = _reserveBalance(tokenOut);
         maxTokenOutAmtCovered = MathUpgradeable.min(maxTokenOutAmtCovered, tokenOutBalance);
 
         if (trancheInYield == 0 || trancheOutYield == 0 || trancheInPrice == 0 || trancheOutPrice == 0) {
@@ -817,7 +817,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     // @dev Keeps the reserve storage up to date. Logs the token balance held by the reserve.
     // @return The Reserve's token balance.
     function _syncReserve(IERC20Upgradeable token) private returns (uint256) {
-        uint256 balance = _tokenBalance(token);
+        uint256 balance = _reserveBalance(token);
         emit ReserveSynced(token, balance);
 
         // If token is the mature tranche,
@@ -895,7 +895,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         bool isNativeFeeToken = (feeToken_ == perpERC20());
         // Funds are going out
         if (isNativeFeeToken) {
-            uint256 balance = _tokenBalance(feeToken_);
+            uint256 balance = _reserveBalance(feeToken_);
             feeToken_.safeTransfer(destination, MathUpgradeable.min(feeAmt, balance));
 
             // In case that the reserve's balance doesn't cover the entire fee amount,
@@ -1012,7 +1012,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         // For normal tranches we use the tranche token balance
         for (uint256 i = 1; i < _reserveCount(); i++) {
             IERC20Upgradeable token = _reserveAt(i);
-            uint256 stdTrancheBalance = _toStdTrancheAmt(_tokenBalance(token), computeYield(token));
+            uint256 stdTrancheBalance = _toStdTrancheAmt(_reserveBalance(token), computeYield(token));
             totalVal += (stdTrancheBalance * computePrice(token));
         }
 
@@ -1025,7 +1025,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     }
 
     // @dev Fetches the reserve's token balance.
-    function _tokenBalance(IERC20Upgradeable token) private view returns (uint256) {
+    function _reserveBalance(IERC20Upgradeable token) private view returns (uint256) {
         return token.balanceOf(reserve());
     }
 
