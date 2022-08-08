@@ -443,7 +443,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     function rollover(
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
-        uint256 trancheInAmtRequested
+        uint256 trancheInAmtAvailable
     ) external override afterStateUpdate whenNotPaused {
         // verifies if rollover is acceptable
         if (!_isAcceptableRollover(trancheIn, tokenOut)) {
@@ -454,7 +454,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         IPerpetualTranche.RolloverPreview memory r = _computeRolloverAmt(
             trancheIn,
             tokenOut,
-            trancheInAmtRequested,
+            trancheInAmtAvailable,
             type(uint256).max
         );
 
@@ -585,14 +585,14 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Set `maxTokenOutAmtCovered` to max(uint256) to use the reserve balance.
+    // @dev Set `tokenOutAmtRequested` to max(uint256) to use the reserve balance.
     function computeRolloverAmt(
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
-        uint256 trancheInAmtRequested,
-        uint256 maxTokenOutAmtCovered
+        uint256 trancheInAmtAvailable,
+        uint256 tokenOutAmtRequested
     ) external override afterStateUpdate returns (IPerpetualTranche.RolloverPreview memory) {
-        return _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtRequested, maxTokenOutAmtCovered);
+        return _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable, tokenOutAmtRequested);
     }
 
     //--------------------------------------------------------------------------
@@ -742,8 +742,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     function _computeRolloverAmt(
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
-        uint256 trancheInAmtRequested,
-        uint256 maxTokenOutAmtCovered
+        uint256 trancheInAmtAvailable,
+        uint256 tokenOutAmtRequested
     ) private view returns (IPerpetualTranche.RolloverPreview memory) {
         IPerpetualTranche.RolloverPreview memory r;
 
@@ -752,15 +752,15 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         uint256 trancheInPrice = computePrice(trancheIn);
         uint256 trancheOutPrice = computePrice(tokenOut);
         uint256 tokenOutBalance = _reserveBalance(tokenOut);
-        maxTokenOutAmtCovered = MathUpgradeable.min(maxTokenOutAmtCovered, tokenOutBalance);
+        tokenOutAmtRequested = MathUpgradeable.min(tokenOutAmtRequested, tokenOutBalance);
 
         if (trancheInYield == 0 || trancheOutYield == 0 || trancheInPrice == 0 || trancheOutPrice == 0) {
-            r.remainingTrancheInAmt = trancheInAmtRequested;
+            r.remainingTrancheInAmt = trancheInAmtAvailable;
             return r;
         }
 
-        r.trancheInAmt = trancheInAmtRequested;
-        uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmtRequested, trancheInYield);
+        r.trancheInAmt = trancheInAmtAvailable;
+        uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmtAvailable, trancheInYield);
 
         // Basic rollover:
         // (stdTrancheInAmt . trancheInPrice) = (stdTrancheOutAmt . trancheOutPrice)
@@ -776,9 +776,9 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
             : r.trancheOutAmt;
 
         // When the token out balance is NOT covered:
-        // we fix tokenOutAmt = maxTokenOutAmtCovered and back calculate other values
-        if (r.tokenOutAmt > maxTokenOutAmtCovered) {
-            r.tokenOutAmt = maxTokenOutAmtCovered;
+        // we fix tokenOutAmt = tokenOutAmtRequested and back calculate other values
+        if (r.tokenOutAmt > tokenOutAmtRequested) {
+            r.tokenOutAmt = tokenOutAmtRequested;
             r.trancheOutAmt = isMatureTrancheOut
                 ? (_matureTrancheBalance * r.tokenOutAmt) / tokenOutBalance
                 : r.tokenOutAmt;
@@ -788,7 +788,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         }
 
         r.perpRolloverAmt = (stdTrancheOutAmt * trancheOutPrice * totalSupply()) / _reserveValue();
-        r.remainingTrancheInAmt = trancheInAmtRequested - r.trancheInAmt;
+        r.remainingTrancheInAmt = trancheInAmtAvailable - r.trancheInAmt;
         return r;
     }
 
