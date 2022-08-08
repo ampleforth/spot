@@ -229,7 +229,7 @@ task("ops:redeem")
     }
 
     console.log("Redeem:");
-    const tx3 = await perp.connect(signer).burn(fixedPtAmount);
+    const tx3 = await perp.connect(signer).redeem(fixedPtAmount);
     await tx3.wait();
     console.log("Tx", tx3.hash);
 

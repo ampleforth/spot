@@ -72,7 +72,7 @@ interface IPerpetualTranche is IERC20Upgradeable {
 
     // @notice Burn perp tokens and redeem the share of reserve assets.
     // @param perpAmtBurnt The amount of perp tokens burnt from the caller.
-    function burn(uint256 perpAmtBurnt) external;
+    function redeem(uint256 perpAmtBurnt) external;
 
     // @notice Rotates newer tranches in for reserve tokens.
     // @param trancheIn The tranche token deposited.
@@ -87,7 +87,7 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @notice Burn perp tokens without redemption.
     // @param amount Amount of perp tokens to be burnt.
     // @return True if burn is successful.
-    function burnWithoutRedemption(uint256 amount) external returns (bool);
+    function burn(uint256 amount) external returns (bool);
 
     // @notice The address of the underlying rebasing ERC-20 collateral token backing the tranches.
     // @return Address of the collateral token.

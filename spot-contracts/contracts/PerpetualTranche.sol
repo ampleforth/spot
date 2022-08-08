@@ -404,7 +404,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
     }
 
     /// @inheritdoc IPerpetualTranche
-    function burn(uint256 perpAmtBurnt) external override afterStateUpdate whenNotPaused {
+    function redeem(uint256 perpAmtBurnt) external override afterStateUpdate whenNotPaused {
         // gets the current perp supply
         uint256 perpSupply = totalSupply();
 
@@ -487,7 +487,7 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
 
     /// @inheritdoc IPerpetualTranche
     // @dev Used in case an altruistic party intends to increase the collaterlization ratio.
-    function burnWithoutRedemption(uint256 amount) external override returns (bool) {
+    function burn(uint256 amount) external override returns (bool) {
         _burn(msg.sender, amount);
         return true;
     }
