@@ -79,6 +79,10 @@ error ExceededMaxMintPerTranche(ITranche trancheIn, uint256 mintAmtForCurrentTra
 /// @param matureValueTargetPerc The target percentage.
 error BelowMatureValueTargetPerc(uint256 matureValuePerc, uint256 matureValueTargetPerc);
 
+/// @notice Expected transfer out asset to not be a reserve asset.
+/// @param token Address of the token transferred.
+error UnauthorizedTransferOut(IERC20Upgradeable token);
+
 /*
  *  @title PerpetualTranche
  *
@@ -368,6 +372,21 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         }
         matureValueTargetPerc = matureValueTargetPerc_;
         emit UpdatedMatureValueTargetPerc(matureValueTargetPerc);
+    }
+
+    // @notice Allows the owner to transfer non-critical assets out of the system if required.
+    // @param token The token address.
+    // @param to The destination address.
+    // @param amount The amount of tokens to be transferred.
+    function transferERC20(
+        IERC20Upgradeable token,
+        address to,
+        uint256 amount
+    ) external afterStateUpdate onlyOwner {
+        if (_inReserve(token) || feeToken() == token) {
+            revert UnauthorizedTransferOut(token);
+        }
+        token.safeTransfer(to, amount);
     }
 
     //--------------------------------------------------------------------------
