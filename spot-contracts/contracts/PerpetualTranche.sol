@@ -7,7 +7,7 @@ import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/securit
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 
-import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import { ERC20BurnableUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 
@@ -108,7 +108,7 @@ error BelowMatureValueTargetPerc(uint256 matureValuePerc, uint256 matureValueTar
  *          This brings the system storage state up to date.
  *
  */
-contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgradeable, IPerpetualTranche {
+contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpgradeable, IPerpetualTranche {
     // data handling
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
     using BondHelpers for IBondController;
@@ -483,13 +483,6 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         // enforce limits
         _enforceTotalSupplyCap();
         _enforceMatureValueTarget();
-    }
-
-    /// @inheritdoc IPerpetualTranche
-    // @dev Used in case an altruistic party intends to increase the collaterlization ratio.
-    function burn(uint256 amount) external override returns (bool) {
-        _burn(msg.sender, amount);
-        return true;
     }
 
     /// @inheritdoc IPerpetualTranche

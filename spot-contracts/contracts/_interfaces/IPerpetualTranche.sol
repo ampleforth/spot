@@ -84,11 +84,6 @@ interface IPerpetualTranche is IERC20Upgradeable {
         uint256 trancheInAmt
     ) external;
 
-    // @notice Burn perp tokens without redemption.
-    // @param amount Amount of perp tokens to be burnt.
-    // @return True if burn is successful.
-    function burn(uint256 amount) external returns (bool);
-
     // @notice The address of the underlying rebasing ERC-20 collateral token backing the tranches.
     // @return Address of the collateral token.
     function collateral() external view returns (IERC20Upgradeable);
