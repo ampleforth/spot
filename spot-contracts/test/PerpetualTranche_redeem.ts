@@ -89,7 +89,7 @@ describe("PerpetualTranche", function () {
   });
 
   describe("#burn", function () {
-    it("should not change the reserve composition", async function () {
+    it("should burn tokens without redemption", async function () {
       await checkReserveComposition(
         perp,
         [collateralToken, initialDepositTranche],
@@ -98,6 +98,26 @@ describe("PerpetualTranche", function () {
       expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("500"));
       await perp.burn(toFixedPtAmt("500"));
       expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("0"));
+      await checkReserveComposition(
+        perp,
+        [collateralToken, initialDepositTranche],
+        [toFixedPtAmt("0"), toFixedPtAmt("500")],
+      );
+    });
+  });
+
+  describe("#burnFrom", function () {
+    it("should burn tokens without redemption from authorized wallet", async function () {
+      await checkReserveComposition(
+        perp,
+        [collateralToken, initialDepositTranche],
+        [toFixedPtAmt("0"), toFixedPtAmt("500")],
+      );
+      expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("500"));
+      await perp.approve(await otherUser.getAddress(), toFixedPtAmt("500"));
+      await perp.connect(otherUser).burnFrom(deployerAddress, toFixedPtAmt("200"));
+      expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("300"));
+      expect(await perp.allowance(deployerAddress, await otherUser.getAddress())).to.eq(toFixedPtAmt("300"));
       await checkReserveComposition(
         perp,
         [collateralToken, initialDepositTranche],
