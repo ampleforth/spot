@@ -99,12 +99,18 @@ describe("PerpetualTranche", function () {
     });
 
     describe("when bond issuer is NOT set correctly", function () {
+      let bond: Contract;
       beforeEach(async function () {
-        await perp.updateBondIssuer(perp.address);
+        const BondIssuer = await ethers.getContractFactory("MockBondIssuer");
+        const newIssuer = await BondIssuer.deploy(collateralToken.address);
+        await perp.updateBondIssuer(newIssuer.address);
+        bond = await createBondWithFactory(bondFactory, perp, [200, 300, 500], 3600);
+        await newIssuer.setLatestBond(bond.address);
       });
-      it("should revert", async function () {
+      it("should not update the deposit bond", async function () {
         await depositTrancheA.approve(perp.address, toFixedPtAmt("500"));
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.reverted;
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.not.be.reverted;
+        expect(await perp.callStatic.getDepositBond()).to.not.eq(bond.address);
       });
     });
 
