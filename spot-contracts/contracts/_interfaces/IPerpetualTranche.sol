@@ -72,7 +72,7 @@ interface IPerpetualTranche is IERC20Upgradeable {
 
     // @notice Burn perp tokens and redeem the share of reserve assets.
     // @param perpAmtBurnt The amount of perp tokens burnt from the caller.
-    function burn(uint256 perpAmtBurnt) external;
+    function redeem(uint256 perpAmtBurnt) external;
 
     // @notice Rotates newer tranches in for reserve tokens.
     // @param trancheIn The tranche token deposited.
@@ -83,11 +83,6 @@ interface IPerpetualTranche is IERC20Upgradeable {
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmt
     ) external;
-
-    // @notice Burn perp tokens without redemption.
-    // @param amount Amount of perp tokens to be burnt.
-    // @return True if burn is successful.
-    function burnWithoutRedemption(uint256 amount) external returns (bool);
 
     // @notice The address of the underlying rebasing ERC-20 collateral token backing the tranches.
     // @return Address of the collateral token.
@@ -142,7 +137,7 @@ interface IPerpetualTranche is IERC20Upgradeable {
     function getReserveTrancheBalance(IERC20Upgradeable tranche) external returns (uint256);
 
     // @notice Computes the price of each perp token, i.e) reserve value / total supply.
-    function getPrice() external returns (uint256);
+    function getAvgPrice() external returns (uint256);
 
     // @notice Fetches the list of reserve tokens which are up for rollover.
     function getReserveTokensUpForRollover() external returns (IERC20Upgradeable[] memory);
@@ -165,30 +160,31 @@ interface IPerpetualTranche is IERC20Upgradeable {
     struct RolloverPreview {
         // @notice The perp denominated value of tokens rolled over.
         uint256 perpRolloverAmt;
-        // @notice The amount of tokens to be withdrawn.
+        // @notice The amount of tokens rolled out.
         uint256 tokenOutAmt;
-        // @notice The tranche denominated amount of tokens to be withdrawn.
+        // @notice The tranche denominated amount of tokens rolled out.
         // @dev tokenOutAmt and trancheOutAmt can only be different values
         //      in the case of rolling over the mature tranche.
         uint256 trancheOutAmt;
-        // @notice The amount of trancheIn tokens used in the rollover operation.
+        // @notice The amount of trancheIn tokens rolled in.
         uint256 trancheInAmt;
-        // @notice The difference between the requested trancheIn amount and the amount used for the rollover.
+        // @notice The difference between the available trancheIn amount and
+        //         the amount of tokens used for the rollover.
         uint256 remainingTrancheInAmt;
     }
 
-    // @notice Computes the amount reserve tokens that can be swapped out for the given number
-    //         of `trancheIn` tokens.
-    // @param trancheIn The tranche token deposited.
-    // @param tokenOut The reserve token to be withdrawn.
-    // @param trancheInAmtRequested The maximum amount of trancheIn tokens deposited.
-    // @param maxTokenOutAmtCovered The reserve token balance available for rollover.
+    // @notice Computes the amount reserve tokens that are rolled out for the given number
+    //         of `trancheIn` tokens rolled in.
+    // @param trancheIn The tranche token rolled in.
+    // @param tokenOut The reserve token to be rolled out.
+    // @param trancheInAmtAvailable The amount of trancheIn tokens rolled in.
+    // @param tokenOutAmtRequested The amount of tokenOut tokens requested to be rolled out.
     // @return r The rollover amounts in various denominations.
     function computeRolloverAmt(
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
-        uint256 trancheInAmtRequested,
-        uint256 maxTokenOutAmtCovered
+        uint256 trancheInAmtAvailable,
+        uint256 tokenOutAmtRequested
     ) external returns (RolloverPreview memory);
 
     // @notice The yield to be applied given the reserve token.

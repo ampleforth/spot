@@ -46,7 +46,7 @@ task("ops:info")
     console.log("Reserve:");
     const reserveCount = (await perp.callStatic.getReserveCount()).toNumber();
     const upForRollover = await perp.callStatic.getReserveTokensUpForRollover();
-    const perpPrice = await perp.callStatic.getPrice();
+    const perpPrice = await perp.callStatic.getAvgPrice();
     const reserveValue = (await perp.totalSupply()).mul(perpPrice);
     let totalTrancheBalance = BigNumber.from(0);
     const data = [];
@@ -229,7 +229,7 @@ task("ops:redeem")
     }
 
     console.log("Redeem:");
-    const tx3 = await perp.connect(signer).burn(fixedPtAmount);
+    const tx3 = await perp.connect(signer).redeem(fixedPtAmount);
     await tx3.wait();
     console.log("Tx", tx3.hash);
 

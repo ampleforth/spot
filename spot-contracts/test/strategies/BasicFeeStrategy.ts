@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { Contract, ContractFactory, Transaction, Signer, constants } from "ethers";
+import { Contract, ContractFactory, Transaction, Signer } from "ethers";
 
 import { toFixedPtAmt } from "../helpers";
 
@@ -15,50 +15,22 @@ describe("BasicFeeStrategy", function () {
     otherUser = accounts[1];
 
     factory = await ethers.getContractFactory("BasicFeeStrategy");
-    feeStrategy = await factory.deploy();
+    feeStrategy = await factory.deploy(mockFeeTokenAddress);
   });
 
   describe("#feeToken", function () {
     beforeEach(async function () {
-      await feeStrategy.init(mockFeeTokenAddress, "0", "0", "0");
+      await feeStrategy.init("0", "0", "0");
     });
     it("should return the fee token", async function () {
       expect(await feeStrategy.feeToken()).to.eq(mockFeeTokenAddress);
     });
   });
 
-  describe("#updateFeeToken", function () {
-    let tx: Transaction;
-    beforeEach(async function () {
-      await feeStrategy.init(mockFeeTokenAddress, "0", "0", "0");
-    });
-
-    describe("when triggered by non-owner", function () {
-      it("should revert", async function () {
-        await expect(feeStrategy.connect(otherUser).updateFeeToken(constants.AddressZero)).to.be.revertedWith(
-          "Ownable: caller is not the owner",
-        );
-      });
-    });
-
-    describe("when set by owner", function () {
-      beforeEach(async function () {
-        tx = feeStrategy.connect(deployer).updateFeeToken(constants.AddressZero);
-        await tx;
-      });
-      it("should update reference", async function () {
-        expect(await feeStrategy.feeToken()).to.eq(constants.AddressZero);
-      });
-      it("should emit event", async function () {
-        await expect(tx).to.emit(feeStrategy, "UpdatedFeeToken").withArgs(constants.AddressZero);
-      });
-    });
-  });
-
   describe("#updateMintFeePerc", function () {
     let tx: Transaction;
     beforeEach(async function () {
-      await feeStrategy.init(mockFeeTokenAddress, "0", "0", "0");
+      await feeStrategy.init("0", "0", "0");
     });
 
     describe("when triggered by non-owner", function () {
@@ -86,7 +58,7 @@ describe("BasicFeeStrategy", function () {
   describe("#updateBurnFeePerc", function () {
     let tx: Transaction;
     beforeEach(async function () {
-      await feeStrategy.init(mockFeeTokenAddress, "0", "0", "0");
+      await feeStrategy.init("0", "0", "0");
     });
 
     describe("when triggered by non-owner", function () {
@@ -114,7 +86,7 @@ describe("BasicFeeStrategy", function () {
   describe("#updateRolloverFeePerc", function () {
     let tx: Transaction;
     beforeEach(async function () {
-      await feeStrategy.init(mockFeeTokenAddress, "0", "0", "0");
+      await feeStrategy.init("0", "0", "0");
     });
 
     describe("when triggered by non-owner", function () {
@@ -142,7 +114,7 @@ describe("BasicFeeStrategy", function () {
   describe("#computeMintFees", function () {
     describe("when perc > 0", function () {
       it("should return the mint fee", async function () {
-        await feeStrategy.init(mockFeeTokenAddress, "1500000", "0", "0");
+        await feeStrategy.init("1500000", "0", "0");
         const r = await feeStrategy.computeMintFees(toFixedPtAmt("1000"));
         expect(r[0]).to.eq(toFixedPtAmt("15"));
         expect(r[1]).to.eq("0");
@@ -151,7 +123,7 @@ describe("BasicFeeStrategy", function () {
 
     describe("when perc < 0", function () {
       it("should return the mint fee", async function () {
-        await feeStrategy.init(mockFeeTokenAddress, "-2500000", "0", "0");
+        await feeStrategy.init("-2500000", "0", "0");
         const r = await feeStrategy.computeMintFees(toFixedPtAmt("1000"));
         expect(r[0]).to.eq(toFixedPtAmt("-25"));
         expect(r[1]).to.eq("0");
@@ -160,7 +132,7 @@ describe("BasicFeeStrategy", function () {
 
     describe("when perc = 0", function () {
       it("should return the mint fee", async function () {
-        await feeStrategy.init(mockFeeTokenAddress, "0", "0", "0");
+        await feeStrategy.init("0", "0", "0");
         const r = await feeStrategy.computeMintFees(toFixedPtAmt("1000"));
         expect(r[0]).to.eq(toFixedPtAmt("0"));
         expect(r[1]).to.eq("0");
@@ -171,7 +143,7 @@ describe("BasicFeeStrategy", function () {
   describe("#computeBurnFees", function () {
     describe("when perc > 0", function () {
       it("should return the burn fee", async function () {
-        await feeStrategy.init(mockFeeTokenAddress, "0", "2500000", "0");
+        await feeStrategy.init("0", "2500000", "0");
         const r = await feeStrategy.computeBurnFees(toFixedPtAmt("1000"));
         expect(r[0]).to.eq(toFixedPtAmt("25"));
         expect(r[1]).to.eq("0");
@@ -180,7 +152,7 @@ describe("BasicFeeStrategy", function () {
 
     describe("when perc < 0", function () {
       it("should return the burn fee", async function () {
-        await feeStrategy.init(mockFeeTokenAddress, "0", "-1500000", "0");
+        await feeStrategy.init("0", "-1500000", "0");
         const r = await feeStrategy.computeBurnFees(toFixedPtAmt("1000"));
         expect(r[0]).to.eq(toFixedPtAmt("-15"));
         expect(r[1]).to.eq("0");
@@ -189,7 +161,7 @@ describe("BasicFeeStrategy", function () {
 
     describe("when perc = 0", function () {
       it("should return the burn fee", async function () {
-        await feeStrategy.init(mockFeeTokenAddress, "0", "0", "0");
+        await feeStrategy.init("0", "0", "0");
         const r = await feeStrategy.computeBurnFees(toFixedPtAmt("1000"));
         expect(r[0]).to.eq(toFixedPtAmt("0"));
         expect(r[1]).to.eq("0");
@@ -200,7 +172,7 @@ describe("BasicFeeStrategy", function () {
   describe("#computeRolloverFees", function () {
     describe("when perc > 0", function () {
       it("should return the rollover fee", async function () {
-        await feeStrategy.init(mockFeeTokenAddress, "0", "0", "1000000");
+        await feeStrategy.init("0", "0", "1000000");
         const r = await feeStrategy.computeRolloverFees(toFixedPtAmt("100000"));
         expect(r[0]).to.eq(toFixedPtAmt("1000"));
         expect(r[1]).to.eq("0");
@@ -209,7 +181,7 @@ describe("BasicFeeStrategy", function () {
 
     describe("when perc < 0", function () {
       it("should return the rollover fee", async function () {
-        await feeStrategy.init(mockFeeTokenAddress, "0", "0", "-5000000");
+        await feeStrategy.init("0", "0", "-5000000");
         const r = await feeStrategy.computeRolloverFees(toFixedPtAmt("100000"));
         expect(r[0]).to.eq(toFixedPtAmt("-5000"));
         expect(r[1]).to.eq("0");
@@ -218,7 +190,7 @@ describe("BasicFeeStrategy", function () {
 
     describe("when perc = 0", function () {
       it("should return the rollover fee", async function () {
-        await feeStrategy.init(mockFeeTokenAddress, "0", "0", "0");
+        await feeStrategy.init("0", "0", "0");
         const r = await feeStrategy.computeRolloverFees(toFixedPtAmt("100000"));
         expect(r[0]).to.eq(toFixedPtAmt("0"));
         expect(r[1]).to.eq("0");
