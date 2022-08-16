@@ -35,6 +35,7 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     uint256 public constant HUNDRED_PERC = 100 * UNIT_PERC;
 
     /// @inheritdoc IFeeStrategy
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     IERC20Upgradeable public immutable override feeToken;
 
     // @notice Fixed percentage of the mint amount to be used as fee.
