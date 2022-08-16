@@ -35,7 +35,8 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     uint256 public constant HUNDRED_PERC = 100 * UNIT_PERC;
 
     /// @inheritdoc IFeeStrategy
-    IERC20Upgradeable public override feeToken;
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
+    IERC20Upgradeable public immutable override feeToken;
 
     // @notice Fixed percentage of the mint amount to be used as fee.
     int256 public mintFeePerc;
@@ -47,10 +48,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     int256 public rolloverFeePerc;
 
     // EVENTS
-
-    // @notice Event emitted when the fee token is updated.
-    // @param feeToken Address of the fee token contract.
-    event UpdatedFeeToken(IERC20Upgradeable feeToken);
 
     // @notice Event emitted when the mint fee percentage is updated.
     // @param mintFeePerc Mint fee percentage.
@@ -64,30 +61,25 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     // @param rolloverFeePerc Rollover fee percentage.
     event UpdatedRolloverPerc(int256 rolloverFeePerc);
 
-    // @notice Contract initializer.
+    // @notice Contract constructor.
     // @param feeToken_ Address of the fee ERC-20 token contract.
+    constructor(IERC20Upgradeable feeToken_) {
+        feeToken = feeToken_;
+    }
+
+    // @notice Contract initializer.
     // @param mintFeePerc_ Mint fee percentage.
     // @param burnFeePerc_ Burn fee percentage.
     // @param rolloverFeePerc_ Rollover fee percentage.
     function init(
-        IERC20Upgradeable feeToken_,
         int256 mintFeePerc_,
         int256 burnFeePerc_,
         int256 rolloverFeePerc_
     ) public initializer {
         __Ownable_init();
-
-        updateFeeToken(feeToken_);
         updateMintFeePerc(mintFeePerc_);
         updateBurnFeePerc(burnFeePerc_);
         updateRolloverFeePerc(rolloverFeePerc_);
-    }
-
-    // @notice Updates the fee token.
-    // @param feeToken_ New fee token.
-    function updateFeeToken(IERC20Upgradeable feeToken_) public onlyOwner {
-        feeToken = feeToken_;
-        emit UpdatedFeeToken(feeToken);
     }
 
     // @notice Updates the mint fee percentage.
