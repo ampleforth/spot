@@ -142,7 +142,7 @@ describe("PerpetualTranche", function () {
       });
 
       it("should revert", async function () {
-        await expect(perp.burn(toFixedPtAmt("0.01"))).to.revertedWith("UnacceptableSupplyNonDecrease");
+        await expect(perp.burn(toFixedPtAmt("0.01"))).to.revertedWith("ExpectedSupplyReduction");
       });
     });
 
