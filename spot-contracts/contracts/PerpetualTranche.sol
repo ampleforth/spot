@@ -51,6 +51,11 @@ error UnacceptableRedemptionTranche(ITranche trancheOut, ITranche redemptionTran
 /// @param perpSupply The current supply of perp tokens.
 error UnacceptableBurnAmt(uint256 requestedBurnAmt, uint256 perpSupply);
 
+/// @notice Expected redemption to result in supply reduction.
+/// @param newSupply The new total supply after redemption.
+/// @param perpSupply The current supply of perp tokens.
+error ExpectedSupplyReduction(uint256 newSupply, uint256 perpSupply);
+
 /// @notice Expected rollover to be acceptable.
 /// @param trancheIn Address of the tranche token transferred in.
 /// @param tokenOut Address of the reserve token transferred out.
@@ -454,8 +459,11 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
             }
         }
 
-        // enforces supply cap
-        _enforceTotalSupplyCap();
+        // enforces supply reduction
+        uint256 newSupply = totalSupply();
+        if (newSupply >= perpSupply) {
+            revert ExpectedSupplyReduction(newSupply, perpSupply);
+        }
     }
 
     /// @inheritdoc IPerpetualTranche
