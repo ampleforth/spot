@@ -114,7 +114,7 @@ task("ops:trancheAndDeposit")
     const router = await hre.ethers.getContractAt("RouterV1", routerAddress);
     const perp = await hre.ethers.getContractAt("PerpetualTranche", perpAddress);
     const bondIssuer = await hre.ethers.getContractAt("BondIssuer", await perp.bondIssuer());
-    const collateralToken = await hre.ethers.getContractAt("MockERC20", await bondIssuer.collateralToken());
+    const collateralToken = await hre.ethers.getContractAt("MockERC20", await bondIssuer.collateral());
 
     const fixedPtCollateralAmount = utils.parseUnits(collateralAmount, await collateralToken.decimals());
     const [depositBondAddress, trancheAddresses, trancheAmts] = await router.callStatic.previewTranche(
@@ -335,7 +335,7 @@ task("ops:trancheAndRollover")
     const router = await hre.ethers.getContractAt("RouterV1", routerAddress);
     const perp = await hre.ethers.getContractAt("PerpetualTranche", perpAddress);
     const bondIssuer = await hre.ethers.getContractAt("BondIssuer", await perp.bondIssuer());
-    const collateralToken = await hre.ethers.getContractAt("MockERC20", await bondIssuer.collateralToken());
+    const collateralToken = await hre.ethers.getContractAt("MockERC20", await bondIssuer.collateral());
 
     const fixedPtCollateralAmount = utils.parseUnits(collateralAmount, await collateralToken.decimals());
     const [depositBondAddress, trancheAddresses, depositTrancheAmts] = await router.callStatic.previewTranche(
@@ -479,7 +479,7 @@ task("ops:trancheAndRolloverMax")
     const { routerAddress, perpAddress } = args;
     const perp = await hre.ethers.getContractAt("PerpetualTranche", perpAddress);
     const bondIssuer = await hre.ethers.getContractAt("BondIssuer", await perp.bondIssuer());
-    const collateralToken = await hre.ethers.getContractAt("MockERC20", await bondIssuer.collateralToken());
+    const collateralToken = await hre.ethers.getContractAt("MockERC20", await bondIssuer.collateral());
     const floatingPtCollateralAmount = utils.formatUnits(
       await collateralToken.balanceOf(signerAddress),
       await collateralToken.decimals(),
