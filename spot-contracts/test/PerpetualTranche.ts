@@ -39,7 +39,7 @@ describe("PerpetualTranche", function () {
     ({ collateralToken, rebaseOracle } = await setupCollateralToken("Bitcoin", "BTC"));
 
     const BondIssuer = await ethers.getContractFactory("MockBondIssuer");
-    issuer = await BondIssuer.deploy();
+    issuer = await BondIssuer.deploy(collateralToken.address);
 
     const FeeStrategy = await ethers.getContractFactory("MockFeeStrategy");
     feeStrategy = await FeeStrategy.deploy();
@@ -180,7 +180,7 @@ describe("PerpetualTranche", function () {
     describe("when set address is valid", function () {
       beforeEach(async function () {
         const BondIssuer = await ethers.getContractFactory("MockBondIssuer");
-        newIssuer = await BondIssuer.deploy();
+        newIssuer = await BondIssuer.deploy(collateralToken.address);
         tx = perp.updateBondIssuer(newIssuer.address);
         await tx;
       });
@@ -189,6 +189,16 @@ describe("PerpetualTranche", function () {
       });
       it("should emit event", async function () {
         await expect(tx).to.emit(perp, "UpdatedBondIssuer").withArgs(newIssuer.address);
+      });
+    });
+
+    describe("when collateral is NOT valid", function () {
+      beforeEach(async function () {
+        const BondIssuer = await ethers.getContractFactory("MockBondIssuer");
+        newIssuer = await BondIssuer.deploy(perp.address);
+      });
+      it("should revert", async function () {
+        await expect(perp.updateBondIssuer(newIssuer.address)).to.be.revertedWith("InvalidCollateral");
       });
     });
   });
