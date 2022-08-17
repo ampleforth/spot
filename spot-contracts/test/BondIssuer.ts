@@ -21,7 +21,7 @@ describe("BondIssuer", function () {
       expect(await issuer.minIssueTimeIntervalSec()).to.eq(3600);
       expect(await issuer.issueWindowOffsetSec()).to.eq(120);
       expect(await issuer.maxMaturityDuration()).to.eq(86400);
-      expect(await issuer.collateralToken()).to.eq(token.address);
+      expect(await issuer.collateral()).to.eq(token.address);
       expect(await issuer.trancheRatios(0)).to.eq(200);
       expect(await issuer.trancheRatios(1)).to.eq(300);
       expect(await issuer.trancheRatios(2)).to.eq(500);

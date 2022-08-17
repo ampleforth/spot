@@ -10,7 +10,7 @@ interface IBondIssuer {
 
     /// @notice The address of the underlying collateral token to be used for issued bonds.
     /// @return Address of the collateral token.
-    function collateralToken() external view returns (address);
+    function collateral() external view returns (address);
 
     // @notice Issues a new bond if sufficient time has elapsed since the last issue.
     function issue() external;

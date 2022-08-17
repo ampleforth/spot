@@ -27,9 +27,9 @@ error UnacceptableReference();
 error InvalidStrategyDecimals(uint256 decimals, uint256 expectDecimals);
 
 /// @notice Expected bond issuer's collateral token to match underlying collateral token.
-/// @param  invalidCollateralToken Address of the input bond issuer's collateral token.
-/// @param underlyingCollateralToken Address of underlying system collateral token.
-error InvalidCollateralToken(address invalidCollateralToken, address underlyingCollateralToken);
+/// @param  invalidCollateral Address of the input bond issuer's collateral token.
+/// @param underlyingCollateral Address of underlying system collateral token.
+error InvalidCollateral(address invalidCollateral, address underlyingCollateral);
 
 /// @notice Expected minTrancheMaturity be less than or equal to maxTrancheMaturity.
 /// @param minTrancheMaturitySec Minimum tranche maturity time in seconds.
@@ -301,8 +301,8 @@ contract PerpetualTranche is ERC20Upgradeable, OwnableUpgradeable, PausableUpgra
         if (address(bondIssuer_) == address(0)) {
             revert UnacceptableReference();
         }
-        if (address(_reserveAt(0)) != bondIssuer_.collateralToken()) {
-            revert InvalidCollateralToken(bondIssuer_.collateralToken(), address(_reserveAt(0)));
+        if (address(_reserveAt(0)) != bondIssuer_.collateral()) {
+            revert InvalidCollateral(bondIssuer_.collateral(), address(_reserveAt(0)));
         }
         bondIssuer = bondIssuer_;
         emit UpdatedBondIssuer(bondIssuer_);

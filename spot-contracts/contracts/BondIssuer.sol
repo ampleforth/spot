@@ -37,7 +37,7 @@ contract BondIssuer is IBondIssuer {
     uint256 public immutable maxMaturityDuration;
 
     // @notice The underlying rebasing token used for tranching.
-    address public immutable collateralToken;
+    address public immutable collateral;
 
     // @notice The tranche ratios.
     // @dev Each tranche ratio is expressed as a fixed point number
@@ -58,7 +58,7 @@ contract BondIssuer is IBondIssuer {
         uint256 minIssueTimeIntervalSec_,
         uint256 issueWindowOffsetSec_,
         uint256 maxMaturityDuration_,
-        address collateralToken_,
+        address collateral_,
         uint256[] memory trancheRatios_
     ) {
         bondFactory = bondFactory_;
@@ -66,7 +66,7 @@ contract BondIssuer is IBondIssuer {
         issueWindowOffsetSec = issueWindowOffsetSec_;
         maxMaturityDuration = maxMaturityDuration_;
 
-        collateralToken = collateralToken_;
+        collateral = collateral_;
         trancheRatios = trancheRatios_;
 
         lastIssueWindowTimestamp = 0;
@@ -87,7 +87,7 @@ contract BondIssuer is IBondIssuer {
         lastIssueWindowTimestamp = block.timestamp - (block.timestamp % minIssueTimeIntervalSec) + issueWindowOffsetSec;
 
         IBondController bond = IBondController(
-            bondFactory.createBond(collateralToken, trancheRatios, lastIssueWindowTimestamp + maxMaturityDuration)
+            bondFactory.createBond(collateral, trancheRatios, lastIssueWindowTimestamp + maxMaturityDuration)
         );
 
         _issuedBonds.add(address(bond));

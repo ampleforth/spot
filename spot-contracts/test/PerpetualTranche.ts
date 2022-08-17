@@ -192,13 +192,13 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when collateral token is NOT valid", function () {
+    describe("when collateral is NOT valid", function () {
       beforeEach(async function () {
         const BondIssuer = await ethers.getContractFactory("MockBondIssuer");
         newIssuer = await BondIssuer.deploy(perp.address);
       });
       it("should revert", async function () {
-        await expect(perp.updateBondIssuer(newIssuer.address)).to.be.revertedWith("InvalidCollateralToken");
+        await expect(perp.updateBondIssuer(newIssuer.address)).to.be.revertedWith("InvalidCollateral");
       });
     });
   });

@@ -3,10 +3,10 @@ pragma solidity ^0.8.15;
 
 contract MockBondIssuer {
     address private _bond;
-    address public collateralToken;
+    address public collateral;
 
-    constructor(address collateralToken_) {
-        collateralToken = collateralToken_;
+    constructor(address collateral_) {
+        collateral = collateral_;
     }
 
     function setLatestBond(address b) external {
