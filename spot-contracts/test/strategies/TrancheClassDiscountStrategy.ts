@@ -36,9 +36,9 @@ describe("TrancheClassDiscountStrategy", function () {
 
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
-        await expect(discountStrategy.connect(otherUser).updateDefinedDiscount(constants.HashZero, 0)).to.be.revertedWith(
-          "Ownable: caller is not the owner",
-        );
+        await expect(
+          discountStrategy.connect(otherUser).updateDefinedDiscount(constants.HashZero, 0),
+        ).to.be.revertedWith("Ownable: caller is not the owner");
       });
     });
 
@@ -187,7 +187,9 @@ describe("TrancheClassDiscountStrategy", function () {
           );
         });
         it("should return the updated discount", async function () {
-          expect(await discountStrategy.computeTrancheDiscount(tranchesNext[0].address)).to.eq(toDiscountFixedPtAmt("0.5"));
+          expect(await discountStrategy.computeTrancheDiscount(tranchesNext[0].address)).to.eq(
+            toDiscountFixedPtAmt("0.5"),
+          );
         });
         it("should return the updated discount", async function () {
           expect(await discountStrategy.computeTrancheDiscount(tranches[0].address)).to.eq(toDiscountFixedPtAmt("0.5"));

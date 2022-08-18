@@ -306,7 +306,9 @@ describe("PerpetualTranche", function () {
         await newDiscountStrategy.setDecimals(8);
       });
       it("should revert", async function () {
-        await expect(perp.updateDiscountStrategy(newDiscountStrategy.address)).to.be.revertedWith("InvalidStrategyDecimals");
+        await expect(perp.updateDiscountStrategy(newDiscountStrategy.address)).to.be.revertedWith(
+          "InvalidStrategyDecimals",
+        );
       });
     });
 

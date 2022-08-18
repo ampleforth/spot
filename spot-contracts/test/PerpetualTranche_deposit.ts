@@ -731,7 +731,9 @@ describe("PerpetualTranche", function () {
           expect(await perp.callStatic.getDepositBond()).to.eq(depositBond.address);
         });
         it("should NOT emit tranche discount", async function () {
-          await expect(tx).not.to.emit(perp, "DiscountApplied").withArgs(depositTrancheA.address, toDiscountFixedPtAmt("1"));
+          await expect(tx)
+            .not.to.emit(perp, "DiscountApplied")
+            .withArgs(depositTrancheA.address, toDiscountFixedPtAmt("1"));
         });
         it("should emit reserve synced", async function () {
           await expect(tx).to.emit(perp, "ReserveSynced").withArgs(depositTrancheA.address, toFixedPtAmt("500"));

@@ -16,7 +16,10 @@ task("ops:info")
     const collateralToken = await hre.ethers.getContractAt("MockERC20", await perp.collateral());
     const feeStrategy = await hre.ethers.getContractAt("BasicFeeStrategy", await perp.feeStrategy());
     const pricingStrategy = await hre.ethers.getContractAt("CDRPricingStrategy", await perp.pricingStrategy());
-    const discountStrategy = await hre.ethers.getContractAt("TrancheClassDiscountStrategy", await perp.discountStrategy());
+    const discountStrategy = await hre.ethers.getContractAt(
+      "TrancheClassDiscountStrategy",
+      await perp.discountStrategy(),
+    );
     const depositBond = await hre.ethers.getContractAt("IBondController", await perp.callStatic.getDepositBond());
     const issued = (await hre.ethers.provider.getCode(depositBond.address)) !== "0x";
     const perpSupply = await perp.totalSupply();
