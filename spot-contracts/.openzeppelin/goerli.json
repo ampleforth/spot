@@ -148,10 +148,10 @@
             "src": "contracts/PerpetualTranche.sol:203"
           },
           {
-            "label": "yieldStrategy",
+            "label": "discountStrategy",
             "offset": 0,
             "slot": "153",
-            "type": "t_contract(IYieldStrategy)6636",
+            "type": "t_contract(IDiscountStrategy)6636",
             "contract": "PerpetualTranche",
             "src": "contracts/PerpetualTranche.sol:211"
           },
@@ -220,7 +220,7 @@
             "src": "contracts/PerpetualTranche.sol:240"
           },
           {
-            "label": "_appliedYields",
+            "label": "_appliedDiscounts",
             "offset": 0,
             "slot": "162",
             "type": "t_mapping(t_contract(IERC20Upgradeable)954,t_uint256)",
@@ -313,8 +313,8 @@
             "label": "contract ITranche",
             "numberOfBytes": "20"
           },
-          "t_contract(IYieldStrategy)6636": {
-            "label": "contract IYieldStrategy",
+          "t_contract(IDiscountStrategy)6636": {
+            "label": "contract IDiscountStrategy",
             "numberOfBytes": "20"
           },
           "t_mapping(t_address,t_mapping(t_address,t_uint256))": {
@@ -493,10 +493,10 @@
             "src": "contracts/PerpetualTranche.sol:203"
           },
           {
-            "label": "yieldStrategy",
+            "label": "discountStrategy",
             "offset": 0,
             "slot": "153",
-            "type": "t_contract(IYieldStrategy)6672",
+            "type": "t_contract(IDiscountStrategy)6672",
             "contract": "PerpetualTranche",
             "src": "contracts/PerpetualTranche.sol:211"
           },
@@ -565,7 +565,7 @@
             "src": "contracts/PerpetualTranche.sol:240"
           },
           {
-            "label": "_appliedYields",
+            "label": "_appliedDiscounts",
             "offset": 0,
             "slot": "162",
             "type": "t_mapping(t_contract(IERC20Upgradeable)954,t_uint256)",
@@ -658,8 +658,8 @@
             "label": "contract ITranche",
             "numberOfBytes": "20"
           },
-          "t_contract(IYieldStrategy)6672": {
-            "label": "contract IYieldStrategy",
+          "t_contract(IDiscountStrategy)6672": {
+            "label": "contract IDiscountStrategy",
             "numberOfBytes": "20"
           },
           "t_mapping(t_address,t_mapping(t_address,t_uint256))": {
@@ -838,10 +838,10 @@
             "src": "contracts/PerpetualTranche.sol:204"
           },
           {
-            "label": "yieldStrategy",
+            "label": "discountStrategy",
             "offset": 0,
             "slot": "153",
-            "type": "t_contract(IYieldStrategy)6672",
+            "type": "t_contract(IDiscountStrategy)6672",
             "contract": "PerpetualTranche",
             "src": "contracts/PerpetualTranche.sol:212"
           },
@@ -910,7 +910,7 @@
             "src": "contracts/PerpetualTranche.sol:241"
           },
           {
-            "label": "_appliedYields",
+            "label": "_appliedDiscounts",
             "offset": 0,
             "slot": "162",
             "type": "t_mapping(t_contract(IERC20Upgradeable)954,t_uint256)",
@@ -1003,8 +1003,8 @@
             "label": "contract ITranche",
             "numberOfBytes": "20"
           },
-          "t_contract(IYieldStrategy)6672": {
-            "label": "contract IYieldStrategy",
+          "t_contract(IDiscountStrategy)6672": {
+            "label": "contract IDiscountStrategy",
             "numberOfBytes": "20"
           },
           "t_mapping(t_address,t_mapping(t_address,t_uint256))": {

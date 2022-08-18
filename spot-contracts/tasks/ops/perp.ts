@@ -16,7 +16,7 @@ task("ops:info")
     const collateralToken = await hre.ethers.getContractAt("MockERC20", await perp.collateral());
     const feeStrategy = await hre.ethers.getContractAt("BasicFeeStrategy", await perp.feeStrategy());
     const pricingStrategy = await hre.ethers.getContractAt("CDRPricingStrategy", await perp.pricingStrategy());
-    const yieldStrategy = await hre.ethers.getContractAt("TrancheClassYieldStrategy", await perp.yieldStrategy());
+    const discountStrategy = await hre.ethers.getContractAt("TrancheClassDiscountStrategy", await perp.discountStrategy());
     const depositBond = await hre.ethers.getContractAt("IBondController", await perp.callStatic.getDepositBond());
     const issued = (await hre.ethers.provider.getCode(depositBond.address)) !== "0x";
     const perpSupply = await perp.totalSupply();
@@ -31,7 +31,7 @@ task("ops:info")
     console.log("reserve:", await perp.reserve());
     console.log("collateralToken", collateralToken.address);
     console.log("feeStrategy:", feeStrategy.address);
-    console.log("yieldStrategy:", yieldStrategy.address);
+    console.log("discountStrategy:", discountStrategy.address);
     console.log("feeToken:", await feeStrategy.feeToken());
     console.log("pricingStrategy:", pricingStrategy.address);
     console.log(`maturityTolarance: [${await perp.minTrancheMaturitySec()}, ${await perp.maxTrancheMaturitySec()}]`);
@@ -54,11 +54,11 @@ task("ops:info")
       const tokenAddress = await perp.callStatic.getReserveAt(i);
       const balance = await perp.callStatic.getReserveTrancheBalance(tokenAddress);
       totalTrancheBalance = totalTrancheBalance.add(balance);
-      const yieldF = await perp.computeYield(tokenAddress);
+      const discountF = await perp.computeDiscount(tokenAddress);
       const price = await perp.computePrice(tokenAddress);
       data.push({
         balance: utils.formatUnits(balance, await perp.decimals()),
-        yieldFactor: utils.formatUnits(yieldF, await yieldStrategy.decimals()),
+        discountFactor: utils.formatUnits(discountF, await discountStrategy.decimals()),
         price: utils.formatUnits(price, priceDecimals),
         upForRollover: upForRollover[i] !== constants.AddressZero && balance.gt(0),
       });

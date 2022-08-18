@@ -6,7 +6,7 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { IBondIssuer } from "./IBondIssuer.sol";
 import { IFeeStrategy } from "./IFeeStrategy.sol";
 import { IPricingStrategy } from "./IPricingStrategy.sol";
-import { IYieldStrategy } from "./IYieldStrategy.sol";
+import { IDiscountStrategy } from "./IDiscountStrategy.sol";
 import { IBondController } from "./buttonwood/IBondController.sol";
 import { ITranche } from "./buttonwood/ITranche.sol";
 
@@ -26,9 +26,9 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @param strategy Address of the strategy contract.
     event UpdatedPricingStrategy(IPricingStrategy strategy);
 
-    // @notice Event emitted when the yield strategy is updated.
+    // @notice Event emitted when the discount strategy is updated.
     // @param strategy Address of the strategy contract.
-    event UpdatedYieldStrategy(IYieldStrategy strategy);
+    event UpdatedDiscountStrategy(IDiscountStrategy strategy);
 
     // @notice Event emitted when maturity tolerance parameters are updated.
     // @param min The minimum maturity time.
@@ -44,10 +44,10 @@ interface IPerpetualTranche is IERC20Upgradeable {
     // @param matureValueTargetPerc The new target percentage.
     event UpdatedMatureValueTargetPerc(uint256 matureValueTargetPerc);
 
-    // @notice Event emitted when the applied yield for a given token is set.
+    // @notice Event emitted when the applied discount for a given token is set.
     // @param token The address of the token.
-    // @param yield The yield factor applied.
-    event YieldApplied(IERC20Upgradeable token, uint256 yield);
+    // @param discount The discount factor applied.
+    event DiscountApplied(IERC20Upgradeable token, uint256 discount);
 
     // @notice Event emitted the reserve's current token balance is recorded after change.
     // @param token Address of token.
@@ -187,10 +187,10 @@ interface IPerpetualTranche is IERC20Upgradeable {
         uint256 tokenOutAmtRequested
     ) external returns (RolloverPreview memory);
 
-    // @notice The yield to be applied given the reserve token.
+    // @notice The discount to be applied given the reserve token.
     // @param token The address of the reserve token.
-    // @return The yield applied.
-    function computeYield(IERC20Upgradeable token) external view returns (uint256);
+    // @return The discount applied.
+    function computeDiscount(IERC20Upgradeable token) external view returns (uint256);
 
     // @notice The price of the given reserve token.
     // @param token The address of the reserve token.

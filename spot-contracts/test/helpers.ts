@@ -6,11 +6,11 @@ import * as path from "path";
 
 const TOKEN_DECIMALS = 18;
 const PRICE_DECIMALS = 8;
-const YIELD_DECIMALS = 18;
+const DISCOUNT_DECIMALS = 18;
 
 export const toFixedPtAmt = (a: string): BigNumber => utils.parseUnits(a, TOKEN_DECIMALS);
 export const toPriceFixedPtAmt = (a: string): BigNumber => utils.parseUnits(a, PRICE_DECIMALS);
-export const toYieldFixedPtAmt = (a: string): BigNumber => utils.parseUnits(a, YIELD_DECIMALS);
+export const toDiscountFixedPtAmt = (a: string): BigNumber => utils.parseUnits(a, DISCOUNT_DECIMALS);
 
 const ORACLE_BASE_PRICE = toPriceFixedPtAmt("1");
 
@@ -194,7 +194,7 @@ export const logReserveComposition = async (perp: Contract) => {
       i,
       token,
       utils.formatUnits(await perp.callStatic.getReserveTrancheBalance(token), await perp.decimals()),
-      utils.formatUnits(await perp.computeYield(token), await perp.YIELD_DECIMALS()),
+      utils.formatUnits(await perp.computeDiscount(token), await perp.DISCOUNT_DECIMALS()),
       utils.formatUnits(await perp.computePrice(token), await perp.PRICE_DECIMALS()),
     );
   }
