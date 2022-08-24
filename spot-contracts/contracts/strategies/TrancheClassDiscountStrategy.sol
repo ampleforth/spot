@@ -6,62 +6,62 @@ import { TrancheData, TrancheDataHelpers, BondHelpers } from "../_utils/BondHelp
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
-import { IYieldStrategy } from "../_interfaces/IYieldStrategy.sol";
+import { IDiscountStrategy } from "../_interfaces/IDiscountStrategy.sol";
 import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 
 /*
- *  @title TrancheClassYieldStrategy
+ *  @title TrancheClassDiscountStrategy
  *
- *  @dev Yield factor defined for a particular "class" of tranches.
+ *  @dev Discount factor defined for a particular "class" of tranches.
  *       Any tranche's class is defined as the unique combination of:
  *        - it's collateraToken
  *        - it's parent bond's trancheRatios
  *        - it's seniorityIDX.
  *
  *       For example:
- *        - All AMPL [35-65] bonds can be configured to have a yield of [1, 0] and
- *        => An AMPL-A tranche token from any [35-65] bond will be applied a yield factor of 1.
- *        - All AMPL [50-50] bonds can be configured to have a yield of [0.8,0]
- *        => An AMPL-A tranche token from any [50-50] bond will be applied a yield factor of 0.8.
+ *        - All AMPL [35-65] bonds can be configured to have a discount of [1, 0] and
+ *        => An AMPL-A tranche token from any [35-65] bond will be applied a discount factor of 1.
+ *        - All AMPL [50-50] bonds can be configured to have a discount of [0.8,0]
+ *        => An AMPL-A tranche token from any [50-50] bond will be applied a discount factor of 0.8.
  *
  */
-contract TrancheClassYieldStrategy is IYieldStrategy, OwnableUpgradeable {
+contract TrancheClassDiscountStrategy is IDiscountStrategy, OwnableUpgradeable {
     using BondHelpers for IBondController;
     using TrancheDataHelpers for TrancheData;
 
     uint8 private constant DECIMALS = 18;
 
-    // @notice Mapping between a tranche class and the yield to be applied.
-    mapping(bytes32 => uint256) private _trancheYields;
+    // @notice Mapping between a tranche class and the discount to be applied.
+    mapping(bytes32 => uint256) private _trancheDiscounts;
 
-    // @notice Event emitted when the defined tranche yields are updated.
+    // @notice Event emitted when the defined tranche discounts are updated.
     // @param hash The tranche class hash.
-    // @param yield The yield factor for any tranche belonging to that class.
-    event UpdatedDefinedTrancheYields(bytes32 hash, uint256 yield);
+    // @param discount The discount factor for any tranche belonging to that class.
+    event UpdatedDefinedTrancheDiscounts(bytes32 hash, uint256 discount);
 
     // @notice Contract initializer.
     function init() public initializer {
         __Ownable_init();
     }
 
-    // @notice Updates the tranche class's yield.
+    // @notice Updates the tranche class's discount.
     // @param classHash The tranche class (hash(collteralToken, trancheRatios, seniority)).
-    // @param yield The yield factor.
-    function updateDefinedYield(bytes32 classHash, uint256 yield) public onlyOwner {
-        if (yield > 0) {
-            _trancheYields[classHash] = yield;
+    // @param discount The discount factor.
+    function updateDefinedDiscount(bytes32 classHash, uint256 discount) public onlyOwner {
+        if (discount > 0) {
+            _trancheDiscounts[classHash] = discount;
         } else {
-            delete _trancheYields[classHash];
+            delete _trancheDiscounts[classHash];
         }
-        emit UpdatedDefinedTrancheYields(classHash, yield);
+        emit UpdatedDefinedTrancheDiscounts(classHash, discount);
     }
 
-    /// @inheritdoc IYieldStrategy
-    function computeTrancheYield(IERC20Upgradeable token) external view override returns (uint256) {
-        return _trancheYields[trancheClass(ITranche(address(token)))];
+    /// @inheritdoc IDiscountStrategy
+    function computeTrancheDiscount(IERC20Upgradeable token) external view override returns (uint256) {
+        return _trancheDiscounts[trancheClass(ITranche(address(token)))];
     }
 
-    /// @inheritdoc IYieldStrategy
+    /// @inheritdoc IDiscountStrategy
     function decimals() external pure override returns (uint8) {
         return DECIMALS;
     }

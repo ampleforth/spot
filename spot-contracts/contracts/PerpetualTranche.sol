@@ -14,7 +14,7 @@ import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/
 import { BondHelpers } from "./_utils/BondHelpers.sol";
 
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
-import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeeStrategy, IPricingStrategy, IYieldStrategy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
+import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeeStrategy, IPricingStrategy, IDiscountStrategy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
 
 /// @notice Expected a valid percentage value from 0-100 as a fixed point number with {PERC_DECIMALS}.
 /// @param value Invalid value.
@@ -132,10 +132,10 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     // with balances {b1, b2 ... bn}.
     //
     // Internally reserve token denominations (amounts/balances) are
-    // standardized using a yield factor.
-    // Standard denomination: b'i = bi . yield(ti)
+    // standardized using a discount factor.
+    // Standard denomination: b'i = bi . discount(ti)
     //
-    // Yield are typically expected to be ~1.0 for safe tranches,
+    // Discount are typically expected to be ~1.0 for safe tranches,
     // but could be less for riskier junior tranches.
     //
     //
@@ -157,14 +157,14 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     //
     //
     // When `ai` tokens of type `ti` are rotated in for tokens of type `tj`
-    //  => ai * yield(ti) * price(ti) =  aj * yield(tj) * price(tj)
-    // Rotation: aj => ai * yield(ti) * price(ti) / (yield(tj) * price(tj))
+    //  => ai * discount(ti) * price(ti) =  aj * discount(tj) * price(tj)
+    // Rotation: aj => ai * discount(ti) * price(ti) / (discount(tj) * price(tj))
     //
     //
     //-------------------------------------------------------------------------
     // Constants & Immutables
-    uint8 public constant YIELD_DECIMALS = 18;
-    uint256 public constant UNIT_YIELD = (10**YIELD_DECIMALS);
+    uint8 public constant DISCOUNT_DECIMALS = 18;
+    uint256 public constant UNIT_DISCOUNT = (10**DISCOUNT_DECIMALS);
 
     uint8 public constant PRICE_DECIMALS = 8;
     uint256 public constant UNIT_PRICE = (10**PRICE_DECIMALS);
@@ -189,13 +189,13 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     // @dev The computed price is expected to be a fixed point unsigned integer with {PRICE_DECIMALS} decimals.
     IPricingStrategy public pricingStrategy;
 
-    // @notice External contract that computes a given reserve token's yield.
-    // @dev Yield is the discount or premium factor applied to every asset when added to
+    // @notice External contract that computes a given reserve token's discount.
+    // @dev Discount is the discount or premium factor applied to every asset when added to
     //      the reserve. This accounts for things like tranche seniority and underlying
     //      collateral volatility. It also allows for standardizing denominations when comparing,
     //      two different reserve tokens.
-    //      The computed yield is expected to be a fixed point unsigned integer with {YIELD_DECIMALS} decimals.
-    IYieldStrategy public yieldStrategy;
+    //      The computed discount is expected to be a fixed point unsigned integer with {DISCOUNT_DECIMALS} decimals.
+    IDiscountStrategy public discountStrategy;
 
     // @notice External contract that stores a predefined bond config and frequency,
     //         and issues new bonds when poked.
@@ -225,11 +225,11 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     // @notice The total number of perps that have been minted using a given tranche.
     mapping(ITranche => uint256) public mintedSupplyPerTranche;
 
-    // @notice Yield factor actually "applied" on each reserve token. It is computed and recorded when
+    // @notice Discount factor actually "applied" on each reserve token. It is computed and recorded when
     //         a token is deposited into the system for the first time.
-    // @dev For all calculations thereafter, the token's applied yield will be used.
-    //      The yield is stored as a fixed point unsigned integer with {YIELD_DECIMALS} decimals.
-    mapping(IERC20Upgradeable => uint256) private _appliedYields;
+    // @dev For all calculations thereafter, the token's applied discount will be used.
+    //      The discount is stored as a fixed point unsigned integer with {DISCOUNT_DECIMALS} decimals.
+    mapping(IERC20Upgradeable => uint256) private _appliedDiscounts;
 
     //--------------------------------------------------------------------------
     // RESERVE
@@ -239,8 +239,8 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
 
     // @notice The amount of all the mature tranches extracted and held as the collateral token,
     //         i.e) the reserve's "virtual" mature tranche balance.
-    // @dev The mature tranche is assumed to have {UNIT_YIELD}. So we do NOT have to
-    //      scale using the yield factor when dealing with the mature tranche balance.
+    // @dev The mature tranche is assumed to have {UNIT_DISCOUNT}. So we do NOT have to
+    //      scale using the discount factor when dealing with the mature tranche balance.
     uint256 private _matureTrancheBalance;
 
     //--------------------------------------------------------------------------
@@ -260,7 +260,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     // @param bondIssuer_ Address of the bond issuer contract.
     // @param feeStrategy_ Address of the fee strategy contract.
     // @param pricingStrategy_ Address of the pricing strategy contract.
-    // @param yieldStrategy_ Address of the yield strategy contract.
+    // @param discountStrategy_ Address of the discount strategy contract.
     function init(
         string memory name,
         string memory symbol,
@@ -268,7 +268,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         IBondIssuer bondIssuer_,
         IFeeStrategy feeStrategy_,
         IPricingStrategy pricingStrategy_,
-        IYieldStrategy yieldStrategy_
+        IDiscountStrategy discountStrategy_
     ) public initializer {
         __ERC20_init(name, symbol);
         __Ownable_init();
@@ -278,12 +278,12 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         // and is to be never updated.
         _reserves.add(address(collateral_));
         _syncReserve(collateral_);
-        _applyYield(collateral_, UNIT_YIELD);
+        _applyDiscount(collateral_, UNIT_DISCOUNT);
 
         updateBondIssuer(bondIssuer_);
         updateFeeStrategy(feeStrategy_);
         updatePricingStrategy(pricingStrategy_);
-        updateYieldStrategy(yieldStrategy_);
+        updateDiscountStrategy(discountStrategy_);
 
         updateTolerableTrancheMaturity(1, type(uint256).max);
         updateMintingLimits(type(uint256).max, type(uint256).max);
@@ -335,17 +335,17 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         emit UpdatedPricingStrategy(pricingStrategy_);
     }
 
-    // @notice Update the reference to the yield strategy contract.
-    // @param yieldStrategy_ New strategy address.
-    function updateYieldStrategy(IYieldStrategy yieldStrategy_) public onlyOwner {
-        if (address(yieldStrategy_) == address(0)) {
+    // @notice Update the reference to the discount strategy contract.
+    // @param discountStrategy_ New strategy address.
+    function updateDiscountStrategy(IDiscountStrategy discountStrategy_) public onlyOwner {
+        if (address(discountStrategy_) == address(0)) {
             revert UnacceptableReference();
         }
-        if (yieldStrategy_.decimals() != YIELD_DECIMALS) {
-            revert InvalidStrategyDecimals(yieldStrategy_.decimals(), YIELD_DECIMALS);
+        if (discountStrategy_.decimals() != DISCOUNT_DECIMALS) {
+            revert InvalidStrategyDecimals(discountStrategy_.decimals(), DISCOUNT_DECIMALS);
         }
-        yieldStrategy = yieldStrategy_;
-        emit UpdatedYieldStrategy(yieldStrategy_);
+        discountStrategy = discountStrategy_;
+        emit UpdatedDiscountStrategy(discountStrategy_);
     }
 
     // @notice Update the maturity tolerance parameters.
@@ -667,7 +667,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
 
             // Keeps track of the total tranches redeemed
             _updateMatureTrancheBalance(
-                _matureTrancheBalance + _toStdTrancheAmt(trancheBalance, computeYield(tranche))
+                _matureTrancheBalance + _toStdTrancheAmt(trancheBalance, computeDiscount(tranche))
             );
         }
 
@@ -708,11 +708,11 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Gets the applied yield for the given tranche if it's set,
-    //      if NOT computes the yield.
-    function computeYield(IERC20Upgradeable token) public view override returns (uint256) {
-        uint256 yield = _appliedYields[token];
-        return (yield > 0) ? yield : yieldStrategy.computeTrancheYield(token);
+    // @dev Gets the applied discount for the given tranche if it's set,
+    //      if NOT computes the discount.
+    function computeDiscount(IERC20Upgradeable token) public view override returns (uint256) {
+        uint256 discount = _appliedDiscounts[token];
+        return (discount > 0) ? discount : discountStrategy.computeTrancheDiscount(token);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -736,7 +736,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     // @dev Computes the perp mint amount for given amount of tranche tokens deposited into the reserve.
     function _computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) private view returns (uint256) {
         uint256 totalSupply_ = totalSupply();
-        uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmt, computeYield(trancheIn));
+        uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmt, computeDiscount(trancheIn));
         uint256 trancheInPrice = computePrice(trancheIn);
         uint256 perpAmtMint = (totalSupply_ > 0)
             ? (stdTrancheInAmt * trancheInPrice * totalSupply_) / _reserveValue()
@@ -772,25 +772,25 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     ) private view returns (IPerpetualTranche.RolloverPreview memory) {
         IPerpetualTranche.RolloverPreview memory r;
 
-        uint256 trancheInYield = computeYield(trancheIn);
-        uint256 trancheOutYield = computeYield(tokenOut);
+        uint256 trancheInDiscount = computeDiscount(trancheIn);
+        uint256 trancheOutDiscount = computeDiscount(tokenOut);
         uint256 trancheInPrice = computePrice(trancheIn);
         uint256 trancheOutPrice = computePrice(tokenOut);
         uint256 tokenOutBalance = _reserveBalance(tokenOut);
         tokenOutAmtRequested = MathUpgradeable.min(tokenOutAmtRequested, tokenOutBalance);
 
-        if (trancheInYield == 0 || trancheOutYield == 0 || trancheInPrice == 0 || trancheOutPrice == 0) {
+        if (trancheInDiscount == 0 || trancheOutDiscount == 0 || trancheInPrice == 0 || trancheOutPrice == 0) {
             r.remainingTrancheInAmt = trancheInAmtAvailable;
             return r;
         }
 
         r.trancheInAmt = trancheInAmtAvailable;
-        uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmtAvailable, trancheInYield);
+        uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmtAvailable, trancheInDiscount);
 
         // Basic rollover:
         // (stdTrancheInAmt . trancheInPrice) = (stdTrancheOutAmt . trancheOutPrice)
         uint256 stdTrancheOutAmt = (stdTrancheInAmt * trancheInPrice) / trancheOutPrice;
-        r.trancheOutAmt = _fromStdTrancheAmt(stdTrancheOutAmt, trancheOutYield);
+        r.trancheOutAmt = _fromStdTrancheAmt(stdTrancheOutAmt, trancheOutDiscount);
 
         // However, if the tokenOut is the mature tranche (held as naked collateral),
         // we infer the tokenOut amount from the tranche denomination.
@@ -807,9 +807,9 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
             r.trancheOutAmt = isMatureTrancheOut
                 ? (_matureTrancheBalance * r.tokenOutAmt) / tokenOutBalance
                 : r.tokenOutAmt;
-            stdTrancheOutAmt = _toStdTrancheAmt(r.trancheOutAmt, trancheOutYield);
+            stdTrancheOutAmt = _toStdTrancheAmt(r.trancheOutAmt, trancheOutDiscount);
             stdTrancheInAmt = (stdTrancheOutAmt * trancheOutPrice) / trancheInPrice;
-            r.trancheInAmt = _fromStdTrancheAmt(stdTrancheInAmt, trancheInYield);
+            r.trancheInAmt = _fromStdTrancheAmt(stdTrancheInAmt, trancheInDiscount);
         }
 
         r.perpRolloverAmt = (stdTrancheOutAmt * trancheOutPrice * totalSupply()) / _reserveValue();
@@ -857,16 +857,16 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
             // Inserts new tranche into reserve list.
             _reserves.add(address(token));
 
-            // Stores the yield for future usage.
-            _applyYield(token, computeYield(token));
+            // Stores the discount for future usage.
+            _applyDiscount(token, computeDiscount(token));
         }
 
         if (balance == 0 && inReserve_) {
             // Removes tranche from reserve list.
             _reserves.remove(address(token));
 
-            // Frees up stored yield.
-            _applyYield(token, 0);
+            // Frees up stored discount.
+            _applyDiscount(token, 0);
 
             // Frees up minted supply.
             delete mintedSupplyPerTranche[ITranche(address(token))];
@@ -933,14 +933,14 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         }
     }
 
-    // @dev Updates contract store with provided yield.
-    function _applyYield(IERC20Upgradeable token, uint256 yield) private {
-        if (yield > 0) {
-            _appliedYields[token] = yield;
+    // @dev Updates contract store with provided discount.
+    function _applyDiscount(IERC20Upgradeable token, uint256 discount) private {
+        if (discount > 0) {
+            _appliedDiscounts[token] = discount;
         } else {
-            delete _appliedYields[token];
+            delete _appliedDiscounts[token];
         }
-        emit YieldApplied(token, yield);
+        emit DiscountApplied(token, discount);
     }
 
     // @dev Updates the mature tranche balance in storage.
@@ -1029,7 +1029,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     }
 
     // @dev Calculates the total value of all the tranches in the reserve.
-    //      Value of each reserve tranche is calculated as = (trancheYield . trancheBalance) . tranchePrice.
+    //      Value of each reserve tranche is calculated as = (trancheDiscount . trancheBalance) . tranchePrice.
     function _reserveValue() private view returns (uint256) {
         // For the mature tranche we use the "virtual" tranche balance
         uint256 totalVal = (_matureTrancheBalance * computePrice(_reserveAt(0)));
@@ -1037,7 +1037,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         // For normal tranches we use the tranche token balance
         for (uint256 i = 1; i < _reserveCount(); i++) {
             IERC20Upgradeable token = _reserveAt(i);
-            uint256 stdTrancheBalance = _toStdTrancheAmt(_reserveBalance(token), computeYield(token));
+            uint256 stdTrancheBalance = _toStdTrancheAmt(_reserveBalance(token), computeDiscount(token));
             totalVal += (stdTrancheBalance * computePrice(token));
         }
 
@@ -1055,14 +1055,14 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     }
 
     // @dev Calculates the standardized tranche amount for internal book keeping.
-    //      stdTrancheAmt = (trancheAmt * yield).
-    function _toStdTrancheAmt(uint256 trancheAmt, uint256 yield) private pure returns (uint256) {
-        return ((trancheAmt * yield) / UNIT_YIELD);
+    //      stdTrancheAmt = (trancheAmt * discount).
+    function _toStdTrancheAmt(uint256 trancheAmt, uint256 discount) private pure returns (uint256) {
+        return ((trancheAmt * discount) / UNIT_DISCOUNT);
     }
 
     // @dev Calculates the external tranche amount from the internal standardized tranche amount.
-    //      trancheAmt = stdTrancheAmt / yield.
-    function _fromStdTrancheAmt(uint256 stdTrancheAmt, uint256 yield) private pure returns (uint256) {
-        return ((stdTrancheAmt * UNIT_YIELD) / yield);
+    //      trancheAmt = stdTrancheAmt / discount.
+    function _fromStdTrancheAmt(uint256 stdTrancheAmt, uint256 discount) private pure returns (uint256) {
+        return ((stdTrancheAmt * UNIT_DISCOUNT) / discount);
     }
 }

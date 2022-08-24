@@ -22,12 +22,12 @@ yarn hardhat --network ganache deploy:PerpetualTranche \
   --min-matuirty-sec "300" \
   --max-matuirty-sec "600"
 
-yarn hardhat --network ganache deploy:YieldStrategy:setYield \
-  --yield-strategy-address "0x4741f9c161003100fF0Ba1097E149d143458bD0B" \
+yarn hardhat --network ganache deploy:DiscountStrategy:setDiscount \
+  --discount-strategy-address "0x4741f9c161003100fF0Ba1097E149d143458bD0B" \
   --collateral-token-address "0x00404F73C76BC75b0D86F8AdDA8500e987BF8232" \
   --tranche-ratios "[500,500]" \
   --tranche-index "0" \
-  --tranche-yield "1.0"
+  --tranche-discount "1.0"
 
 yarn hardhat --network ganache deploy:Router
 

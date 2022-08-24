@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.15;
 
-contract MockYieldStrategy {
+contract MockDiscountStrategy {
     uint8 private _decimals;
 
-    mapping(address => uint256) private _yields;
+    mapping(address => uint256) private _discounts;
 
     constructor() {
         _decimals = 18;
@@ -14,12 +14,12 @@ contract MockYieldStrategy {
         _decimals = d;
     }
 
-    function setTrancheYield(address t, uint256 y) external {
-        _yields[t] = y;
+    function setTrancheDiscount(address t, uint256 y) external {
+        _discounts[t] = y;
     }
 
-    function computeTrancheYield(address t) external view returns (uint256) {
-        return _yields[t];
+    function computeTrancheDiscount(address t) external view returns (uint256) {
+        return _discounts[t];
     }
 
     function decimals() external view returns (uint8) {
