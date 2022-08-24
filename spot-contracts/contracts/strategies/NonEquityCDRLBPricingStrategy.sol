@@ -7,7 +7,7 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { IPricingStrategy } from "../_interfaces/IPricingStrategy.sol";
 
-/*
+/**
  *  @title NonEquityCDRLBPricingStrategy (CDRLB -> collateral to debt ratio - lower bound)
  *
  *  @notice Prices a given tranche as the max(tranche's CDR, UNIT_PRICE).

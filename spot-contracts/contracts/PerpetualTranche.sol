@@ -88,7 +88,7 @@ error BelowMatureValueTargetPerc(uint256 matureValuePerc, uint256 matureValueTar
 /// @param token Address of the token transferred.
 error UnauthorizedTransferOut(IERC20Upgradeable token);
 
-/*
+/**
  *  @title PerpetualTranche
  *
  *  @notice An opinionated implementation of a perpetual note ERC-20 token contract, backed by buttonwood tranches.
@@ -176,71 +176,71 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     //-------------------------------------------------------------------------
     // Storage
 
-    // @dev The perp token balances are represented as a fixed point unsigned integer with these many decimals.
+    /// @dev The perp token balances are represented as a fixed point unsigned integer with these many decimals.
     uint8 private _decimals;
 
     //--------------------------------------------------------------------------
     // CONFIG
 
-    // @notice External contract points controls fees & incentives.
+    /// @notice External contract points controls fees & incentives.
     IFeeStrategy public override feeStrategy;
 
-    // @notice External contract that computes a given reserve token's price.
-    // @dev The computed price is expected to be a fixed point unsigned integer with {PRICE_DECIMALS} decimals.
+    /// @notice External contract that computes a given reserve token's price.
+    /// @dev The computed price is expected to be a fixed point unsigned integer with {PRICE_DECIMALS} decimals.
     IPricingStrategy public pricingStrategy;
 
-    // @notice External contract that computes a given reserve token's discount.
-    // @dev Discount is the discount or premium factor applied to every asset when added to
-    //      the reserve. This accounts for things like tranche seniority and underlying
-    //      collateral volatility. It also allows for standardizing denominations when comparing,
-    //      two different reserve tokens.
-    //      The computed discount is expected to be a fixed point unsigned integer with {DISCOUNT_DECIMALS} decimals.
+    /// @notice External contract that computes a given reserve token's discount.
+    /// @dev Discount is the discount or premium factor applied to every asset when added to
+    ///      the reserve. This accounts for things like tranche seniority and underlying
+    ///      collateral volatility. It also allows for standardizing denominations when comparing,
+    ///      two different reserve tokens.
+    ///      The computed discount is expected to be a fixed point unsigned integer with {DISCOUNT_DECIMALS} decimals.
     IDiscountStrategy public discountStrategy;
 
-    // @notice External contract that stores a predefined bond config and frequency,
-    //         and issues new bonds when poked.
-    // @dev Only tranches of bonds issued by this whitelisted issuer are accepted into the reserve.
+    /// @notice External contract that stores a predefined bond config and frequency,
+    ///         and issues new bonds when poked.
+    /// @dev Only tranches of bonds issued by this whitelisted issuer are accepted into the reserve.
     IBondIssuer public bondIssuer;
 
-    // @notice The active deposit bond of whose tranches are currently being accepted to mint perps.
+    /// @notice The active deposit bond of whose tranches are currently being accepted to mint perps.
     IBondController private _depositBond;
 
-    // @notice The minimum maturity time in seconds for a tranche below which
-    //         it can be rolled over.
+    /// @notice The minimum maturity time in seconds for a tranche below which
+    ///         it can be rolled over.
     uint256 public minTrancheMaturitySec;
 
-    // @notice The maximum maturity time in seconds for a tranche above which
-    //         it can NOT get added into the reserve.
+    /// @notice The maximum maturity time in seconds for a tranche above which
+    ///         it can NOT get added into the reserve.
     uint256 public maxTrancheMaturitySec;
 
-    // @notice The percentage of the reserve value to be held as mature tranches.
+    /// @notice The percentage of the reserve value to be held as mature tranches.
     uint256 public matureValueTargetPerc;
 
-    // @notice The maximum supply of perps that can exist at any given time.
+    /// @notice The maximum supply of perps that can exist at any given time.
     uint256 public maxSupply;
 
-    // @notice The max number of perps that can be minted for each tranche in the minting bond.
+    /// @notice The max number of perps that can be minted for each tranche in the minting bond.
     uint256 public maxMintAmtPerTranche;
 
-    // @notice The total number of perps that have been minted using a given tranche.
+    /// @notice The total number of perps that have been minted using a given tranche.
     mapping(ITranche => uint256) public mintedSupplyPerTranche;
 
-    // @notice Discount factor actually "applied" on each reserve token. It is computed and recorded when
-    //         a token is deposited into the system for the first time.
-    // @dev For all calculations thereafter, the token's applied discount will be used.
-    //      The discount is stored as a fixed point unsigned integer with {DISCOUNT_DECIMALS} decimals.
+    /// @notice Discount factor actually "applied" on each reserve token. It is computed and recorded when
+    ///         a token is deposited into the system for the first time.
+    /// @dev For all calculations thereafter, the token's applied discount will be used.
+    ///      The discount is stored as a fixed point unsigned integer with {DISCOUNT_DECIMALS} decimals.
     mapping(IERC20Upgradeable => uint256) private _appliedDiscounts;
 
     //--------------------------------------------------------------------------
     // RESERVE
 
-    // @notice A record of all tokens in the reserve which back the perps.
+    /// @notice A record of all tokens in the reserve which back the perps.
     EnumerableSetUpgradeable.AddressSet private _reserves;
 
-    // @notice The amount of all the mature tranches extracted and held as the collateral token,
-    //         i.e) the reserve's "virtual" mature tranche balance.
-    // @dev The mature tranche is assumed to have {UNIT_DISCOUNT}. So we do NOT have to
-    //      scale using the discount factor when dealing with the mature tranche balance.
+    /// @notice The amount of all the mature tranches extracted and held as the collateral token,
+    ///         i.e) the reserve's "virtual" mature tranche balance.
+    /// @dev The mature tranche is assumed to have {UNIT_DISCOUNT}. So we do NOT have to
+    ///      scale using the discount factor when dealing with the mature tranche balance.
     uint256 private _matureTrancheBalance;
 
     //--------------------------------------------------------------------------
@@ -253,14 +253,14 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     //--------------------------------------------------------------------------
     // Construction & Initialization
 
-    // @notice Contract state initialization.
-    // @param name ERC-20 Name of the Perp token.
-    // @param symbol ERC-20 Symbol of the Perp token.
-    // @param collateral_ Address of the underlying collateral token.
-    // @param bondIssuer_ Address of the bond issuer contract.
-    // @param feeStrategy_ Address of the fee strategy contract.
-    // @param pricingStrategy_ Address of the pricing strategy contract.
-    // @param discountStrategy_ Address of the discount strategy contract.
+    /// @notice Contract state initialization.
+    /// @param name ERC-20 Name of the Perp token.
+    /// @param symbol ERC-20 Symbol of the Perp token.
+    /// @param collateral_ Address of the underlying collateral token.
+    /// @param bondIssuer_ Address of the bond issuer contract.
+    /// @param feeStrategy_ Address of the fee strategy contract.
+    /// @param pricingStrategy_ Address of the pricing strategy contract.
+    /// @param discountStrategy_ Address of the discount strategy contract.
     function init(
         string memory name,
         string memory symbol,
@@ -293,14 +293,14 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     //--------------------------------------------------------------------------
     // ADMIN only methods
 
-    // @notice Pauses deposits, withdrawals and rollovers.
-    // @dev NOTE: ERC-20 functions, like transfers will always remain operational.
+    /// @notice Pauses deposits, withdrawals and rollovers.
+    /// @dev NOTE: ERC-20 functions, like transfers will always remain operational.
     function pause() public onlyOwner {
         _pause();
     }
 
-    // @notice Update the reference to the bond issuer contract.
-    // @param bondIssuer_ New bond issuer address.
+    /// @notice Update the reference to the bond issuer contract.
+    /// @param bondIssuer_ New bond issuer address.
     function updateBondIssuer(IBondIssuer bondIssuer_) public onlyOwner {
         if (address(bondIssuer_) == address(0)) {
             revert UnacceptableReference();
@@ -312,8 +312,8 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         emit UpdatedBondIssuer(bondIssuer_);
     }
 
-    // @notice Update the reference to the fee strategy contract.
-    // @param feeStrategy_ New strategy address.
+    /// @notice Update the reference to the fee strategy contract.
+    /// @param feeStrategy_ New strategy address.
     function updateFeeStrategy(IFeeStrategy feeStrategy_) public onlyOwner {
         if (address(feeStrategy_) == address(0)) {
             revert UnacceptableReference();
@@ -322,8 +322,8 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         emit UpdatedFeeStrategy(feeStrategy_);
     }
 
-    // @notice Update the reference to the pricing strategy contract.
-    // @param pricingStrategy_ New strategy address.
+    /// @notice Update the reference to the pricing strategy contract.
+    /// @param pricingStrategy_ New strategy address.
     function updatePricingStrategy(IPricingStrategy pricingStrategy_) public onlyOwner {
         if (address(pricingStrategy_) == address(0)) {
             revert UnacceptableReference();
@@ -335,8 +335,8 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         emit UpdatedPricingStrategy(pricingStrategy_);
     }
 
-    // @notice Update the reference to the discount strategy contract.
-    // @param discountStrategy_ New strategy address.
+    /// @notice Update the reference to the discount strategy contract.
+    /// @param discountStrategy_ New strategy address.
     function updateDiscountStrategy(IDiscountStrategy discountStrategy_) public onlyOwner {
         if (address(discountStrategy_) == address(0)) {
             revert UnacceptableReference();
@@ -348,9 +348,9 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         emit UpdatedDiscountStrategy(discountStrategy_);
     }
 
-    // @notice Update the maturity tolerance parameters.
-    // @param minTrancheMaturitySec_ New minimum maturity time.
-    // @param maxTrancheMaturitySec_ New maximum maturity time.
+    /// @notice Update the maturity tolerance parameters.
+    /// @param minTrancheMaturitySec_ New minimum maturity time.
+    /// @param maxTrancheMaturitySec_ New maximum maturity time.
     function updateTolerableTrancheMaturity(uint256 minTrancheMaturitySec_, uint256 maxTrancheMaturitySec_)
         public
         onlyOwner
@@ -363,17 +363,17 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         emit UpdatedTolerableTrancheMaturity(minTrancheMaturitySec_, maxTrancheMaturitySec_);
     }
 
-    // @notice Update parameters controlling the perp token mint limits.
-    // @param maxSupply_ New max total supply.
-    // @param maxMintAmtPerTranche_ New max total for per tranche in minting bond.
+    /// @notice Update parameters controlling the perp token mint limits.
+    /// @param maxSupply_ New max total supply.
+    /// @param maxMintAmtPerTranche_ New max total for per tranche in minting bond.
     function updateMintingLimits(uint256 maxSupply_, uint256 maxMintAmtPerTranche_) public onlyOwner {
         maxSupply = maxSupply_;
         maxMintAmtPerTranche = maxMintAmtPerTranche_;
         emit UpdatedMintingLimits(maxSupply_, maxMintAmtPerTranche_);
     }
 
-    // @notice Update the mature value target percentage parameter.
-    // @param matureValueTargetPerc_ The new target percentage.
+    /// @notice Update the mature value target percentage parameter.
+    /// @param matureValueTargetPerc_ The new target percentage.
     function updateMatureValueTargetPerc(uint256 matureValueTargetPerc_) public onlyOwner {
         if (matureValueTargetPerc_ > HUNDRED_PERC) {
             revert InvalidPerc(matureValueTargetPerc_);
@@ -382,10 +382,10 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         emit UpdatedMatureValueTargetPerc(matureValueTargetPerc);
     }
 
-    // @notice Allows the owner to transfer non-critical assets out of the system if required.
-    // @param token The token address.
-    // @param to The destination address.
-    // @param amount The amount of tokens to be transferred.
+    /// @notice Allows the owner to transfer non-critical assets out of the system if required.
+    /// @param token The token address.
+    /// @param to The destination address.
+    /// @param amount The amount of tokens to be transferred.
     function transferERC20(
         IERC20Upgradeable token,
         address to,
@@ -559,7 +559,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Reserve tokens which are not up for rollover are marked by `address(0)`.
+    /// @dev Reserve tokens which are not up for rollover are marked by `address(0)`.
     function getReserveTokensUpForRollover() external override afterStateUpdate returns (IERC20Upgradeable[] memory) {
         uint256 reserveCount = _reserveCount();
         IERC20Upgradeable[] memory rolloverTokens = new IERC20Upgradeable[](reserveCount);
@@ -581,7 +581,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Returns a fixed point with {PRICE_DECIMALS} decimals.
+    /// @dev Returns a fixed point with {PRICE_DECIMALS} decimals.
     function getAvgPrice() external override afterStateUpdate returns (uint256) {
         uint256 totalSupply_ = totalSupply();
         return totalSupply_ > 0 ? _reserveValue() / totalSupply_ : 0;
@@ -608,7 +608,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Set `tokenOutAmtRequested` to max(uint256) to use the reserve balance.
+    /// @dev Set `tokenOutAmtRequested` to max(uint256) to use the reserve balance.
     function computeRolloverAmt(
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
@@ -622,9 +622,9 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     // Public methods
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Lazily updates time-dependent reserve storage state.
-    //      This function is to be invoked on all external function entry points which are
-    //      read the reserve storage. This function is intended to be idempotent.
+    /// @dev Lazily updates time-dependent reserve storage state.
+    ///      This function is to be invoked on all external function entry points which are
+    ///      read the reserve storage. This function is intended to be idempotent.
     function updateState() public override {
         // Lazily queries the bond issuer to get the most recently issued bond
         // and updates with the new deposit bond if it's "acceptable".
@@ -708,8 +708,8 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     }
 
     /// @inheritdoc IPerpetualTranche
-    // @dev Gets the applied discount for the given tranche if it's set,
-    //      if NOT computes the discount.
+    /// @dev Gets the applied discount for the given tranche if it's set,
+    ///      if NOT computes the discount.
     function computeDiscount(IERC20Upgradeable token) public view override returns (uint256) {
         uint256 discount = _appliedDiscounts[token];
         return (discount > 0) ? discount : discountStrategy.computeTrancheDiscount(token);
@@ -723,9 +723,9 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
                 : pricingStrategy.computeTranchePrice(ITranche(address(token)));
     }
 
-    // @notice Returns the number of decimals used to get its user representation.
-    // @dev For example, if `decimals` equals `2`, a balance of `505` tokens should
-    //      be displayed to a user as `5.05` (`505 / 10 ** 2`).
+    /// @notice Returns the number of decimals used to get its user representation.
+    /// @dev For example, if `decimals` equals `2`, a balance of `505` tokens should
+    ///      be displayed to a user as `5.05` (`505 / 10 ** 2`).
     function decimals() public view override returns (uint8) {
         return _decimals;
     }
@@ -733,7 +733,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     //--------------------------------------------------------------------------
     // Private methods
 
-    // @dev Computes the perp mint amount for given amount of tranche tokens deposited into the reserve.
+    /// @dev Computes the perp mint amount for given amount of tranche tokens deposited into the reserve.
     function _computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) private view returns (uint256) {
         uint256 totalSupply_ = totalSupply();
         uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmt, computeDiscount(trancheIn));
@@ -744,7 +744,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         return (perpAmtMint);
     }
 
-    // @dev Computes the reserve token amounts redeemed when a given number of perps are burnt.
+    /// @dev Computes the reserve token amounts redeemed when a given number of perps are burnt.
     function _computeRedemptionAmts(uint256 perpAmtBurnt)
         private
         view
@@ -763,7 +763,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         return (reserveTokens, redemptionAmts);
     }
 
-    // @dev Computes the amount of reserve tokens that can be rolled out for the given amount of tranches deposited.
+    /// @dev Computes the amount of reserve tokens that can be rolled out for the given amount of tranches deposited.
     function _computeRolloverAmt(
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
@@ -817,8 +817,8 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         return r;
     }
 
-    // @dev Transfers tokens from the given address to self and updates the reserve list.
-    // @return Reserve's token balance after transfer in.
+    /// @dev Transfers tokens from the given address to self and updates the reserve list.
+    /// @return Reserve's token balance after transfer in.
     function _transferIntoReserve(
         address from,
         IERC20Upgradeable token,
@@ -828,8 +828,8 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         return _syncReserve(token);
     }
 
-    // @dev Transfers tokens from self into the given address and updates the reserve list.
-    // @return Reserve's token balance after transfer out.
+    /// @dev Transfers tokens from self into the given address and updates the reserve list.
+    /// @return Reserve's token balance after transfer out.
     function _transferOutOfReserve(
         address to,
         IERC20Upgradeable token,
@@ -839,8 +839,8 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         return _syncReserve(token);
     }
 
-    // @dev Keeps the reserve storage up to date. Logs the token balance held by the reserve.
-    // @return The Reserve's token balance.
+    /// @dev Keeps the reserve storage up to date. Logs the token balance held by the reserve.
+    /// @return The Reserve's token balance.
     function _syncReserve(IERC20Upgradeable token) private returns (uint256) {
         uint256 balance = _reserveBalance(token);
         emit ReserveSynced(token, balance);
@@ -875,7 +875,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         return balance;
     }
 
-    // @dev Handles fee transfer between the payer, the reserve and the protocol fee collector.
+    /// @dev Handles fee transfer between the payer, the reserve and the protocol fee collector.
     function _settleFee(
         address payer,
         int256 reserveFee,
@@ -894,7 +894,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         }
     }
 
-    // @dev Transfers fee tokens from the payer to the destination.
+    /// @dev Transfers fee tokens from the payer to the destination.
     function _handleFeeTransferIn(
         address payer,
         address destination,
@@ -914,7 +914,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         }
     }
 
-    // @dev Transfers fee from the reserve to the destination.
+    /// @dev Transfers fee from the reserve to the destination.
     function _handleFeeTransferOut(address destination, uint256 feeAmt) private {
         IERC20Upgradeable feeToken_ = feeToken();
         bool isNativeFeeToken = (feeToken_ == perpERC20());
@@ -933,7 +933,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         }
     }
 
-    // @dev Updates contract store with provided discount.
+    /// @dev Updates contract store with provided discount.
     function _applyDiscount(IERC20Upgradeable token, uint256 discount) private {
         if (discount > 0) {
             _appliedDiscounts[token] = discount;
@@ -943,20 +943,20 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         emit DiscountApplied(token, discount);
     }
 
-    // @dev Updates the mature tranche balance in storage.
+    /// @dev Updates the mature tranche balance in storage.
     function _updateMatureTrancheBalance(uint256 matureTrancheBalance) private {
         _matureTrancheBalance = matureTrancheBalance;
         emit UpdatedMatureTrancheBalance(matureTrancheBalance);
     }
 
-    // @dev Checks if the given token pair is a valid rollover.
-    //      * When rolling out mature tranche,
-    //          - expects incoming tranche to be part of the deposit bond
-    //      * When rolling out immature tranches,
-    //          - expects incoming tranche to be part of the deposit bond
-    //          - expects outgoing tranche to not be part of the deposit bond
-    //          - expects outgoing tranche to be in the reserve
-    //          - expects outgoing bond to not be "acceptable" any more
+    /// @dev Checks if the given token pair is a valid rollover.
+    ///      * When rolling out mature tranche,
+    ///          - expects incoming tranche to be part of the deposit bond
+    ///      * When rolling out immature tranches,
+    ///          - expects incoming tranche to be part of the deposit bond
+    ///          - expects outgoing tranche to not be part of the deposit bond
+    ///          - expects outgoing tranche to be in the reserve
+    ///          - expects outgoing bond to not be "acceptable" any more
     function _isAcceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut) private view returns (bool) {
         IBondController bondIn = IBondController(trancheIn.bond());
 
@@ -974,10 +974,10 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
             !_isAcceptableForReserve(bondOut));
     }
 
-    // @dev Checks if the bond's tranches can be accepted into the reserve.
-    //      * Expects the bond to to have the same collateral token as perp.
-    //      * Expects the bond's maturity to be within expected bounds.
-    // @return True if the bond is "acceptable".
+    /// @dev Checks if the bond's tranches can be accepted into the reserve.
+    ///      * Expects the bond to to have the same collateral token as perp.
+    ///      * Expects the bond's maturity to be within expected bounds.
+    /// @return True if the bond is "acceptable".
     function _isAcceptableForReserve(IBondController bond) private view returns (bool) {
         // NOTE: `timeToMaturity` will be 0 if the bond is past maturity.
         uint256 timeToMaturity = bond.timeToMaturity();
@@ -986,7 +986,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
             timeToMaturity < maxTrancheMaturitySec);
     }
 
-    // @dev Enforces the total supply cap. To be invoked AFTER the mint operation.
+    /// @dev Enforces the total supply cap. To be invoked AFTER the mint operation.
     function _enforceTotalSupplyCap() private view {
         // checks if new total supply is within the max supply cap
         uint256 newSupply = totalSupply();
@@ -995,7 +995,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         }
     }
 
-    // @dev Enforces the per tranche supply cap. To be invoked AFTER the mint operation.
+    /// @dev Enforces the per tranche supply cap. To be invoked AFTER the mint operation.
     function _enforcePerTrancheSupplyCap(ITranche trancheIn) private view {
         // checks if supply minted using the given tranche is within the cap
         if (mintedSupplyPerTranche[trancheIn] > maxMintAmtPerTranche) {
@@ -1003,8 +1003,8 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         }
     }
 
-    // @dev Enforces that the percentage of the reserve value is within the target percentage.
-    //      To be invoked AFTER the rollover operation.
+    /// @dev Enforces that the percentage of the reserve value is within the target percentage.
+    ///      To be invoked AFTER the rollover operation.
     function _enforceMatureValueTarget() private view {
         uint256 matureValue = (_matureTrancheBalance * computePrice(_reserveAt(0)));
         uint256 matureValuePerc = (matureValue * HUNDRED_PERC) / _reserveValue();
@@ -1013,23 +1013,23 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         }
     }
 
-    // @dev Counts the number of tokens currently in the reserve.
+    /// @dev Counts the number of tokens currently in the reserve.
     function _reserveCount() private view returns (uint256) {
         return _reserves.length();
     }
 
-    // @dev Fetches the reserve token by index.
+    /// @dev Fetches the reserve token by index.
     function _reserveAt(uint256 i) private view returns (IERC20Upgradeable) {
         return IERC20Upgradeable(_reserves.at(i));
     }
 
-    // @dev Checks if the given token is in the reserve.
+    /// @dev Checks if the given token is in the reserve.
     function _inReserve(IERC20Upgradeable token) private view returns (bool) {
         return _reserves.contains(address(token));
     }
 
-    // @dev Calculates the total value of all the tranches in the reserve.
-    //      Value of each reserve tranche is calculated as = (trancheDiscount . trancheBalance) . tranchePrice.
+    /// @dev Calculates the total value of all the tranches in the reserve.
+    ///      Value of each reserve tranche is calculated as = (trancheDiscount . trancheBalance) . tranchePrice.
     function _reserveValue() private view returns (uint256) {
         // For the mature tranche we use the "virtual" tranche balance
         uint256 totalVal = (_matureTrancheBalance * computePrice(_reserveAt(0)));
@@ -1044,24 +1044,24 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         return totalVal;
     }
 
-    // @dev Checks if the given token is the mature tranche, ie) the underlying collateral token.
+    /// @dev Checks if the given token is the mature tranche, ie) the underlying collateral token.
     function _isMatureTranche(IERC20Upgradeable token) private view returns (bool) {
         return (token == _reserveAt(0));
     }
 
-    // @dev Fetches the reserve's token balance.
+    /// @dev Fetches the reserve's token balance.
     function _reserveBalance(IERC20Upgradeable token) private view returns (uint256) {
         return token.balanceOf(reserve());
     }
 
-    // @dev Calculates the standardized tranche amount for internal book keeping.
-    //      stdTrancheAmt = (trancheAmt * discount).
+    /// @dev Calculates the standardized tranche amount for internal book keeping.
+    ///      stdTrancheAmt = (trancheAmt * discount).
     function _toStdTrancheAmt(uint256 trancheAmt, uint256 discount) private pure returns (uint256) {
         return ((trancheAmt * discount) / UNIT_DISCOUNT);
     }
 
-    // @dev Calculates the external tranche amount from the internal standardized tranche amount.
-    //      trancheAmt = stdTrancheAmt / discount.
+    /// @dev Calculates the external tranche amount from the internal standardized tranche amount.
+    ///      trancheAmt = stdTrancheAmt / discount.
     function _fromStdTrancheAmt(uint256 stdTrancheAmt, uint256 discount) private pure returns (uint256) {
         return ((stdTrancheAmt * UNIT_DISCOUNT) / discount);
     }

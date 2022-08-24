@@ -7,7 +7,7 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { IPricingStrategy } from "../_interfaces/IPricingStrategy.sol";
 
-/*
+/**
  *  @title CDRPricingStrategy (CDR -> collateral to debt ratio)
  *
  *  @notice Prices the given tranche token based on it's CDR.
@@ -26,7 +26,7 @@ contract CDRPricingStrategy is IPricingStrategy {
     }
 
     /// @inheritdoc IPricingStrategy
-    // @dev Selective handling for collateral for mature tranches are held by the perp reserve.
+    /// @dev Selective handling for collateral for mature tranches are held by the perp reserve.
     function computeMatureTranchePrice(
         IERC20Upgradeable, /* collateralToken */
         uint256 collateralBalance,
