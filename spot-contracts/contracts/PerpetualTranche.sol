@@ -46,11 +46,6 @@ error UnacceptableDepositTranche(ITranche trancheIn, IBondController depositBond
 /// @param perpAmtMint The amount of tranche tokens mint.
 error UnacceptableMintAmt(uint256 trancheInAmt, uint256 perpAmtMint);
 
-/// @notice Expected to redeem current redemption tranche.
-/// @param trancheOut Address of the withdrawn tranche.
-/// @param redemptionTranche Address of the next tranche up for redemption.
-error UnacceptableRedemptionTranche(ITranche trancheOut, ITranche redemptionTranche);
-
 /// @notice Expected to burn a non-zero amount of tokens.
 /// @param requestedBurnAmt The amount of tranche tokens requested to be burnt.
 /// @param perpSupply The current supply of perp tokens.
