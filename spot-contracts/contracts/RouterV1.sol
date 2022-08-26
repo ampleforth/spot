@@ -93,7 +93,7 @@ contract RouterV1 {
     // @param perp Address of the perp contract.
     // @param bond Address of the deposit bond.
     // @param collateralAmount The amount of collateral the user wants to tranche.
-    // @param feePaid The fee paid to the perp contract to mint perp.
+    // @param feePaid The fee paid to the perp contract to mint perp when the fee token is not the perp token itself, otherwise 0.
     // @dev Fee to be paid should be pre-computed off-chain using the preview function.
     function trancheAndDeposit(
         IPerpetualTranche perp,
