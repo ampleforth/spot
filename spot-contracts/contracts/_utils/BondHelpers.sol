@@ -17,17 +17,17 @@ struct TrancheData {
     uint8 trancheCount;
 }
 
-/*
+/**
  *  @title TrancheDataHelpers
  *
  *  @notice Library with helper functions the bond's retrieved tranche data.
  *
  */
 library TrancheDataHelpers {
-    // @notice Iterates through the tranche data to find the seniority index of the given tranche.
-    // @param td The tranche data object.
-    // @param t The address of the tranche to check.
-    // @return the index of the tranche in the tranches array.
+    /// @notice Iterates through the tranche data to find the seniority index of the given tranche.
+    /// @param td The tranche data object.
+    /// @param t The address of the tranche to check.
+    /// @return the index of the tranche in the tranches array.
     function getTrancheIndex(TrancheData memory td, ITranche t) internal pure returns (uint256) {
         for (uint8 i = 0; i < td.trancheCount; i++) {
             if (td.tranches[i] == t) {
@@ -38,16 +38,16 @@ library TrancheDataHelpers {
     }
 }
 
-/*
+/**
  *  @title TrancheHelpers
  *
  *  @notice Library with helper functions tranche tokens.
  *
  */
 library TrancheHelpers {
-    // @notice Given a tranche, looks up the collateral balance backing the tranche supply.
-    // @param t Address of the tranche token.
-    // @return The collateral balance and the tranche token supply.
+    /// @notice Given a tranche, looks up the collateral balance backing the tranche supply.
+    /// @param t Address of the tranche token.
+    /// @return The collateral balance and the tranche token supply.
     function getTrancheCollateralization(ITranche t) internal view returns (uint256, uint256) {
         IBondController bond = IBondController(t.bond());
         TrancheData memory td;
@@ -59,7 +59,7 @@ library TrancheHelpers {
     }
 }
 
-/*
+/**
  *  @title BondHelpers
  *
  *  @notice Library with helper functions for ButtonWood's Bond contract.
@@ -71,25 +71,25 @@ library BondHelpers {
     uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
     uint256 private constant BPS = 10_000;
 
-    // @notice Given a bond, calculates the time remaining to maturity.
-    // @param b The address of the bond contract.
-    // @return The number of seconds before the bond reaches maturity.
+    /// @notice Given a bond, calculates the time remaining to maturity.
+    /// @param b The address of the bond contract.
+    /// @return The number of seconds before the bond reaches maturity.
     function timeToMaturity(IBondController b) internal view returns (uint256) {
         uint256 maturityDate = b.maturityDate();
         return maturityDate > block.timestamp ? maturityDate - block.timestamp : 0;
     }
 
-    // @notice Given a bond, calculates the bond duration i.e)
-    //         difference between creation time and maturity time.
-    // @param b The address of the bond contract.
-    // @return The duration in seconds.
+    /// @notice Given a bond, calculates the bond duration i.e)
+    ///         difference between creation time and maturity time.
+    /// @param b The address of the bond contract.
+    /// @return The duration in seconds.
     function duration(IBondController b) internal view returns (uint256) {
         return b.maturityDate() - b.creationDate();
     }
 
-    // @notice Given a bond, retrieves all of the bond's tranche related data.
-    // @param b The address of the bond contract.
-    // @return The tranche data.
+    /// @notice Given a bond, retrieves all of the bond's tranche related data.
+    /// @param b The address of the bond contract.
+    /// @return The tranche data.
     function getTrancheData(IBondController b) internal view returns (TrancheData memory) {
         TrancheData memory td;
         td.trancheCount = SafeCastUpgradeable.toUint8(b.trancheCount());
@@ -104,11 +104,11 @@ library BondHelpers {
         return td;
     }
 
-    // @notice Helper function to estimate the amount of tranches minted when a given amount of collateral
-    //         is deposited into the bond.
-    // @dev This function is used off-chain services (using callStatic) to preview tranches minted after
-    // @param b The address of the bond contract.
-    // @return The tranche data, an array of tranche amounts and fees.
+    /// @notice Helper function to estimate the amount of tranches minted when a given amount of collateral
+    ///         is deposited into the bond.
+    /// @dev This function is used off-chain services (using callStatic) to preview tranches minted after
+    /// @param b The address of the bond contract.
+    /// @return The tranche data, an array of tranche amounts and fees.
     function previewDeposit(IBondController b, uint256 collateralAmount)
         internal
         view
@@ -141,12 +141,12 @@ library BondHelpers {
         return (td, trancheAmts, fees);
     }
 
-    // @notice Given a bond, for each tranche token retrieves the total collateral redeemable
-    //         for the total supply of the tranche token (aka debt issued).
-    // @dev The cdr can be computed for each tranche by dividing the
-    //      returned tranche's collateralBalance by the tranche's totalSupply.
-    // @param b The address of the bond contract.
-    // @return The tranche data and the list of collateral balances and the total supplies for each tranche.
+    /// @notice Given a bond, for each tranche token retrieves the total collateral redeemable
+    ///         for the total supply of the tranche token (aka debt issued).
+    /// @dev The cdr can be computed for each tranche by dividing the
+    ///      returned tranche's collateralBalance by the tranche's totalSupply.
+    /// @param b The address of the bond contract.
+    /// @return The tranche data and the list of collateral balances and the total supplies for each tranche.
     function getTrancheCollateralizations(IBondController b)
         internal
         view
@@ -191,11 +191,11 @@ library BondHelpers {
         return (td, collateralBalances, trancheSupplies);
     }
 
-    // @notice Given a bond, retrieves the collateral redeemable for
-    //         each tranche held by the given address.
-    // @param b The address of the bond contract.
-    // @param u The address to check balance for.
-    // @return The tranche data and an array of collateral balances.
+    /// @notice Given a bond, retrieves the collateral redeemable for
+    ///         each tranche held by the given address.
+    /// @param b The address of the bond contract.
+    /// @param u The address to check balance for.
+    /// @return The tranche data and an array of collateral balances.
     function getTrancheCollateralBalances(IBondController b, address u)
         internal
         view

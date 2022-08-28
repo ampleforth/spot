@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.15;
 
-/*
+/**
  *  @title SignedMathHelpers
  *
  *  @notice Library with helper functions for signed integer math.

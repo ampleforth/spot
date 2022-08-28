@@ -31,22 +31,22 @@ contract TrancheClassDiscountStrategy is IDiscountStrategy, OwnableUpgradeable {
 
     uint8 private constant DECIMALS = 18;
 
-    // @notice Mapping between a tranche class and the discount to be applied.
+    /// @notice Mapping between a tranche class and the discount to be applied.
     mapping(bytes32 => uint256) private _trancheDiscounts;
 
-    // @notice Event emitted when the defined tranche discounts are updated.
-    // @param hash The tranche class hash.
-    // @param discount The discount factor for any tranche belonging to that class.
+    /// @notice Event emitted when the defined tranche discounts are updated.
+    /// @param hash The tranche class hash.
+    /// @param discount The discount factor for any tranche belonging to that class.
     event UpdatedDefinedTrancheDiscounts(bytes32 hash, uint256 discount);
 
-    // @notice Contract initializer.
+    /// @notice Contract initializer.
     function init() public initializer {
         __Ownable_init();
     }
 
-    // @notice Updates the tranche class's discount.
-    // @param classHash The tranche class (hash(collteralToken, trancheRatios, seniority)).
-    // @param discount The discount factor.
+    /// @notice Updates the tranche class's discount.
+    /// @param classHash The tranche class (hash(collteralToken, trancheRatios, seniority)).
+    /// @param discount The discount factor.
     function updateDefinedDiscount(bytes32 classHash, uint256 discount) public onlyOwner {
         if (discount > 0) {
             _trancheDiscounts[classHash] = discount;
@@ -66,11 +66,11 @@ contract TrancheClassDiscountStrategy is IDiscountStrategy, OwnableUpgradeable {
         return DECIMALS;
     }
 
-    // @notice The computes the class hash of a given tranche.
-    // @dev A given tranche's computed class is the hash(collateralToken, trancheRatios, seniority).
-    //      This is used to identify different tranche tokens instances of the same class
-    // @param tranche The address of the tranche token.
-    // @return The class hash.
+    /// @notice The computes the class hash of a given tranche.
+    /// @dev A given tranche's computed class is the hash(collateralToken, trancheRatios, seniority).
+    ///      This is used to identify different tranche tokens instances of the same class
+    /// @param tranche The address of the tranche token.
+    /// @return The class hash.
     function trancheClass(ITranche tranche) public view returns (bytes32) {
         IBondController bond = IBondController(tranche.bond());
         TrancheData memory td = bond.getTrancheData();
