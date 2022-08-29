@@ -5,7 +5,7 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { IPricingStrategy } from "../_interfaces/IPricingStrategy.sol";
 
-/*
+/**
  *  @title UnitPricingStrategy
  *
  *  @notice All tranche tokens are assumed to have a price of 1.

@@ -72,15 +72,15 @@ task("deploy:PerpetualTranche")
     const pricingStrategy = await PricingStrategy.deploy();
     await pricingStrategy.deployed();
 
-    const TrancheClassYieldStrategy = await hre.ethers.getContractFactory("TrancheClassYieldStrategy");
-    const yieldStrategy = await TrancheClassYieldStrategy.deploy();
-    await yieldStrategy.deployed();
-    await yieldStrategy.init();
+    const TrancheClassDiscountStrategy = await hre.ethers.getContractFactory("TrancheClassDiscountStrategy");
+    const discountStrategy = await TrancheClassDiscountStrategy.deploy();
+    await discountStrategy.deployed();
+    await discountStrategy.init();
 
     console.log("perp", perp.address);
     console.log("feeStrategy", feeStrategy.address);
     console.log("pricingStrategy", pricingStrategy.address);
-    console.log("yieldStrategy", yieldStrategy.address);
+    console.log("discountStrategy", discountStrategy.address);
 
     const initTx = await perp.init(
       name,
@@ -89,7 +89,7 @@ task("deploy:PerpetualTranche")
       bondIssuerAddress,
       feeStrategy.address,
       pricingStrategy.address,
-      yieldStrategy.address,
+      discountStrategy.address,
     );
     await initTx.wait();
 
@@ -103,7 +103,7 @@ task("deploy:PerpetualTranche")
     });
 
     await hre.run("verify:contract", {
-      address: yieldStrategy.address,
+      address: discountStrategy.address,
     });
 
     await hre.run("verify:contract", {
@@ -111,22 +111,22 @@ task("deploy:PerpetualTranche")
     });
   });
 
-task("deploy:YieldStrategy:setYield")
-  .addParam("yieldStrategyAddress", "the address of the yield strategy contract", undefined, types.string, false)
+task("deploy:DiscountStrategy:setDiscount")
+  .addParam("discountStrategyAddress", "the address of the discount strategy contract", undefined, types.string, false)
   .addParam("collateralTokenAddress", "the address of the collateral token", undefined, types.string, false)
   .addParam("trancheRatios", "the bond's tranche ratios", undefined, types.json, false)
   .addParam("trancheIndex", "the tranche's index", undefined, types.string, false)
-  .addParam("trancheYield", "the yields to be set in float", undefined, types.string, false)
+  .addParam("trancheDiscount", "the discounts to be set in float", undefined, types.string, false)
   .setAction(async function (args: TaskArguments, hre) {
-    const { yieldStrategyAddress, collateralTokenAddress, trancheRatios, trancheIndex, trancheYield } = args;
-    const yieldStrategy = await hre.ethers.getContractAt("TrancheClassYieldStrategy", yieldStrategyAddress);
+    const { discountStrategyAddress, collateralTokenAddress, trancheRatios, trancheIndex, trancheDiscount } = args;
+    const discountStrategy = await hre.ethers.getContractAt("TrancheClassDiscountStrategy", discountStrategyAddress);
     const abiCoder = new hre.ethers.utils.AbiCoder();
     const hash = hre.ethers.utils.keccak256(
       abiCoder.encode(["address", "uint256[]", "uint256"], [collateralTokenAddress, trancheRatios, trancheIndex]),
     );
-    const tx = await yieldStrategy.updateDefinedYield(
+    const tx = await discountStrategy.updateDefinedDiscount(
       hash,
-      hre.ethers.utils.parseUnits(trancheYield, await yieldStrategy.decimals()),
+      hre.ethers.utils.parseUnits(trancheDiscount, await discountStrategy.decimals()),
     );
     console.log(tx.hash);
     await tx.wait();

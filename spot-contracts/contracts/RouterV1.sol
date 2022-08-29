@@ -11,7 +11,7 @@ import { ITranche } from "./_interfaces/buttonwood/ITranche.sol";
 import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
 import { IPerpetualTranche } from "./_interfaces/IPerpetualTranche.sol";
 
-/*
+/**
  *  @title RouterV1
  *
  *  @notice Contract to dry-run and batch multiple operations.
@@ -35,12 +35,12 @@ contract RouterV1 {
         _;
     }
 
-    // @notice Calculates the amount of tranche tokens minted after depositing into the deposit bond.
-    // @dev Used by off-chain services to preview a tranche operation.
-    // @param perp Address of the perp contract.
-    // @param collateralAmount The amount of collateral the user wants to tranche.
-    // @return bond The address of the current deposit bond.
-    // @return trancheAmts The tranche token amounts minted.
+    /// @notice Calculates the amount of tranche tokens minted after depositing into the deposit bond.
+    /// @dev Used by off-chain services to preview a tranche operation.
+    /// @param perp Address of the perp contract.
+    /// @param collateralAmount The amount of collateral the user wants to tranche.
+    /// @return bond The address of the current deposit bond.
+    /// @return trancheAmts The tranche token amounts minted.
     function previewTranche(IPerpetualTranche perp, uint256 collateralAmount)
         external
         afterPerpStateUpdate(perp)
@@ -59,14 +59,14 @@ contract RouterV1 {
         return (bond, td.tranches, trancheAmts);
     }
 
-    // @notice Calculates the amount of perp tokens minted and fees for the operation.
-    // @dev Used by off-chain services to preview a deposit operation.
-    // @param perp Address of the perp contract.
-    // @param trancheIn The address of the tranche token to be deposited.
-    // @param trancheInAmt The amount of tranche tokens deposited.
-    // @return mintAmt The amount of perp tokens minted.
-    // @return feeToken The address of the fee token.
-    // @return mintFee The fee charged for minting.
+    /// @notice Calculates the amount of perp tokens minted and fees for the operation.
+    /// @dev Used by off-chain services to preview a deposit operation.
+    /// @param perp Address of the perp contract.
+    /// @param trancheIn The address of the tranche token to be deposited.
+    /// @param trancheInAmt The amount of tranche tokens deposited.
+    /// @return mintAmt The amount of perp tokens minted.
+    /// @return feeToken The address of the fee token.
+    /// @return mintFee The fee charged for minting.
     function previewDeposit(
         IPerpetualTranche perp,
         ITranche trancheIn,
@@ -87,14 +87,14 @@ contract RouterV1 {
         return (mintAmt, feeToken, mintFee);
     }
 
-    // @notice Tranches the collateral using the current deposit bond and then deposits individual tranches
-    //         to mint perp tokens. It transfers the perp tokens back to the
-    //         transaction sender along with any unused tranches and fees.
-    // @param perp Address of the perp contract.
-    // @param bond Address of the deposit bond.
-    // @param collateralAmount The amount of collateral the user wants to tranche.
-    // @param feePaid The fee paid to the perp contract to mint perp when the fee token is not the perp token itself, otherwise 0.
-    // @dev Fee to be paid should be pre-computed off-chain using the preview function.
+    /// @notice Tranches the collateral using the current deposit bond and then deposits individual tranches
+    ///         to mint perp tokens. It transfers the perp tokens back to the
+    ///         transaction sender along with any unused tranches and fees.
+    /// @param perp Address of the perp contract.
+    /// @param bond Address of the deposit bond.
+    /// @param collateralAmount The amount of collateral the user wants to tranche.
+    /// @param feePaid The fee paid to the perp contract to mint perp when the fee token is not the perp token itself, otherwise 0.
+    /// @dev Fee to be paid should be pre-computed off-chain using the preview function.
     function trancheAndDeposit(
         IPerpetualTranche perp,
         IBondController bond,
@@ -151,15 +151,15 @@ contract RouterV1 {
         perp.safeTransfer(msg.sender, perp.balanceOf(address(this)));
     }
 
-    // @notice Calculates the reserve tokens that can be redeemed from the queue
-    //         for burning up to the requested amount of perp tokens.
-    // @dev Used by off-chain services to preview a redeem operation.
-    // @param perp Address of the perp contract.
-    // @param perpAmtBurnt The amount of perp tokens requested to be burnt.
-    // @return reserveTokens The list of reserve tokens redeemed.
-    // @return redemptionAmts The list of reserve token amounts redeemed.
-    // @return feeToken The address of the fee token.
-    // @return burnFee The fee charged for burning.
+    /// @notice Calculates the reserve tokens that can be redeemed from the queue
+    ///         for burning up to the requested amount of perp tokens.
+    /// @dev Used by off-chain services to preview a redeem operation.
+    /// @param perp Address of the perp contract.
+    /// @param perpAmtBurnt The amount of perp tokens requested to be burnt.
+    /// @return reserveTokens The list of reserve tokens redeemed.
+    /// @return redemptionAmts The list of reserve token amounts redeemed.
+    /// @return feeToken The address of the fee token.
+    /// @return burnFee The fee charged for burning.
     function previewRedeem(IPerpetualTranche perp, uint256 perpAmtBurnt)
         external
         afterPerpStateUpdate(perp)
@@ -179,18 +179,18 @@ contract RouterV1 {
         return (reserveTokens, redemptionAmts, feeToken, burnFee);
     }
 
-    // @notice Calculates the amount tranche tokens that can be rolled out, remainders and fees,
-    //         with a given tranche token rolled in and amount.
-    // @dev Used by off-chain services to preview a rollover operation.
-    // @param perp Address of the perp contract.
-    // @param trancheIn The tranche token deposited.
-    // @param tokenOut The reserve token requested to be withdrawn.
-    // @param trancheInAmt The amount of trancheIn tokens available to deposit.
-    // @param maxTokenOutAmtUsed The token balance to be used for rollover.
-    // @dev Set maxTokenOutAmtUsed to max(uint256) to use the entire balance.
-    // @return r The amounts rolled over and remaining.
-    // @return feeToken The address of the fee token.
-    // @return rolloverFee The fee paid by the caller.
+    /// @notice Calculates the amount tranche tokens that can be rolled out, remainders and fees,
+    ///         with a given tranche token rolled in and amount.
+    /// @dev Used by off-chain services to preview a rollover operation.
+    /// @param perp Address of the perp contract.
+    /// @param trancheIn The tranche token deposited.
+    /// @param tokenOut The reserve token requested to be withdrawn.
+    /// @param trancheInAmtRequested The amount of trancheIn tokens available to deposit.
+    /// @param maxTokenOutAmtUsed The token balance to be used for rollover.
+    /// @dev Set maxTokenOutAmtUsed to max(uint256) to use the entire balance.
+    /// @return r The amounts rolled over and remaining.
+    /// @return feeToken The address of the fee token.
+    /// @return rolloverFee The fee paid by the caller.
     function previewRollover(
         IPerpetualTranche perp,
         ITranche trancheIn,
@@ -226,12 +226,12 @@ contract RouterV1 {
         uint256 trancheInAmt;
     }
 
-    // @notice Tranches collateral and performs a batch rollover.
-    // @param perp Address of the perp contract.
-    // @param bond Address of the deposit bond.
-    // @param collateralAmount The amount of collateral the user wants to tranche.
-    // @param rollovers List of batch rollover operations pre-computed off-chain.
-    // @param feePaid The fee paid by the user performing rollover (fee could be negative).
+    /// @notice Tranches collateral and performs a batch rollover.
+    /// @param perp Address of the perp contract.
+    /// @param bond Address of the deposit bond.
+    /// @param collateralAmount The amount of collateral the user wants to tranche.
+    /// @param rollovers List of batch rollover operations pre-computed off-chain.
+    /// @param feePaid The fee paid by the user performing rollover (fee could be negative).
     function trancheAndRollover(
         IPerpetualTranche perp,
         IBondController bond,
@@ -297,7 +297,7 @@ contract RouterV1 {
         }
     }
 
-    // @dev Checks if the spender has sufficient allowance. If not, approves the maximum possible amount.
+    /// @dev Checks if the spender has sufficient allowance. If not, approves the maximum possible amount.
     function _checkAndApproveMax(
         IERC20Upgradeable token,
         address spender,

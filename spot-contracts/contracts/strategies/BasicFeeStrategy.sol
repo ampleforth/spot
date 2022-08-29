@@ -14,7 +14,7 @@ import { IPerpetualTranche } from "../_interfaces/IPerpetualTranche.sol";
 /// @param perc The percentage value.
 error UnacceptablePercValue(int256 perc);
 
-/*
+/**
  *  @title BasicFeeStrategy
  *
  *  @notice Basic fee strategy using fixed percentages. This strategy extracts NO protocol fees.
@@ -29,7 +29,7 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     using SafeCastUpgradeable for uint256;
     using SafeCastUpgradeable for int256;
 
-    // @dev {10 ** PERC_DECIMALS} is considered 1%
+    /// @dev {10 ** PERC_DECIMALS} is considered 1%
     uint8 public constant PERC_DECIMALS = 6;
     uint256 public constant UNIT_PERC = 10**PERC_DECIMALS;
     uint256 public constant HUNDRED_PERC = 100 * UNIT_PERC;
@@ -38,39 +38,39 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     IERC20Upgradeable public immutable override feeToken;
 
-    // @notice Fixed percentage of the mint amount to be used as fee.
+    /// @notice Fixed percentage of the mint amount to be used as fee.
     int256 public mintFeePerc;
 
-    // @notice Fixed percentage of the burn amount to be used as fee.
+    /// @notice Fixed percentage of the burn amount to be used as fee.
     int256 public burnFeePerc;
 
-    // @notice Fixed percentage of the rollover amount to be used as fee.
+    /// @notice Fixed percentage of the rollover amount to be used as fee.
     int256 public rolloverFeePerc;
 
     // EVENTS
 
-    // @notice Event emitted when the mint fee percentage is updated.
-    // @param mintFeePerc Mint fee percentage.
+    /// @notice Event emitted when the mint fee percentage is updated.
+    /// @param mintFeePerc Mint fee percentage.
     event UpdatedMintPerc(int256 mintFeePerc);
 
-    // @notice Event emitted when the burn fee percentage is updated.
-    // @param burnFeePerc Burn fee percentage.
+    /// @notice Event emitted when the burn fee percentage is updated.
+    /// @param burnFeePerc Burn fee percentage.
     event UpdatedBurnPerc(int256 burnFeePerc);
 
-    // @notice Event emitted when the rollover fee percentage is updated.
-    // @param rolloverFeePerc Rollover fee percentage.
+    /// @notice Event emitted when the rollover fee percentage is updated.
+    /// @param rolloverFeePerc Rollover fee percentage.
     event UpdatedRolloverPerc(int256 rolloverFeePerc);
 
-    // @notice Contract constructor.
-    // @param feeToken_ Address of the fee ERC-20 token contract.
+    /// @notice Contract constructor.
+    /// @param feeToken_ Address of the fee ERC-20 token contract.
     constructor(IERC20Upgradeable feeToken_) {
         feeToken = feeToken_;
     }
 
-    // @notice Contract initializer.
-    // @param mintFeePerc_ Mint fee percentage.
-    // @param burnFeePerc_ Burn fee percentage.
-    // @param rolloverFeePerc_ Rollover fee percentage.
+    /// @notice Contract initializer.
+    /// @param mintFeePerc_ Mint fee percentage.
+    /// @param burnFeePerc_ Burn fee percentage.
+    /// @param rolloverFeePerc_ Rollover fee percentage.
     function init(
         int256 mintFeePerc_,
         int256 burnFeePerc_,
@@ -82,22 +82,22 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
         updateRolloverFeePerc(rolloverFeePerc_);
     }
 
-    // @notice Updates the mint fee percentage.
-    // @param mintFeePerc_ New mint fee percentage.
+    /// @notice Updates the mint fee percentage.
+    /// @param mintFeePerc_ New mint fee percentage.
     function updateMintFeePerc(int256 mintFeePerc_) public onlyOwner {
         mintFeePerc = mintFeePerc_;
         emit UpdatedMintPerc(mintFeePerc_);
     }
 
-    // @notice Updates the burn fee percentage.
-    // @param burnFeePerc_ New burn fee percentage.
+    /// @notice Updates the burn fee percentage.
+    /// @param burnFeePerc_ New burn fee percentage.
     function updateBurnFeePerc(int256 burnFeePerc_) public onlyOwner {
         burnFeePerc = burnFeePerc_;
         emit UpdatedBurnPerc(burnFeePerc_);
     }
 
-    // @notice Updates the rollover fee percentage.
-    // @param rolloverFeePerc_ New rollover fee percentage.
+    /// @notice Updates the rollover fee percentage.
+    /// @param rolloverFeePerc_ New rollover fee percentage.
     function updateRolloverFeePerc(int256 rolloverFeePerc_) public onlyOwner {
         rolloverFeePerc = rolloverFeePerc_;
         emit UpdatedRolloverPerc(rolloverFeePerc_);

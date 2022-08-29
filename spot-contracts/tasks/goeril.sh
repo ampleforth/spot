@@ -20,12 +20,12 @@ yarn hardhat --network goerli deploy:PerpetualTranche \
   --min-matuirty-sec "600" \
   --max-matuirty-sec "3600"
 
-yarn hardhat --network goerli deploy:YieldStrategy:setYield \
-  --yield-strategy-address "0x67d82378B5a6E78549C619E8514d97D6FE7fCCbB" \
+yarn hardhat --network goerli deploy:DiscountStrategy:setDiscount \
+  --discount-strategy-address "0x67d82378B5a6E78549C619E8514d97D6FE7fCCbB" \
   --collateral-token-address "0x14f6e47F3237213E4B7E1dAEc273545df524039F" \
   --tranche-ratios "[500,500]" \
   --tranche-index "0" \
-  --tranche-yield "1.0"
+  --tranche-discount "1.0"
 
 yarn hardhat --network goerli deploy:Router
 

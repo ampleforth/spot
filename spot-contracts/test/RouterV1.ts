@@ -9,7 +9,7 @@ import {
   bondAt,
   getTranches,
   toFixedPtAmt,
-  toYieldFixedPtAmt,
+  toDiscountFixedPtAmt,
   toPriceFixedPtAmt,
   advancePerpQueue,
   mintCollteralToken,
@@ -22,7 +22,7 @@ let perp: Contract,
   issuer: Contract,
   feeStrategy: Contract,
   pricingStrategy: Contract,
-  yieldStrategy: Contract,
+  discountStrategy: Contract,
   deployer: Signer,
   deployerAddress: string,
   router: Contract,
@@ -49,8 +49,8 @@ describe("RouterV1", function () {
     const PricingStrategy = await ethers.getContractFactory("MockPricingStrategy");
     pricingStrategy = await PricingStrategy.deploy();
 
-    const YieldStrategy = await ethers.getContractFactory("MockYieldStrategy");
-    yieldStrategy = await YieldStrategy.deploy();
+    const DiscountStrategy = await ethers.getContractFactory("MockDiscountStrategy");
+    discountStrategy = await DiscountStrategy.deploy();
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -62,7 +62,7 @@ describe("RouterV1", function () {
         issuer.address,
         feeStrategy.address,
         pricingStrategy.address,
-        yieldStrategy.address,
+        discountStrategy.address,
       ],
       {
         initializer: "init(string,string,address,address,address,address,address)",
@@ -75,10 +75,10 @@ describe("RouterV1", function () {
     depositTranches = await getTranches(depositBond);
 
     await pricingStrategy.setTranchePrice(depositTranches[0].address, toPriceFixedPtAmt("1"));
-    await yieldStrategy.setTrancheYield(depositTranches[0].address, toYieldFixedPtAmt("1"));
+    await discountStrategy.setTrancheDiscount(depositTranches[0].address, toDiscountFixedPtAmt("1"));
 
     await pricingStrategy.setTranchePrice(depositTranches[1].address, toPriceFixedPtAmt("1"));
-    await yieldStrategy.setTrancheYield(depositTranches[1].address, toYieldFixedPtAmt("0.75"));
+    await discountStrategy.setTrancheDiscount(depositTranches[1].address, toDiscountFixedPtAmt("0.75"));
 
     await feeStrategy.setFeeToken(perp.address);
     await feeStrategy.setMintFee(toFixedPtAmt("0"));
@@ -147,9 +147,9 @@ describe("RouterV1", function () {
       await depositIntoBond(depositBond1, toFixedPtAmt("1000"), deployer);
 
       await pricingStrategy.setTranchePrice(depositTranches1[0].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(depositTranches1[0].address, toYieldFixedPtAmt("1"));
+      await discountStrategy.setTrancheDiscount(depositTranches1[0].address, toDiscountFixedPtAmt("1"));
       await pricingStrategy.setTranchePrice(depositTranches1[1].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(depositTranches1[1].address, toYieldFixedPtAmt("0.75"));
+      await discountStrategy.setTrancheDiscount(depositTranches1[1].address, toDiscountFixedPtAmt("0.75"));
 
       await depositTranches1[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(depositTranches1[0].address, toFixedPtAmt("200"));
@@ -163,9 +163,9 @@ describe("RouterV1", function () {
       await depositIntoBond(depositBond2, toFixedPtAmt("1000"), deployer);
 
       await pricingStrategy.setTranchePrice(depositTranches2[0].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(depositTranches2[0].address, toYieldFixedPtAmt("1"));
+      await discountStrategy.setTrancheDiscount(depositTranches2[0].address, toDiscountFixedPtAmt("1"));
       await pricingStrategy.setTranchePrice(depositTranches2[1].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(depositTranches2[1].address, toYieldFixedPtAmt("0.75"));
+      await discountStrategy.setTrancheDiscount(depositTranches2[1].address, toDiscountFixedPtAmt("0.75"));
 
       await depositTranches2[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(depositTranches2[0].address, toFixedPtAmt("200"));
@@ -179,9 +179,9 @@ describe("RouterV1", function () {
       await depositIntoBond(depositBond3, toFixedPtAmt("1000"), deployer);
 
       await pricingStrategy.setTranchePrice(depositTranches3[0].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(depositTranches3[0].address, toYieldFixedPtAmt("1"));
+      await discountStrategy.setTrancheDiscount(depositTranches3[0].address, toDiscountFixedPtAmt("1"));
       await pricingStrategy.setTranchePrice(depositTranches3[1].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(depositTranches3[1].address, toYieldFixedPtAmt("0.75"));
+      await discountStrategy.setTrancheDiscount(depositTranches3[1].address, toDiscountFixedPtAmt("0.75"));
 
       await depositTranches3[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(depositTranches3[0].address, toFixedPtAmt("200"));
@@ -283,9 +283,9 @@ describe("RouterV1", function () {
       await depositIntoBond(holdingPenBond, toFixedPtAmt("1000"), deployer);
 
       await pricingStrategy.setTranchePrice(holdingPenTranches[0].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(holdingPenTranches[0].address, toYieldFixedPtAmt("1"));
+      await discountStrategy.setTrancheDiscount(holdingPenTranches[0].address, toDiscountFixedPtAmt("1"));
       await pricingStrategy.setTranchePrice(holdingPenTranches[1].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(holdingPenTranches[1].address, toYieldFixedPtAmt("0.75"));
+      await discountStrategy.setTrancheDiscount(holdingPenTranches[1].address, toDiscountFixedPtAmt("0.75"));
 
       await holdingPenTranches[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(holdingPenTranches[0].address, toFixedPtAmt("200"));
@@ -299,9 +299,9 @@ describe("RouterV1", function () {
       await depositIntoBond(reserveBond, toFixedPtAmt("1000"), deployer);
 
       await pricingStrategy.setTranchePrice(reserveTranches[0].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(reserveTranches[0].address, toYieldFixedPtAmt("1"));
+      await discountStrategy.setTrancheDiscount(reserveTranches[0].address, toDiscountFixedPtAmt("1"));
       await pricingStrategy.setTranchePrice(reserveTranches[1].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(reserveTranches[1].address, toYieldFixedPtAmt("0.75"));
+      await discountStrategy.setTrancheDiscount(reserveTranches[1].address, toDiscountFixedPtAmt("0.75"));
 
       await reserveTranches[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(reserveTranches[0].address, toFixedPtAmt("200"));
@@ -315,9 +315,9 @@ describe("RouterV1", function () {
       await depositIntoBond(depositBond, toFixedPtAmt("1000"), deployer);
 
       await pricingStrategy.setTranchePrice(depositTranches[0].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(depositTranches[0].address, toYieldFixedPtAmt("1"));
+      await discountStrategy.setTrancheDiscount(depositTranches[0].address, toDiscountFixedPtAmt("1"));
       await pricingStrategy.setTranchePrice(depositTranches[1].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(depositTranches[1].address, toYieldFixedPtAmt("0.75"));
+      await discountStrategy.setTrancheDiscount(depositTranches[1].address, toDiscountFixedPtAmt("0.75"));
 
       await depositTranches[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(depositTranches[0].address, toFixedPtAmt("200"));
@@ -666,9 +666,9 @@ describe("RouterV1", function () {
       await depositIntoBond(holdingPenBond, toFixedPtAmt("1000"), deployer);
 
       await pricingStrategy.setTranchePrice(holdingPenTranches[0].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(holdingPenTranches[0].address, toYieldFixedPtAmt("1"));
+      await discountStrategy.setTrancheDiscount(holdingPenTranches[0].address, toDiscountFixedPtAmt("1"));
       await pricingStrategy.setTranchePrice(holdingPenTranches[1].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(holdingPenTranches[1].address, toYieldFixedPtAmt("1"));
+      await discountStrategy.setTrancheDiscount(holdingPenTranches[1].address, toDiscountFixedPtAmt("1"));
 
       await holdingPenTranches[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(holdingPenTranches[0].address, toFixedPtAmt("200"));
@@ -682,9 +682,9 @@ describe("RouterV1", function () {
       await depositIntoBond(reserveBond, toFixedPtAmt("1000"), deployer);
 
       await pricingStrategy.setTranchePrice(reserveTranches[0].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(reserveTranches[0].address, toYieldFixedPtAmt("1"));
+      await discountStrategy.setTrancheDiscount(reserveTranches[0].address, toDiscountFixedPtAmt("1"));
       await pricingStrategy.setTranchePrice(reserveTranches[1].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(reserveTranches[1].address, toYieldFixedPtAmt("1"));
+      await discountStrategy.setTrancheDiscount(reserveTranches[1].address, toDiscountFixedPtAmt("1"));
 
       await reserveTranches[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(reserveTranches[0].address, toFixedPtAmt("200"));
@@ -697,9 +697,9 @@ describe("RouterV1", function () {
       depositTranches = await getTranches(depositBond);
 
       await pricingStrategy.setTranchePrice(depositTranches[0].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(depositTranches[0].address, toYieldFixedPtAmt("1"));
+      await discountStrategy.setTrancheDiscount(depositTranches[0].address, toDiscountFixedPtAmt("1"));
       await pricingStrategy.setTranchePrice(depositTranches[1].address, toPriceFixedPtAmt("1"));
-      await yieldStrategy.setTrancheYield(depositTranches[1].address, toYieldFixedPtAmt("1"));
+      await discountStrategy.setTrancheDiscount(depositTranches[1].address, toDiscountFixedPtAmt("1"));
     });
 
     describe("successful tranche & rollover and return the remainder", function () {

@@ -10,7 +10,7 @@ import {
   bondAt,
   getTranches,
   toFixedPtAmt,
-  toYieldFixedPtAmt,
+  toDiscountFixedPtAmt,
   toPriceFixedPtAmt,
   advancePerpQueue,
   advancePerpQueueToBondMaturity,
@@ -25,7 +25,7 @@ let perp: Contract,
   issuer: Contract,
   feeStrategy: Contract,
   pricingStrategy: Contract,
-  yieldStrategy: Contract,
+  discountStrategy: Contract,
   deployer: Signer,
   otherUser: Signer,
   deployerAddress: string,
@@ -57,8 +57,8 @@ describe("PerpetualTranche", function () {
     const PricingStrategy = await ethers.getContractFactory("MockPricingStrategy");
     pricingStrategy = await PricingStrategy.deploy();
 
-    const YieldStrategy = await ethers.getContractFactory("MockYieldStrategy");
-    yieldStrategy = await YieldStrategy.deploy();
+    const DiscountStrategy = await ethers.getContractFactory("MockDiscountStrategy");
+    discountStrategy = await DiscountStrategy.deploy();
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -70,7 +70,7 @@ describe("PerpetualTranche", function () {
         issuer.address,
         feeStrategy.address,
         pricingStrategy.address,
-        yieldStrategy.address,
+        discountStrategy.address,
       ],
       {
         initializer: "init(string,string,address,address,address,address,address)",
@@ -91,7 +91,7 @@ describe("PerpetualTranche", function () {
     await depositIntoBond(holdingPenBond, toFixedPtAmt("2000"), deployer);
 
     await pricingStrategy.setTranchePrice(holdingPenTranche1.address, toPriceFixedPtAmt("1"));
-    await yieldStrategy.setTrancheYield(holdingPenTranche1.address, toYieldFixedPtAmt("1"));
+    await discountStrategy.setTrancheDiscount(holdingPenTranche1.address, toDiscountFixedPtAmt("1"));
     await holdingPenTranche1.approve(perp.address, toFixedPtAmt("500"));
     await perp.deposit(holdingPenTranche1.address, toFixedPtAmt("500"));
 
@@ -103,12 +103,12 @@ describe("PerpetualTranche", function () {
     await depositIntoBond(reserveBond, toFixedPtAmt("2000"), deployer);
 
     await pricingStrategy.setTranchePrice(reserveTranche1.address, toPriceFixedPtAmt("1"));
-    await yieldStrategy.setTrancheYield(reserveTranche1.address, toYieldFixedPtAmt("1"));
+    await discountStrategy.setTrancheDiscount(reserveTranche1.address, toDiscountFixedPtAmt("1"));
     await reserveTranche1.approve(perp.address, toFixedPtAmt("500"));
     await perp.deposit(reserveTranche1.address, toFixedPtAmt("500"));
 
     await pricingStrategy.setTranchePrice(reserveTranche2.address, toPriceFixedPtAmt("1"));
-    await yieldStrategy.setTrancheYield(reserveTranche2.address, toYieldFixedPtAmt("0.5"));
+    await discountStrategy.setTrancheDiscount(reserveTranche2.address, toDiscountFixedPtAmt("0.5"));
     await reserveTranche2.approve(perp.address, toFixedPtAmt("1000"));
     await perp.deposit(reserveTranche2.address, toFixedPtAmt("1000"));
 
@@ -118,7 +118,7 @@ describe("PerpetualTranche", function () {
     [rolloverInTranche] = await getTranches(rolloverInBond);
 
     await pricingStrategy.setTranchePrice(rolloverInTranche.address, toPriceFixedPtAmt("1"));
-    await yieldStrategy.setTrancheYield(rolloverInTranche.address, toYieldFixedPtAmt("1"));
+    await discountStrategy.setTrancheDiscount(rolloverInTranche.address, toDiscountFixedPtAmt("1"));
 
     await depositIntoBond(rolloverInBond, toFixedPtAmt("5000"), deployer);
     await rolloverInTranche.approve(perp.address, toFixedPtAmt("5000"));
@@ -152,7 +152,7 @@ describe("PerpetualTranche", function () {
       let tranches: Contract[];
       beforeEach(async function () {
         tranches = await getTranches(rolloverInBond);
-        await yieldStrategy.setTrancheYield(tranches[1].address, toYieldFixedPtAmt("1"));
+        await discountStrategy.setTrancheDiscount(tranches[1].address, toDiscountFixedPtAmt("1"));
       });
       it("should revert", async function () {
         await expect(
@@ -233,7 +233,7 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when tokenIn yield is zero", function () {
+    describe("when tokenIn discount is zero", function () {
       let newRotationInTranche: Contract;
       beforeEach(async function () {
         const tranches = await getTranches(rolloverInBond);
@@ -260,12 +260,12 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when trancheIn yield is 0.5", function () {
+    describe("when trancheIn discount is 0.5", function () {
       let newRotationInTranche: Contract;
       beforeEach(async function () {
         const tranches = await getTranches(rolloverInBond);
         newRotationInTranche = tranches[1];
-        await yieldStrategy.setTrancheYield(newRotationInTranche.address, toYieldFixedPtAmt("0.5"));
+        await discountStrategy.setTrancheDiscount(newRotationInTranche.address, toDiscountFixedPtAmt("0.5"));
       });
 
       it("should rollover the correct amount", async function () {
@@ -283,7 +283,7 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when tokenOut yield is 0.5", function () {
+    describe("when tokenOut discount is 0.5", function () {
       it("should rollover the correct amount", async function () {
         const r = await perp.callStatic.computeRolloverAmt(
           rolloverInTranche.address,
@@ -431,13 +431,13 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("tokenIn yield is 0.5 and tokenOut is collateral which rebased up", function () {
+    describe("tokenIn discount is 0.5 and tokenOut is collateral which rebased up", function () {
       let rolloverInTranche2: Contract;
       beforeEach(async function () {
         const rolloverInTranches = await getTranches(rolloverInBond);
         rolloverInTranche2 = rolloverInTranches[1];
         await pricingStrategy.setTranchePrice(rolloverInTranche2.address, toPriceFixedPtAmt("1"));
-        await yieldStrategy.setTrancheYield(rolloverInTranche2.address, toYieldFixedPtAmt("0.5"));
+        await discountStrategy.setTrancheDiscount(rolloverInTranche2.address, toDiscountFixedPtAmt("0.5"));
         await pricingStrategy.setTranchePrice(collateralToken.address, toPriceFixedPtAmt("2"));
         await rebase(collateralToken, rebaseOracle, +1);
       });
@@ -458,13 +458,13 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("tokenIn yield is 0.5 and tokenOut is collateral which rebased down", function () {
+    describe("tokenIn discount is 0.5 and tokenOut is collateral which rebased down", function () {
       let rolloverInTranche2: Contract;
       beforeEach(async function () {
         const rolloverInTranches = await getTranches(rolloverInBond);
         rolloverInTranche2 = rolloverInTranches[1];
         await pricingStrategy.setTranchePrice(rolloverInTranche2.address, toPriceFixedPtAmt("1"));
-        await yieldStrategy.setTrancheYield(rolloverInTranche2.address, toYieldFixedPtAmt("0.5"));
+        await discountStrategy.setTrancheDiscount(rolloverInTranche2.address, toDiscountFixedPtAmt("0.5"));
         await pricingStrategy.setTranchePrice(collateralToken.address, toPriceFixedPtAmt("0.5"));
         await rebase(collateralToken, rebaseOracle, -0.5);
       });
@@ -555,13 +555,13 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when tokenIn has 0.5 yield, tokenOut is collateral has rebased down", function () {
+    describe("when tokenIn has 0.5 discount, tokenOut is collateral has rebased down", function () {
       let newRotationInTranche: Contract;
       beforeEach(async function () {
         const tranches = await getTranches(rolloverInBond);
         newRotationInTranche = tranches[1];
         await pricingStrategy.setTranchePrice(newRotationInTranche.address, toPriceFixedPtAmt("1"));
-        await yieldStrategy.setTrancheYield(newRotationInTranche.address, toYieldFixedPtAmt("0.5"));
+        await discountStrategy.setTrancheDiscount(newRotationInTranche.address, toDiscountFixedPtAmt("0.5"));
         await rebase(collateralToken, rebaseOracle, -0.25);
       });
       it("should rollover the correct amount", async function () {
@@ -579,13 +579,13 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when tokenIn has 0.5 yield, tokenOut is collateral has rebased up", function () {
+    describe("when tokenIn has 0.5 discount, tokenOut is collateral has rebased up", function () {
       let newRotationInTranche: Contract;
       beforeEach(async function () {
         const tranches = await getTranches(rolloverInBond);
         newRotationInTranche = tranches[1];
         await pricingStrategy.setTranchePrice(newRotationInTranche.address, toPriceFixedPtAmt("1"));
-        await yieldStrategy.setTrancheYield(newRotationInTranche.address, toYieldFixedPtAmt("0.5"));
+        await discountStrategy.setTrancheDiscount(newRotationInTranche.address, toDiscountFixedPtAmt("0.5"));
         await rebase(collateralToken, rebaseOracle, 0.25);
       });
       it("should rollover the correct amount", async function () {
@@ -603,13 +603,13 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when tokenIn has 0.5 yield, tokenOut is collateral has rebased down and NOT covered", function () {
+    describe("when tokenIn has 0.5 discount, tokenOut is collateral has rebased down and NOT covered", function () {
       let newRotationInTranche: Contract;
       beforeEach(async function () {
         const tranches = await getTranches(rolloverInBond);
         newRotationInTranche = tranches[1];
         await pricingStrategy.setTranchePrice(newRotationInTranche.address, toPriceFixedPtAmt("1"));
-        await yieldStrategy.setTrancheYield(newRotationInTranche.address, toYieldFixedPtAmt("0.5"));
+        await discountStrategy.setTrancheDiscount(newRotationInTranche.address, toDiscountFixedPtAmt("0.5"));
         await rebase(collateralToken, rebaseOracle, -0.25);
       });
       it("should rollover the correct amount", async function () {
@@ -627,13 +627,13 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when tokenIn has 0.5 yield, tokenOut is collateral has rebased up and NOT covered", function () {
+    describe("when tokenIn has 0.5 discount, tokenOut is collateral has rebased up and NOT covered", function () {
       let newRotationInTranche: Contract;
       beforeEach(async function () {
         const tranches = await getTranches(rolloverInBond);
         newRotationInTranche = tranches[1];
         await pricingStrategy.setTranchePrice(newRotationInTranche.address, toPriceFixedPtAmt("1"));
-        await yieldStrategy.setTrancheYield(newRotationInTranche.address, toYieldFixedPtAmt("0.5"));
+        await discountStrategy.setTrancheDiscount(newRotationInTranche.address, toDiscountFixedPtAmt("0.5"));
         await rebase(collateralToken, rebaseOracle, 0.25);
       });
       it("should rollover the correct amount", async function () {
@@ -1034,7 +1034,7 @@ describe("PerpetualTranche", function () {
         const tranches = await getTranches(rolloverInBond);
         newRotationInTranche = tranches[1];
         await pricingStrategy.setTranchePrice(newRotationInTranche.address, toPriceFixedPtAmt("1"));
-        await yieldStrategy.setTrancheYield(newRotationInTranche.address, toYieldFixedPtAmt("1"));
+        await discountStrategy.setTrancheDiscount(newRotationInTranche.address, toDiscountFixedPtAmt("1"));
 
         expect(await perp.callStatic.getMatureTrancheBalance()).to.eq(toFixedPtAmt("500"));
 

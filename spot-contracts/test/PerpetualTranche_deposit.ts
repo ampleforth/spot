@@ -10,7 +10,7 @@ import {
   bondAt,
   getTranches,
   toFixedPtAmt,
-  toYieldFixedPtAmt,
+  toDiscountFixedPtAmt,
   toPriceFixedPtAmt,
   advancePerpQueue,
   checkReserveComposition,
@@ -22,7 +22,7 @@ let perp: Contract,
   issuer: Contract,
   feeStrategy: Contract,
   pricingStrategy: Contract,
-  yieldStrategy: Contract,
+  discountStrategy: Contract,
   deployer: Signer,
   deployerAddress: string,
   otherUser: Signer,
@@ -49,8 +49,8 @@ describe("PerpetualTranche", function () {
     const PricingStrategy = await ethers.getContractFactory("MockPricingStrategy");
     pricingStrategy = await PricingStrategy.deploy();
 
-    const YieldStrategy = await ethers.getContractFactory("MockYieldStrategy");
-    yieldStrategy = await YieldStrategy.deploy();
+    const DiscountStrategy = await ethers.getContractFactory("MockDiscountStrategy");
+    discountStrategy = await DiscountStrategy.deploy();
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -62,7 +62,7 @@ describe("PerpetualTranche", function () {
         issuer.address,
         feeStrategy.address,
         pricingStrategy.address,
-        yieldStrategy.address,
+        discountStrategy.address,
       ],
       {
         initializer: "init(string,string,address,address,address,address,address)",
@@ -76,7 +76,7 @@ describe("PerpetualTranche", function () {
     await feeStrategy.setFeeToken(perp.address);
     await feeStrategy.setMintFee(toFixedPtAmt("0"));
     await pricingStrategy.setTranchePrice(depositTrancheA.address, toPriceFixedPtAmt("1"));
-    await yieldStrategy.setTrancheYield(depositTrancheA.address, toYieldFixedPtAmt("1"));
+    await discountStrategy.setTrancheDiscount(depositTrancheA.address, toDiscountFixedPtAmt("1"));
 
     await depositIntoBond(depositBond, toFixedPtAmt("1000"), deployer);
     await depositTrancheA.approve(perp.address, toFixedPtAmt("500"));
@@ -215,7 +215,7 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when tranche yield is zero", function () {
+    describe("when tranche discount is zero", function () {
       it("should revert", async function () {
         await expect(perp.deposit(depositTrancheZ.address, toFixedPtAmt("500"))).to.revertedWith("UnacceptableMintAmt");
       });
@@ -233,9 +233,9 @@ describe("PerpetualTranche", function () {
         });
       });
 
-      describe("when tranche yield is 0.5", function () {
+      describe("when tranche discount is 0.5", function () {
         beforeEach(async function () {
-          await yieldStrategy.setTrancheYield(depositTrancheA.address, toYieldFixedPtAmt("0.5"));
+          await discountStrategy.setTrancheDiscount(depositTrancheA.address, toDiscountFixedPtAmt("0.5"));
         });
 
         it("should mint the correct amount", async function () {
@@ -244,10 +244,10 @@ describe("PerpetualTranche", function () {
         });
       });
 
-      describe("when tranche yield is 0.5 and tranche price is 0.5", function () {
+      describe("when tranche discount is 0.5 and tranche price is 0.5", function () {
         beforeEach(async function () {
           await pricingStrategy.setTranchePrice(depositTrancheA.address, toPriceFixedPtAmt("0.5"));
-          await yieldStrategy.setTrancheYield(depositTrancheA.address, toYieldFixedPtAmt("0.5"));
+          await discountStrategy.setTrancheDiscount(depositTrancheA.address, toDiscountFixedPtAmt("0.5"));
         });
 
         it("should mint the correct amount", async function () {
@@ -260,7 +260,7 @@ describe("PerpetualTranche", function () {
     describe("when total supply > zero", function () {
       let newBond: Contract, newTranche: Contract;
       beforeEach(async function () {
-        await yieldStrategy.setTrancheYield(depositTrancheA.address, toYieldFixedPtAmt("1"));
+        await discountStrategy.setTrancheDiscount(depositTrancheA.address, toDiscountFixedPtAmt("1"));
         await pricingStrategy.setTranchePrice(depositTrancheA.address, toPriceFixedPtAmt("1"));
         await perp.deposit(depositTrancheA.address, toFixedPtAmt("200"));
 
@@ -273,9 +273,9 @@ describe("PerpetualTranche", function () {
       });
 
       describe("when price is eql to avg reserve price", function () {
-        describe("when yield is 1", function () {
+        describe("when discount is 1", function () {
           beforeEach(async function () {
-            await yieldStrategy.setTrancheYield(newTranche.address, toYieldFixedPtAmt("1"));
+            await discountStrategy.setTrancheDiscount(newTranche.address, toDiscountFixedPtAmt("1"));
             await pricingStrategy.setTranchePrice(newTranche.address, toPriceFixedPtAmt("1"));
           });
 
@@ -285,9 +285,9 @@ describe("PerpetualTranche", function () {
           });
         });
 
-        describe("when yield < 1", function () {
+        describe("when discount < 1", function () {
           beforeEach(async function () {
-            await yieldStrategy.setTrancheYield(newTranche.address, toYieldFixedPtAmt("0.5"));
+            await discountStrategy.setTrancheDiscount(newTranche.address, toDiscountFixedPtAmt("0.5"));
             await pricingStrategy.setTranchePrice(newTranche.address, toPriceFixedPtAmt("1"));
           });
 
@@ -297,9 +297,9 @@ describe("PerpetualTranche", function () {
           });
         });
 
-        describe("when yield > 1", function () {
+        describe("when discount > 1", function () {
           beforeEach(async function () {
-            await yieldStrategy.setTrancheYield(newTranche.address, toYieldFixedPtAmt("2"));
+            await discountStrategy.setTrancheDiscount(newTranche.address, toDiscountFixedPtAmt("2"));
             await pricingStrategy.setTranchePrice(newTranche.address, toPriceFixedPtAmt("1"));
           });
 
@@ -313,7 +313,7 @@ describe("PerpetualTranche", function () {
       describe("when price is > avg reserve price", function () {
         beforeEach(async function () {
           await pricingStrategy.setTranchePrice(depositTrancheA.address, toPriceFixedPtAmt("0.5"));
-          await yieldStrategy.setTrancheYield(newTranche.address, toYieldFixedPtAmt("1"));
+          await discountStrategy.setTrancheDiscount(newTranche.address, toDiscountFixedPtAmt("1"));
           await pricingStrategy.setTranchePrice(newTranche.address, toPriceFixedPtAmt("1"));
         });
 
@@ -326,7 +326,7 @@ describe("PerpetualTranche", function () {
       describe("when price is < avg reserve price", function () {
         beforeEach(async function () {
           await pricingStrategy.setTranchePrice(depositTrancheA.address, toPriceFixedPtAmt("2"));
-          await yieldStrategy.setTrancheYield(newTranche.address, toYieldFixedPtAmt("1"));
+          await discountStrategy.setTrancheDiscount(newTranche.address, toDiscountFixedPtAmt("1"));
           await pricingStrategy.setTranchePrice(newTranche.address, toPriceFixedPtAmt("1"));
         });
 
@@ -688,8 +688,8 @@ describe("PerpetualTranche", function () {
       it("should NOT update the deposit bond", async function () {
         expect(await perp.callStatic.getDepositBond()).to.eq(depositBond.address);
       });
-      it("should emit tranche yield", async function () {
-        await expect(tx).to.emit(perp, "YieldApplied").withArgs(depositTrancheA.address, toYieldFixedPtAmt("1"));
+      it("should emit tranche discount", async function () {
+        await expect(tx).to.emit(perp, "DiscountApplied").withArgs(depositTrancheA.address, toDiscountFixedPtAmt("1"));
       });
       it("should emit reserve synced", async function () {
         await expect(tx).to.emit(perp, "ReserveSynced").withArgs(depositTrancheA.address, toFixedPtAmt("500"));
@@ -730,8 +730,10 @@ describe("PerpetualTranche", function () {
         it("should NOT update the deposit bond", async function () {
           expect(await perp.callStatic.getDepositBond()).to.eq(depositBond.address);
         });
-        it("should NOT emit tranche yield", async function () {
-          await expect(tx).not.to.emit(perp, "YieldApplied").withArgs(depositTrancheA.address, toYieldFixedPtAmt("1"));
+        it("should NOT emit tranche discount", async function () {
+          await expect(tx)
+            .not.to.emit(perp, "DiscountApplied")
+            .withArgs(depositTrancheA.address, toDiscountFixedPtAmt("1"));
         });
         it("should emit reserve synced", async function () {
           await expect(tx).to.emit(perp, "ReserveSynced").withArgs(depositTrancheA.address, toFixedPtAmt("500"));
@@ -757,7 +759,7 @@ describe("PerpetualTranche", function () {
           await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
           const tranches = await getTranches(newBond);
           newTranche = tranches[0];
-          await yieldStrategy.setTrancheYield(newTranche.address, toYieldFixedPtAmt("0.5"));
+          await discountStrategy.setTrancheDiscount(newTranche.address, toDiscountFixedPtAmt("0.5"));
           await pricingStrategy.setTranchePrice(newTranche.address, toPriceFixedPtAmt("0.2"));
 
           await checkReserveComposition(
@@ -776,8 +778,8 @@ describe("PerpetualTranche", function () {
         it("should update the deposit bond", async function () {
           expect(await perp.callStatic.getDepositBond()).to.eq(newBond.address);
         });
-        it("should emit tranche yield", async function () {
-          await expect(tx).to.emit(perp, "YieldApplied").withArgs(newTranche.address, toYieldFixedPtAmt("0.5"));
+        it("should emit tranche discount", async function () {
+          await expect(tx).to.emit(perp, "DiscountApplied").withArgs(newTranche.address, toDiscountFixedPtAmt("0.5"));
         });
         it("should emit reserve synced", async function () {
           await expect(tx).to.emit(perp, "ReserveSynced").withArgs(newTranche.address, toFixedPtAmt("250"));
