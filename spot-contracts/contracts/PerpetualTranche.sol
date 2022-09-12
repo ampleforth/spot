@@ -3,6 +3,7 @@ pragma solidity ^0.8.17;
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
@@ -117,7 +118,13 @@ error UnauthorizedTransferOut(IERC20Upgradeable token);
  *          This brings the system storage state up to date.
  *
  */
-contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpgradeable, IPerpetualTranche {
+contract PerpetualTranche is
+    ERC20BurnableUpgradeable,
+    OwnableUpgradeable,
+    PausableUpgradeable,
+    ReentrancyGuardUpgradeable,
+    IPerpetualTranche
+{
     // data handling
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
     using BondHelpers for IBondController;
@@ -407,9 +414,14 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     // External methods
 
     /// @inheritdoc IPerpetualTranche
-    function deposit(ITranche trancheIn, uint256 trancheInAmt) external override afterStateUpdate whenNotPaused {
-        IBondController bondIn = IBondController(trancheIn.bond());
-        if (!_depositBond.trancheTokenAddresses(trancheIn) || bondIn != _depositBond) {
+    function deposit(ITranche trancheIn, uint256 trancheInAmt)
+        external
+        override
+        afterStateUpdate
+        nonReentrant
+        whenNotPaused
+    {
+        if (IBondController(trancheIn.bond()) != _depositBond) {
             revert UnacceptableDepositTranche(trancheIn, _depositBond);
         }
 
@@ -438,7 +450,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     }
 
     /// @inheritdoc IPerpetualTranche
-    function redeem(uint256 perpAmtBurnt) external override afterStateUpdate whenNotPaused {
+    function redeem(uint256 perpAmtBurnt) external override afterStateUpdate nonReentrant whenNotPaused {
         // gets the current perp supply
         uint256 perpSupply = totalSupply();
 
@@ -481,7 +493,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable
-    ) external override afterStateUpdate whenNotPaused {
+    ) external override afterStateUpdate nonReentrant whenNotPaused {
         // verifies if rollover is acceptable
         if (!_isAcceptableRollover(trancheIn, tokenOut)) {
             revert UnacceptableRollover(trancheIn, tokenOut);
