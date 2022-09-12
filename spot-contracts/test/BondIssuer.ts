@@ -29,6 +29,12 @@ describe("BondIssuer", function () {
       expect(await issuer.issuedCount()).to.eq(0);
       await expect(issuer.issuedBondAt(0)).to.be.reverted;
     });
+    it("should revert if tranche rations are improper", async function () {
+      const BondIssuer = await ethers.getContractFactory("BondIssuer");
+      await expect(
+        BondIssuer.deploy(bondFactory.address, 3600, 120, 86400, token.address, [200, 300, 501]),
+      ).to.be.revertedWith("BondIssuer: Invalid tranche ratios");
+    });
   });
 
   describe("#issue", function () {

@@ -18,6 +18,10 @@ import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
 contract BondIssuer is IBondIssuer {
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
 
+    /// @dev Using the same granularity as the underlying buttonwood tranche contracts.
+    ///      https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
+    uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
+
     /// @notice Address of the bond factory.
     IBondFactory public immutable bondFactory;
 
@@ -68,6 +72,11 @@ contract BondIssuer is IBondIssuer {
 
         collateral = collateral_;
         trancheRatios = trancheRatios_;
+        uint256 ratioSum;
+        for (uint8 i = 0; i < trancheRatios_.length; i++) {
+            ratioSum += trancheRatios_[i];
+        }
+        require(ratioSum == TRANCHE_RATIO_GRANULARITY, "BondIssuer: Invalid tranche ratios");
 
         lastIssueWindowTimestamp = 0;
     }
