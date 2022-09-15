@@ -236,7 +236,7 @@ contract RouterV1 {
         IPerpetualTranche perp,
         IBondController bond,
         uint256 collateralAmount,
-        RolloverBatch[] memory rollovers,
+        RolloverBatch[] calldata rollovers,
         uint256 feePaid
     ) external afterPerpStateUpdate(perp) {
         TrancheData memory td = bond.getTrancheData();
