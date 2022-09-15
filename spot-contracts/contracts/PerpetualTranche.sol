@@ -403,7 +403,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     /// @inheritdoc IPerpetualTranche
     function deposit(ITranche trancheIn, uint256 trancheInAmt) external override afterStateUpdate whenNotPaused {
         IBondController bondIn = IBondController(trancheIn.bond());
-        if (!bondIn.trancheTokenAddresses(trancheIn) || bondIn != _depositBond) {
+        if (!_depositBond.trancheTokenAddresses(trancheIn) || bondIn != _depositBond) {
             revert UnacceptableDepositTranche(trancheIn, _depositBond);
         }
 
