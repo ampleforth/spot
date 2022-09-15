@@ -36,19 +36,6 @@ library TrancheDataHelpers {
         }
         revert UnacceptableTrancheIndex(t);
     }
-
-    /// @notice Iterates through the tranche data to check if given tranche belongs to the tranche list.
-    /// @param td The tranche data object.
-    /// @param t The address of the tranche to check.
-    /// @return if the tranche belongs to the list.
-    function isBondTranche(TrancheData memory td, ITranche t) internal pure returns (bool) {
-        for (uint8 i = 0; i < td.trancheCount; i++) {
-            if (td.tranches[i] == t) {
-                return true;
-            }
-        }
-        return false;
-    }
 }
 
 /**

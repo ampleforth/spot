@@ -115,21 +115,6 @@ describe("BondHelpers", function () {
     });
   });
 
-  describe("#isBondTranche", function () {
-    it("should return if the tranche is part of list", async function () {
-      const bond = await createBondWithFactory(bondFactory, collateralToken, [100, 100, 100, 100, 100, 500], 86400);
-      const td = await bondHelpers.getTrancheData(bond.address);
-
-      for (const t in td.tranches) {
-        expect(await bondHelpers.isBondTranche(bond.address, td.tranches[t])).to.eq(true);
-      }
-
-      expect(await bondHelpers.isBondTranche(bond.address, bond.address)).to.be.eq(false);
-      expect(await bondHelpers.isBondTranche(bond.address, deployerAddress)).to.be.eq(false);
-      expect(await bondHelpers.isBondTranche(bond.address, constants.AddressZero)).to.be.eq(false);
-    });
-  });
-
   describe("#previewDeposit", function () {
     let bond: Contract;
     beforeEach(async function () {

@@ -11,7 +11,7 @@ import { ERC20BurnableUpgradeable } from "@openzeppelin/contracts-upgradeable/to
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 
-import { BondHelpers, TrancheData, TrancheDataHelpers } from "./_utils/BondHelpers.sol";
+import { BondHelpers } from "./_utils/BondHelpers.sol";
 
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeeStrategy, IPricingStrategy, IDiscountStrategy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
@@ -121,7 +121,6 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     // data handling
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
     using BondHelpers for IBondController;
-    using TrancheDataHelpers for TrancheData;
 
     // ERC20 operations
     using SafeERC20Upgradeable for IERC20Upgradeable;
@@ -403,10 +402,8 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
 
     /// @inheritdoc IPerpetualTranche
     function deposit(ITranche trancheIn, uint256 trancheInAmt) external override afterStateUpdate whenNotPaused {
-        if (
-            !(_depositBond.getTrancheData()).isBondTranche(trancheIn) ||
-            IBondController(trancheIn.bond()) != _depositBond
-        ) {
+        IBondController bondIn = IBondController(trancheIn.bond());
+        if (!bondIn.trancheTokenAddresses(trancheIn) || bondIn != _depositBond) {
             revert UnacceptableDepositTranche(trancheIn, _depositBond);
         }
 

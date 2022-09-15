@@ -57,9 +57,4 @@ contract BondHelpersTester {
         TrancheData memory td = b.getTrancheData();
         return td.getTrancheIndex(t);
     }
-
-    function isBondTranche(IBondController b, ITranche t) public view returns (bool) {
-        TrancheData memory td = b.getTrancheData();
-        return td.isBondTranche(t);
-    }
 }

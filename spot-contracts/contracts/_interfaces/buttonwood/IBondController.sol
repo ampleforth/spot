@@ -20,6 +20,8 @@ interface IBondController {
 
     function trancheCount() external view returns (uint256 count);
 
+    function trancheTokenAddresses(ITranche token) external view returns (bool);
+
     function deposit(uint256 amount) external;
 
     function redeem(uint256[] memory amounts) external;
