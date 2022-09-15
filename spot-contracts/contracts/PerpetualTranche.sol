@@ -417,9 +417,9 @@ contract PerpetualTranche is
     function deposit(ITranche trancheIn, uint256 trancheInAmt)
         external
         override
-        afterStateUpdate
         nonReentrant
         whenNotPaused
+        afterStateUpdate
     {
         if (IBondController(trancheIn.bond()) != _depositBond) {
             revert UnacceptableDepositTranche(trancheIn, _depositBond);
@@ -450,7 +450,7 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    function redeem(uint256 perpAmtBurnt) external override afterStateUpdate nonReentrant whenNotPaused {
+    function redeem(uint256 perpAmtBurnt) external override nonReentrant whenNotPaused afterStateUpdate {
         // gets the current perp supply
         uint256 perpSupply = totalSupply();
 
@@ -493,7 +493,7 @@ contract PerpetualTranche is
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable
-    ) external override afterStateUpdate nonReentrant whenNotPaused {
+    ) external override nonReentrant whenNotPaused afterStateUpdate {
         // verifies if rollover is acceptable
         if (!_isAcceptableRollover(trancheIn, tokenOut)) {
             revert UnacceptableRollover(trancheIn, tokenOut);
