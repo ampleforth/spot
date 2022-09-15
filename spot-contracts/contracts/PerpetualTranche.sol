@@ -299,6 +299,12 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         _pause();
     }
 
+    /// @notice Unpauses deposits, withdrawals and rollovers.
+    /// @dev NOTE: ERC-20 functions, like transfers will always remain operational.
+    function unpause() public onlyOwner {
+        _unpause();
+    }
+
     /// @notice Update the reference to the bond issuer contract.
     /// @param bondIssuer_ New bond issuer address.
     function updateBondIssuer(IBondIssuer bondIssuer_) public onlyOwner {

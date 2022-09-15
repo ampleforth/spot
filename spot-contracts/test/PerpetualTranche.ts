@@ -160,6 +160,43 @@ describe("PerpetualTranche", function () {
     });
   });
 
+  describe("#unpause", function () {
+    let tx: Transaction;
+
+    describe("when triggered by non-owner", function () {
+      beforeEach(async function () {
+        await perp.pause();
+      });
+
+      it("should revert", async function () {
+        await expect(perp.connect(otherUser).unpause()).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+    });
+
+    describe("when not paused", function () {
+      it("should revert", async function () {
+        await expect(perp.connect(deployer).unpause()).to.be.revertedWith("Pausable: not paused");
+      });
+    });
+
+    describe("when valid", function () {
+      beforeEach(async function () {
+        tx = await perp.connect(deployer).pause();
+        await tx;
+        tx = await perp.connect(deployer).unpause();
+        await tx;
+      });
+      it("should unpause", async function () {
+        expect(await perp.paused()).to.eq(false);
+      });
+      it("should emit event", async function () {
+        await expect(tx)
+          .to.emit(perp, "Unpaused")
+          .withArgs(await deployer.getAddress());
+      });
+    });
+  });
+
   describe("#updateBondIssuer", function () {
     let newIssuer: Contract, tx: Transaction;
 
