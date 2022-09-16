@@ -128,6 +128,20 @@ describe("PerpetualTranche", function () {
       });
     });
 
+    describe("when the malicious trancheIn is deposited which points to the deposit bond", function () {
+      it("should revert", async function () {
+        const ERC20 = await ethers.getContractFactory("MockTranche");
+        const maliciousTranche = await ERC20.deploy();
+        await maliciousTranche.init("Tranche", "TRA");
+        await maliciousTranche.mint(deployerAddress, toFixedPtAmt("500"))
+        await maliciousTranche.setBond(await perp.callStatic.getDepositBond())
+        await maliciousTranche.approve(perp.address, toFixedPtAmt("500"));
+        await expect(perp.deposit(maliciousTranche.address, toFixedPtAmt("500"))).to.revertedWith(
+          "UnacceptableDepositTranche",
+        );
+      });
+    });
+
     describe("when user has not approved sufficient tranche tokens", function () {
       beforeEach(async function () {
         await depositTrancheA.approve(perp.address, toFixedPtAmt("0"));
