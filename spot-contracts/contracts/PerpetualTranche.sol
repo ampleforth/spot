@@ -443,7 +443,7 @@ contract PerpetualTranche is
         // settles fees
         _settleFee(msg.sender, reserveFee, protocolFee);
 
-        // updates & enforces supply cap and tranche mint cap
+        // post-deposit checks
         mintedSupplyPerTranche[trancheIn] += perpAmtMint;
         _enforcePerTrancheSupplyCap(trancheIn);
         _enforceTotalSupplyCap();
@@ -481,11 +481,8 @@ contract PerpetualTranche is
             }
         }
 
-        // enforces supply reduction
-        uint256 newSupply = totalSupply();
-        if (newSupply >= perpSupply) {
-            revert ExpectedSupplyReduction(newSupply, perpSupply);
-        }
+        // post-redeem checks
+        _enforceSupplyReduction(perpSupply);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -529,9 +526,9 @@ contract PerpetualTranche is
         // transfers tranche from the reserve to the sender
         _transferOutOfReserve(msg.sender, tokenOut, r.tokenOutAmt);
 
-        // enforce limits
-        _enforceTotalSupplyCap();
+        // post-rollover checks
         _enforceMatureValueTarget();
+        _enforceTotalSupplyCap();
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -1019,6 +1016,14 @@ contract PerpetualTranche is
         // checks if supply minted using the given tranche is within the cap
         if (mintedSupplyPerTranche[trancheIn] > maxMintAmtPerTranche) {
             revert ExceededMaxMintPerTranche(trancheIn, mintedSupplyPerTranche[trancheIn], maxMintAmtPerTranche);
+        }
+    }
+
+    /// @dev Enforces that supply strictly reduces after the redemption.
+    function _enforceSupplyReduction(uint256 prevSupply) private view {
+        uint256 newSupply = totalSupply();
+        if (newSupply >= prevSupply) {
+            revert ExpectedSupplyReduction(newSupply, prevSupply);
         }
     }
 
