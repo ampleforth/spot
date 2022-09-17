@@ -45,7 +45,7 @@ export default {
   solidity: {
     compilers: [
       {
-        version: "0.8.15",
+        version: "0.8.17",
         settings: {
           optimizer: {
             enabled: true,
@@ -65,6 +65,6 @@ export default {
     apiKey: process.env.ETHERSCAN_API_KEY,
   },
   mocha: {
-    bail: true,
+    bail: false,
   },
 } as HardhatUserConfig;
