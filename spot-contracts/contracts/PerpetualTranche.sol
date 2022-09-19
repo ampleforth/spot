@@ -189,12 +189,12 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     /// @dev The computed price is expected to be a fixed point unsigned integer with {PRICE_DECIMALS} decimals.
     IPricingStrategy public pricingStrategy;
 
-    /// @notice External contract that computes a given reserve token's discount.
-    /// @dev Discount is the discount or premium factor applied to every asset when added to
-    ///      the reserve. This accounts for things like tranche seniority and underlying
-    ///      collateral volatility. It also allows for standardizing denominations when comparing,
-    ///      two different reserve tokens.
-    ///      The computed discount is expected to be a fixed point unsigned integer with {DISCOUNT_DECIMALS} decimals.
+    /// @notice External contract that computes a given reserve token's discount factor.
+    /// @dev It is a multiplier, applied to every asset when added to the reserve.
+    ///      This accounts for things like tranche seniority and underlying collateral volatility.
+    ///      It also allows for standardizing denominations when comparing, two different reserve tokens.
+    ///      For example, a factor of 0.95 on a particular tranche results in a 5% discount.
+    ///      The discount factor is expected to be a fixed point unsigned integer with {DISCOUNT_DECIMALS} decimals.
     IDiscountStrategy public discountStrategy;
 
     /// @notice External contract that stores a predefined bond config and frequency,
