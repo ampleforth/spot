@@ -3,6 +3,7 @@ pragma solidity ^0.8.17;
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
@@ -117,7 +118,13 @@ error UnauthorizedTransferOut(IERC20Upgradeable token);
  *          This brings the system storage state up to date.
  *
  */
-contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpgradeable, IPerpetualTranche {
+contract PerpetualTranche is
+    ERC20BurnableUpgradeable,
+    OwnableUpgradeable,
+    PausableUpgradeable,
+    ReentrancyGuardUpgradeable,
+    IPerpetualTranche
+{
     // data handling
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
     using BondHelpers for IBondController;
@@ -407,7 +414,13 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
     // External methods
 
     /// @inheritdoc IPerpetualTranche
-    function deposit(ITranche trancheIn, uint256 trancheInAmt) external override afterStateUpdate whenNotPaused {
+    function deposit(ITranche trancheIn, uint256 trancheInAmt)
+        external
+        override
+        nonReentrant
+        whenNotPaused
+        afterStateUpdate
+    {
         IBondController bondIn = IBondController(trancheIn.bond());
         if (!_depositBond.trancheTokenAddresses(trancheIn) || bondIn != _depositBond) {
             revert UnacceptableDepositTranche(trancheIn, _depositBond);
@@ -431,14 +444,14 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         // settles fees
         _settleFee(msg.sender, reserveFee, protocolFee);
 
-        // updates & enforces supply cap and tranche mint cap
+        // post-deposit checks
         mintedSupplyPerTranche[trancheIn] += perpAmtMint;
         _enforcePerTrancheSupplyCap(trancheIn);
         _enforceTotalSupplyCap();
     }
 
     /// @inheritdoc IPerpetualTranche
-    function redeem(uint256 perpAmtBurnt) external override afterStateUpdate whenNotPaused {
+    function redeem(uint256 perpAmtBurnt) external override nonReentrant whenNotPaused afterStateUpdate {
         // gets the current perp supply
         uint256 perpSupply = totalSupply();
 
@@ -469,11 +482,8 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
             }
         }
 
-        // enforces supply reduction
-        uint256 newSupply = totalSupply();
-        if (newSupply >= perpSupply) {
-            revert ExpectedSupplyReduction(newSupply, perpSupply);
-        }
+        // post-redeem checks
+        _enforceSupplyReduction(perpSupply);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -481,7 +491,7 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable
-    ) external override afterStateUpdate whenNotPaused {
+    ) external override nonReentrant whenNotPaused afterStateUpdate {
         // verifies if rollover is acceptable
         if (!_isAcceptableRollover(trancheIn, tokenOut)) {
             revert UnacceptableRollover(trancheIn, tokenOut);
@@ -517,9 +527,9 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         // transfers tranche from the reserve to the sender
         _transferOutOfReserve(msg.sender, tokenOut, r.tokenOutAmt);
 
-        // enforce limits
-        _enforceTotalSupplyCap();
+        // post-rollover checks
         _enforceMatureValueTarget();
+        _enforceTotalSupplyCap();
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -1007,6 +1017,14 @@ contract PerpetualTranche is ERC20BurnableUpgradeable, OwnableUpgradeable, Pausa
         // checks if supply minted using the given tranche is within the cap
         if (mintedSupplyPerTranche[trancheIn] > maxMintAmtPerTranche) {
             revert ExceededMaxMintPerTranche(trancheIn, mintedSupplyPerTranche[trancheIn], maxMintAmtPerTranche);
+        }
+    }
+
+    /// @dev Enforces that supply strictly reduces after the redemption.
+    function _enforceSupplyReduction(uint256 prevSupply) private view {
+        uint256 newSupply = totalSupply();
+        if (newSupply >= prevSupply) {
+            revert ExpectedSupplyReduction(newSupply, prevSupply);
         }
     }
 
