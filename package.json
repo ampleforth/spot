@@ -8,5 +8,8 @@
   "packageManager": "yarn@3.2.1",
   "workspaces": [
     "spot-contracts"
-  ]
+  ],
+  "devDependencies": {
+    "typescript": "^4.7.4"
+  }
 }
