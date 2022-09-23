@@ -15,8 +15,8 @@ task("verify:contract", "Verifies on etherscan")
   .addParam("sleepSec", "sleep time before verification", 15, types.int, true)
   .setAction(async function (args: TaskArguments, hre) {
     try {
+      await sleep(args.sleepSec);
       throw new Error("Skipping verification");
-      // await sleep(args.sleepSec);
       // await hre.run("verify:verify", {
       //   address: args.address,
       //   constructorArguments: args.constructorArguments,
@@ -35,9 +35,14 @@ task("verify:contract", "Verifies on etherscan")
 task("transferOwnership", "Transfers ownership of contract to new owner")
   .addParam("address", "the contract address", undefined, types.string, false)
   .addParam("newOwnerAddress", "the new owner address", undefined, types.string, false)
+  .addParam("fromIdx", "the index of sender", 0, types.int)
   .setAction(async function (args: TaskArguments, hre) {
     const { address, newOwnerAddress } = args;
     const contract = await hre.ethers.getContractAt("Ownable", address);
+
+    const signer = (await hre.ethers.getSigners())[args.fromIdx];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
 
     console.log(`Transferring ownership of ${address} to ${newOwnerAddress}`);
     await sleep(10);
