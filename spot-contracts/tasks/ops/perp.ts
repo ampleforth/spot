@@ -1,3 +1,4 @@
+import { getAdminAddress } from "@openzeppelin/upgrades-core";
 import { task, types } from "hardhat/config";
 import { TaskArguments } from "hardhat/types";
 import { utils, constants, Contract, BigNumber } from "ethers";
@@ -24,6 +25,7 @@ task("ops:info")
     const issued = (await hre.ethers.provider.getCode(depositBond.address)) !== "0x";
     const perpSupply = await perp.totalSupply();
     const priceDecimals = await pricingStrategy.decimals();
+    const proxyAdminAddress = await getAdminAddress(hre.ethers.provider, perpAddress);
 
     console.log("---------------------------------------------------------------");
     console.log("BondIssuer:", bondIssuer.address);
@@ -31,6 +33,9 @@ task("ops:info")
 
     console.log("---------------------------------------------------------------");
     console.log("PerpetualTranche:", perp.address);
+    console.log("proxyAdmin", proxyAdminAddress);
+    console.log("owner", await perp.owner());
+    console.log("keeper", await perp.keeper());
     console.log("reserve:", await perp.reserve());
     console.log("collateralToken", collateralToken.address);
     console.log("feeStrategy:", feeStrategy.address);

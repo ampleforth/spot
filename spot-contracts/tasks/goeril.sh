@@ -2,55 +2,60 @@
 ## DEPLOYMENT
 yarn hardhat --network goerli deploy:MockAMPL
 
-yarn hardhat --network goerli deploy:BondFactory
-
 yarn hardhat --network goerli deploy:BondIssuer \
-  --bond-factory-address "0xAcffcac91E7ca39418812BBBD50d6C6DA7Dff256" \
+  --bond-factory-address "0xda5DbE504e7D532E4F8921B38E1F970D4b881BFB" \
   --bond-duration "3600" \
   --issue-frequency "1200" \
   --issue-window-offset "0" \
-  --collateral-token-address "0x14f6e47F3237213E4B7E1dAEc273545df524039F" \
+  --collateral-token-address "0x74567107828843070087F1c6ec8322A3e8450725" \
   --tranche-ratios "[500,500]"
 
 yarn hardhat --network goerli deploy:PerpetualTranche \
-  --bond-issuer-address "0xb790Fdd1a339C98aE6751Bb0D76a10FBFb3718B4" \
-  --collateral-token-address "0x14f6e47F3237213E4B7E1dAEc273545df524039F" \
+  --bond-issuer-address "0xAb7d17864463dEdA6c19060Ad6556e1B218c5Ba0" \
+  --collateral-token-address "0x74567107828843070087F1c6ec8322A3e8450725" \
   --name "SPOT" \
   --symbol "SPOT" \
-  --min-matuirty-sec "600" \
-  --max-matuirty-sec "3600"
+  --pricing-strategy-ref "CDRPricingStrategy"
 
 yarn hardhat --network goerli deploy:DiscountStrategy:setDiscount \
-  --discount-strategy-address "0x67d82378B5a6E78549C619E8514d97D6FE7fCCbB" \
-  --collateral-token-address "0x14f6e47F3237213E4B7E1dAEc273545df524039F" \
+  --discount-strategy-address "0x9649fa62f182a4922B9bb49129B20C8502027fEe" \
+  --collateral-token-address "0x74567107828843070087F1c6ec8322A3e8450725" \
   --tranche-ratios "[500,500]" \
   --tranche-index "0" \
   --tranche-discount "1.0"
 
 yarn hardhat --network goerli deploy:Router
 
+## verify later
+yarn hardhat verify:contract --network goerli --address 0xAb7d17864463dEdA6c19060Ad6556e1B218c5Ba0 --constructor-arguments "[\"0xda5DbE504e7D532E4F8921B38E1F970D4b881BFB\",1200,0,3600,\"0x74567107828843070087F1c6ec8322A3e8450725\",[500,500]]"
+yarn hardhat verify:contract --network goerli --address 0x5396479b65ed39360Ba6C16f6D7c9fd357674534 --constructor-arguments "[\"0x95014Bc18F82a98CFAA3253fbD3184125A01f848\",\"0x95014Bc18F82a98CFAA3253fbD3184125A01f848\",\"1000000\",\"1000000\",\"0\"]"
+yarn hardhat verify:contract --network goerli --address 0x2DdF288F26490D1147296cC0FA2B3c4da5E15f10 --constructor-arguments "[]"
+yarn hardhat verify:contract --network goerli --address 0x9649fa62f182a4922B9bb49129B20C8502027fEe --constructor-arguments "[]"
+yarn hardhat verify:contract --network goerli --address 0x95014Bc18F82a98CFAA3253fbD3184125A01f848 --constructor-arguments "[]"
+yarn hardhat verify:contract --network goerli --address 0x5e902bdCC408550b4BD612678bE2d57677664Dc9 --constructor-arguments "[]"
+
 ########################################################################
 ## OPS
-yarn hardhat --network goerli ops:info 0x0cF0bcE1d837AF29AB81eCC2F7383a175f538706
+yarn hardhat --network goerli ops:info 0x95014Bc18F82a98CFAA3253fbD3184125A01f848
 
 yarn hardhat --network goerli ops:trancheAndDeposit \
-  --router-address 0x948e4869fAEF267406F896290209Ca229cFAF220 \
-  --perp-address 0x0cF0bcE1d837AF29AB81eCC2F7383a175f538706 \
+  --router-address 0x5e902bdCC408550b4BD612678bE2d57677664Dc9 \
+  --perp-address 0x95014Bc18F82a98CFAA3253fbD3184125A01f848 \
   --collateral-amount 250
 
 yarn hardhat --network goerli ops:redeem \
-  --router-address 0x948e4869fAEF267406F896290209Ca229cFAF220 \
-  --perp-address 0x0cF0bcE1d837AF29AB81eCC2F7383a175f538706 \
+  --router-address 0x5e902bdCC408550b4BD612678bE2d57677664Dc9 \
+  --perp-address 0x95014Bc18F82a98CFAA3253fbD3184125A01f848 \
   --amount 10
 
 yarn hardhat --network goerli ops:redeemTranches \
-  --bond-issuer-address 0xb790Fdd1a339C98aE6751Bb0D76a10FBFb3718B4 
+  --bond-issuer-address 0xAb7d17864463dEdA6c19060Ad6556e1B218c5Ba0 
 
 yarn hardhat --network goerli ops:trancheAndRollover \
-  --router-address 0x948e4869fAEF267406F896290209Ca229cFAF220 \
-  --perp-address 0x0cF0bcE1d837AF29AB81eCC2F7383a175f538706 \
+  --router-address 0x5e902bdCC408550b4BD612678bE2d57677664Dc9 \
+  --perp-address 0x95014Bc18F82a98CFAA3253fbD3184125A01f848 \
   --collateral-amount 200
 
 yarn hardhat --network goerli ops:rebase:MockAMPL \
-  --ampl-address "0x14f6e47F3237213E4B7E1dAEc273545df524039F" \
+  --ampl-address "0x74567107828843070087F1c6ec8322A3e8450725" \
   --rebase-perc 0.1

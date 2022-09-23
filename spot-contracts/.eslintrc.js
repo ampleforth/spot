@@ -23,7 +23,7 @@ module.exports = {
     "node/no-unpublished-import": [
       "error",
       {
-        allowModules: ["hardhat", "ethers"],
+        allowModules: ["hardhat", "ethers", "@openzeppelin/upgrades-core"],
       },
     ],
   },

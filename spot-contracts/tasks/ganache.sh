@@ -19,8 +19,7 @@ yarn hardhat --network ganache deploy:PerpetualTranche \
   --collateral-token-address "0x00404F73C76BC75b0D86F8AdDA8500e987BF8232" \
   --name "SPOT" \
   --symbol "SPOT" \
-  --min-matuirty-sec "300" \
-  --max-matuirty-sec "600"
+  --pricing-strategy-ref "CDRPricingStrategy"
 
 yarn hardhat --network ganache deploy:DiscountStrategy:setDiscount \
   --discount-strategy-address "0x4741f9c161003100fF0Ba1097E149d143458bD0B" \
