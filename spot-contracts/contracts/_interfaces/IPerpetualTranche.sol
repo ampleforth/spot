@@ -14,6 +14,11 @@ interface IPerpetualTranche is IERC20Upgradeable {
     //--------------------------------------------------------------------------
     // Events
 
+    /// @notice Event emitted when the keeper is updated.
+    /// @param prevKeeper The address of the previous keeper.
+    /// @param newKeeper The address of the new keeper.
+    event UpdatedKeeper(address prevKeeper, address newKeeper);
+
     /// @notice Event emitted when the bond issuer is updated.
     /// @param issuer Address of the issuer contract.
     event UpdatedBondIssuer(IBondIssuer issuer);
@@ -83,6 +88,10 @@ interface IPerpetualTranche is IERC20Upgradeable {
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmt
     ) external;
+
+    /// @notice Reference to the wallet or contract that has the ability to pause/unpause operations.
+    /// @return The address of the keeper.
+    function keeper() external view returns (address);
 
     /// @notice The address of the underlying rebasing ERC-20 collateral token backing the tranches.
     /// @return Address of the collateral token.

@@ -128,25 +128,28 @@ describe("PerpetualTranche", function () {
 
   describe("#pause", function () {
     let tx: Transaction;
+    beforeEach(async function () {
+      await perp.connect(deployer).updateKeeper(await otherUser.getAddress());
+    });
 
-    describe("when triggered by non-owner", function () {
+    describe("when triggered by non-keeper", function () {
       it("should revert", async function () {
-        await expect(perp.connect(otherUser).pause()).to.be.revertedWith("Ownable: caller is not the owner");
+        await expect(perp.connect(deployer).pause()).to.be.revertedWith("UnauthorizedCall");
       });
     });
 
     describe("when already paused", function () {
       beforeEach(async function () {
-        await perp.pause();
+        await perp.connect(otherUser).pause();
       });
       it("should revert", async function () {
-        await expect(perp.connect(deployer).pause()).to.be.revertedWith("Pausable: paused");
+        await expect(perp.connect(otherUser).pause()).to.be.revertedWith("Pausable: paused");
       });
     });
 
     describe("when valid", function () {
       beforeEach(async function () {
-        tx = await perp.connect(deployer).pause();
+        tx = await perp.connect(otherUser).pause();
         await tx;
       });
       it("should pause", async function () {
@@ -155,35 +158,38 @@ describe("PerpetualTranche", function () {
       it("should emit event", async function () {
         await expect(tx)
           .to.emit(perp, "Paused")
-          .withArgs(await deployer.getAddress());
+          .withArgs(await otherUser.getAddress());
       });
     });
   });
 
   describe("#unpause", function () {
     let tx: Transaction;
+    beforeEach(async function () {
+      await perp.connect(deployer).updateKeeper(await otherUser.getAddress());
+    });
 
-    describe("when triggered by non-owner", function () {
+    describe("when triggered by non-keeper", function () {
       beforeEach(async function () {
-        await perp.pause();
+        await perp.connect(otherUser).pause();
       });
 
       it("should revert", async function () {
-        await expect(perp.connect(otherUser).unpause()).to.be.revertedWith("Ownable: caller is not the owner");
+        await expect(perp.connect(deployer).unpause()).to.be.revertedWith("UnauthorizedCall");
       });
     });
 
     describe("when not paused", function () {
       it("should revert", async function () {
-        await expect(perp.connect(deployer).unpause()).to.be.revertedWith("Pausable: not paused");
+        await expect(perp.connect(otherUser).unpause()).to.be.revertedWith("Pausable: not paused");
       });
     });
 
     describe("when valid", function () {
       beforeEach(async function () {
-        tx = await perp.connect(deployer).pause();
+        tx = await perp.connect(otherUser).pause();
         await tx;
-        tx = await perp.connect(deployer).unpause();
+        tx = await perp.connect(otherUser).unpause();
         await tx;
       });
       it("should unpause", async function () {
@@ -192,7 +198,40 @@ describe("PerpetualTranche", function () {
       it("should emit event", async function () {
         await expect(tx)
           .to.emit(perp, "Unpaused")
-          .withArgs(await deployer.getAddress());
+          .withArgs(await otherUser.getAddress());
+      });
+    });
+  });
+
+  describe("#updateKeeper", function () {
+    let tx: Transaction;
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(perp.connect(otherUser).updateKeeper(constants.AddressZero)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    describe("when set address is NOT valid", function () {
+      it("should revert", async function () {
+        await expect(perp.updateKeeper(constants.AddressZero)).to.be.revertedWith("UnacceptableReference");
+      });
+    });
+
+    describe("when set address is valid", function () {
+      beforeEach(async function () {
+        tx = perp.updateKeeper(await otherUser.getAddress());
+        await tx;
+      });
+      it("should update reference", async function () {
+        expect(await perp.keeper()).to.eq(await otherUser.getAddress());
+      });
+      it("should emit event", async function () {
+        await expect(tx)
+          .to.emit(perp, "UpdatedKeeper")
+          .withArgs(constants.AddressZero, await otherUser.getAddress());
       });
     });
   });

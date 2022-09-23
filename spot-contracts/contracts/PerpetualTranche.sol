@@ -17,6 +17,11 @@ import { BondHelpers } from "./_utils/BondHelpers.sol";
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeeStrategy, IPricingStrategy, IDiscountStrategy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
 
+/// @notice Expected contract call to be triggered by authorized caller.
+/// @param caller The address which triggered the call.
+/// @param authorizedCaller The address which is authorized to trigger the call.
+error UnauthorizedCall(address caller, address authorizedCaller);
+
 /// @notice Expected a valid percentage value from 0-100 as a fixed point number with {PERC_DECIMALS}.
 /// @param value Invalid value.
 error InvalidPerc(uint256 value);
@@ -189,6 +194,9 @@ contract PerpetualTranche is
     //--------------------------------------------------------------------------
     // CONFIG
 
+    /// @inheritdoc IPerpetualTranche
+    address public override keeper;
+
     /// @notice External contract points controls fees & incentives.
     IFeeStrategy public override feeStrategy;
 
@@ -252,8 +260,18 @@ contract PerpetualTranche is
 
     //--------------------------------------------------------------------------
     // Modifiers
+
+    /// @dev Updates time-dependent reserve state.
     modifier afterStateUpdate() {
         updateState();
+        _;
+    }
+
+    /// @dev Throws if called by any account other than the keeper.
+    modifier onlyKeeper() {
+        if (keeper != _msgSender()) {
+            revert UnauthorizedCall(_msgSender(), keeper);
+        }
         _;
     }
 
@@ -302,14 +320,25 @@ contract PerpetualTranche is
 
     /// @notice Pauses deposits, withdrawals and rollovers.
     /// @dev NOTE: ERC-20 functions, like transfers will always remain operational.
-    function pause() public onlyOwner {
+    function pause() public onlyKeeper {
         _pause();
     }
 
     /// @notice Unpauses deposits, withdrawals and rollovers.
     /// @dev NOTE: ERC-20 functions, like transfers will always remain operational.
-    function unpause() public onlyOwner {
+    function unpause() public onlyKeeper {
         _unpause();
+    }
+
+    /// @notice Updates the reference to the keeper.
+    /// @param newKeeper The address of the new keeper.
+    function updateKeeper(address newKeeper) public virtual onlyOwner {
+        if (newKeeper == address(0)) {
+            revert UnacceptableReference();
+        }
+        address prevKeeper = keeper;
+        keeper = newKeeper;
+        emit UpdatedKeeper(prevKeeper, newKeeper);
     }
 
     /// @notice Update the reference to the bond issuer contract.

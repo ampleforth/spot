@@ -129,6 +129,7 @@ describe("PerpetualTranche", function () {
   describe("#redeem", function () {
     describe("when paused", function () {
       beforeEach(async function () {
+        await perp.updateKeeper(deployerAddress);
         await perp.pause();
       });
 

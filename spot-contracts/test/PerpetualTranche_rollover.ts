@@ -138,6 +138,7 @@ describe("PerpetualTranche", function () {
   describe("#rollover", function () {
     describe("when paused", function () {
       beforeEach(async function () {
+        await perp.updateKeeper(deployerAddress);
         await perp.pause();
       });
 
