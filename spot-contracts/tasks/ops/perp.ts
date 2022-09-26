@@ -1,3 +1,4 @@
+import { getAdminAddress } from "@openzeppelin/upgrades-core";
 import { task, types } from "hardhat/config";
 import { TaskArguments } from "hardhat/types";
 import { utils, constants, Contract, BigNumber } from "ethers";
@@ -24,6 +25,7 @@ task("ops:info")
     const issued = (await hre.ethers.provider.getCode(depositBond.address)) !== "0x";
     const perpSupply = await perp.totalSupply();
     const priceDecimals = await pricingStrategy.decimals();
+    const proxyAdminAddress = await getAdminAddress(hre.ethers.provider, perpAddress);
 
     console.log("---------------------------------------------------------------");
     console.log("BondIssuer:", bondIssuer.address);
@@ -31,7 +33,11 @@ task("ops:info")
 
     console.log("---------------------------------------------------------------");
     console.log("PerpetualTranche:", perp.address);
+    console.log("proxyAdmin", proxyAdminAddress);
+    console.log("owner", await perp.owner());
+    console.log("keeper", await perp.keeper());
     console.log("reserve:", await perp.reserve());
+    console.log("paused:", await perp.paused());
     console.log("collateralToken", collateralToken.address);
     console.log("feeStrategy:", feeStrategy.address);
     console.log("discountStrategy:", discountStrategy.address);
@@ -499,4 +505,39 @@ task("ops:trancheAndRolloverMax")
       bondIssuerAddress: bondIssuer.address,
       fromIdx: args.fromIdx,
     });
+  });
+
+task("ops:perp:updateKeeper", "Updates the keeper address of perpetual tranche")
+  .addParam("address", "the perpetual tranche contract address", undefined, types.string, false)
+  .addParam("newKeeperAddress", "the address of the new keeper", undefined, types.string, false)
+  .addParam("fromIdx", "the index of sender", 0, types.int)
+  .setAction(async function (args: TaskArguments, hre) {
+    const { address, newKeeperAddress } = args;
+    const perp = await hre.ethers.getContractAt("PerpetualTranche", address);
+
+    const signer = (await hre.ethers.getSigners())[args.fromIdx];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
+
+    console.log(`Updating keeper to ${newKeeperAddress}`);
+    const tx = await perp.updateKeeper(newKeeperAddress);
+    console.log(tx.hash);
+    await tx.wait();
+  });
+
+task("ops:perp:pause", "Pauses opeartions on the perpetual tranche contract")
+  .addParam("address", "the perpetual tranche contract address", undefined, types.string, false)
+  .addParam("fromIdx", "the index of sender", 0, types.int)
+  .setAction(async function (args: TaskArguments, hre) {
+    const { address } = args;
+    const perp = await hre.ethers.getContractAt("PerpetualTranche", address);
+
+    const signer = (await hre.ethers.getSigners())[args.fromIdx];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
+
+    console.log(`Pausing`);
+    const tx = await perp.pause();
+    console.log(tx.hash);
+    await tx.wait();
   });

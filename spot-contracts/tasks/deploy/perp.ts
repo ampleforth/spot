@@ -1,5 +1,6 @@
 import { task, types } from "hardhat/config";
 import { TaskArguments } from "hardhat/types";
+import { sleep } from "../helpers";
 
 task("deploy:BondIssuer")
   .addParam("bondFactoryAddress", "the address of the band factory", undefined, types.string, false)
@@ -28,11 +29,11 @@ task("deploy:BondIssuer")
       collateralTokenAddress,
       trancheRatios,
     );
-
     await bondIssuer.deployed();
 
-    await bondIssuer.issue();
+    await (await bondIssuer.issue()).wait();
 
+    await sleep(15);
     await hre.run("verify:contract", {
       address: bondIssuer.address,
       constructorArguments: [
@@ -53,7 +54,7 @@ task("deploy:PerpetualTranche")
   .addParam("collateralTokenAddress", "the address of the collateral token", undefined, types.string, false)
   .addParam("name", "the ERC20 name", undefined, types.string, false)
   .addParam("symbol", "the ERC20 symbol", undefined, types.string, false)
-  .addParam("pricingStrategyRef", "the pricing strategy to be used", "UnitPricingStrategy", types.string)
+  .addParam("pricingStrategyRef", "the pricing strategy to be used", "CDRPricingStrategy", types.string)
   .setAction(async function (args: TaskArguments, hre) {
     const { bondIssuerAddress, collateralTokenAddress, name, symbol, pricingStrategyRef } = args;
     const deployer = (await hre.ethers.getSigners())[0];
@@ -66,7 +67,7 @@ task("deploy:PerpetualTranche")
     const BasicFeeStrategy = await hre.ethers.getContractFactory("BasicFeeStrategy");
     const feeStrategy = await BasicFeeStrategy.deploy(perp.address);
     await feeStrategy.deployed();
-    await feeStrategy.init("0", "0", "0");
+    await (await feeStrategy.init("0", "0", "0")).wait();
 
     const PricingStrategy = await hre.ethers.getContractFactory(pricingStrategyRef);
     const pricingStrategy = await PricingStrategy.deploy();
@@ -75,7 +76,7 @@ task("deploy:PerpetualTranche")
     const TrancheClassDiscountStrategy = await hre.ethers.getContractFactory("TrancheClassDiscountStrategy");
     const discountStrategy = await TrancheClassDiscountStrategy.deploy();
     await discountStrategy.deployed();
-    await discountStrategy.init();
+    await (await discountStrategy.init()).wait();
 
     console.log("perp", perp.address);
     console.log("feeStrategy", feeStrategy.address);
@@ -93,6 +94,7 @@ task("deploy:PerpetualTranche")
     );
     await initTx.wait();
 
+    await sleep(15);
     await hre.run("verify:contract", {
       address: feeStrategy.address,
       constructorArguments: [perp.address, perp.address, "1000000", "1000000", "0"],
@@ -138,8 +140,9 @@ task("deploy:Router").setAction(async function (args: TaskArguments, hre) {
   const RouterV1 = await hre.ethers.getContractFactory("RouterV1");
   const router = await RouterV1.deploy();
   await router.deployed();
-
   console.log("router", router.address);
+
+  await sleep(15);
   await hre.run("verify:contract", {
     address: router.address,
   });

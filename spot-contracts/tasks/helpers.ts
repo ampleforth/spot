@@ -7,3 +7,7 @@ export async function getContractFactoryFromExternalArtifacts(ethers: any, name:
   const artifact = JSON.parse(fs.readFileSync(`${EXTERNAL_ARTIFACTS_PATH}/${name}.json`).toString());
   return ethers.getContractFactoryFromArtifact(artifact);
 }
+
+export async function sleep(sleepSec: number) {
+  await new Promise(resolve => setTimeout(resolve, sleepSec));
+}
