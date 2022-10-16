@@ -25,12 +25,11 @@ task("deploy:BondIssuer")
       bondFactoryAddress,
       issueFrequency,
       issueWindowOffset,
-      bondDuration,
       collateralTokenAddress,
-      trancheRatios,
     );
     await bondIssuer.deployed();
 
+    await (await bondIssuer.init(bondDuration, trancheRatios)).wait();
     await (await bondIssuer.issue()).wait();
 
     await sleep(15);
