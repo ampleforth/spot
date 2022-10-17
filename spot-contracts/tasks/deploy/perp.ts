@@ -35,14 +35,7 @@ task("deploy:BondIssuer")
     await sleep(15);
     await hre.run("verify:contract", {
       address: bondIssuer.address,
-      constructorArguments: [
-        bondFactoryAddress,
-        issueFrequency,
-        issueWindowOffset,
-        bondDuration,
-        collateralTokenAddress,
-        trancheRatios,
-      ],
+      constructorArguments: [bondFactoryAddress, issueFrequency, issueWindowOffset, collateralTokenAddress],
     });
 
     console.log("Bond issuer", bondIssuer.address);
