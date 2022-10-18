@@ -26,15 +26,6 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     /// @notice Address of the bond factory.
     IBondFactory public immutable bondFactory;
 
-    /// @notice Time to elapse since last issue window start, after which a new bond can be issued.
-    ///         AKA, issue frequency.
-    uint256 public immutable minIssueTimeIntervalSec;
-
-    /// @notice The issue window begins this many seconds into the minIssueTimeIntervalSec period.
-    /// @dev For example if minIssueTimeIntervalSec is 604800 (1 week), and issueWindowOffsetSec is 93600
-    ///      then the issue window opens at Friday 2AM GMT every week.
-    uint256 public immutable issueWindowOffsetSec;
-
     /// @notice The underlying rebasing token used for tranching.
     address public immutable collateral;
 
@@ -50,6 +41,15 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     ///      https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol#L20
     uint256[] public trancheRatios;
 
+    /// @notice Time to elapse since last issue window start, after which a new bond can be issued.
+    ///         AKA, issue frequency.
+    uint256 public minIssueTimeIntervalSec;
+
+    /// @notice The issue window begins this many seconds into the minIssueTimeIntervalSec period.
+    /// @dev For example if minIssueTimeIntervalSec is 604800 (1 week), and issueWindowOffsetSec is 93600
+    ///      then the issue window opens at Friday 2AM GMT every week.
+    uint256 public issueWindowOffsetSec;
+
     /// @notice An enumerable list to keep track of bonds issued by this issuer.
     /// @dev Bonds are only added and never removed, thus the last item will always point
     ///      to the latest bond.
@@ -60,27 +60,26 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
 
     /// @notice Contract constructor
     /// @param bondFactory_ The bond factory reference.
-    /// @param minIssueTimeIntervalSec_ The minimum time between successive issues.
-    /// @param issueWindowOffsetSec_ The issue window offset.
     /// @param collateral_ The address of the collateral ERC-20.
-    constructor(
-        IBondFactory bondFactory_,
-        uint256 minIssueTimeIntervalSec_,
-        uint256 issueWindowOffsetSec_,
-        address collateral_
-    ) {
+    constructor(IBondFactory bondFactory_, address collateral_) {
         bondFactory = bondFactory_;
-        minIssueTimeIntervalSec = minIssueTimeIntervalSec_;
-        issueWindowOffsetSec = issueWindowOffsetSec_;
         collateral = collateral_;
     }
 
-    /// @notice Contract initializer
+    /// @notice Contract initializer.
     /// @param maxMaturityDuration_ The maximum maturity duration.
     /// @param trancheRatios_ The tranche ratios.
-    function init(uint256 maxMaturityDuration_, uint256[] memory trancheRatios_) public initializer {
+    /// @param minIssueTimeIntervalSec_ The minimum time between successive issues.
+    /// @param issueWindowOffsetSec_ The issue window offset.
+    function init(
+        uint256 maxMaturityDuration_,
+        uint256[] memory trancheRatios_,
+        uint256 minIssueTimeIntervalSec_,
+        uint256 issueWindowOffsetSec_
+    ) public initializer {
         __Ownable_init();
         updateBondConfig(maxMaturityDuration_, trancheRatios_);
+        updateIssuanceTimingConfig(minIssueTimeIntervalSec_, issueWindowOffsetSec_);
     }
 
     /// @notice Updates the bond duration and tranche ratios used to issue bonds.
@@ -94,6 +93,17 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
             ratioSum += trancheRatios_[i];
         }
         require(ratioSum == TRANCHE_RATIO_GRANULARITY, "BondIssuer: Invalid tranche ratios");
+    }
+
+    /// @notice Updates the bond frequency and offset.
+    /// @param minIssueTimeIntervalSec_ The new issuance interval.
+    /// @param issueWindowOffsetSec_ The new issue window offset.
+    function updateIssuanceTimingConfig(uint256 minIssueTimeIntervalSec_, uint256 issueWindowOffsetSec_)
+        public
+        onlyOwner
+    {
+        minIssueTimeIntervalSec = minIssueTimeIntervalSec_;
+        issueWindowOffsetSec = issueWindowOffsetSec_;
     }
 
     /// @inheritdoc IBondIssuer

@@ -15,8 +15,8 @@ describe("BondIssuer", function () {
     token = await Token.deploy();
     await token.init("Test token", "TEST");
     const BondIssuer = await ethers.getContractFactory("BondIssuer");
-    issuer = await BondIssuer.deploy(bondFactory.address, 3600, 120, token.address);
-    await issuer.init(86400, [200, 300, 500]);
+    issuer = await BondIssuer.deploy(bondFactory.address, token.address);
+    await issuer.init(86400, [200, 300, 500], 3600, 120);
   });
 
   describe("#setup", function () {
@@ -58,6 +58,22 @@ describe("BondIssuer", function () {
       expect(await issuer.maxMaturityDuration()).to.eq(864000);
       expect(await issuer.trancheRatios(0)).to.eq(300);
       expect(await issuer.trancheRatios(1)).to.eq(700);
+    });
+  });
+
+  describe("#updateIssuanceTimingConfig", function () {
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(issuer.connect(otherUser).updateIssuanceTimingConfig(7200, 240)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    it("should update the bond config", async function () {
+      await issuer.updateIssuanceTimingConfig(7200, 240);
+      expect(await issuer.minIssueTimeIntervalSec()).to.eq(7200);
+      expect(await issuer.issueWindowOffsetSec()).to.eq(240);
     });
   });
 

@@ -724,8 +724,8 @@ describe("PerpetualTranche", function () {
       let issuer: Contract;
       beforeEach(async function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
-        issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, collateralToken.address);
-        await issuer.init(3600, [200, 300, 500]);
+        issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
+        await issuer.init(3600, [200, 300, 500], 1200, 0);
         await perp.updateBondIssuer(issuer.address);
 
         await advancePerpQueue(perp, 1200);
@@ -762,8 +762,8 @@ describe("PerpetualTranche", function () {
       let issuer: Contract;
       beforeEach(async function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
-        issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, collateralToken.address);
-        await issuer.init(3600, [200, 300, 500]);
+        issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
+        await issuer.init(3600, [200, 300, 500], 1200, 0);
         await perp.updateBondIssuer(issuer.address);
 
         await advancePerpQueue(perp, 3600);
@@ -804,8 +804,8 @@ describe("PerpetualTranche", function () {
       let issuer: Contract;
       beforeEach(async function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
-        issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, collateralToken.address);
-        await issuer.init(3600, [200, 300, 500]);
+        issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
+        await issuer.init(3600, [200, 300, 500], 1200, 0);
         await perp.updateBondIssuer(issuer.address);
 
         await advancePerpQueue(perp, 3600);
@@ -849,8 +849,8 @@ describe("PerpetualTranche", function () {
       let issuer: Contract;
       beforeEach(async function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
-        issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, collateralToken.address);
-        await issuer.init(3600, [200, 300, 500]);
+        issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
+        await issuer.init(3600, [200, 300, 500], 1200, 0);
         await perp.updateBondIssuer(issuer.address);
 
         await advancePerpQueue(perp, 3600);
@@ -964,8 +964,8 @@ describe("PerpetualTranche", function () {
       const reserveTranches: Contract[] = [];
       beforeEach(async function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
-        issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, collateralToken.address);
-        await issuer.init(10800, [500, 500]);
+        issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
+        await issuer.init(10800, [500, 500], 1200, 0);
         await perp.updateBondIssuer(issuer.address);
         await perp.updateTolerableTrancheMaturity(0, 10800);
         await advancePerpQueue(perp, 10900);
@@ -1041,8 +1041,8 @@ describe("PerpetualTranche", function () {
       const reserveTranches: Contract[] = [];
       beforeEach(async function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
-        issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, collateralToken.address);
-        await issuer.init(10800, [500, 500]);
+        issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
+        await issuer.init(10800, [500, 500], 1200, 0);
         await perp.updateBondIssuer(issuer.address);
         await perp.updateTolerableTrancheMaturity(0, 10800);
         await advancePerpQueue(perp, 10900);
@@ -1132,8 +1132,8 @@ describe("PerpetualTranche", function () {
       const reserveTranches: Contract[] = [];
       beforeEach(async function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
-        issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, collateralToken.address);
-        await issuer.init(10800, [500, 500]);
+        issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
+        await issuer.init(10800, [500, 500], 1200, 0);
         await perp.updateBondIssuer(issuer.address);
         await perp.updateTolerableTrancheMaturity(0, 10800);
         await advancePerpQueue(perp, 10900);
@@ -1220,8 +1220,8 @@ describe("PerpetualTranche", function () {
       const reserveTranches: Contract[] = [];
       beforeEach(async function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
-        issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, collateralToken.address);
-        await issuer.init(10800, [500, 500]);
+        issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
+        await issuer.init(10800, [500, 500], 1200, 0);
         await perp.updateBondIssuer(issuer.address);
         await perp.updateTolerableTrancheMaturity(0, 10800);
         await advancePerpQueue(perp, 10900);
@@ -1311,8 +1311,8 @@ describe("PerpetualTranche", function () {
     beforeEach(async function () {
       const bondFactory = await setupBondFactory();
       const BondIssuer = await ethers.getContractFactory("BondIssuer");
-      const issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, collateralToken.address);
-      await issuer.init(10800, [500, 500]);
+      const issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
+      await issuer.init(10800, [500, 500], 1200, 0);
       await perp.updateBondIssuer(issuer.address);
       await perp.updateTolerableTrancheMaturity(600, 10800);
       await advancePerpQueue(perp, 10900);
@@ -1346,8 +1346,8 @@ describe("PerpetualTranche", function () {
     beforeEach(async function () {
       const bondFactory = await setupBondFactory();
       const BondIssuer = await ethers.getContractFactory("BondIssuer");
-      const issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, collateralToken.address);
-      await issuer.init(10800, [500, 500]);
+      const issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
+      await issuer.init(10800, [500, 500], 1200, 0);
       await perp.updateBondIssuer(issuer.address);
       await perp.updateTolerableTrancheMaturity(600, 10800);
       await advancePerpQueue(perp, 10900);
