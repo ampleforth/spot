@@ -85,7 +85,7 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
 
     /// @notice Updates the bond duration and tranche ratios used to issue bonds.
     /// @param maxMaturityDuration_ The new maximum maturity duration.
-    /// @param trancheRatios_ The new tranche ratios.
+    /// @param trancheRatios_ The new tranche ratios, ordered by decreasing seniority (i.e. A to Z)
     function updateBondConfig(uint256 maxMaturityDuration_, uint256[] memory trancheRatios_) public onlyOwner {
         maxMaturityDuration = maxMaturityDuration_;
         trancheRatios = trancheRatios_;
