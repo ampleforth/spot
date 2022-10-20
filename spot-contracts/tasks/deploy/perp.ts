@@ -21,29 +21,16 @@ task("deploy:BondIssuer")
     console.log("Signer", await (await hre.ethers.getSigners())[0].getAddress());
 
     const BondIssuer = await hre.ethers.getContractFactory("BondIssuer");
-    const bondIssuer = await BondIssuer.deploy(
-      bondFactoryAddress,
-      issueFrequency,
-      issueWindowOffset,
-      bondDuration,
-      collateralTokenAddress,
-      trancheRatios,
-    );
+    const bondIssuer = await BondIssuer.deploy(bondFactoryAddress, collateralTokenAddress);
     await bondIssuer.deployed();
 
+    await (await bondIssuer.init(bondDuration, trancheRatios, issueFrequency, issueWindowOffset)).wait();
     await (await bondIssuer.issue()).wait();
 
     await sleep(15);
     await hre.run("verify:contract", {
       address: bondIssuer.address,
-      constructorArguments: [
-        bondFactoryAddress,
-        issueFrequency,
-        issueWindowOffset,
-        bondDuration,
-        collateralTokenAddress,
-        trancheRatios,
-      ],
+      constructorArguments: [bondFactoryAddress, collateralTokenAddress],
     });
 
     console.log("Bond issuer", bondIssuer.address);

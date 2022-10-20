@@ -41,7 +41,8 @@ describe("RouterV1", function () {
     ({ collateralToken } = await setupCollateralToken("Bitcoin", "BTC"));
 
     const BondIssuer = await ethers.getContractFactory("BondIssuer");
-    issuer = await BondIssuer.deploy(bondFactory.address, 1200, 0, 3600, collateralToken.address, [200, 300, 500]);
+    issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
+    await issuer.init(3600, [200, 300, 500], 1200, 0);
 
     const FeeStrategy = await ethers.getContractFactory("MockFeeStrategy");
     feeStrategy = await FeeStrategy.deploy();

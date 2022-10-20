@@ -1,22 +1,27 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { Contract } from "ethers";
+import { Contract, Signer } from "ethers";
 
 import { TimeHelpers, setupBondFactory } from "./helpers";
 
-let bondFactory: Contract, token: Contract, issuer: Contract;
+let bondFactory: Contract, token: Contract, issuer: Contract, deployer: Signer, otherUser: Signer;
 describe("BondIssuer", function () {
   beforeEach(async function () {
+    const accounts = await ethers.getSigners();
+    deployer = accounts[0];
+    otherUser = accounts[1];
     bondFactory = await setupBondFactory();
     const Token = await ethers.getContractFactory("MockERC20");
     token = await Token.deploy();
     await token.init("Test token", "TEST");
     const BondIssuer = await ethers.getContractFactory("BondIssuer");
-    issuer = await BondIssuer.deploy(bondFactory.address, 3600, 120, 86400, token.address, [200, 300, 500]);
+    issuer = await BondIssuer.deploy(bondFactory.address, token.address);
+    await issuer.init(86400, [200, 300, 500], 3600, 120);
   });
 
-  describe("#constructor", function () {
+  describe("#setup", function () {
     it("should set storage parameters", async function () {
+      expect(await issuer.owner()).to.eq(await deployer.getAddress());
       expect(await issuer.bondFactory()).to.eq(bondFactory.address);
       expect(await issuer.minIssueTimeIntervalSec()).to.eq(3600);
       expect(await issuer.issueWindowOffsetSec()).to.eq(120);
@@ -29,11 +34,60 @@ describe("BondIssuer", function () {
       expect(await issuer.issuedCount()).to.eq(0);
       await expect(issuer.issuedBondAt(0)).to.be.reverted;
     });
-    it("should revert if tranche rations are improper", async function () {
-      const BondIssuer = await ethers.getContractFactory("BondIssuer");
-      await expect(
-        BondIssuer.deploy(bondFactory.address, 3600, 120, 86400, token.address, [200, 300, 501]),
-      ).to.be.revertedWith("BondIssuer: Invalid tranche ratios");
+  });
+
+  describe("#updateMaxMaturityDuration", function () {
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(issuer.connect(otherUser).updateMaxMaturityDuration(86400)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    it("should update the bond duration", async function () {
+      await issuer.updateMaxMaturityDuration(864000);
+      expect(await issuer.maxMaturityDuration()).to.eq(864000);
+    });
+  });
+
+  describe("#updateTrancheRatios", function () {
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(issuer.connect(otherUser).updateTrancheRatios([200, 300, 500])).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    describe("when tranche ratios are improper", function () {
+      it("should revert", async function () {
+        await expect(issuer.updateTrancheRatios([200, 300, 501])).to.be.revertedWith(
+          "BondIssuer: Invalid tranche ratios",
+        );
+      });
+    });
+
+    it("should update the tranche ratios", async function () {
+      await issuer.updateTrancheRatios([300, 700]);
+      expect(await issuer.trancheRatios(0)).to.eq(300);
+      expect(await issuer.trancheRatios(1)).to.eq(700);
+    });
+  });
+
+  describe("#updateIssuanceTimingConfig", function () {
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(issuer.connect(otherUser).updateIssuanceTimingConfig(7200, 240)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    it("should update the timing config", async function () {
+      await issuer.updateIssuanceTimingConfig(7200, 240);
+      expect(await issuer.minIssueTimeIntervalSec()).to.eq(7200);
+      expect(await issuer.issueWindowOffsetSec()).to.eq(240);
     });
   });
 

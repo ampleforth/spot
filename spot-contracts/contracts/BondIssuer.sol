@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.17;
 
+import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 
 import { IBondFactory } from "./_interfaces/buttonwood/IBondFactory.sol";
@@ -15,7 +16,7 @@ import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
  *  @dev Based on the provided frequency, issuer instantiates a new bond with the config when poked.
  *
  */
-contract BondIssuer is IBondIssuer {
+contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
 
     /// @dev Using the same granularity as the underlying buttonwood tranche contracts.
@@ -25,29 +26,29 @@ contract BondIssuer is IBondIssuer {
     /// @notice Address of the bond factory.
     IBondFactory public immutable bondFactory;
 
-    /// @notice Time to elapse since last issue window start, after which a new bond can be issued.
-    ///         AKA, issue frequency.
-    uint256 public immutable minIssueTimeIntervalSec;
-
-    /// @notice The issue window begins this many seconds into the minIssueTimeIntervalSec period.
-    /// @dev For example if minIssueTimeIntervalSec is 604800 (1 week), and issueWindowOffsetSec is 93600
-    ///      then the issue window opens at Friday 2AM GMT every week.
-    uint256 public immutable issueWindowOffsetSec;
+    /// @notice The underlying rebasing token used for tranching.
+    address public immutable collateral;
 
     /// @notice The maximum maturity duration for the issued bonds.
     /// @dev In practice, bonds issued by this issuer won't have a constant duration as
     ///      block.timestamp when the issue function is invoked can vary.
     ///      Rather these bonds are designed to have a predictable maturity date.
-    uint256 public immutable maxMaturityDuration;
-
-    /// @notice The underlying rebasing token used for tranching.
-    address public immutable collateral;
+    uint256 public maxMaturityDuration;
 
     /// @notice The tranche ratios.
     /// @dev Each tranche ratio is expressed as a fixed point number
     ///      such that the sum of all the tranche ratios is exactly 1000.
     ///      https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol#L20
     uint256[] public trancheRatios;
+
+    /// @notice Time to elapse since last issue window start, after which a new bond can be issued.
+    ///         AKA, issue frequency.
+    uint256 public minIssueTimeIntervalSec;
+
+    /// @notice The issue window begins this many seconds into the minIssueTimeIntervalSec period.
+    /// @dev For example if minIssueTimeIntervalSec is 604800 (1 week), and issueWindowOffsetSec is 93600
+    ///      then the issue window opens at Friday 2AM GMT every week.
+    uint256 public issueWindowOffsetSec;
 
     /// @notice An enumerable list to keep track of bonds issued by this issuer.
     /// @dev Bonds are only added and never removed, thus the last item will always point
@@ -57,28 +58,57 @@ contract BondIssuer is IBondIssuer {
     /// @notice The timestamp when the issue window opened during the last issue.
     uint256 public lastIssueWindowTimestamp;
 
-    constructor(
-        IBondFactory bondFactory_,
-        uint256 minIssueTimeIntervalSec_,
-        uint256 issueWindowOffsetSec_,
-        uint256 maxMaturityDuration_,
-        address collateral_,
-        uint256[] memory trancheRatios_
-    ) {
+    /// @notice Contract constructor
+    /// @param bondFactory_ The bond factory reference.
+    /// @param collateral_ The address of the collateral ERC-20.
+    constructor(IBondFactory bondFactory_, address collateral_) {
         bondFactory = bondFactory_;
-        minIssueTimeIntervalSec = minIssueTimeIntervalSec_;
-        issueWindowOffsetSec = issueWindowOffsetSec_;
-        maxMaturityDuration = maxMaturityDuration_;
-
         collateral = collateral_;
+    }
+
+    /// @notice Contract initializer.
+    /// @param maxMaturityDuration_ The maximum maturity duration.
+    /// @param trancheRatios_ The tranche ratios.
+    /// @param minIssueTimeIntervalSec_ The minimum time between successive issues.
+    /// @param issueWindowOffsetSec_ The issue window offset.
+    function init(
+        uint256 maxMaturityDuration_,
+        uint256[] memory trancheRatios_,
+        uint256 minIssueTimeIntervalSec_,
+        uint256 issueWindowOffsetSec_
+    ) public initializer {
+        __Ownable_init();
+        updateMaxMaturityDuration(maxMaturityDuration_);
+        updateTrancheRatios(trancheRatios_);
+        updateIssuanceTimingConfig(minIssueTimeIntervalSec_, issueWindowOffsetSec_);
+    }
+
+    /// @notice Updates the bond duration.
+    /// @param maxMaturityDuration_ The new maximum maturity duration.
+    function updateMaxMaturityDuration(uint256 maxMaturityDuration_) public onlyOwner {
+        maxMaturityDuration = maxMaturityDuration_;
+    }
+
+    /// @notice Updates the tranche ratios used to issue bonds.
+    /// @param trancheRatios_ The new tranche ratios, ordered by decreasing seniority (i.e. A to Z)
+    function updateTrancheRatios(uint256[] memory trancheRatios_) public onlyOwner {
         trancheRatios = trancheRatios_;
         uint256 ratioSum;
         for (uint8 i = 0; i < trancheRatios_.length; i++) {
             ratioSum += trancheRatios_[i];
         }
         require(ratioSum == TRANCHE_RATIO_GRANULARITY, "BondIssuer: Invalid tranche ratios");
+    }
 
-        lastIssueWindowTimestamp = 0;
+    /// @notice Updates the bond frequency and offset.
+    /// @param minIssueTimeIntervalSec_ The new issuance interval.
+    /// @param issueWindowOffsetSec_ The new issue window offset.
+    function updateIssuanceTimingConfig(uint256 minIssueTimeIntervalSec_, uint256 issueWindowOffsetSec_)
+        public
+        onlyOwner
+    {
+        minIssueTimeIntervalSec = minIssueTimeIntervalSec_;
+        issueWindowOffsetSec = issueWindowOffsetSec_;
     }
 
     /// @inheritdoc IBondIssuer
