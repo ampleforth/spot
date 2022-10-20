@@ -36,10 +36,25 @@ describe("BondIssuer", function () {
     });
   });
 
-  describe("#updateBondConfig", function () {
+  describe("#updateMaxMaturityDuration", function () {
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
-        await expect(issuer.connect(otherUser).updateBondConfig(86400, [200, 300, 500])).to.be.revertedWith(
+        await expect(issuer.connect(otherUser).updateMaxMaturityDuration(86400)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    it("should update the bond duration", async function () {
+      await issuer.updateMaxMaturityDuration(864000);
+      expect(await issuer.maxMaturityDuration()).to.eq(864000);
+    });
+  });
+
+  describe("#updateTrancheRatios", function () {
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(issuer.connect(otherUser).updateTrancheRatios([200, 300, 500])).to.be.revertedWith(
           "Ownable: caller is not the owner",
         );
       });
@@ -47,15 +62,14 @@ describe("BondIssuer", function () {
 
     describe("when tranche ratios are improper", function () {
       it("should revert", async function () {
-        await expect(issuer.updateBondConfig(86400, [200, 300, 501])).to.be.revertedWith(
+        await expect(issuer.updateTrancheRatios([200, 300, 501])).to.be.revertedWith(
           "BondIssuer: Invalid tranche ratios",
         );
       });
     });
 
-    it("should update the bond config", async function () {
-      await issuer.updateBondConfig(864000, [300, 700]);
-      expect(await issuer.maxMaturityDuration()).to.eq(864000);
+    it("should update the tranche ratios", async function () {
+      await issuer.updateTrancheRatios([300, 700]);
       expect(await issuer.trancheRatios(0)).to.eq(300);
       expect(await issuer.trancheRatios(1)).to.eq(700);
     });
@@ -70,7 +84,7 @@ describe("BondIssuer", function () {
       });
     });
 
-    it("should update the bond config", async function () {
+    it("should update the timing config", async function () {
       await issuer.updateIssuanceTimingConfig(7200, 240);
       expect(await issuer.minIssueTimeIntervalSec()).to.eq(7200);
       expect(await issuer.issueWindowOffsetSec()).to.eq(240);

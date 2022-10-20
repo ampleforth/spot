@@ -78,15 +78,20 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
         uint256 issueWindowOffsetSec_
     ) public initializer {
         __Ownable_init();
-        updateBondConfig(maxMaturityDuration_, trancheRatios_);
+        updateMaxMaturityDuration(maxMaturityDuration_);
+        updateTrancheRatios(trancheRatios_);
         updateIssuanceTimingConfig(minIssueTimeIntervalSec_, issueWindowOffsetSec_);
     }
 
-    /// @notice Updates the bond duration and tranche ratios used to issue bonds.
+    /// @notice Updates the bond duration.
     /// @param maxMaturityDuration_ The new maximum maturity duration.
-    /// @param trancheRatios_ The new tranche ratios, ordered by decreasing seniority (i.e. A to Z)
-    function updateBondConfig(uint256 maxMaturityDuration_, uint256[] memory trancheRatios_) public onlyOwner {
+    function updateMaxMaturityDuration(uint256 maxMaturityDuration_) public onlyOwner {
         maxMaturityDuration = maxMaturityDuration_;
+    }
+
+    /// @notice Updates the tranche ratios used to issue bonds.
+    /// @param trancheRatios_ The new tranche ratios, ordered by decreasing seniority (i.e. A to Z)
+    function updateTrancheRatios(uint256[] memory trancheRatios_) public onlyOwner {
         trancheRatios = trancheRatios_;
         uint256 ratioSum;
         for (uint8 i = 0; i < trancheRatios_.length; i++) {
