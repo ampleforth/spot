@@ -297,6 +297,7 @@ contract PerpetualTranche is
     ) public initializer {
         __ERC20_init(name, symbol);
         __Ownable_init();
+        keeper = owner();
         _decimals = IERC20MetadataUpgradeable(address(collateral_)).decimals();
 
         // NOTE: `_reserveAt(0)` always points to the underling collateral token
@@ -316,7 +317,7 @@ contract PerpetualTranche is
     }
 
     //--------------------------------------------------------------------------
-    // ADMIN only methods
+    // Keeper only methods
 
     /// @notice Pauses deposits, withdrawals and rollovers.
     /// @dev NOTE: ERC-20 functions, like transfers will always remain operational.
@@ -329,6 +330,18 @@ contract PerpetualTranche is
     function unpause() public onlyKeeper {
         _unpause();
     }
+
+    /// @notice Update parameters controlling the perp token mint limits.
+    /// @param maxSupply_ New max total supply.
+    /// @param maxMintAmtPerTranche_ New max total for per tranche in minting bond.
+    function updateMintingLimits(uint256 maxSupply_, uint256 maxMintAmtPerTranche_) public onlyKeeper {
+        maxSupply = maxSupply_;
+        maxMintAmtPerTranche = maxMintAmtPerTranche_;
+        emit UpdatedMintingLimits(maxSupply_, maxMintAmtPerTranche_);
+    }
+
+    //--------------------------------------------------------------------------
+    // Owner only methods
 
     /// @notice Updates the reference to the keeper.
     /// @param newKeeper The address of the new keeper.
@@ -403,15 +416,6 @@ contract PerpetualTranche is
         minTrancheMaturitySec = minTrancheMaturitySec_;
         maxTrancheMaturitySec = maxTrancheMaturitySec_;
         emit UpdatedTolerableTrancheMaturity(minTrancheMaturitySec_, maxTrancheMaturitySec_);
-    }
-
-    /// @notice Update parameters controlling the perp token mint limits.
-    /// @param maxSupply_ New max total supply.
-    /// @param maxMintAmtPerTranche_ New max total for per tranche in minting bond.
-    function updateMintingLimits(uint256 maxSupply_, uint256 maxMintAmtPerTranche_) public onlyOwner {
-        maxSupply = maxSupply_;
-        maxMintAmtPerTranche = maxMintAmtPerTranche_;
-        emit UpdatedMintingLimits(maxSupply_, maxMintAmtPerTranche_);
     }
 
     /// @notice Update the mature value target percentage parameter.
