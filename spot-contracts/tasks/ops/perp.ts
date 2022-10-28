@@ -37,20 +37,27 @@ task("ops:info")
     console.log("owner", await perp.owner());
     console.log("keeper", await perp.keeper());
     console.log("reserve:", await perp.reserve());
+    console.log("protocolFeeCollector:", await perp.protocolFeeCollector());
     console.log("paused:", await perp.paused());
     console.log("collateralToken", collateralToken.address);
     console.log("feeStrategy:", feeStrategy.address);
     console.log("discountStrategy:", discountStrategy.address);
     console.log("feeToken:", await feeStrategy.feeToken());
     console.log("pricingStrategy:", pricingStrategy.address);
+    console.log("---------------------------------------------------------------");
     console.log(`maturityTolarance: [${await perp.minTrancheMaturitySec()}, ${await perp.maxTrancheMaturitySec()}]`);
+    console.log("maxSupply:", utils.formatUnits(await perp.maxSupply(), await perp.decimals()));
+    console.log("maxMintAmtPerTranche:", utils.formatUnits(await perp.maxMintAmtPerTranche(), await perp.decimals()));
+    console.log(
+      "matureValueTargetPerc:",
+      utils.formatUnits(await perp.matureValueTargetPerc(), await perp.PERC_DECIMALS()),
+    );
+    console.log("---------------------------------------------------------------");
     console.log("depositBond:", depositBond.address);
     console.log("issued:", issued);
-    console.log("TotalSupply:", utils.formatUnits(perpSupply, perpDecimals));
-
     const matureTrancheBalance = await perp.callStatic.getMatureTrancheBalance();
     console.log("MatureTrancheBalance:", utils.formatUnits(matureTrancheBalance, perpDecimals));
-
+    console.log("TotalSupply:", utils.formatUnits(perpSupply, perpDecimals));
     console.log("---------------------------------------------------------------");
     console.log("Reserve:");
     const reserveCount = (await perp.callStatic.getReserveCount()).toNumber();
