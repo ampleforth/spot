@@ -214,4 +214,35 @@ library BondHelpers {
 
         return (td, balances);
     }
+
+    /// @notice Given a bond and a user address computes the tranche amounts proportional to the tranche ratios,
+    //          that can be redeemed for the collateral before maturity.
+    /// @param b The address of the bond contract.
+    /// @param u The address to check balance for.
+    /// @return The tranche data and an array of tranche token balances.
+    function computeRedeemableTrancheAmounts(IBondController b, address u)
+        internal
+        view
+        returns (TrancheData memory, uint256[] memory)
+    {
+        TrancheData memory td = getTrancheData(b);
+        uint256[] memory redeemableAmts = new uint256[](td.trancheCount);
+        uint256[] memory trancheAmts = new uint256[](td.trancheCount);
+        uint256 minUnitBalanceRedeemable = type(uint256).max;
+
+        uint8 i;
+        for (i = 0; i < td.trancheCount; i++) {
+            trancheAmts[i] = td.tranches[i].balanceOf(u);
+            uint256 unitBalanceRedeemable = (trancheAmts[i] * TRANCHE_RATIO_GRANULARITY) / td.trancheRatios[i];
+            if (minUnitBalanceRedeemable < unitBalanceRedeemable) {
+                minUnitBalanceRedeemable = unitBalanceRedeemable;
+            }
+        }
+
+        for (i = 0; i < td.trancheCount; i++) {
+            redeemableAmts[i] = td.trancheRatios[i] * minUnitBalanceRedeemable;
+        }
+
+        return (td, redeemableAmts);
+    }
 }

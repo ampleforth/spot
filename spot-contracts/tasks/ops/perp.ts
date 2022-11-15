@@ -433,7 +433,7 @@ task("ops:trancheAndRollover")
         remainingTrancheInAmts[i] = rd.remainingTrancheInAmt;
         remainingTokenOutAmts[j] = remainingTokenOutAmts[j].sub(rd.tokenOutAmt);
 
-        if (remainingTokenOutAmts[i].lte(DUST_AMOUNT)) {
+        if (remainingTokenOutAmts[j].lte(DUST_AMOUNT)) {
           j++;
         }
         if (remainingTrancheInAmts[i].lte(DUST_AMOUNT)) {
