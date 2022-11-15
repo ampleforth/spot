@@ -171,7 +171,7 @@ contract RolloverVault is
 
         // Calculate usable balance
         uint256 usableBalance = depositAsset_.balanceOf(address(this)).min(
-            (HUNDRED_PERC - minCashPerc).mulDiv(totalAssets(), UNIT_PERC, MathUpgradeable.Rounding.Down)
+            (HUNDRED_PERC - minCashPerc).mulDiv(totalAssets(), HUNDRED_PERC, MathUpgradeable.Rounding.Down)
         );
 
         // Ensure usable balance before tranching
