@@ -16,11 +16,10 @@ task("verify:contract", "Verifies on etherscan")
   .setAction(async function (args: TaskArguments, hre) {
     try {
       await sleep(args.sleepSec);
-      throw new Error("Skipping verification");
-      // await hre.run("verify:verify", {
-      //   address: args.address,
-      //   constructorArguments: args.constructorArguments,
-      // });
+      await hre.run("verify:verify", {
+        address: args.address,
+        constructorArguments: args.constructorArguments,
+      });
     } catch (e) {
       console.log("Unable to verify on etherscan");
       // console.warn(e)
@@ -33,12 +32,12 @@ task("verify:contract", "Verifies on etherscan")
   });
 
 task("transferOwnership", "Transfers ownership of contract to new owner")
-  .addParam("address", "the contract address", undefined, types.string, false)
+  .addPositionalParam("address", "the contract address", undefined, types.string, false)
   .addParam("newOwnerAddress", "the new owner address", undefined, types.string, false)
   .addParam("fromIdx", "the index of sender", 0, types.int)
   .setAction(async function (args: TaskArguments, hre) {
     const { address, newOwnerAddress } = args;
-    const contract = await hre.ethers.getContractAt("Ownable", address);
+    const contract = await hre.ethers.getContractAt("OwnableUpgradeable", address);
 
     const signer = (await hre.ethers.getSigners())[args.fromIdx];
     const signerAddress = await signer.getAddress();

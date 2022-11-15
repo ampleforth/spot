@@ -39,7 +39,7 @@ export default {
       accounts: {
         mnemonic: process.env.PROD_MNEMONIC || Wallet.createRandom().mnemonic.phrase,
       },
-      gasMultiplier: 1.05,
+      gasMultiplier: 1.02,
     },
   },
   solidity: {
