@@ -226,7 +226,6 @@ contract RolloverVault is
                 continue;
             }
 
-            
             // TODO: handle case when fees need to paid by the vault for rolling over
             // _checkAndApproveMax(incomeAsset(), address(perp), type(uint256).max);
 
