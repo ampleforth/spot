@@ -203,20 +203,19 @@ library BondHelpers {
     {
         TrancheData memory td = getTrancheData(b);
         uint256[] memory redeemableAmts = new uint256[](td.trancheCount);
-        uint256[] memory trancheAmts = new uint256[](td.trancheCount);
-        uint256 minUnitBalanceRedeemable = type(uint256).max;
 
+        // We calculate the minimum value of {trancheBal/trancheRatio} across tranches
+        uint256 min = type(uint256).max;
         uint8 i;
-        for (i = 0; i < td.trancheCount; i++) {
-            trancheAmts[i] = td.tranches[i].balanceOf(u);
-            uint256 unitBalanceRedeemable = (trancheAmts[i] * TRANCHE_RATIO_GRANULARITY) / td.trancheRatios[i];
-            if (minUnitBalanceRedeemable < unitBalanceRedeemable) {
-                minUnitBalanceRedeemable = unitBalanceRedeemable;
+        for (i = 0; i < td.trancheCount && min != 0; i++) {
+            uint256 d = (td.tranches[i].balanceOf(u) * TRANCHE_RATIO_GRANULARITY) / td.trancheRatios[i];
+            if (d < min) {
+                min = d;
             }
         }
 
         for (i = 0; i < td.trancheCount; i++) {
-            redeemableAmts[i] = td.trancheRatios[i] * minUnitBalanceRedeemable;
+            redeemableAmts[i] = (td.trancheRatios[i] * min) / TRANCHE_RATIO_GRANULARITY;
         }
 
         return (td, redeemableAmts);

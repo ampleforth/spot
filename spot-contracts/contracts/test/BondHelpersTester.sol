@@ -49,4 +49,12 @@ contract BondHelpersTester {
         TrancheData memory td = b.getTrancheData();
         return td.getTrancheIndex(t);
     }
+
+    function computeRedeemableTrancheAmounts(IBondController b, address u)
+        public
+        view
+        returns (TrancheData memory td, uint256[] memory)
+    {
+        return b.computeRedeemableTrancheAmounts(u);
+    }
 }
