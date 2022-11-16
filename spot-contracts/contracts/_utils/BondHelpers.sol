@@ -191,30 +191,6 @@ library BondHelpers {
         return (td, collateralBalances, trancheSupplies);
     }
 
-    /// @notice Given a bond, retrieves the collateral redeemable for
-    ///         each tranche held by the given address.
-    /// @param b The address of the bond contract.
-    /// @param u The address to check balance for.
-    /// @return The tranche data and an array of collateral balances.
-    function getTrancheCollateralBalances(IBondController b, address u)
-        internal
-        view
-        returns (TrancheData memory, uint256[] memory)
-    {
-        TrancheData memory td;
-        uint256[] memory collateralBalances;
-        uint256[] memory trancheSupplies;
-
-        (td, collateralBalances, trancheSupplies) = getTrancheCollateralizations(b);
-
-        uint256[] memory balances = new uint256[](td.trancheCount);
-        for (uint8 i = 0; i < td.trancheCount; i++) {
-            balances[i] = (td.tranches[i].balanceOf(u) * collateralBalances[i]) / trancheSupplies[i];
-        }
-
-        return (td, balances);
-    }
-
     /// @notice Given a bond and a user address computes the tranche amounts proportional to the tranche ratios,
     //          that can be redeemed for the collateral before maturity.
     /// @param b The address of the bond contract.

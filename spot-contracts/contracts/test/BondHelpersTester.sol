@@ -33,14 +33,6 @@ contract BondHelpersTester {
         return b.previewDeposit(collateralAmount);
     }
 
-    function getTrancheCollateralBalances(IBondController b, address u)
-        public
-        view
-        returns (TrancheData memory, uint256[] memory)
-    {
-        return b.getTrancheCollateralBalances(u);
-    }
-
     function getTrancheCollateralizations(IBondController b)
         public
         view
