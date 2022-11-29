@@ -59,3 +59,9 @@ yarn hardhat --network goerli ops:trancheAndRollover \
 yarn hardhat --network goerli ops:rebase:MockAMPL \
   --ampl-address "0x74567107828843070087F1c6ec8322A3e8450725" \
   --rebase-perc 0.1
+
+
+########################################################################
+## upgrade
+
+yarn hardhat --network goerli upgrade:perp:testnet 0x95014Bc18F82a98CFAA3253fbD3184125A01f848
