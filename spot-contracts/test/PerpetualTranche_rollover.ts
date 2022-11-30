@@ -159,7 +159,7 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await expect(
           perp.rollover(rolloverInTranche.address, tranches[1].address, toFixedPtAmt("500")),
-        ).to.revertedWith("UnacceptableRollover");
+        ).to.revertedWith("UnacceptableRollover(");
       });
     });
 
@@ -167,10 +167,16 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await expect(
           perp.rollover(reserveTranche1.address, collateralToken.address, toFixedPtAmt("500")),
-        ).to.revertedWith("UnacceptableRollover");
+        ).to.revertedWith("UnacceptableRollover(");
+        await expect(
+          perp.rollover(reserveTranche1.address, reserveTranche1.address, toFixedPtAmt("500")),
+        ).to.revertedWith("UnacceptableRollover(");
+        await expect(
+          perp.rollover(reserveTranche1.address, reserveTranche2.address, toFixedPtAmt("500")),
+        ).to.revertedWith("UnacceptableRollover(");
         await expect(
           perp.rollover(reserveTranche1.address, holdingPenTranche1.address, toFixedPtAmt("500")),
-        ).to.revertedWith("UnacceptableRollover");
+        ).to.revertedWith("UnacceptableRollover(");
       });
     });
 
@@ -183,7 +189,7 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await expect(
           perp.rollover(rolloverInTranche.address, maliciousTranche.address, toFixedPtAmt("500")),
-        ).to.revertedWith("UnacceptableRollover");
+        ).to.revertedWith("UnacceptableRollover(");
       });
     });
 
@@ -197,7 +203,24 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await expect(
           perp.rollover(newRotationInTranche.address, rolloverInTranche.address, toFixedPtAmt("500")),
-        ).to.revertedWith("UnacceptableRollover");
+        ).to.revertedWith("UnacceptableRollover(");
+      });
+    });
+
+    describe("when the malicious trancheIn which points to the deposit bond is rolled in", function () {
+      let maliciousTranche: Contract;
+      beforeEach(async function () {
+        const ERC20 = await ethers.getContractFactory("MockTranche");
+        maliciousTranche = await ERC20.deploy();
+        await maliciousTranche.init("Tranche", "TRA");
+        await maliciousTranche.mint(deployerAddress, toFixedPtAmt("500"));
+        await maliciousTranche.setBond(await perp.callStatic.getDepositBond());
+        await maliciousTranche.approve(perp.address, toFixedPtAmt("500"));
+      });
+      it("should revert", async function () {
+        await expect(
+          perp.rollover(maliciousTranche.address, reserveTranche1.address, toFixedPtAmt("500")),
+        ).to.revertedWith("UnacceptableRollover(");
       });
     });
 

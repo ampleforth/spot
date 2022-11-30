@@ -450,8 +450,7 @@ contract PerpetualTranche is
         whenNotPaused
         afterStateUpdate
     {
-        IBondController bondIn = IBondController(trancheIn.bond());
-        if (!_depositBond.trancheTokenAddresses(trancheIn) || bondIn != _depositBond) {
+        if (!_isBondTranche(trancheIn, _depositBond)) {
             revert UnacceptableDepositTranche(trancheIn, _depositBond);
         }
 
@@ -1000,22 +999,20 @@ contract PerpetualTranche is
     ///          - expects incoming tranche to be part of the deposit bond
     ///      * When rolling out immature tranches,
     ///          - expects incoming tranche to be part of the deposit bond
-    ///          - expects outgoing tranche to not be part of the deposit bond
+    ///          - expects outgoing tranche to NOT be part of the deposit bond, (ie bondIn != bondOut)
     ///          - expects outgoing tranche to be in the reserve
-    ///          - expects outgoing bond to not be "acceptable" any more
+    ///          - expects outgoing bond to NOT be "acceptable" any more
     function _isAcceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut) private view returns (bool) {
-        IBondController bondIn = IBondController(trancheIn.bond());
-
         // when rolling out the mature tranche
         if (_isMatureTranche(tokenOut)) {
-            return (bondIn == _depositBond);
+            return _isBondTranche(trancheIn, _depositBond);
         }
 
         // when rolling out a normal tranche
         ITranche trancheOut = ITranche(address(tokenOut));
         IBondController bondOut = IBondController(trancheOut.bond());
-        return (bondIn == _depositBond &&
-            bondOut != _depositBond &&
+        return (_isBondTranche(trancheIn, _depositBond) &&
+            !_isBondTranche(trancheOut, _depositBond) &&
             _inReserve(trancheOut) &&
             !_isAcceptableForReserve(bondOut));
     }
@@ -1030,6 +1027,12 @@ contract PerpetualTranche is
         return (address(_reserveAt(0)) == bond.collateralToken() &&
             timeToMaturity >= minTrancheMaturitySec &&
             timeToMaturity < maxTrancheMaturitySec);
+    }
+
+    /// @dev Checks if the given tranche is a valid child of the given parent bond.
+    /// @return True if the bond is the tranche's parent.
+    function _isBondTranche(ITranche tranche, IBondController bond) private view returns (bool) {
+        return (bond.trancheTokenAddresses(tranche) && address(bond) == tranche.bond());
     }
 
     /// @dev Enforces the total supply cap. To be invoked AFTER the mint operation.
