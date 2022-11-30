@@ -30,22 +30,48 @@ task("ops:info")
 
     console.log("---------------------------------------------------------------");
     console.log("BondIssuer:", bondIssuer.address);
+    console.log("bondFactory:", await bondIssuer.bondFactory());
+    console.log("collateral:", await bondIssuer.collateral());
+    console.log("maxMaturityDuration:", utils.formatUnits(await bondIssuer.maxMaturityDuration(), 0));
+    console.log("minIssueTimeIntervalSec:", utils.formatUnits(await bondIssuer.minIssueTimeIntervalSec(), 0));
+    console.log("issueWindowOffsetSec:", utils.formatUnits(await bondIssuer.issueWindowOffsetSec(), 0));
+    let i = 0;
+    while (true) {
+      try {
+        console.log(`trancheRatios(${i}):`, utils.formatUnits(await bondIssuer.trancheRatios(i), 3));
+        i++;
+      } catch (e) {
+        break;
+      }
+    }
+    console.log("lastIssueWindowTimestamp:", utils.formatUnits(await bondIssuer.lastIssueWindowTimestamp(), 0));
     console.log("latestBond:", latestBond.address);
 
     console.log("---------------------------------------------------------------");
+    console.log("feeStrategy:", feeStrategy.address);
+    console.log("owner", await feeStrategy.owner());
+    console.log("feeToken", await feeStrategy.feeToken());
+    console.log("mintFeePerc:", utils.formatUnits(await feeStrategy.mintFeePerc(), 6));
+    console.log("burnFeePerc:", utils.formatUnits(await feeStrategy.burnFeePerc(), 6));
+    console.log("rolloverFeePerc:", utils.formatUnits(await feeStrategy.rolloverFeePerc(), 6));
+
+    console.log("---------------------------------------------------------------");
+    console.log("discountStrategy:", discountStrategy.address);
+    console.log("owner", await discountStrategy.owner());
+
+    console.log("---------------------------------------------------------------");
+    console.log("pricingStrategy:", pricingStrategy.address);
+
+    console.log("---------------------------------------------------------------");
     console.log("PerpetualTranche:", perp.address);
-    console.log("proxyAdmin", proxyAdminAddress);
-    console.log("implementation", implAddress);
-    console.log("owner", await perp.owner());
-    console.log("keeper", await perp.keeper());
+    console.log("proxyAdmin:", proxyAdminAddress);
+    console.log("implementation:", implAddress);
+    console.log("owner:", await perp.owner());
+    console.log("keeper:", await perp.keeper());
     console.log("reserve:", await perp.reserve());
     console.log("protocolFeeCollector:", await perp.protocolFeeCollector());
     console.log("paused:", await perp.paused());
-    console.log("collateralToken", collateralToken.address);
-    console.log("feeStrategy:", feeStrategy.address);
-    console.log("discountStrategy:", discountStrategy.address);
-    console.log("feeToken:", await feeStrategy.feeToken());
-    console.log("pricingStrategy:", pricingStrategy.address);
+    console.log("collateralToken:", collateralToken.address);
     console.log("---------------------------------------------------------------");
     console.log(`maturityTolarance: [${await perp.minTrancheMaturitySec()}, ${await perp.maxTrancheMaturitySec()}]`);
     console.log("maxSupply:", utils.formatUnits(await perp.maxSupply(), await perp.decimals()));
