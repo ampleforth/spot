@@ -64,3 +64,8 @@ yarn hardhat --network mainnet ops:trancheAndRollover \
   --router-address 0x38f600e08540178719BF656e6B43FC15A529c393 \
   --perp-address 0xC1f33e0cf7e40a67375007104B929E49a581bafE \
   --collateral-amount 200
+
+########################################################################
+## upgrade
+
+yarn hardhat --network mainnet prepare_upgrade:perp:mainnet 0xC1f33e0cf7e40a67375007104B929E49a581bafE
