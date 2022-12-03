@@ -47,6 +47,8 @@ yarn hardhat --network mainnet transferOwnership "0x2978B4103985A6668CE345555b0f
 yarn hardhat --network mainnet ops:info 0xC1f33e0cf7e40a67375007104B929E49a581bafE
 
 # test ops
+yarn hardhat --network mainnet ops:updateState 0xC1f33e0cf7e40a67375007104B929E49a581bafE
+
 yarn hardhat --network mainnet ops:trancheAndDeposit \
   --router-address 0x38f600e08540178719BF656e6B43FC15A529c393 \
   --perp-address 0xC1f33e0cf7e40a67375007104B929E49a581bafE \

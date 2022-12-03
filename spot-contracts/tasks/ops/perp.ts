@@ -204,9 +204,12 @@ task("ops:trancheAndDeposit")
     console.log("Signer", signerAddress);
 
     console.log("Approving router to spend tokens:");
-    const tx1 = await collateralToken.connect(signer).approve(router.address, fixedPtCollateralAmount);
-    await tx1.wait();
-    console.log("Tx", tx1.hash);
+    const allowance = await collateralToken.allowance(signerAddress, router.address);
+    if (allowance.lt(fixedPtCollateralAmount)) {
+      const tx1 = await collateralToken.connect(signer).approve(router.address, fixedPtCollateralAmount);
+      await tx1.wait();
+      console.log("Tx", tx1.hash);
+    }
 
     let fee = BigNumber.from("0");
     if (totalMintFee.gt("0") && feeToken.address !== perp.address) {
@@ -482,9 +485,12 @@ task("ops:trancheAndRollover")
     console.log("Signer", signerAddress);
 
     console.log("Approving collateralToken to be spent");
-    const tx1 = await collateralToken.connect(signer).approve(router.address, fixedPtCollateralAmount);
-    await tx1.wait();
-    console.log("Tx", tx1.hash);
+    const allowance = await collateralToken.allowance(signerAddress, router.address);
+    if (allowance.lt(fixedPtCollateralAmount)) {
+      const tx1 = await collateralToken.connect(signer).approve(router.address, fixedPtCollateralAmount);
+      await tx1.wait();
+      console.log("Tx", tx1.hash);
+    }
 
     let fee = BigNumber.from("0");
     if (totalRolloverFee.gt("0")) {
