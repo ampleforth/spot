@@ -10,7 +10,7 @@ yarn hardhat --network mainnet deploy:BondIssuer \
   --tranche-ratios "[200,800]"
 
 yarn hardhat --network mainnet deploy:PerpetualTranche \
-  --bond-issuer-address "0x9443b779d4AedF97d2B93D7CDa5fA0BB6312DfF2" \
+  --bond-issuer-address "0xD64FA63dc5E8fcB743457E47E4d522E11Ff1AD66" \
   --collateral-token-address "0xD46bA6D942050d489DBd938a2C909A5d5039A161" \
   --name "SPOT" \
   --symbol "SPOT" \
@@ -27,7 +27,7 @@ yarn hardhat --network mainnet deploy:Router
 
 ########################################################################
 ## Transfer ownership
-yarn hardhat --network mainnet transferOwnership "0x9443b779d4AedF97d2B93D7CDa5fA0BB6312DfF2" \
+yarn hardhat --network mainnet transferOwnership "0xD64FA63dc5E8fcB743457E47E4d522E11Ff1AD66" \
   --new-owner-address "0x57981B1EaFe4b18EC97f8B10859B40207b364662"
 
 yarn hardhat --network mainnet transferOwnership "0xFF732cA9EFc95E853FBD71a5c61647cd0C0898a3" \
@@ -41,6 +41,7 @@ yarn hardhat --network mainnet transferOwnership "0xC1f33e0cf7e40a67375007104B92
 
 yarn hardhat --network mainnet transferOwnership "0x2978B4103985A6668CE345555b0febdE64Fb092F" \
   --new-owner-address "0x57981B1EaFe4b18EC97f8B10859B40207b364662"
+
 
 ########################################################################
 ## OPS
@@ -61,6 +62,9 @@ yarn hardhat --network mainnet ops:redeem \
 
 yarn hardhat --network mainnet ops:redeemTranches \
   --bond-issuer-address 0x9443b779d4AedF97d2B93D7CDa5fA0BB6312DfF2
+
+yarn hardhat --network mainnet ops:redeemTranches \
+  --bond-issuer-address 0xD64FA63dc5E8fcB743457E47E4d522E11Ff1AD66
 
 yarn hardhat --network mainnet ops:trancheAndRollover \
   --router-address 0x38f600e08540178719BF656e6B43FC15A529c393 \
