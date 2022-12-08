@@ -8,7 +8,7 @@ const START_TIME = 2499998400;
 const mockTime = (x: number) => START_TIME + x;
 
 let bondFactory: Contract, token: Contract, issuer: Contract, deployer: Signer, otherUser: Signer;
-describe.only("BondIssuer", function () {
+describe("BondIssuer", function () {
   beforeEach(async function () {
     const accounts = await ethers.getSigners();
     deployer = accounts[0];
