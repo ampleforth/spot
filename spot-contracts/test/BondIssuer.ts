@@ -1,11 +1,14 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 import { Contract, Signer } from "ethers";
 
 import { TimeHelpers, setupBondFactory } from "./helpers";
 
+const START_TIME = 2499998400;
+const mockTime = (x: number) => START_TIME + x;
+
 let bondFactory: Contract, token: Contract, issuer: Contract, deployer: Signer, otherUser: Signer;
-describe("BondIssuer", function () {
+describe.only("BondIssuer", function () {
   beforeEach(async function () {
     const accounts = await ethers.getSigners();
     deployer = accounts[0];
@@ -16,7 +19,12 @@ describe("BondIssuer", function () {
     await token.init("Test token", "TEST");
     const BondIssuer = await ethers.getContractFactory("BondIssuer");
     issuer = await BondIssuer.deploy(bondFactory.address, token.address);
-    await issuer.init(86400, [200, 300, 500], 3600, 120);
+    await issuer.init(86400, [200, 300, 500], 3600, 900);
+    await TimeHelpers.setNextBlockTimestamp(mockTime(0));
+  });
+
+  afterEach(async function () {
+    await network.provider.send("hardhat_reset");
   });
 
   describe("#setup", function () {
@@ -24,7 +32,7 @@ describe("BondIssuer", function () {
       expect(await issuer.owner()).to.eq(await deployer.getAddress());
       expect(await issuer.bondFactory()).to.eq(bondFactory.address);
       expect(await issuer.minIssueTimeIntervalSec()).to.eq(3600);
-      expect(await issuer.issueWindowOffsetSec()).to.eq(120);
+      expect(await issuer.issueWindowOffsetSec()).to.eq(900);
       expect(await issuer.maxMaturityDuration()).to.eq(86400);
       expect(await issuer.collateral()).to.eq(token.address);
       expect(await issuer.trancheRatios(0)).to.eq(200);
@@ -94,7 +102,7 @@ describe("BondIssuer", function () {
   describe("#issue", function () {
     describe("when sufficient time has passed", function () {
       it("should issue a new bond", async function () {
-        await TimeHelpers.setNextBlockTimestamp(2499998400);
+        await TimeHelpers.setNextBlockTimestamp(mockTime(901));
         const tx = await issuer.issue();
         const txR = await tx.wait();
         const bondIssuedEvent = txR.events[txR.events.length - 1];
@@ -103,34 +111,74 @@ describe("BondIssuer", function () {
         expect(tx).to.emit(issuer, "BondIssued");
         expect(await issuer.isInstance(bond)).to.eq(true);
         expect(await issuer.callStatic.getLatestBond()).to.eq(bond);
-        expect(await issuer.lastIssueWindowTimestamp()).to.eq(2499998520);
+        expect(await issuer.lastIssueWindowTimestamp()).to.eq(mockTime(900));
 
         expect(await issuer.issuedCount()).to.eq(1);
         expect(await issuer.issuedBondAt(0)).to.eq(bond);
         await expect(issuer.issuedBondAt(1)).to.be.reverted;
 
-        await TimeHelpers.setNextBlockTimestamp(2500002120);
+        await TimeHelpers.setNextBlockTimestamp(mockTime(4495));
+        await expect(issuer.issue()).not.to.emit(issuer, "BondIssued");
+        expect(await issuer.lastIssueWindowTimestamp()).to.eq(mockTime(900));
+
+        await TimeHelpers.setNextBlockTimestamp(mockTime(4501));
         await expect(issuer.issue()).to.emit(issuer, "BondIssued");
-        expect(await issuer.lastIssueWindowTimestamp()).to.eq(2500002120);
+        expect(await issuer.lastIssueWindowTimestamp()).to.eq(mockTime(4500));
 
         expect(await issuer.issuedCount()).to.eq(2);
         await expect(issuer.issuedBondAt(1)).to.not.be.reverted;
+
+        await TimeHelpers.setNextBlockTimestamp(mockTime(4505));
+        await expect(issuer.issue()).not.to.emit(issuer, "BondIssued");
+        expect(await issuer.lastIssueWindowTimestamp()).to.eq(mockTime(4500));
       });
     });
 
-    describe("when sufficient time has not passed", function () {
-      it("should not issue a new bond", async function () {
-        await TimeHelpers.setNextBlockTimestamp(2500005720);
-        await expect(issuer.issue()).to.emit(issuer, "BondIssued");
-        expect(await issuer.issuedCount()).to.eq(1);
+    describe("for various elapsed times lastIssueWindowTimestamp", function () {
+      beforeEach(async function () {
+        expect(await issuer.lastIssueWindowTimestamp()).to.eq("0");
+      });
 
-        await TimeHelpers.setNextBlockTimestamp(2500009310);
-        await expect(issuer.issue()).not.to.emit(issuer, "BondIssued");
-        expect(await issuer.issuedCount()).to.eq(1);
-
-        await TimeHelpers.setNextBlockTimestamp(2500009320);
+      it("should should snap down", async function () {
+        await TimeHelpers.setNextBlockTimestamp(mockTime(3500));
         await expect(issuer.issue()).to.emit(issuer, "BondIssued");
-        expect(await issuer.issuedCount()).to.eq(2);
+        expect(await issuer.lastIssueWindowTimestamp()).to.eq(mockTime(900));
+      });
+
+      it("should should snap down", async function () {
+        await TimeHelpers.setNextBlockTimestamp(mockTime(3595));
+        await expect(issuer.issue()).to.emit(issuer, "BondIssued");
+        expect(await issuer.lastIssueWindowTimestamp()).to.eq(mockTime(900));
+      });
+
+      it("should should snap down", async function () {
+        await TimeHelpers.setNextBlockTimestamp(mockTime(3600));
+        await expect(issuer.issue()).to.emit(issuer, "BondIssued");
+        expect(await issuer.lastIssueWindowTimestamp()).to.eq(mockTime(900));
+      });
+
+      it("should should snap down", async function () {
+        await TimeHelpers.setNextBlockTimestamp(mockTime(4495));
+        await expect(issuer.issue()).to.emit(issuer, "BondIssued");
+        expect(await issuer.lastIssueWindowTimestamp()).to.eq(mockTime(900));
+      });
+
+      it("should should snap down", async function () {
+        await TimeHelpers.setNextBlockTimestamp(mockTime(4500));
+        await expect(issuer.issue()).to.emit(issuer, "BondIssued");
+        expect(await issuer.lastIssueWindowTimestamp()).to.eq(mockTime(4500));
+      });
+
+      it("should should snap down", async function () {
+        await TimeHelpers.setNextBlockTimestamp(mockTime(4501));
+        await expect(issuer.issue()).to.emit(issuer, "BondIssued");
+        expect(await issuer.lastIssueWindowTimestamp()).to.eq(mockTime(4500));
+      });
+
+      it("should should snap down", async function () {
+        await TimeHelpers.setNextBlockTimestamp(mockTime(4600));
+        await expect(issuer.issue()).to.emit(issuer, "BondIssued");
+        expect(await issuer.lastIssueWindowTimestamp()).to.eq(mockTime(4500));
       });
     });
   });

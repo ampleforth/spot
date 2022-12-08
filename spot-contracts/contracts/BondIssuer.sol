@@ -118,12 +118,15 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
 
     /// @inheritdoc IBondIssuer
     function issue() public override {
-        if (block.timestamp < lastIssueWindowTimestamp + minIssueTimeIntervalSec) {
+        if (block.timestamp <= lastIssueWindowTimestamp + minIssueTimeIntervalSec) {
             return;
         }
 
         // Set to the timestamp of the most recent issue window start
         lastIssueWindowTimestamp = block.timestamp - (block.timestamp % minIssueTimeIntervalSec) + issueWindowOffsetSec;
+        if (lastIssueWindowTimestamp > block.timestamp) {
+            lastIssueWindowTimestamp -= minIssueTimeIntervalSec;
+        }
 
         IBondController bond = IBondController(
             bondFactory.createBond(collateral, trancheRatios, lastIssueWindowTimestamp + maxMaturityDuration)
