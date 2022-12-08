@@ -123,7 +123,9 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
         }
 
         // Set to the timestamp of the most recent issue window start
-        lastIssueWindowTimestamp = block.timestamp - (block.timestamp % minIssueTimeIntervalSec) + issueWindowOffsetSec;
+        lastIssueWindowTimestamp =
+            block.timestamp -
+            ((block.timestamp - issueWindowOffsetSec) % minIssueTimeIntervalSec);
 
         IBondController bond = IBondController(
             bondFactory.createBond(collateral, trancheRatios, lastIssueWindowTimestamp + maxMaturityDuration)
