@@ -333,9 +333,6 @@ contract PerpetualTranche is
     /// @notice Updates the reference to the keeper.
     /// @param newKeeper The address of the new keeper.
     function updateKeeper(address newKeeper) public virtual onlyOwner {
-        if (newKeeper == address(0)) {
-            revert UnacceptableReference();
-        }
         address prevKeeper = keeper;
         keeper = newKeeper;
         emit UpdatedKeeper(prevKeeper, newKeeper);

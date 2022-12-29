@@ -214,12 +214,6 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when set address is NOT valid", function () {
-      it("should revert", async function () {
-        await expect(perp.updateKeeper(constants.AddressZero)).to.be.revertedWith("UnacceptableReference");
-      });
-    });
-
     describe("when set address is valid", function () {
       beforeEach(async function () {
         tx = perp.updateKeeper(await otherUser.getAddress());
