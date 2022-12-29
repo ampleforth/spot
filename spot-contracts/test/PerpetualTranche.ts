@@ -230,6 +230,68 @@ describe("PerpetualTranche", function () {
     });
   });
 
+  describe("#authorizeRoller", function () {
+    let tx: Transaction;
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(perp.connect(otherUser).authorizeRoller(constants.AddressZero, true)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    describe("when roller is not authorized and is authorized", function () {
+      beforeEach(async function () {
+        expect(await perp.authorizedRollersCount()).to.eq(0);
+        tx = perp.authorizeRoller(await otherUser.getAddress(), true);
+        await tx;
+      });
+      it("should authorize roller", async function () {
+        expect(await perp.authorizedRollersCount()).to.eq(1);
+        expect(await perp.authorizedRollerAt(0)).to.eq(await otherUser.getAddress());
+      });
+      it("should emit event", async function () {
+        await expect(tx)
+          .to.emit(perp, "UpdatedRollerAuthorization")
+          .withArgs(await otherUser.getAddress(), true);
+      });
+    });
+
+    describe("when roller is already authorized and is authorized again", function () {
+      beforeEach(async function () {
+        await perp.authorizeRoller(await otherUser.getAddress(), true);
+      });
+      it("should revert", async function () {
+        await expect(perp.authorizeRoller(await otherUser.getAddress(), true)).to.be.reverted;
+      });
+    });
+
+    describe("when roller is not authorized and is unauthorized", function () {
+      it("should revert", async function () {
+        expect(await perp.authorizedRollersCount()).to.eq(0);
+        await expect(perp.authorizeRoller(await otherUser.getAddress(), false)).to.be.reverted;
+      });
+    });
+
+    describe("when roller is authorized and is unauthorized", function () {
+      beforeEach(async function () {
+        await perp.authorizeRoller(await otherUser.getAddress(), true);
+        expect(await perp.authorizedRollersCount()).to.eq(1);
+        tx = perp.authorizeRoller(await otherUser.getAddress(), false);
+        await tx;
+      });
+      it("should unauthorize roller", async function () {
+        expect(await perp.authorizedRollersCount()).to.eq(0);
+      });
+      it("should emit event", async function () {
+        await expect(tx)
+          .to.emit(perp, "UpdatedRollerAuthorization")
+          .withArgs(await otherUser.getAddress(), false);
+      });
+    });
+  });
+
   describe("#updateBondIssuer", function () {
     let newIssuer: Contract, tx: Transaction;
 

@@ -94,6 +94,9 @@ error BelowMatureValueTargetPerc(uint256 matureValuePerc, uint256 matureValueTar
 /// @param token Address of the token transferred.
 error UnauthorizedTransferOut(IERC20Upgradeable token);
 
+/// @notice Expected new roller to be unauthorized or old roller to be authorized.
+error RollerAuthorizationFailed();
+
 /**
  *  @title PerpetualTranche
  *
@@ -259,6 +262,20 @@ contract PerpetualTranche is
     uint256 private _matureTrancheBalance;
 
     //--------------------------------------------------------------------------
+    // v1.1.0 STORAGE ADDITION
+
+    /// @notice A set of all authorized addresses which can execute rollovers.
+    /// @dev The contract owner can modify this set.
+    ///      NOTE: If the set is empty, all addresses are considered authorized and can execute rollovers.
+    ///            else only addresses in the set can execute rollovers.
+    EnumerableSetUpgradeable.AddressSet private _authorizedRollers;
+
+    /// @notice Event emitted when the authorized rollers are updated.
+    /// @param roller The address of the roller.
+    /// @param authorized If the roller is has been authorized or not.
+    event UpdatedRollerAuthorization(address roller, bool authorized);
+
+    //--------------------------------------------------------------------------
     // Modifiers
 
     /// @dev Updates time-dependent reserve state.
@@ -271,6 +288,16 @@ contract PerpetualTranche is
     modifier onlyKeeper() {
         if (keeper != _msgSender()) {
             revert UnauthorizedCall(_msgSender(), keeper);
+        }
+        _;
+    }
+
+    /// @dev Throws if called by any account other than an authorized roller.
+    modifier onlyAuthorizedRollers() {
+        // If the set it empty, permit all callers
+        // else permit only whitelisted callers.
+        if (_authorizedRollers.length() > 0 && !_authorizedRollers.contains(_msgSender())) {
+            revert UnauthorizedCall(_msgSender(), address(0));
         }
         _;
     }
@@ -336,6 +363,22 @@ contract PerpetualTranche is
         address prevKeeper = keeper;
         keeper = newKeeper;
         emit UpdatedKeeper(prevKeeper, newKeeper);
+    }
+
+    /// @notice Updates the authorized roller set.
+    /// @dev CAUTION: If the authorized roller set is empty, all rollers are authorized.
+    /// @param roller The address of the roller.
+    /// @param authorize If the roller is to be authorized or unauthorized.
+    function authorizeRoller(address roller, bool authorize) public onlyOwner {
+        if (authorize && !_authorizedRollers.contains(roller)) {
+            _authorizedRollers.add(roller);
+        } else if (!authorize && _authorizedRollers.contains(roller)) {
+            _authorizedRollers.remove(roller);
+        } else {
+            revert RollerAuthorizationFailed();
+        }
+
+        emit UpdatedRollerAuthorization(roller, authorize);
     }
 
     /// @notice Update the reference to the bond issuer contract.
@@ -518,7 +561,7 @@ contract PerpetualTranche is
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable
-    ) external override nonReentrant whenNotPaused afterStateUpdate {
+    ) external override onlyAuthorizedRollers nonReentrant whenNotPaused afterStateUpdate {
         // verifies if rollover is acceptable
         if (!_isAcceptableRollover(trancheIn, tokenOut)) {
             revert UnacceptableRollover(trancheIn, tokenOut);
@@ -660,6 +703,17 @@ contract PerpetualTranche is
         uint256 tokenOutAmtRequested
     ) external override afterStateUpdate returns (IPerpetualTranche.RolloverPreview memory) {
         return _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable, tokenOutAmtRequested);
+    }
+
+    /// @notice Returns the number of authorized rollers.
+    function authorizedRollersCount() external view returns (uint256) {
+        return _authorizedRollers.length();
+    }
+
+    /// @notice Gets the roller address from the authorized set by index.
+    /// @param i The index of the address in the set.
+    function authorizedRollerAt(uint256 i) external view returns (address) {
+        return _authorizedRollers.at(i);
     }
 
     //--------------------------------------------------------------------------
