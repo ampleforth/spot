@@ -450,7 +450,7 @@ contract PerpetualTranche is
         whenNotPaused
         afterStateUpdate
     {
-        if (!_isBondTranche(trancheIn, _depositBond)) {
+        if (!_isDepositBondTranche(trancheIn)) {
             revert UnacceptableDepositTranche(trancheIn, _depositBond);
         }
 
@@ -1007,14 +1007,14 @@ contract PerpetualTranche is
     function _isAcceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut) private view returns (bool) {
         // when rolling out the mature tranche
         if (_isMatureTranche(tokenOut)) {
-            return _isBondTranche(trancheIn, _depositBond);
+            return _isDepositBondTranche(trancheIn);
         }
 
         // when rolling out a normal tranche
         ITranche trancheOut = ITranche(address(tokenOut));
         IBondController bondOut = IBondController(trancheOut.bond());
-        return (_isBondTranche(trancheIn, _depositBond) &&
-            !_isBondTranche(trancheOut, _depositBond) &&
+        return (_isDepositBondTranche(trancheIn) &&
+            !_isDepositBondTranche(trancheOut) &&
             _inReserve(trancheOut) &&
             !_isAcceptableForReserve(bondOut));
     }
@@ -1031,10 +1031,10 @@ contract PerpetualTranche is
             timeToMaturity < maxTrancheMaturitySec);
     }
 
-    /// @dev Checks if the given tranche is a valid child of the given parent bond.
-    /// @return True if the bond is the tranche's parent.
-    function _isBondTranche(ITranche tranche, IBondController bond) private view returns (bool) {
-        return (bond.trancheTokenAddresses(tranche) && address(bond) == tranche.bond());
+    /// @dev Checks if the given tranche belongs to the current deposit bond.
+    /// @return True if the deposit bond is the tranche's parent.
+    function _isDepositBondTranche(ITranche tranche) private view returns (bool) {
+        return (_depositBond.trancheTokenAddresses(tranche) && address(_depositBond) == tranche.bond());
     }
 
     /// @dev Enforces the total supply cap. To be invoked AFTER the mint operation.
