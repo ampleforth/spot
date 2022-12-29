@@ -376,8 +376,9 @@ task("ops:trancheAndRollover")
     false,
   )
   .addParam("fromIdx", "the index of sender", 0, types.int)
+  .addFlag("dryRun", "skip execution")
   .setAction(async function (args: TaskArguments, hre) {
-    const { perpAddress, routerAddress, collateralAmount } = args;
+    const { perpAddress, routerAddress, collateralAmount, dryRun } = args;
 
     const router = await hre.ethers.getContractAt("RouterV1", routerAddress);
     const perp = await hre.ethers.getContractAt("PerpetualTranche", perpAddress);
@@ -475,8 +476,16 @@ task("ops:trancheAndRollover")
       }
     }
 
+    console.log("depositBond", depositBond.address);
+    console.log("collateralAmount", fixedPtCollateralAmount);
     console.log("rolloverAmt", utils.formatUnits(totalRolloverAmt, await perp.decimals()));
     console.log("rolloverFee", utils.formatUnits(totalRolloverFee, await feeToken.decimals()));
+    console.log(rolloverData.map(r => [r.trancheIn.address, r.tokenOut.address, r.trancheInAmt]));
+
+    if (dryRun) {
+      console.log("Skipping execution");
+      return;
+    }
 
     console.log("---------------------------------------------------------------");
     console.log("Execution:");
@@ -505,7 +514,6 @@ task("ops:trancheAndRollover")
     fee = fee.mul("2");
 
     console.log("Executing rollover:");
-    console.log(rolloverData.map(r => [r.trancheIn.address, r.tokenOut.address, r.trancheInAmt]));
     const tx3 = await router.connect(signer).trancheAndRollover(
       perp.address,
       depositBond.address,
