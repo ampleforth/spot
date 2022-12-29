@@ -168,9 +168,9 @@ contract PerpetualTranche is
     // Redeem: ForEach ti => (p / supply(perps)) * bi
     //
     //
-    // When `ai` tokens of type `ti` are rotated in for tokens of type `tj`
+    // When `ai` tokens of type `ti` are rolled in for tokens of type `tj`
     //  => ai * discount(ti) * price(ti) =  aj * discount(tj) * price(tj)
-    // Rotation: aj => ai * discount(ti) * price(ti) / (discount(tj) * price(tj))
+    // Rollover: aj => ai * discount(ti) * price(ti) / (discount(tj) * price(tj))
     //
     //
     //-------------------------------------------------------------------------
@@ -249,7 +249,7 @@ contract PerpetualTranche is
     //--------------------------------------------------------------------------
     // RESERVE
 
-    /// @notice A record of all tokens in the reserve which back the perps.
+    /// @notice A set of all tokens in the reserve which back the perps.
     EnumerableSetUpgradeable.AddressSet private _reserves;
 
     /// @notice The amount of all the mature tranches extracted and held as the collateral token,
@@ -686,10 +686,10 @@ contract PerpetualTranche is
 
         // Lazily checks if every reserve tranche has reached maturity.
         // If so redeems the tranche balance for the underlying collateral and
-        // removes the tranche from the reserve list.
-        // NOTE: We traverse the reserve list in the reverse order
+        // removes the tranche from the reserve set.
+        // NOTE: We traverse the reserve set in the reverse order
         //       as deletions involve swapping the deleted element to the
-        //       end of the list and removing the last element.
+        //       end of the set and removing the last element.
         //       We also skip the `reserveAt(0)`, i.e) the mature tranche,
         //       which is never removed.
         uint256 reserveCount = _reserveCount();
@@ -864,7 +864,7 @@ contract PerpetualTranche is
         return r;
     }
 
-    /// @dev Transfers tokens from the given address to self and updates the reserve list.
+    /// @dev Transfers tokens from the given address to self and updates the reserve set.
     /// @return Reserve's token balance after transfer in.
     function _transferIntoReserve(
         address from,
@@ -875,7 +875,7 @@ contract PerpetualTranche is
         return _syncReserve(token);
     }
 
-    /// @dev Transfers tokens from self into the given address and updates the reserve list.
+    /// @dev Transfers tokens from self into the given address and updates the reserve set.
     /// @return Reserve's token balance after transfer out.
     function _transferOutOfReserve(
         address to,
@@ -893,15 +893,15 @@ contract PerpetualTranche is
         emit ReserveSynced(token, balance);
 
         // If token is the mature tranche,
-        // it NEVER gets removed from the `_reserves` list.
+        // it NEVER gets removed from the `_reserves` set.
         if (_isMatureTranche(token)) {
             return balance;
         }
 
-        // Otherwise `_reserves` list gets updated.
+        // Otherwise `_reserves` set gets updated.
         bool inReserve_ = _inReserve(token);
         if (balance > 0 && !inReserve_) {
-            // Inserts new tranche into reserve list.
+            // Inserts new tranche into reserve set.
             _reserves.add(address(token));
 
             // Stores the discount for future usage.
@@ -909,7 +909,7 @@ contract PerpetualTranche is
         }
 
         if (balance == 0 && inReserve_) {
-            // Removes tranche from reserve list.
+            // Removes tranche from reserve set.
             _reserves.remove(address(token));
 
             // Frees up stored discount.
