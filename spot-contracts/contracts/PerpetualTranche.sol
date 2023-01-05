@@ -270,11 +270,6 @@ contract PerpetualTranche is
     ///            else only addresses in the set can execute rollovers.
     EnumerableSetUpgradeable.AddressSet private _authorizedRollers;
 
-    /// @notice Event emitted when the authorized rollers are updated.
-    /// @param roller The address of the roller.
-    /// @param authorized If the roller is has been authorized or not.
-    event UpdatedRollerAuthorization(address roller, bool authorized);
-
     //--------------------------------------------------------------------------
     // Modifiers
 

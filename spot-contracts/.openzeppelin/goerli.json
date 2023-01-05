@@ -2011,7 +2011,7 @@
             "label": "feeStrategy",
             "offset": 0,
             "slot": "302",
-            "type": "t_contract(IFeeStrategy)9088",
+            "type": "t_contract(IFeeStrategy)9083",
             "contract": "PerpetualTranche",
             "src": "contracts/PerpetualTranche.sol:204"
           },
@@ -2019,7 +2019,7 @@
             "label": "pricingStrategy",
             "offset": 0,
             "slot": "303",
-            "type": "t_contract(IPricingStrategy)9443",
+            "type": "t_contract(IPricingStrategy)9445",
             "contract": "PerpetualTranche",
             "src": "contracts/PerpetualTranche.sol:208"
           },
@@ -2027,7 +2027,7 @@
             "label": "discountStrategy",
             "offset": 0,
             "slot": "304",
-            "type": "t_contract(IDiscountStrategy)9046",
+            "type": "t_contract(IDiscountStrategy)9041",
             "contract": "PerpetualTranche",
             "src": "contracts/PerpetualTranche.sol:216"
           },
@@ -2035,7 +2035,7 @@
             "label": "bondIssuer",
             "offset": 0,
             "slot": "305",
-            "type": "t_contract(IBondIssuer)9026",
+            "type": "t_contract(IBondIssuer)9021",
             "contract": "PerpetualTranche",
             "src": "contracts/PerpetualTranche.sol:221"
           },
@@ -2043,7 +2043,7 @@
             "label": "_depositBond",
             "offset": 0,
             "slot": "306",
-            "type": "t_contract(IBondController)9522",
+            "type": "t_contract(IBondController)9524",
             "contract": "PerpetualTranche",
             "src": "contracts/PerpetualTranche.sol:224"
           },
@@ -2091,7 +2091,7 @@
             "label": "mintedSupplyPerTranche",
             "offset": 0,
             "slot": "312",
-            "type": "t_mapping(t_contract(ITranche)9549,t_uint256)",
+            "type": "t_mapping(t_contract(ITranche)9551,t_uint256)",
             "contract": "PerpetualTranche",
             "src": "contracts/PerpetualTranche.sol:244"
           },
@@ -2125,7 +2125,7 @@
             "slot": "317",
             "type": "t_struct(AddressSet)4620_storage",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:271"
+            "src": "contracts/PerpetualTranche.sol:273"
           }
         ],
         "types": {
@@ -2157,15 +2157,15 @@
             "label": "bytes32",
             "numberOfBytes": "32"
           },
-          "t_contract(IBondController)9522": {
+          "t_contract(IBondController)9524": {
             "label": "contract IBondController",
             "numberOfBytes": "20"
           },
-          "t_contract(IBondIssuer)9026": {
+          "t_contract(IBondIssuer)9021": {
             "label": "contract IBondIssuer",
             "numberOfBytes": "20"
           },
-          "t_contract(IDiscountStrategy)9046": {
+          "t_contract(IDiscountStrategy)9041": {
             "label": "contract IDiscountStrategy",
             "numberOfBytes": "20"
           },
@@ -2173,15 +2173,15 @@
             "label": "contract IERC20Upgradeable",
             "numberOfBytes": "20"
           },
-          "t_contract(IFeeStrategy)9088": {
+          "t_contract(IFeeStrategy)9083": {
             "label": "contract IFeeStrategy",
             "numberOfBytes": "20"
           },
-          "t_contract(IPricingStrategy)9443": {
+          "t_contract(IPricingStrategy)9445": {
             "label": "contract IPricingStrategy",
             "numberOfBytes": "20"
           },
-          "t_contract(ITranche)9549": {
+          "t_contract(ITranche)9551": {
             "label": "contract ITranche",
             "numberOfBytes": "20"
           },
@@ -2201,7 +2201,7 @@
             "label": "mapping(contract IERC20Upgradeable => uint256)",
             "numberOfBytes": "32"
           },
-          "t_mapping(t_contract(ITranche)9549,t_uint256)": {
+          "t_mapping(t_contract(ITranche)9551,t_uint256)": {
             "label": "mapping(contract ITranche => uint256)",
             "numberOfBytes": "32"
           },

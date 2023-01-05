@@ -67,6 +67,11 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @param matureTrancheBalance The mature tranche balance.
     event UpdatedMatureTrancheBalance(uint256 matureTrancheBalance);
 
+    /// @notice Event emitted when the authorized rollers are updated.
+    /// @param roller The address of the roller.
+    /// @param authorized If the roller is has been authorized or not.
+    event UpdatedRollerAuthorization(address roller, bool authorized);
+
     //--------------------------------------------------------------------------
     // Methods
 
