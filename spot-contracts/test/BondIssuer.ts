@@ -1,8 +1,8 @@
 import { expect } from "chai";
 import { ethers, network } from "hardhat";
-import { Contract, Signer } from "ethers";
+import { Contract, Transaction, Signer } from "ethers";
 
-import { TimeHelpers, setupBondFactory } from "./helpers";
+import { TimeHelpers, setupBondFactory, bondAt } from "./helpers";
 
 const START_TIME = 2499998400;
 const mockTime = (x: number) => START_TIME + x;
@@ -199,6 +199,192 @@ describe("BondIssuer", function () {
         const bond = bondIssuedEvent.args.bond;
         expect(await issuer.callStatic.getLatestBond()).to.eq(bond);
         await expect(issuer.getLatestBond()).to.not.emit(issuer, "BondIssued");
+      });
+    });
+  });
+
+  describe("#matureAll", function () {
+    describe("active set has one bond and it is NOT up for maturity", function () {
+      beforeEach(async function () {
+        await TimeHelpers.setNextBlockTimestamp(mockTime(900));
+        await issuer.issue();
+        await TimeHelpers.setNextBlockTimestamp(mockTime(87295));
+      });
+
+      it("should revert", async function () {
+        await expect(issuer.matureAll()).to.be.revertedWith("NoMaturedBonds");
+      });
+    });
+
+    describe("active set has one bond and it is up for maturity", function () {
+      let lastBond: Contract, tx: Transaction;
+      beforeEach(async function () {
+        await TimeHelpers.setNextBlockTimestamp(mockTime(900));
+        await issuer.issue();
+        lastBond = await bondAt(await issuer.callStatic.getLatestBond());
+        expect(await issuer.activeCount()).to.eq(1);
+        expect(await issuer.issuedCount()).to.eq(1);
+        expect(await issuer.issuedBondAt(0)).to.eq(lastBond.address);
+
+        await TimeHelpers.setNextBlockTimestamp(mockTime(87301));
+        tx = issuer.matureAll();
+        await tx;
+      });
+      it("should emit mature", async function () {
+        await expect(tx).to.emit(issuer, "BondMature").withArgs(lastBond.address);
+        await expect(tx).to.emit(lastBond, "Mature");
+      });
+      it("should keep track of active and mature bonds", async function () {
+        expect(await issuer.activeCount()).to.eq(0);
+        expect(await issuer.issuedCount()).to.eq(1);
+        expect(await issuer.issuedBondAt(0)).to.eq(lastBond.address);
+      });
+    });
+
+    describe("active set has one bond and it is up for maturity by `mature` was already invoked", function () {
+      let lastBond: Contract, tx: Transaction;
+      beforeEach(async function () {
+        await TimeHelpers.setNextBlockTimestamp(mockTime(900));
+        await issuer.issue();
+        lastBond = await bondAt(await issuer.callStatic.getLatestBond());
+        expect(await issuer.activeCount()).to.eq(1);
+        expect(await issuer.issuedCount()).to.eq(1);
+        expect(await issuer.issuedBondAt(0)).to.eq(lastBond.address);
+
+        await TimeHelpers.setNextBlockTimestamp(mockTime(87301));
+        await lastBond.mature();
+        tx = issuer.matureAll();
+        await tx;
+      });
+      it("should NOT emit mature", async function () {
+        await expect(tx).to.emit(issuer, "BondMature");
+        await expect(tx).not.to.emit(lastBond, "Mature");
+      });
+      it("should keep track of active and mature bonds", async function () {
+        expect(await issuer.activeCount()).to.eq(0);
+        expect(await issuer.issuedCount()).to.eq(1);
+        expect(await issuer.issuedBondAt(0)).to.eq(lastBond.address);
+      });
+    });
+
+    describe("active set has many bonds and one is up for maturity", function () {
+      let b1: Contract, b2: Contract, b3: Contract, tx: Transaction;
+      beforeEach(async function () {
+        await TimeHelpers.setNextBlockTimestamp(mockTime(900));
+        await issuer.issue();
+        b1 = await bondAt(await issuer.callStatic.getLatestBond());
+
+        await TimeHelpers.setNextBlockTimestamp(mockTime(83700));
+        await issuer.issue();
+        b2 = await bondAt(await issuer.callStatic.getLatestBond());
+
+        await TimeHelpers.setNextBlockTimestamp(mockTime(87300));
+        await issuer.issue();
+        b3 = await bondAt(await issuer.callStatic.getLatestBond());
+
+        expect(await issuer.activeCount()).to.eq(3);
+        expect(await issuer.issuedCount()).to.eq(3);
+        expect(await issuer.issuedBondAt(0)).to.eq(b1.address);
+        expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
+        expect(await issuer.issuedBondAt(2)).to.eq(b3.address);
+
+        tx = issuer.matureAll();
+        await tx;
+      });
+      it("should emit mature on the oldest bond", async function () {
+        await expect(tx).to.emit(b1, "Mature");
+        await expect(tx).to.emit(issuer, "BondMature").withArgs(b1.address);
+      });
+      it("should keep track of active and mature bonds", async function () {
+        expect(await issuer.activeCount()).to.eq(2);
+        expect(await issuer.issuedCount()).to.eq(3);
+        expect(await issuer.issuedBondAt(0)).to.eq(b3.address);
+        expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
+        expect(await issuer.issuedBondAt(2)).to.eq(b1.address);
+      });
+    });
+
+    describe("active set has many bonds and many are up for maturity", function () {
+      let b1: Contract, b2: Contract, b3: Contract, tx: Transaction;
+      beforeEach(async function () {
+        await TimeHelpers.setNextBlockTimestamp(mockTime(900));
+        await issuer.issue();
+        b1 = await bondAt(await issuer.callStatic.getLatestBond());
+
+        await TimeHelpers.setNextBlockTimestamp(mockTime(83700));
+        await issuer.issue();
+        b2 = await bondAt(await issuer.callStatic.getLatestBond());
+
+        await TimeHelpers.setNextBlockTimestamp(mockTime(87300));
+        await issuer.issue();
+        b3 = await bondAt(await issuer.callStatic.getLatestBond());
+
+        await TimeHelpers.setNextBlockTimestamp(mockTime(170100));
+
+        expect(await issuer.activeCount()).to.eq(3);
+        expect(await issuer.issuedCount()).to.eq(3);
+        expect(await issuer.issuedBondAt(0)).to.eq(b1.address);
+        expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
+        expect(await issuer.issuedBondAt(2)).to.eq(b3.address);
+
+        tx = issuer.matureAll();
+        await tx;
+      });
+      it("should emit mature", async function () {
+        await expect(tx).to.emit(b1, "Mature");
+        await expect(tx).to.emit(issuer, "BondMature").withArgs(b1.address);
+        await expect(tx).to.emit(b2, "Mature");
+        await expect(tx).to.emit(issuer, "BondMature").withArgs(b2.address);
+      });
+      it("should keep track of active and mature bonds", async function () {
+        expect(await issuer.activeCount()).to.eq(1);
+        expect(await issuer.issuedCount()).to.eq(3);
+        expect(await issuer.issuedBondAt(0)).to.eq(b3.address);
+        expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
+        expect(await issuer.issuedBondAt(2)).to.eq(b1.address);
+      });
+    });
+
+    describe("active set has many bonds and all are up for maturity", function () {
+      let b1: Contract, b2: Contract, b3: Contract, tx: Transaction;
+      beforeEach(async function () {
+        await TimeHelpers.setNextBlockTimestamp(mockTime(900));
+        await issuer.issue();
+        b1 = await bondAt(await issuer.callStatic.getLatestBond());
+
+        await TimeHelpers.setNextBlockTimestamp(mockTime(83700));
+        await issuer.issue();
+        b2 = await bondAt(await issuer.callStatic.getLatestBond());
+
+        await TimeHelpers.setNextBlockTimestamp(mockTime(87300));
+        await issuer.issue();
+        b3 = await bondAt(await issuer.callStatic.getLatestBond());
+
+        await TimeHelpers.setNextBlockTimestamp(mockTime(260100));
+
+        expect(await issuer.activeCount()).to.eq(3);
+        expect(await issuer.issuedCount()).to.eq(3);
+        expect(await issuer.issuedBondAt(0)).to.eq(b1.address);
+        expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
+        expect(await issuer.issuedBondAt(2)).to.eq(b3.address);
+
+        tx = issuer.matureAll();
+        await tx;
+      });
+      it("should emit mature", async function () {
+        await expect(tx).to.emit(b1, "Mature");
+        await expect(tx).to.emit(issuer, "BondMature").withArgs(b1.address);
+        await expect(tx).to.emit(b2, "Mature");
+        await expect(tx).to.emit(issuer, "BondMature").withArgs(b2.address);
+        await expect(tx).to.emit(b3, "Mature");
+        await expect(tx).to.emit(issuer, "BondMature").withArgs(b3.address);
+      });
+      it("should keep track of active and mature bonds", async function () {
+        expect(await issuer.activeCount()).to.eq(0);
+        expect(await issuer.issuedCount()).to.eq(3);
+        expect(await issuer.issuedBondAt(0)).to.eq(b3.address);
+        expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
+        expect(await issuer.issuedBondAt(2)).to.eq(b1.address);
       });
     });
   });
