@@ -69,6 +69,11 @@ yarn hardhat --network mainnet ops:redeemTranches \
 yarn hardhat --network mainnet ops:redeemTranches \
   --bond-issuer-address 0x2E2E49eDCd5ce08677Bab6d791C863f1361B52F2
 
+yarn hardhat --network mainnet ops:preview_tx:trancheAndRollover \
+  --wallet-address [INSERT_WALLET_ADDRESS] \
+  --router-address 0x38f600e08540178719BF656e6B43FC15A529c393 \
+  --perp-address 0xC1f33e0cf7e40a67375007104B929E49a581bafE
+
 yarn hardhat --network mainnet ops:trancheAndRollover \
   --router-address 0x38f600e08540178719BF656e6B43FC15A529c393 \
   --perp-address 0xC1f33e0cf7e40a67375007104B929E49a581bafE \

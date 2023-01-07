@@ -31,6 +31,8 @@ yarn hardhat --network goerli deploy:Router
 ## OPS
 yarn hardhat --network goerli ops:info 0x95014Bc18F82a98CFAA3253fbD3184125A01f848
 
+yarn hardhat --network goerli ops:updateState 0x95014Bc18F82a98CFAA3253fbD3184125A01f848
+
 yarn hardhat --network goerli ops:trancheAndDeposit \
   --router-address 0x5e902bdCC408550b4BD612678bE2d57677664Dc9 \
   --perp-address 0x95014Bc18F82a98CFAA3253fbD3184125A01f848 \
@@ -46,6 +48,11 @@ yarn hardhat --network goerli ops:redeemTranches \
 
 yarn hardhat --network goerli ops:redeemTranches \
   --bond-issuer-address 0xAb7d17864463dEdA6c19060Ad6556e1B218c5Ba0 
+
+yarn hardhat --network goerli ops:preview_tx:trancheAndRollover \
+  --wallet-address [INSERT_WALLET_ADDRESS] \
+  --router-address 0x5e902bdCC408550b4BD612678bE2d57677664Dc9 \
+  --perp-address 0x95014Bc18F82a98CFAA3253fbD3184125A01f848
 
 yarn hardhat --network goerli ops:trancheAndRollover \
   --router-address 0x5e902bdCC408550b4BD612678bE2d57677664Dc9 \
