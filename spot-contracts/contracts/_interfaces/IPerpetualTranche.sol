@@ -150,6 +150,10 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @param tranche The address of the tranche token held by the reserve.
     function getReserveTrancheBalance(IERC20Upgradeable tranche) external returns (uint256);
 
+    /// @notice Calculates the reserve's tranche token value.
+    /// @param tranche The address of the tranche token held by the reserve.
+    function getReserveTrancheValue(IERC20Upgradeable tranche) external returns (uint256);
+
     /// @notice Computes the price of each perp token, i.e) reserve value / total supply.
     function getAvgPrice() external returns (uint256);
 

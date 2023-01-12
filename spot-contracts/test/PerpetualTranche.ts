@@ -1431,4 +1431,40 @@ describe("PerpetualTranche", function () {
       expect(await perp.callStatic.getReserveTrancheBalance(depositTranches[4].address)).to.eq(toFixedPtAmt("500"));
     });
   });
+
+  describe("#getReserveTrancheValue", async function () {
+    const depositTranches: Contract[] = [];
+    beforeEach(async function () {
+      const bondFactory = await setupBondFactory();
+      const BondIssuer = await ethers.getContractFactory("BondIssuer");
+      const issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
+      await issuer.init(10800, [500, 500], 1200, 0);
+      await perp.updateBondIssuer(issuer.address);
+      await perp.updateTolerableTrancheMaturity(600, 10800);
+      await advancePerpQueue(perp, 10900);
+      for (let i = 0; i < 5; i++) {
+        const depositBond = await bondAt(await perp.callStatic.getDepositBond());
+        const tranches = await getTranches(depositBond);
+        await pricingStrategy.setTranchePrice(tranches[0].address, toPriceFixedPtAmt("0.9"));
+        await discountStrategy.setTrancheDiscount(tranches[0].address, toDiscountFixedPtAmt("0.8"));
+        await depositIntoBond(depositBond, toFixedPtAmt("1000"), deployer);
+        await tranches[0].approve(perp.address, toFixedPtAmt("500"));
+        await perp.deposit(tranches[0].address, toFixedPtAmt("500"));
+        depositTranches[i] = tranches[0];
+        await advancePerpQueue(perp, 1200);
+      }
+      await advancePerpQueueToRollover(perp, await bondAt(depositTranches[2].bond()));
+      await pricingStrategy.setPrice(toPriceFixedPtAmt("1.1"));
+    });
+
+    it("should return the tranche value", async function () {
+      expect(await perp.callStatic.getReserveTrancheValue(perp.address)).to.eq("0");
+      expect(await perp.callStatic.getReserveTrancheValue(collateralToken.address)).to.eq(toFixedPtAmt("880"));
+      expect(await perp.callStatic.getReserveTrancheValue(depositTranches[0].address)).to.eq("0");
+      expect(await perp.callStatic.getReserveTrancheValue(depositTranches[1].address)).to.eq("0");
+      expect(await perp.callStatic.getReserveTrancheValue(depositTranches[2].address)).to.eq(toFixedPtAmt("360"));
+      expect(await perp.callStatic.getReserveTrancheValue(depositTranches[3].address)).to.eq(toFixedPtAmt("360"));
+      expect(await perp.callStatic.getReserveTrancheValue(depositTranches[4].address)).to.eq(toFixedPtAmt("360"));
+    });
+  });
 });

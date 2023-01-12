@@ -641,6 +641,16 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
+    function getReserveTrancheValue(IERC20Upgradeable tranche) external override afterStateUpdate returns (uint256) {
+        if (!_inReserve(tranche)) {
+            return 0;
+        }
+        uint256 balance = _isMatureTranche(tranche) ? _matureTrancheBalance : _reserveBalance(tranche);
+        uint256 stdTrancheAmt = _toStdTrancheAmt(balance, computeDiscount(tranche));
+        return MathUpgradeable.mulDiv(stdTrancheAmt, computePrice(tranche), UNIT_PRICE);
+    }
+
+    /// @inheritdoc IPerpetualTranche
     /// @dev Reserve tokens which are not up for rollover are marked by `address(0)`.
     function getReserveTokensUpForRollover() external override afterStateUpdate returns (IERC20Upgradeable[] memory) {
         uint256 reserveCount = _reserveCount();
