@@ -11,7 +11,6 @@ import {
   rebase,
   depositIntoBond,
   getTrancheBalances,
-  getTranches,
 } from "../helpers";
 
 let bondFactory: Contract,
@@ -20,17 +19,12 @@ let bondFactory: Contract,
   bondHelpers: Contract,
   accounts: Signer[],
   deployer: Signer,
-  deployerAddress: string,
-  user: Signer,
-  userAddress: string;
+  deployerAddress: string;
 
 async function setupContracts() {
   accounts = await ethers.getSigners();
   deployer = accounts[0];
   deployerAddress = await deployer.getAddress();
-
-  user = accounts[1];
-  userAddress = await user.getAddress();
 
   bondFactory = await setupBondFactory();
   ({ collateralToken, rebaseOracle } = await setupCollateralToken("Bitcoin", "BTC"));
@@ -421,146 +415,6 @@ describe("BondHelpers", function () {
           expect(b[2][0]).to.eq(toFixedPtAmt("200"));
           expect(b[2][1]).to.eq(toFixedPtAmt("300"));
           expect(b[2][2]).to.eq(toFixedPtAmt("500"));
-        });
-      });
-    });
-  });
-
-  describe("#getTrancheCollateralBalances", function () {
-    let bond: Contract, bondLength: number;
-    beforeEach(async function () {
-      bondLength = 86400;
-      bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], bondLength);
-      await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
-      const tranches = await getTranches(bond);
-      await tranches[0].transfer(userAddress, toFixedPtAmt("50"));
-      await tranches[1].transfer(userAddress, toFixedPtAmt("50"));
-      await tranches[2].transfer(userAddress, toFixedPtAmt("50"));
-    });
-
-    describe("when bond not mature", function () {
-      describe("when no change in supply", function () {
-        it("should calculate the balances", async function () {
-          const b = await bondHelpers.getTrancheCollateralBalances(bond.address, deployerAddress);
-          expect(b[1][0]).to.eq(toFixedPtAmt("150"));
-          expect(b[1][1]).to.eq(toFixedPtAmt("250"));
-          expect(b[1][2]).to.eq(toFixedPtAmt("450"));
-
-          const c = await bondHelpers.getTrancheCollateralBalances(bond.address, userAddress);
-          expect(c[1][0]).to.eq(toFixedPtAmt("50"));
-          expect(c[1][1]).to.eq(toFixedPtAmt("50"));
-          expect(c[1][2]).to.eq(toFixedPtAmt("50"));
-        });
-      });
-
-      describe("when supply increases above z threshold", function () {
-        it("should calculate the balances", async function () {
-          await rebase(collateralToken, rebaseOracle, 0.1);
-          const b = await bondHelpers.getTrancheCollateralBalances(bond.address, deployerAddress);
-          expect(b[1][0]).to.eq(toFixedPtAmt("150"));
-          expect(b[1][1]).to.eq(toFixedPtAmt("250"));
-          expect(b[1][2]).to.eq(toFixedPtAmt("540"));
-
-          const c = await bondHelpers.getTrancheCollateralBalances(bond.address, userAddress);
-          expect(c[1][0]).to.eq(toFixedPtAmt("50"));
-          expect(c[1][1]).to.eq(toFixedPtAmt("50"));
-          expect(c[1][2]).to.eq(toFixedPtAmt("60"));
-        });
-      });
-
-      describe("when supply decreases below z threshold", function () {
-        it("should calculate the balances", async function () {
-          await rebase(collateralToken, rebaseOracle, -0.1);
-          const b = await bondHelpers.getTrancheCollateralBalances(bond.address, deployerAddress);
-          expect(b[1][0]).to.eq(toFixedPtAmt("150"));
-          expect(b[1][1]).to.eq(toFixedPtAmt("250"));
-          expect(b[1][2]).to.eq(toFixedPtAmt("360"));
-
-          const c = await bondHelpers.getTrancheCollateralBalances(bond.address, userAddress);
-          expect(c[1][0]).to.eq(toFixedPtAmt("50"));
-          expect(c[1][1]).to.eq(toFixedPtAmt("50"));
-          expect(c[1][2]).to.eq(toFixedPtAmt("40"));
-        });
-      });
-
-      describe("when supply decreases below b threshold", function () {
-        it("should calculate the balances", async function () {
-          await rebase(collateralToken, rebaseOracle, -0.6);
-          const b = await bondHelpers.getTrancheCollateralBalances(bond.address, deployerAddress);
-          expect(b[1][0]).to.eq(toFixedPtAmt("150"));
-          expect(b[1][1]).to.eq(toFixedPtAmt("166.666666666666666666"));
-          expect(b[1][2]).to.eq(toFixedPtAmt("0"));
-
-          const c = await bondHelpers.getTrancheCollateralBalances(bond.address, userAddress);
-          expect(c[1][0]).to.eq(toFixedPtAmt("50"));
-          expect(c[1][1]).to.eq(toFixedPtAmt("33.333333333333333333"));
-          expect(c[1][2]).to.eq(toFixedPtAmt("0"));
-        });
-      });
-
-      describe("when supply decreases below a threshold", function () {
-        it("should calculate the balances", async function () {
-          await rebase(collateralToken, rebaseOracle, -0.85);
-          const b = await bondHelpers.getTrancheCollateralBalances(bond.address, deployerAddress);
-          expect(b[1][0]).to.eq(toFixedPtAmt("112.5"));
-          expect(b[1][1]).to.eq(toFixedPtAmt("0"));
-          expect(b[1][2]).to.eq(toFixedPtAmt("0"));
-
-          const c = await bondHelpers.getTrancheCollateralBalances(bond.address, userAddress);
-          expect(c[1][0]).to.eq(toFixedPtAmt("37.5"));
-          expect(c[1][1]).to.eq(toFixedPtAmt("0"));
-          expect(c[1][2]).to.eq(toFixedPtAmt("0"));
-        });
-      });
-    });
-
-    describe("when bond is mature", function () {
-      beforeEach(async function () {
-        await TimeHelpers.increaseTime(bondLength);
-        await bond.mature(); // NOTE: Any rebase after maturity goes directly to the tranches
-      });
-
-      describe("when no change in supply", function () {
-        it("should calculate the balances", async function () {
-          const b = await bondHelpers.getTrancheCollateralBalances(bond.address, deployerAddress);
-          expect(b[1][0]).to.eq(toFixedPtAmt("150"));
-          expect(b[1][1]).to.eq(toFixedPtAmt("250"));
-          expect(b[1][2]).to.eq(toFixedPtAmt("450"));
-
-          const c = await bondHelpers.getTrancheCollateralBalances(bond.address, userAddress);
-          expect(c[1][0]).to.eq(toFixedPtAmt("50"));
-          expect(c[1][1]).to.eq(toFixedPtAmt("50"));
-          expect(c[1][2]).to.eq(toFixedPtAmt("50"));
-        });
-      });
-
-      describe("when supply increases", function () {
-        it("should calculate the balances", async function () {
-          await rebase(collateralToken, rebaseOracle, 0.1);
-          const b = await bondHelpers.getTrancheCollateralBalances(bond.address, deployerAddress);
-          expect(b[1][0]).to.eq(toFixedPtAmt("165"));
-          expect(b[1][1]).to.eq(toFixedPtAmt("275"));
-          expect(b[1][2]).to.eq(toFixedPtAmt("495"));
-
-          const c = await bondHelpers.getTrancheCollateralBalances(bond.address, userAddress);
-          expect(c[1][0]).to.eq(toFixedPtAmt("55"));
-          expect(c[1][1]).to.eq(toFixedPtAmt("55"));
-          expect(c[1][2]).to.eq(toFixedPtAmt("55"));
-        });
-      });
-
-      describe("when supply decreases", function () {
-        it("should calculate the balances", async function () {
-          await rebase(collateralToken, rebaseOracle, -0.1);
-          const b = await bondHelpers.getTrancheCollateralBalances(bond.address, deployerAddress);
-          expect(b[1][0]).to.eq(toFixedPtAmt("135"));
-          expect(b[1][1]).to.eq(toFixedPtAmt("225"));
-          expect(b[1][2]).to.eq(toFixedPtAmt("405"));
-
-          const c = await bondHelpers.getTrancheCollateralBalances(bond.address, userAddress);
-          expect(c[1][0]).to.eq(toFixedPtAmt("45"));
-          expect(c[1][1]).to.eq(toFixedPtAmt("45"));
-          expect(c[1][2]).to.eq(toFixedPtAmt("45"));
         });
       });
     });
