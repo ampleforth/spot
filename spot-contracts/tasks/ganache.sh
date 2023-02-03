@@ -53,10 +53,6 @@ yarn hardhat --network ganache ops:trancheAndRollover \
   --perp-address 0x89967625335C35c5FE1F3C1c03D37fdEb6f415Ed \
   --collateral-amount 200
 
-yarn hardhat --network ganache ops:trancheAndRolloverMax \
-  --router-address 0x4a57d51af3a8a90905a5F756E0B28cC2888A1bD5 \
-  --perp-address 0x89967625335C35c5FE1F3C1c03D37fdEb6f415Ed
-
 yarn hardhat --network ganache ops:increaseTimeBy 300
 yarn hardhat --network ganache ops:updateState 0x89967625335C35c5FE1F3C1c03D37fdEb6f415Ed
 

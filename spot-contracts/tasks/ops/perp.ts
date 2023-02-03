@@ -1,7 +1,7 @@
 import { getAdminAddress, getImplementationAddress } from "@openzeppelin/upgrades-core";
 import { task, types } from "hardhat/config";
 import { TaskArguments } from "hardhat/types";
-import { utils, constants, Contract, BigNumber } from "ethers";
+import { utils, constants, BigNumber } from "ethers";
 
 task("ops:info")
   .addPositionalParam("perpAddress", "the address of the perp contract", undefined, types.string, false)
@@ -119,6 +119,41 @@ task("ops:info")
       );
     }
     console.log("---------------------------------------------------------------");
+  });
+
+task("ops:perp:updateKeeper", "Updates the keeper address of perpetual tranche")
+  .addParam("address", "the perpetual tranche contract address", undefined, types.string, false)
+  .addParam("newKeeperAddress", "the address of the new keeper", undefined, types.string, false)
+  .addParam("fromIdx", "the index of sender", 0, types.int)
+  .setAction(async function (args: TaskArguments, hre) {
+    const { address, newKeeperAddress } = args;
+    const perp = await hre.ethers.getContractAt("PerpetualTranche", address);
+
+    const signer = (await hre.ethers.getSigners())[args.fromIdx];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
+
+    console.log(`Updating keeper to ${newKeeperAddress}`);
+    const tx = await perp.updateKeeper(newKeeperAddress);
+    console.log(tx.hash);
+    await tx.wait();
+  });
+
+task("ops:perp:pause", "Pauses operations on the perpetual tranche contract")
+  .addParam("address", "the perpetual tranche contract address", undefined, types.string, false)
+  .addParam("fromIdx", "the index of sender", 0, types.int)
+  .setAction(async function (args: TaskArguments, hre) {
+    const { address } = args;
+    const perp = await hre.ethers.getContractAt("PerpetualTranche", address);
+
+    const signer = (await hre.ethers.getSigners())[args.fromIdx];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
+
+    console.log(`Pausing`);
+    const tx = await perp.pause();
+    console.log(tx.hash);
+    await tx.wait();
   });
 
 task("ops:updateState")
@@ -281,312 +316,4 @@ task("ops:redeem")
     console.log("Tx", tx3.hash);
 
     console.log("Signer balance", utils.formatUnits(await perp.balanceOf(signerAddress), await perp.decimals()));
-  });
-
-task("ops:redeemTranches")
-  .addParam("bondIssuerAddress", "the address of the bond issuer contract", undefined, types.string, false)
-  .addParam("fromIdx", "the index of sender", 0, types.int)
-  .setAction(async function (args: TaskArguments, hre) {
-    const { bondIssuerAddress } = args;
-    const bondIssuer = await hre.ethers.getContractAt("BondIssuer", bondIssuerAddress);
-
-    console.log("---------------------------------------------------------------");
-    console.log("Execution:");
-    const signer = (await hre.ethers.getSigners())[args.fromIdx];
-    const signerAddress = await signer.getAddress();
-    console.log("Signer", signerAddress);
-
-    const attemptMature = async (bond: Contract) => {
-      try {
-        console.log("Invoking Mature");
-        const tx = await bond.connect(signer).mature();
-        await tx.wait();
-        console.log("Tx:", tx.hash);
-      } catch (e) {
-        console.log("Not up for maturity");
-      }
-    };
-
-    // iterate through the bonds
-    const issuedCount = await bondIssuer.callStatic.issuedCount();
-    for (let i = 0; i < issuedCount; i++) {
-      const bondAddress = await bondIssuer.callStatic.issuedBondAt(i);
-      const bond = await hre.ethers.getContractAt("IBondController", bondAddress);
-
-      console.log("---------------------------------------------------------------");
-      console.log("Processing bond", bondAddress);
-
-      const trancheCount = await bond.trancheCount();
-      const tranches = [];
-      for (let j = 0; j < trancheCount; j++) {
-        const [address, ratio] = await bond.tranches(j);
-        const tranche = await hre.ethers.getContractAt("ITranche", address);
-        const balance = await tranche.balanceOf(signerAddress);
-        const scalar = balance.div(ratio).mul("1000");
-        tranches.push({
-          idx: j,
-          address,
-          tranche,
-          ratio,
-          balance,
-          scalar,
-        });
-      }
-
-      await attemptMature(bond);
-
-      if (!(await bond.isMature())) {
-        console.log("Redeeming based on balance");
-        const minScalarTranche = tranches.sort((a, b) =>
-          a.scalar.gte(b.scalar) ? (a.scalar.eq(b.scalar) ? 0 : 1) : -1,
-        )[0];
-        if (minScalarTranche.scalar.gt("0")) {
-          const redemptionAmounts = tranches.map(t => t.ratio.mul(minScalarTranche.scalar).div("1000"));
-          console.log(
-            "Tranche balances",
-            tranches.map(t => t.balance),
-          );
-          console.log("Redeeming tranches", redemptionAmounts);
-          const tx = await bond.connect(signer).redeem(redemptionAmounts);
-          await tx.wait();
-          console.log("Tx:", tx.hash);
-        }
-      } else {
-        console.log("Redeeming mature");
-        for (let j = 0; j < trancheCount; j++) {
-          if (tranches[j].balance.gt(0)) {
-            console.log("Redeeming", tranches[j].address);
-            const tx = await bond.connect(signer).redeemMature(tranches[j].address, tranches[j].balance);
-            await tx.wait();
-            console.log("Tx:", tx.hash);
-          }
-        }
-      }
-    }
-  });
-
-task("ops:trancheAndRollover")
-  .addParam("perpAddress", "the address of the perp contract", undefined, types.string, false)
-  .addParam("routerAddress", "the address of the router contract", undefined, types.string, false)
-  .addParam(
-    "collateralAmount",
-    "the total amount of collateral (in float) to tranche and use for rolling over",
-    undefined,
-    types.string,
-    false,
-  )
-  .addParam("fromIdx", "the index of sender", 0, types.int)
-  .addFlag("dryRun", "skip execution")
-  .setAction(async function (args: TaskArguments, hre) {
-    const { perpAddress, routerAddress, collateralAmount, dryRun } = args;
-
-    const router = await hre.ethers.getContractAt("RouterV1", routerAddress);
-    const perp = await hre.ethers.getContractAt("PerpetualTranche", perpAddress);
-    const bondIssuer = await hre.ethers.getContractAt("BondIssuer", await perp.bondIssuer());
-    const collateralToken = await hre.ethers.getContractAt("MockERC20", await bondIssuer.collateral());
-
-    const fixedPtCollateralAmount = utils.parseUnits(collateralAmount, await collateralToken.decimals());
-    const [depositBondAddress, trancheAddresses, depositTrancheAmts] = await router.callStatic.previewTranche(
-      perp.address,
-      fixedPtCollateralAmount,
-    );
-    const depositBond = await hre.ethers.getContractAt("IBondController", depositBondAddress);
-
-    console.log("---------------------------------------------------------------");
-    console.log("Preview tranche:", collateralAmount);
-    const depositTranches = [];
-    for (let i = 0; i < trancheAddresses.length; i++) {
-      const tranche = await hre.ethers.getContractAt("ITranche", trancheAddresses[i]);
-      depositTranches.push(tranche);
-      console.log(
-        `tranches(${i}):`,
-        trancheAddresses[i],
-        utils.formatUnits(depositTrancheAmts[i].toString(), await collateralToken.decimals()),
-      );
-    }
-
-    console.log("---------------------------------------------------------------");
-    console.log("Rollover list:");
-    const reserveCount = (await perp.callStatic.getReserveCount()).toNumber();
-    const upForRotation = await perp.callStatic.getReserveTokensUpForRollover();
-    const reserveTokens = [];
-    const reserveTokenBalances = [];
-    const rotationTokens = [];
-    const rotationTokenBalances = [];
-    for (let i = 0; i < reserveCount; i++) {
-      const tranche = await hre.ethers.getContractAt("ITranche", await perp.callStatic.getReserveAt(i));
-      const balance = await tranche.balanceOf(await perp.reserve());
-      reserveTokens.push(tranche);
-      reserveTokenBalances.push(balance);
-      if (upForRotation[i] !== constants.AddressZero && balance.gt(0)) {
-        rotationTokens.push(tranche);
-        rotationTokenBalances.push(balance);
-      }
-    }
-    if (rotationTokens.length === 0) {
-      throw Error("No tokens up for rollover");
-    }
-
-    console.log("---------------------------------------------------------------");
-    console.log("Rollover preview:");
-    const feeToken = await hre.ethers.getContractAt("PerpetualTranche", await perp.feeToken());
-    let totalRolloverAmt = BigNumber.from("0");
-    let totalRolloverFee = BigNumber.from("0");
-
-    // continues to the next token when only DUST remains
-    const DUST_AMOUNT = utils.parseUnits("1", await perp.decimals());
-
-    const remainingTrancheInAmts: BigNumber[] = depositTrancheAmts.map((t: BigNumber) => t);
-    const remainingTokenOutAmts: BigNumber[] = rotationTokenBalances.map(b => b);
-
-    const rolloverData: any[] = [];
-    for (let i = 0, j = 0; i < depositTranches.length && j < rotationTokens.length; ) {
-      const trancheIn = depositTranches[i];
-      const tokenOut = rotationTokens[j];
-      const [rd, , rolloverFee] = await router.callStatic.previewRollover(
-        perp.address,
-        trancheIn.address,
-        tokenOut.address,
-        remainingTrancheInAmts[i],
-        remainingTokenOutAmts[j],
-      );
-
-      if (rd.perpRolloverAmt.gt("0")) {
-        rolloverData.push({
-          trancheIn,
-          tokenOut,
-          trancheInAmt: rd.trancheInAmt,
-          tokenOutAmt: rd.tokenOutAmt,
-        });
-
-        totalRolloverAmt = totalRolloverAmt.add(rd.perpRolloverAmt);
-        totalRolloverFee = totalRolloverFee.add(rolloverFee);
-
-        remainingTrancheInAmts[i] = rd.remainingTrancheInAmt;
-        remainingTokenOutAmts[j] = remainingTokenOutAmts[j].sub(rd.tokenOutAmt);
-
-        if (remainingTokenOutAmts[i].lte(DUST_AMOUNT)) {
-          j++;
-        }
-        if (remainingTrancheInAmts[i].lte(DUST_AMOUNT)) {
-          i++;
-        }
-      } else {
-        i++;
-      }
-    }
-
-    console.log("depositBond", depositBond.address);
-    console.log("collateralAmount", fixedPtCollateralAmount);
-    console.log("rolloverAmt", utils.formatUnits(totalRolloverAmt, await perp.decimals()));
-    console.log("rolloverFee", utils.formatUnits(totalRolloverFee, await feeToken.decimals()));
-    console.log(rolloverData.map(r => [r.trancheIn.address, r.tokenOut.address, r.trancheInAmt]));
-
-    if (dryRun) {
-      console.log("Skipping execution");
-      return;
-    }
-
-    console.log("---------------------------------------------------------------");
-    console.log("Execution:");
-    const signer = (await hre.ethers.getSigners())[args.fromIdx];
-    const signerAddress = await signer.getAddress();
-    console.log("Signer", signerAddress);
-
-    console.log("Approving collateralToken to be spent");
-    const allowance = await collateralToken.allowance(signerAddress, router.address);
-    if (allowance.lt(fixedPtCollateralAmount)) {
-      const tx1 = await collateralToken.connect(signer).approve(router.address, fixedPtCollateralAmount);
-      await tx1.wait();
-      console.log("Tx", tx1.hash);
-    }
-
-    let fee = BigNumber.from("0");
-    if (totalRolloverFee.gt("0")) {
-      fee = totalRolloverFee;
-      console.log("Approving fees to be spent:");
-      const tx2 = await feeToken.connect(signer).increaseAllowance(router.address, fee);
-      await tx2.wait();
-      console.log("Tx", tx2.hash);
-    }
-
-    // TODO: fee calculation has some rounding issues. Overpaying fixes it for now
-    fee = fee.mul("2");
-
-    console.log("Executing rollover:");
-    const tx3 = await router.connect(signer).trancheAndRollover(
-      perp.address,
-      depositBond.address,
-      fixedPtCollateralAmount,
-      rolloverData.map(r => [r.trancheIn.address, r.tokenOut.address, r.trancheInAmt]),
-      fee,
-    );
-    await tx3.wait();
-    console.log("Tx", tx3.hash);
-  });
-
-task("ops:trancheAndRolloverMax")
-  .addParam("perpAddress", "the address of the perp contract", undefined, types.string, false)
-  .addParam("routerAddress", "the address of the router contract", undefined, types.string, false)
-  .addParam("fromIdx", "the index of sender", 0, types.int)
-  .setAction(async function (args: TaskArguments, hre) {
-    const signer = (await hre.ethers.getSigners())[args.fromIdx];
-    const signerAddress = await signer.getAddress();
-    console.log("Signer", signerAddress);
-
-    const { routerAddress, perpAddress } = args;
-    const perp = await hre.ethers.getContractAt("PerpetualTranche", perpAddress);
-    const bondIssuer = await hre.ethers.getContractAt("BondIssuer", await perp.bondIssuer());
-    const collateralToken = await hre.ethers.getContractAt("MockERC20", await bondIssuer.collateral());
-    const floatingPtCollateralAmount = utils.formatUnits(
-      await collateralToken.balanceOf(signerAddress),
-      await collateralToken.decimals(),
-    );
-
-    await hre.run("ops:trancheAndRollover", {
-      perpAddress,
-      routerAddress,
-      collateralAmount: floatingPtCollateralAmount,
-      fromIdx: args.fromIdx,
-    });
-
-    await hre.run("ops:redeemTranches", {
-      bondIssuerAddress: bondIssuer.address,
-      fromIdx: args.fromIdx,
-    });
-  });
-
-task("ops:perp:updateKeeper", "Updates the keeper address of perpetual tranche")
-  .addParam("address", "the perpetual tranche contract address", undefined, types.string, false)
-  .addParam("newKeeperAddress", "the address of the new keeper", undefined, types.string, false)
-  .addParam("fromIdx", "the index of sender", 0, types.int)
-  .setAction(async function (args: TaskArguments, hre) {
-    const { address, newKeeperAddress } = args;
-    const perp = await hre.ethers.getContractAt("PerpetualTranche", address);
-
-    const signer = (await hre.ethers.getSigners())[args.fromIdx];
-    const signerAddress = await signer.getAddress();
-    console.log("Signer", signerAddress);
-
-    console.log(`Updating keeper to ${newKeeperAddress}`);
-    const tx = await perp.updateKeeper(newKeeperAddress);
-    console.log(tx.hash);
-    await tx.wait();
-  });
-
-task("ops:perp:pause", "Pauses opeartions on the perpetual tranche contract")
-  .addParam("address", "the perpetual tranche contract address", undefined, types.string, false)
-  .addParam("fromIdx", "the index of sender", 0, types.int)
-  .setAction(async function (args: TaskArguments, hre) {
-    const { address } = args;
-    const perp = await hre.ethers.getContractAt("PerpetualTranche", address);
-
-    const signer = (await hre.ethers.getSigners())[args.fromIdx];
-    const signerAddress = await signer.getAddress();
-    console.log("Signer", signerAddress);
-
-    console.log(`Pausing`);
-    const tx = await perp.pause();
-    console.log(tx.hash);
-    await tx.wait();
   });
