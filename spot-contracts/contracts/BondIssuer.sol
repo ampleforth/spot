@@ -56,15 +56,13 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     ///      then the issue window opens at Friday 2AM GMT every week.
     uint256 public issueWindowOffsetSec;
 
-    /// @dev List of all active bonds, i.e) issued bonds which have not been matured.
-    EnumerableSetUpgradeable.AddressSet private _activeBonds;
+    /// @notice An enumerable list to keep track of bonds issued by this issuer.
+    /// @dev Bonds are only added and never removed, thus the last item will always point
+    ///      to the latest bond.
+    EnumerableSetUpgradeable.AddressSet private _issuedBonds;
 
-    /// @dev List of "inactive", matured bonds.
-    ///      Once a bond is matured it's moved from the `active` list into this one.
-    EnumerableSetUpgradeable.AddressSet private _maturedBonds;
-
-    /// @dev The reference to the most recently issued bond.
-    IBondController private _lastBond;
+    /// @dev List of all indices of active bonds in the `_issuedBonds` list.
+    uint256[] private _activeBondIDXs;
 
     /// @notice The timestamp when the issue window opened during the last issue.
     uint256 public lastIssueWindowTimestamp;
@@ -124,26 +122,25 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
 
     /// @inheritdoc IBondIssuer
     function isInstance(IBondController bond) external view override returns (bool) {
-        return (_activeBonds.contains(address(bond)) || _maturedBonds.contains(address(bond)));
+        return _issuedBonds.contains(address(bond));
     }
 
     /// @inheritdoc IBondIssuer
     /// @dev Reverts if none of the active bonds are mature.
     function matureAll() external {
         bool bondsMature = false;
-        uint256 activeCount_ = _activeBonds.length();
 
-        // NOTE: We traverse the active list in the reverse order as deletions involve
+        // NOTE: We traverse the active index list in the reverse order as deletions involve
         //       swapping the deleted element to the end of the list and removing the last element.
-        for (uint256 i = activeCount_; i > 0; i--) {
-            IBondController bond = IBondController(_activeBonds.at(i - 1));
+        for (uint256 i = _activeBondIDXs.length; i > 0; i--) {
+            IBondController bond = IBondController(_issuedBonds.at(_activeBondIDXs[i - 1]));
             if (bond.timeToMaturity() <= 0) {
                 if (!bond.isMature()) {
                     bond.mature();
                 }
 
-                _activeBonds.remove(address(bond));
-                _maturedBonds.add(address(bond));
+                _activeBondIDXs[i - 1] = _activeBondIDXs[_activeBondIDXs.length - 1];
+                _activeBondIDXs.pop();
                 emit BondMature(bond);
 
                 bondsMature = true;
@@ -170,8 +167,8 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
             bondFactory.createBond(collateral, trancheRatios, lastIssueWindowTimestamp + maxMaturityDuration)
         );
 
-        _activeBonds.add(address(bond));
-        _lastBond = bond;
+        _issuedBonds.add(address(bond));
+        _activeBondIDXs.push(_issuedBonds.length() - 1);
 
         emit BondIssued(bond);
     }
@@ -180,29 +177,17 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     /// @dev Lazily issues a new bond when the time is right.
     function getLatestBond() external override returns (IBondController) {
         issue();
-        return _lastBond;
+        // NOTE: The latest bond will be at the end of the list.
+        return IBondController(_issuedBonds.at(_issuedBonds.length() - 1));
     }
 
     /// @inheritdoc IBondIssuer
     function issuedCount() external view override returns (uint256) {
-        return _activeBonds.length() + _maturedBonds.length();
+        return _issuedBonds.length();
     }
 
     /// @inheritdoc IBondIssuer
-    /// @dev Internally, we first iterate through the active list and then move on to the mature list.
-    ///      This list is NOT guaranteed to be ordered.
     function issuedBondAt(uint256 index) external view override returns (IBondController) {
-        uint256 activeCount_ = _activeBonds.length();
-        if (index < activeCount_) {
-            return IBondController(_activeBonds.at(index));
-        } else {
-            return IBondController(_maturedBonds.at(index - activeCount_));
-        }
-    }
-
-    /// @notice Returns the count of issued bonds which are still active (i.e have not matured).
-    /// @return The number of active bonds.
-    function activeCount() external view returns (uint256) {
-        return _activeBonds.length();
+        return IBondController(_issuedBonds.at(index));
     }
 }

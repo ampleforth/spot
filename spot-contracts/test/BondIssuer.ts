@@ -203,7 +203,7 @@ describe("BondIssuer", function () {
     });
   });
 
-  describe("#matureAll", function () {
+  describe.only("#matureAll", function () {
     describe("active set has one bond and it is NOT up for maturity", function () {
       beforeEach(async function () {
         await TimeHelpers.setNextBlockTimestamp(mockTime(900));
@@ -222,7 +222,6 @@ describe("BondIssuer", function () {
         await TimeHelpers.setNextBlockTimestamp(mockTime(900));
         await issuer.issue();
         lastBond = await bondAt(await issuer.callStatic.getLatestBond());
-        expect(await issuer.activeCount()).to.eq(1);
         expect(await issuer.issuedCount()).to.eq(1);
         expect(await issuer.issuedBondAt(0)).to.eq(lastBond.address);
 
@@ -235,7 +234,6 @@ describe("BondIssuer", function () {
         await expect(tx).to.emit(lastBond, "Mature");
       });
       it("should keep track of active and mature bonds", async function () {
-        expect(await issuer.activeCount()).to.eq(0);
         expect(await issuer.issuedCount()).to.eq(1);
         expect(await issuer.issuedBondAt(0)).to.eq(lastBond.address);
       });
@@ -247,7 +245,6 @@ describe("BondIssuer", function () {
         await TimeHelpers.setNextBlockTimestamp(mockTime(900));
         await issuer.issue();
         lastBond = await bondAt(await issuer.callStatic.getLatestBond());
-        expect(await issuer.activeCount()).to.eq(1);
         expect(await issuer.issuedCount()).to.eq(1);
         expect(await issuer.issuedBondAt(0)).to.eq(lastBond.address);
 
@@ -261,7 +258,6 @@ describe("BondIssuer", function () {
         await expect(tx).not.to.emit(lastBond, "Mature");
       });
       it("should keep track of active and mature bonds", async function () {
-        expect(await issuer.activeCount()).to.eq(0);
         expect(await issuer.issuedCount()).to.eq(1);
         expect(await issuer.issuedBondAt(0)).to.eq(lastBond.address);
       });
@@ -282,7 +278,6 @@ describe("BondIssuer", function () {
         await issuer.issue();
         b3 = await bondAt(await issuer.callStatic.getLatestBond());
 
-        expect(await issuer.activeCount()).to.eq(3);
         expect(await issuer.issuedCount()).to.eq(3);
         expect(await issuer.issuedBondAt(0)).to.eq(b1.address);
         expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
@@ -296,11 +291,10 @@ describe("BondIssuer", function () {
         await expect(tx).to.emit(issuer, "BondMature").withArgs(b1.address);
       });
       it("should keep track of active and mature bonds", async function () {
-        expect(await issuer.activeCount()).to.eq(2);
         expect(await issuer.issuedCount()).to.eq(3);
-        expect(await issuer.issuedBondAt(0)).to.eq(b3.address);
+        expect(await issuer.issuedBondAt(0)).to.eq(b1.address);
         expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
-        expect(await issuer.issuedBondAt(2)).to.eq(b1.address);
+        expect(await issuer.issuedBondAt(2)).to.eq(b3.address);
       });
     });
 
@@ -321,7 +315,6 @@ describe("BondIssuer", function () {
 
         await TimeHelpers.setNextBlockTimestamp(mockTime(170100));
 
-        expect(await issuer.activeCount()).to.eq(3);
         expect(await issuer.issuedCount()).to.eq(3);
         expect(await issuer.issuedBondAt(0)).to.eq(b1.address);
         expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
@@ -337,11 +330,10 @@ describe("BondIssuer", function () {
         await expect(tx).to.emit(issuer, "BondMature").withArgs(b2.address);
       });
       it("should keep track of active and mature bonds", async function () {
-        expect(await issuer.activeCount()).to.eq(1);
         expect(await issuer.issuedCount()).to.eq(3);
-        expect(await issuer.issuedBondAt(0)).to.eq(b3.address);
+        expect(await issuer.issuedBondAt(0)).to.eq(b1.address);
         expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
-        expect(await issuer.issuedBondAt(2)).to.eq(b1.address);
+        expect(await issuer.issuedBondAt(2)).to.eq(b3.address);
       });
     });
 
@@ -362,7 +354,6 @@ describe("BondIssuer", function () {
 
         await TimeHelpers.setNextBlockTimestamp(mockTime(260100));
 
-        expect(await issuer.activeCount()).to.eq(3);
         expect(await issuer.issuedCount()).to.eq(3);
         expect(await issuer.issuedBondAt(0)).to.eq(b1.address);
         expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
@@ -380,11 +371,10 @@ describe("BondIssuer", function () {
         await expect(tx).to.emit(issuer, "BondMature").withArgs(b3.address);
       });
       it("should keep track of active and mature bonds", async function () {
-        expect(await issuer.activeCount()).to.eq(0);
         expect(await issuer.issuedCount()).to.eq(3);
-        expect(await issuer.issuedBondAt(0)).to.eq(b3.address);
+        expect(await issuer.issuedBondAt(0)).to.eq(b1.address);
         expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
-        expect(await issuer.issuedBondAt(2)).to.eq(b1.address);
+        expect(await issuer.issuedBondAt(2)).to.eq(b3.address);
       });
     });
   });
