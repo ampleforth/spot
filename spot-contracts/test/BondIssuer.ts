@@ -41,6 +41,8 @@ describe("BondIssuer", function () {
       expect(await issuer.lastIssueWindowTimestamp()).to.eq(0);
       expect(await issuer.issuedCount()).to.eq(0);
       await expect(issuer.issuedBondAt(0)).to.be.reverted;
+      expect(await issuer.activeCount()).to.eq(0);
+      await expect(issuer.activeBondAt(0)).to.be.reverted;
     });
   });
 
@@ -117,6 +119,10 @@ describe("BondIssuer", function () {
         expect(await issuer.issuedBondAt(0)).to.eq(bond);
         await expect(issuer.issuedBondAt(1)).to.be.reverted;
 
+        expect(await issuer.activeCount()).to.eq(1);
+        expect(await issuer.activeBondAt(0)).to.eq(bond);
+        await expect(issuer.activeBondAt(1)).to.be.reverted;
+
         await TimeHelpers.setNextBlockTimestamp(mockTime(4495));
         await expect(issuer.issue()).not.to.emit(issuer, "BondIssued");
         expect(await issuer.lastIssueWindowTimestamp()).to.eq(mockTime(900));
@@ -127,6 +133,9 @@ describe("BondIssuer", function () {
 
         expect(await issuer.issuedCount()).to.eq(2);
         await expect(issuer.issuedBondAt(1)).to.not.be.reverted;
+
+        expect(await issuer.activeCount()).to.eq(2);
+        await expect(issuer.activeBondAt(1)).to.not.be.reverted;
 
         await TimeHelpers.setNextBlockTimestamp(mockTime(4505));
         await expect(issuer.issue()).not.to.emit(issuer, "BondIssued");
@@ -224,6 +233,8 @@ describe("BondIssuer", function () {
         lastBond = await bondAt(await issuer.callStatic.getLatestBond());
         expect(await issuer.issuedCount()).to.eq(1);
         expect(await issuer.issuedBondAt(0)).to.eq(lastBond.address);
+        expect(await issuer.activeCount()).to.eq(1);
+        expect(await issuer.activeBondAt(0)).to.eq(lastBond.address);
 
         await TimeHelpers.setNextBlockTimestamp(mockTime(87301));
         tx = issuer.matureActive();
@@ -236,6 +247,8 @@ describe("BondIssuer", function () {
       it("should keep track of active and mature bonds", async function () {
         expect(await issuer.issuedCount()).to.eq(1);
         expect(await issuer.issuedBondAt(0)).to.eq(lastBond.address);
+        expect(await issuer.activeCount()).to.eq(0);
+        await expect(issuer.activeBondAt(0)).to.be.reverted;
       });
     });
 
@@ -260,6 +273,8 @@ describe("BondIssuer", function () {
       it("should keep track of active and mature bonds", async function () {
         expect(await issuer.issuedCount()).to.eq(1);
         expect(await issuer.issuedBondAt(0)).to.eq(lastBond.address);
+        expect(await issuer.activeCount()).to.eq(0);
+        await expect(issuer.activeBondAt(0)).to.be.reverted;
       });
     });
 
@@ -283,6 +298,11 @@ describe("BondIssuer", function () {
         expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
         expect(await issuer.issuedBondAt(2)).to.eq(b3.address);
 
+        expect(await issuer.activeCount()).to.eq(3);
+        expect(await issuer.activeBondAt(0)).to.eq(b1.address);
+        expect(await issuer.activeBondAt(1)).to.eq(b2.address);
+        expect(await issuer.activeBondAt(2)).to.eq(b3.address);
+
         tx = issuer.matureActive();
         await tx;
       });
@@ -295,6 +315,10 @@ describe("BondIssuer", function () {
         expect(await issuer.issuedBondAt(0)).to.eq(b1.address);
         expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
         expect(await issuer.issuedBondAt(2)).to.eq(b3.address);
+        expect(await issuer.activeCount()).to.eq(2);
+        expect(await issuer.activeBondAt(0)).to.eq(b3.address);
+        expect(await issuer.activeBondAt(1)).to.eq(b2.address);
+        await expect(issuer.activeBondAt(2)).to.be.reverted;
       });
     });
 
@@ -320,6 +344,11 @@ describe("BondIssuer", function () {
         expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
         expect(await issuer.issuedBondAt(2)).to.eq(b3.address);
 
+        expect(await issuer.activeCount()).to.eq(3);
+        expect(await issuer.activeBondAt(0)).to.eq(b1.address);
+        expect(await issuer.activeBondAt(1)).to.eq(b2.address);
+        expect(await issuer.activeBondAt(2)).to.eq(b3.address);
+
         tx = issuer.matureActive();
         await tx;
       });
@@ -334,6 +363,9 @@ describe("BondIssuer", function () {
         expect(await issuer.issuedBondAt(0)).to.eq(b1.address);
         expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
         expect(await issuer.issuedBondAt(2)).to.eq(b3.address);
+        expect(await issuer.activeCount()).to.eq(1);
+        expect(await issuer.activeBondAt(0)).to.eq(b3.address);
+        await expect(issuer.activeBondAt(1)).to.be.reverted;
       });
     });
 
@@ -359,6 +391,11 @@ describe("BondIssuer", function () {
         expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
         expect(await issuer.issuedBondAt(2)).to.eq(b3.address);
 
+        expect(await issuer.activeCount()).to.eq(3);
+        expect(await issuer.activeBondAt(0)).to.eq(b1.address);
+        expect(await issuer.activeBondAt(1)).to.eq(b2.address);
+        expect(await issuer.activeBondAt(2)).to.eq(b3.address);
+
         tx = issuer.matureActive();
         await tx;
       });
@@ -375,6 +412,8 @@ describe("BondIssuer", function () {
         expect(await issuer.issuedBondAt(0)).to.eq(b1.address);
         expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
         expect(await issuer.issuedBondAt(2)).to.eq(b3.address);
+        expect(await issuer.activeCount()).to.eq(0);
+        await expect(issuer.activeBondAt(0)).to.be.reverted;
       });
     });
   });

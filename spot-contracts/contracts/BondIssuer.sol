@@ -187,4 +187,15 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     function issuedBondAt(uint256 index) external view override returns (IBondController) {
         return IBondController(_issuedBonds.at(index));
     }
+
+    /// @inheritdoc IBondIssuer
+    function activeCount() external view override returns (uint256) {
+        return _activeBondIDXs.length;
+    }
+
+    /// @inheritdoc IBondIssuer
+    /// @dev This is NOT ordered by issuance time.
+    function activeBondAt(uint256 index) external view override returns (IBondController) {
+        return IBondController(_issuedBonds.at(_activeBondIDXs[index]));
+    }
 }
