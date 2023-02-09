@@ -9,7 +9,7 @@ interface IBondIssuer {
     event BondIssued(IBondController bond);
 
     /// @notice Event emitted when a bond has matured.
-    /// @param bond The mature bond.
+    /// @param bond The matured bond.
     event BondMature(IBondController bond);
 
     /// @notice The address of the underlying collateral token to be used for issued bonds.
