@@ -3,6 +3,9 @@ pragma solidity ^0.8.0;
 
 import { IBondController } from "./buttonwood/IBondController.sol";
 
+/// @notice Expected at least one matured bond.
+error NoMaturedBonds();
+
 interface IBondIssuer {
     /// @notice Event emitted when a new bond is issued by the issuer.
     /// @param bond The newly issued bond.
@@ -16,8 +19,8 @@ interface IBondIssuer {
     /// @return Address of the collateral token.
     function collateral() external view returns (address);
 
-    /// @notice Invokes `mature` on issued bonds.
-    function matureAll() external;
+    /// @notice Invokes `mature` on issued active bonds.
+    function matureActive() external;
 
     /// @notice Issues a new bond if sufficient time has elapsed since the last issue.
     function issue() external;

@@ -8,10 +8,7 @@ import { BondHelpers } from "./_utils/BondHelpers.sol";
 
 import { IBondFactory } from "./_interfaces/buttonwood/IBondFactory.sol";
 import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
-import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
-
-/// @notice Expected at least one mature bond.
-error NoMaturedBonds();
+import { IBondIssuer, NoMaturedBonds } from "./_interfaces/IBondIssuer.sol";
 
 /**
  *  @title BondIssuer
@@ -127,7 +124,7 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
 
     /// @inheritdoc IBondIssuer
     /// @dev Reverts if none of the active bonds are mature.
-    function matureAll() external {
+    function matureActive() external {
         bool bondsMature = false;
 
         // NOTE: We traverse the active index list in the reverse order as deletions involve

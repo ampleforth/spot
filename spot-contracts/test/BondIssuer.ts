@@ -203,7 +203,7 @@ describe("BondIssuer", function () {
     });
   });
 
-  describe.only("#matureAll", function () {
+  describe("#matureActive", function () {
     describe("active set has one bond and it is NOT up for maturity", function () {
       beforeEach(async function () {
         await TimeHelpers.setNextBlockTimestamp(mockTime(900));
@@ -212,7 +212,7 @@ describe("BondIssuer", function () {
       });
 
       it("should revert", async function () {
-        await expect(issuer.matureAll()).to.be.revertedWith("NoMaturedBonds");
+        await expect(issuer.matureActive()).to.be.revertedWith("NoMaturedBonds");
       });
     });
 
@@ -226,7 +226,7 @@ describe("BondIssuer", function () {
         expect(await issuer.issuedBondAt(0)).to.eq(lastBond.address);
 
         await TimeHelpers.setNextBlockTimestamp(mockTime(87301));
-        tx = issuer.matureAll();
+        tx = issuer.matureActive();
         await tx;
       });
       it("should emit mature", async function () {
@@ -250,7 +250,7 @@ describe("BondIssuer", function () {
 
         await TimeHelpers.setNextBlockTimestamp(mockTime(87301));
         await lastBond.mature();
-        tx = issuer.matureAll();
+        tx = issuer.matureActive();
         await tx;
       });
       it("should NOT emit mature", async function () {
@@ -283,7 +283,7 @@ describe("BondIssuer", function () {
         expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
         expect(await issuer.issuedBondAt(2)).to.eq(b3.address);
 
-        tx = issuer.matureAll();
+        tx = issuer.matureActive();
         await tx;
       });
       it("should emit mature on the oldest bond", async function () {
@@ -320,7 +320,7 @@ describe("BondIssuer", function () {
         expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
         expect(await issuer.issuedBondAt(2)).to.eq(b3.address);
 
-        tx = issuer.matureAll();
+        tx = issuer.matureActive();
         await tx;
       });
       it("should emit mature", async function () {
@@ -359,7 +359,7 @@ describe("BondIssuer", function () {
         expect(await issuer.issuedBondAt(1)).to.eq(b2.address);
         expect(await issuer.issuedBondAt(2)).to.eq(b3.address);
 
-        tx = issuer.matureAll();
+        tx = issuer.matureActive();
         await tx;
       });
       it("should emit mature", async function () {
