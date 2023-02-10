@@ -42,7 +42,7 @@ interface IBondIssuer {
     /// @return Address of the bond.
     function issuedBondAt(uint256 index) external view returns (IBondController);
 
-    /// @notice The total number of bonds issued by this issuer which are currently active.
+    /// @notice Number of bonds issued by this issuer which have not yet reached their maturity date.
     /// @return Number of active bonds.
     function activeCount() external view returns (uint256);
 
