@@ -39,6 +39,7 @@ interface IBondIssuer {
     function issuedCount() external view returns (uint256);
 
     /// @notice The bond address from the issued list by index.
+    /// @param index The index of the bond in the issued list.
     /// @return Address of the bond.
     function issuedBondAt(uint256 index) external view returns (IBondController);
 
@@ -47,6 +48,7 @@ interface IBondIssuer {
     function activeCount() external view returns (uint256);
 
     /// @notice The bond address from the active list by index.
+    /// @param index The index of the bond in the active list.
     /// @return Address of the active bond.
     function activeBondAt(uint256 index) external view returns (IBondController);
 }
