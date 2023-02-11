@@ -42,13 +42,4 @@ interface IBondIssuer {
     /// @param index The index of the bond in the issued list.
     /// @return Address of the bond.
     function issuedBondAt(uint256 index) external view returns (IBondController);
-
-    /// @notice Number of bonds issued by this issuer which have not yet reached their maturity date.
-    /// @return Number of active bonds.
-    function activeCount() external view returns (uint256);
-
-    /// @notice The bond address from the active list by index.
-    /// @param index The index of the bond in the active list.
-    /// @return Address of the active bond.
-    function activeBondAt(uint256 index) external view returns (IBondController);
 }

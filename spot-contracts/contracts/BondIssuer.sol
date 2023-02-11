@@ -188,14 +188,17 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
         return IBondController(_issuedBonds.at(index));
     }
 
-    /// @inheritdoc IBondIssuer
-    function activeCount() external view override returns (uint256) {
+    /// @notice Number of bonds issued by this issuer which have not yet reached their maturity date.
+    /// @return Number of active bonds.
+    function activeCount() external view returns (uint256) {
         return _activeBondIDXs.length;
     }
 
-    /// @inheritdoc IBondIssuer
+    /// @notice The bond address from the active list by index.
     /// @dev This is NOT ordered by issuance time.
-    function activeBondAt(uint256 index) external view override returns (IBondController) {
+    /// @param index The index of the bond in the active list.
+    /// @return Address of the active bond.
+    function activeBondAt(uint256 index) external view returns (IBondController) {
         return IBondController(_issuedBonds.at(_activeBondIDXs[index]));
     }
 }
