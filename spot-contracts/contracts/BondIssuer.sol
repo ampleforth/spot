@@ -4,9 +4,11 @@ pragma solidity ^0.8.17;
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 
+import { BondHelpers } from "./_utils/BondHelpers.sol";
+
 import { IBondFactory } from "./_interfaces/buttonwood/IBondFactory.sol";
 import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
-import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
+import { IBondIssuer, NoMaturedBonds } from "./_interfaces/IBondIssuer.sol";
 
 /**
  *  @title BondIssuer
@@ -18,6 +20,7 @@ import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
  */
 contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
+    using BondHelpers for IBondController;
 
     /// @dev Using the same granularity as the underlying buttonwood tranche contracts.
     ///      https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
@@ -54,6 +57,9 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     /// @dev Bonds are only added and never removed, thus the last item will always point
     ///      to the latest bond.
     EnumerableSetUpgradeable.AddressSet private _issuedBonds;
+
+    /// @dev List of all indices of active bonds in the `_issuedBonds` list.
+    uint256[] private _activeBondIDXs;
 
     /// @notice The timestamp when the issue window opened during the last issue.
     uint256 public lastIssueWindowTimestamp;
@@ -117,6 +123,33 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     }
 
     /// @inheritdoc IBondIssuer
+    /// @dev Reverts if none of the active bonds are mature.
+    function matureActive() external {
+        bool bondsMature = false;
+
+        // NOTE: We traverse the active index list in the reverse order as deletions involve
+        //       swapping the deleted element to the end of the list and removing the last element.
+        for (uint256 i = _activeBondIDXs.length; i > 0; i--) {
+            IBondController bond = IBondController(_issuedBonds.at(_activeBondIDXs[i - 1]));
+            if (bond.timeToMaturity() <= 0) {
+                if (!bond.isMature()) {
+                    bond.mature();
+                }
+
+                _activeBondIDXs[i - 1] = _activeBondIDXs[_activeBondIDXs.length - 1];
+                _activeBondIDXs.pop();
+                emit BondMature(bond);
+
+                bondsMature = true;
+            }
+        }
+
+        if (!bondsMature) {
+            revert NoMaturedBonds();
+        }
+    }
+
+    /// @inheritdoc IBondIssuer
     function issue() public override {
         if (block.timestamp < lastIssueWindowTimestamp + minIssueTimeIntervalSec) {
             return;
@@ -132,6 +165,7 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
         );
 
         _issuedBonds.add(address(bond));
+        _activeBondIDXs.push(_issuedBonds.length() - 1);
 
         emit BondIssued(bond);
     }
@@ -152,5 +186,19 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     /// @inheritdoc IBondIssuer
     function issuedBondAt(uint256 index) external view override returns (IBondController) {
         return IBondController(_issuedBonds.at(index));
+    }
+
+    /// @notice Number of bonds issued by this issuer which have not yet reached their maturity date.
+    /// @return Number of active bonds.
+    function activeCount() external view returns (uint256) {
+        return _activeBondIDXs.length;
+    }
+
+    /// @notice The bond address from the active list by index.
+    /// @dev This is NOT ordered by issuance time.
+    /// @param index The index of the bond in the active list.
+    /// @return Address of the active bond.
+    function activeBondAt(uint256 index) external view returns (IBondController) {
+        return IBondController(_issuedBonds.at(_activeBondIDXs[index]));
     }
 }
