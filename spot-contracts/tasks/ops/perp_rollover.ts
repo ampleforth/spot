@@ -396,3 +396,54 @@ task("ops:preview_tx:trancheAndRollover")
     console.log("Wrote tx batch to file:", "RolloverBatch.json");
     fs.writeFileSync("RolloverBatch.json", JSON.stringify(await generateGnosisSafeBatchFile(hre, [tx1, tx2]), null, 2));
   });
+
+task("ops:preview_tx:redeemTranches")
+  .addParam("walletAddress", "the address of the wallet with the collateral token", undefined, types.string, false)
+  .addParam("bondIssuerAddress", "the address of the bond issuer", undefined, types.string, false)
+  .addParam("depth", "the number of bonds to check", 5, types.int)
+  .setAction(async function (args: TaskArguments, hre) {
+    const { walletAddress, bondIssuerAddress, depth } = args;
+    const txs: ProposedTransaction[] = [];
+    const bondIssuer = await hre.ethers.getContractAt("BondIssuer", bondIssuerAddress);
+
+    const issuedCount = await bondIssuer.callStatic.issuedCount();
+    for (let i = issuedCount - 1; i > 0 && issuedCount - 1 - i < depth; i--) {
+      const bondAddress = await bondIssuer.callStatic.issuedBondAt(i);
+      const bond = await hre.ethers.getContractAt("IBondController", bondAddress);
+
+      const td = await getTrancheData(hre, bond);
+      const isMature = await bond.isMature();
+
+      if (isMature) {
+        for (let j = 0; j < td.length; j++) {
+          const b = await td[j][0].balanceOf(walletAddress);
+          if (b.gt(0)) {
+            txs.push({
+              contract: bond,
+              method: "redeemMature",
+              args: [td[j][0].address, b.toString()],
+            });
+          }
+        }
+      } else {
+        const redemptionAmounts = await computeRedeemableTrancheAmounts(td, walletAddress);
+        if (redemptionAmounts[0].gt("0")) {
+          txs.push({
+            contract: bond,
+            method: "redeem",
+            args: [JSON.stringify(redemptionAmounts.map(a => a.toString()))],
+          });
+        }
+      }
+    }
+
+    console.log("---------------------------------------------------------------");
+    console.log("Execute the following transactions");
+
+    for (let i = 0; i < txs.length; i++) {
+      console.log({ to: txs[i].contract.address, method: txs[i].method, args: txs[i].args });
+    }
+
+    console.log("Wrote tx batch to file:", "RedeemBatch.json");
+    fs.writeFileSync("RedeemBatch.json", JSON.stringify(await generateGnosisSafeBatchFile(hre, txs), null, 2));
+  });
