@@ -1857,9 +1857,9 @@
         }
       }
     },
-    "40ef2d885ddd39dc79e291e8583af4d8a28e3309c44dd2d5b9e561e2dfba051f": {
-      "address": "0x16732918fe4Db90305D951F32A0642230EaF9aF2",
-      "txHash": "0x655f2c6a52f05501534495ad3abd7a452346d6af56b948a24914eee9278cf226",
+    "3935b74d2f245056fda5a20fbcfa0bfc7990f5aa54c7e5bdc3f91a93860d3ed7": {
+      "address": "0x1Be92B4753C1A2B3D97644390AE1C6d93E95f025",
+      "txHash": "0x169f8e8fdb1f48b16851ca19cccd792b84c1bcdcc074712bed6f547918135769",
       "layout": {
         "storage": [
           {
@@ -1997,7 +1997,7 @@
             "slot": "301",
             "type": "t_uint8",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:195"
+            "src": "contracts/PerpetualTranche.sol:241"
           },
           {
             "label": "keeper",
@@ -2005,47 +2005,47 @@
             "slot": "301",
             "type": "t_address",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:201"
+            "src": "contracts/PerpetualTranche.sol:247"
           },
           {
             "label": "feeStrategy",
             "offset": 0,
             "slot": "302",
-            "type": "t_contract(IFeeStrategy)9083",
+            "type": "t_contract(IFeeStrategy)9188",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:204"
+            "src": "contracts/PerpetualTranche.sol:250"
           },
           {
             "label": "pricingStrategy",
             "offset": 0,
             "slot": "303",
-            "type": "t_contract(IPricingStrategy)9445",
+            "type": "t_contract(IPricingStrategy)9502",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:208"
+            "src": "contracts/PerpetualTranche.sol:254"
           },
           {
             "label": "discountStrategy",
             "offset": 0,
             "slot": "304",
-            "type": "t_contract(IDiscountStrategy)9041",
+            "type": "t_contract(IDiscountStrategy)9146",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:216"
+            "src": "contracts/PerpetualTranche.sol:262"
           },
           {
             "label": "bondIssuer",
             "offset": 0,
             "slot": "305",
-            "type": "t_contract(IBondIssuer)9021",
+            "type": "t_contract(IBondIssuer)9126",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:221"
+            "src": "contracts/PerpetualTranche.sol:267"
           },
           {
             "label": "_depositBond",
             "offset": 0,
             "slot": "306",
-            "type": "t_contract(IBondController)9524",
+            "type": "t_contract(IBondController)9581",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:224"
+            "src": "contracts/PerpetualTranche.sol:270"
           },
           {
             "label": "minTrancheMaturitySec",
@@ -2053,7 +2053,7 @@
             "slot": "307",
             "type": "t_uint256",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:228"
+            "src": "contracts/PerpetualTranche.sol:274"
           },
           {
             "label": "maxTrancheMaturitySec",
@@ -2061,7 +2061,7 @@
             "slot": "308",
             "type": "t_uint256",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:232"
+            "src": "contracts/PerpetualTranche.sol:278"
           },
           {
             "label": "matureValueTargetPerc",
@@ -2069,7 +2069,7 @@
             "slot": "309",
             "type": "t_uint256",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:235"
+            "src": "contracts/PerpetualTranche.sol:281"
           },
           {
             "label": "maxSupply",
@@ -2077,7 +2077,7 @@
             "slot": "310",
             "type": "t_uint256",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:238"
+            "src": "contracts/PerpetualTranche.sol:284"
           },
           {
             "label": "maxMintAmtPerTranche",
@@ -2085,15 +2085,15 @@
             "slot": "311",
             "type": "t_uint256",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:241"
+            "src": "contracts/PerpetualTranche.sol:287"
           },
           {
             "label": "mintedSupplyPerTranche",
             "offset": 0,
             "slot": "312",
-            "type": "t_mapping(t_contract(ITranche)9551,t_uint256)",
+            "type": "t_mapping(t_contract(ITranche)9608,t_uint256)",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:244"
+            "src": "contracts/PerpetualTranche.sol:290"
           },
           {
             "label": "_appliedDiscounts",
@@ -2101,7 +2101,7 @@
             "slot": "313",
             "type": "t_mapping(t_contract(IERC20Upgradeable)1157,t_uint256)",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:250"
+            "src": "contracts/PerpetualTranche.sol:296"
           },
           {
             "label": "_reserves",
@@ -2109,7 +2109,7 @@
             "slot": "314",
             "type": "t_struct(AddressSet)4620_storage",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:256"
+            "src": "contracts/PerpetualTranche.sol:302"
           },
           {
             "label": "_matureTrancheBalance",
@@ -2117,15 +2117,15 @@
             "slot": "316",
             "type": "t_uint256",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:262"
+            "src": "contracts/PerpetualTranche.sol:308"
           },
           {
-            "label": "_authorizedRollers",
+            "label": "_rollers",
             "offset": 0,
             "slot": "317",
             "type": "t_struct(AddressSet)4620_storage",
             "contract": "PerpetualTranche",
-            "src": "contracts/PerpetualTranche.sol:273"
+            "src": "contracts/PerpetualTranche.sol:317"
           }
         ],
         "types": {
@@ -2157,15 +2157,15 @@
             "label": "bytes32",
             "numberOfBytes": "32"
           },
-          "t_contract(IBondController)9524": {
+          "t_contract(IBondController)9581": {
             "label": "contract IBondController",
             "numberOfBytes": "20"
           },
-          "t_contract(IBondIssuer)9021": {
+          "t_contract(IBondIssuer)9126": {
             "label": "contract IBondIssuer",
             "numberOfBytes": "20"
           },
-          "t_contract(IDiscountStrategy)9041": {
+          "t_contract(IDiscountStrategy)9146": {
             "label": "contract IDiscountStrategy",
             "numberOfBytes": "20"
           },
@@ -2173,15 +2173,15 @@
             "label": "contract IERC20Upgradeable",
             "numberOfBytes": "20"
           },
-          "t_contract(IFeeStrategy)9083": {
+          "t_contract(IFeeStrategy)9188": {
             "label": "contract IFeeStrategy",
             "numberOfBytes": "20"
           },
-          "t_contract(IPricingStrategy)9445": {
+          "t_contract(IPricingStrategy)9502": {
             "label": "contract IPricingStrategy",
             "numberOfBytes": "20"
           },
-          "t_contract(ITranche)9551": {
+          "t_contract(ITranche)9608": {
             "label": "contract ITranche",
             "numberOfBytes": "20"
           },
@@ -2201,7 +2201,7 @@
             "label": "mapping(contract IERC20Upgradeable => uint256)",
             "numberOfBytes": "32"
           },
-          "t_mapping(t_contract(ITranche)9551,t_uint256)": {
+          "t_mapping(t_contract(ITranche)9608,t_uint256)": {
             "label": "mapping(contract ITranche => uint256)",
             "numberOfBytes": "32"
           },
