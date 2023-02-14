@@ -143,6 +143,10 @@ contract PerpetualTranche is
     // ERC20 operations
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
+    // Math
+    using MathUpgradeable for uint256;
+    using SignedMathUpgradeable for int256;
+
     //-------------------------------------------------------------------------
     // Events
 
@@ -576,9 +580,7 @@ contract PerpetualTranche is
         (int256 reserveFee, uint256 protocolFee) = feeStrategy.computeBurnFees(perpAmtBurnt);
 
         // updates the mature tranche balance
-        _updateMatureTrancheBalance(
-            MathUpgradeable.mulDiv(_matureTrancheBalance, (perpSupply - perpAmtBurnt), perpSupply)
-        );
+        _updateMatureTrancheBalance(_matureTrancheBalance.mulDiv((perpSupply - perpAmtBurnt), perpSupply));
 
         // settles fees
         _settleFee(msg.sender, reserveFee, protocolFee);
@@ -693,7 +695,7 @@ contract PerpetualTranche is
         }
         uint256 balance = _isMatureTranche(tranche) ? _matureTrancheBalance : _reserveBalance(tranche);
         uint256 stdTrancheAmt = _toStdTrancheAmt(balance, computeDiscount(tranche));
-        return MathUpgradeable.mulDiv(stdTrancheAmt, computePrice(tranche), UNIT_PRICE);
+        return stdTrancheAmt.mulDiv(computePrice(tranche), UNIT_PRICE);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -888,8 +890,8 @@ contract PerpetualTranche is
         uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmt, computeDiscount(trancheIn));
         uint256 trancheInPrice = computePrice(trancheIn);
         uint256 perpAmtMint = (totalSupply_ > 0)
-            ? MathUpgradeable.mulDiv(stdTrancheInAmt * trancheInPrice, totalSupply_, _reserveValue())
-            : MathUpgradeable.mulDiv(stdTrancheInAmt, trancheInPrice, UNIT_PRICE);
+            ? (stdTrancheInAmt * trancheInPrice).mulDiv(totalSupply_, _reserveValue())
+            : stdTrancheInAmt.mulDiv(trancheInPrice, UNIT_PRICE);
         return (perpAmtMint);
     }
 
@@ -906,7 +908,7 @@ contract PerpetualTranche is
         for (uint256 i = 0; i < reserveCount; i++) {
             reserveTokens[i] = _reserveAt(i);
             redemptionAmts[i] = (totalSupply_ > 0)
-                ? MathUpgradeable.mulDiv(_reserveBalance(reserveTokens[i]), perpAmtBurnt, totalSupply_)
+                ? _reserveBalance(reserveTokens[i]).mulDiv(perpAmtBurnt, totalSupply_)
                 : 0;
         }
         return (reserveTokens, redemptionAmts);
@@ -926,7 +928,7 @@ contract PerpetualTranche is
         uint256 trancheInPrice = computePrice(trancheIn);
         uint256 trancheOutPrice = computePrice(tokenOut);
         uint256 tokenOutBalance = _reserveBalance(tokenOut);
-        tokenOutAmtRequested = MathUpgradeable.min(tokenOutAmtRequested, tokenOutBalance);
+        tokenOutAmtRequested = tokenOutAmtRequested.min(tokenOutBalance);
 
         if (trancheInDiscount == 0 || trancheOutDiscount == 0 || trancheInPrice == 0 || trancheOutPrice == 0) {
             r.remainingTrancheInAmt = trancheInAmtAvailable;
@@ -938,7 +940,7 @@ contract PerpetualTranche is
 
         // Basic rollover:
         // (stdTrancheInAmt . trancheInPrice) = (stdTrancheOutAmt . trancheOutPrice)
-        uint256 stdTrancheOutAmt = MathUpgradeable.mulDiv(stdTrancheInAmt, trancheInPrice, trancheOutPrice);
+        uint256 stdTrancheOutAmt = stdTrancheInAmt.mulDiv(trancheInPrice, trancheOutPrice);
         r.trancheOutAmt = _fromStdTrancheAmt(stdTrancheOutAmt, trancheOutDiscount);
 
         // However, if the tokenOut is the mature tranche (held as naked collateral),
@@ -946,7 +948,7 @@ contract PerpetualTranche is
         // (tokenOutAmt = collateralBalance * trancheOutAmt / matureTrancheBalance)
         bool isMatureTrancheOut = _isMatureTranche(tokenOut);
         r.tokenOutAmt = isMatureTrancheOut
-            ? MathUpgradeable.mulDiv(tokenOutBalance, r.trancheOutAmt, _matureTrancheBalance)
+            ? tokenOutBalance.mulDiv(r.trancheOutAmt, _matureTrancheBalance)
             : r.trancheOutAmt;
 
         // When the token out balance is NOT covered:
@@ -954,14 +956,14 @@ contract PerpetualTranche is
         if (r.tokenOutAmt > tokenOutAmtRequested) {
             r.tokenOutAmt = tokenOutAmtRequested;
             r.trancheOutAmt = isMatureTrancheOut
-                ? MathUpgradeable.mulDiv(_matureTrancheBalance, r.tokenOutAmt, tokenOutBalance)
+                ? _matureTrancheBalance.mulDiv(r.tokenOutAmt, tokenOutBalance)
                 : r.tokenOutAmt;
             stdTrancheOutAmt = _toStdTrancheAmt(r.trancheOutAmt, trancheOutDiscount);
-            stdTrancheInAmt = MathUpgradeable.mulDiv(stdTrancheOutAmt, trancheOutPrice, trancheInPrice);
+            stdTrancheInAmt = stdTrancheOutAmt.mulDiv(trancheOutPrice, trancheInPrice);
             r.trancheInAmt = _fromStdTrancheAmt(stdTrancheInAmt, trancheInDiscount);
         }
 
-        r.perpRolloverAmt = MathUpgradeable.mulDiv(stdTrancheOutAmt * trancheOutPrice, totalSupply(), _reserveValue());
+        r.perpRolloverAmt = (stdTrancheOutAmt * trancheOutPrice).mulDiv(totalSupply(), _reserveValue());
         r.remainingTrancheInAmt = trancheInAmtAvailable - r.trancheInAmt;
         return r;
     }
@@ -1031,7 +1033,7 @@ contract PerpetualTranche is
         uint256 protocolFee
     ) private {
         // Handling reserve fees
-        uint256 reserveFeeAbs = SignedMathUpgradeable.abs(reserveFee);
+        uint256 reserveFeeAbs = reserveFee.abs();
         if (reserveFee > 0) {
             _handleFeeTransferIn(payer, reserve(), reserveFeeAbs);
         } else if (reserveFee < 0) {
@@ -1070,7 +1072,7 @@ contract PerpetualTranche is
         // Funds are going out
         if (isNativeFeeToken) {
             uint256 balance = _reserveBalance(feeToken_);
-            feeToken_.safeTransfer(destination, MathUpgradeable.min(feeAmt, balance));
+            feeToken_.safeTransfer(destination, feeAmt.min(balance));
 
             // In case that the reserve's balance doesn't cover the entire fee amount,
             // we mint perps to cover the difference.
@@ -1168,7 +1170,7 @@ contract PerpetualTranche is
     ///      To be invoked AFTER the rollover operation.
     function _enforceMatureValueTarget() private view {
         uint256 matureValue = (_matureTrancheBalance * computePrice(_reserveAt(0)));
-        uint256 matureValuePerc = MathUpgradeable.mulDiv(matureValue, HUNDRED_PERC, _reserveValue());
+        uint256 matureValuePerc = matureValue.mulDiv(HUNDRED_PERC, _reserveValue());
         if (matureValuePerc < matureValueTargetPerc) {
             revert BelowMatureValueTargetPerc(matureValuePerc, matureValueTargetPerc);
         }
@@ -1218,12 +1220,12 @@ contract PerpetualTranche is
     /// @dev Calculates the standardized tranche amount for internal book keeping.
     ///      stdTrancheAmt = (trancheAmt * discount).
     function _toStdTrancheAmt(uint256 trancheAmt, uint256 discount) private pure returns (uint256) {
-        return MathUpgradeable.mulDiv(trancheAmt, discount, UNIT_DISCOUNT);
+        return trancheAmt.mulDiv(discount, UNIT_DISCOUNT);
     }
 
     /// @dev Calculates the external tranche amount from the internal standardized tranche amount.
     ///      trancheAmt = stdTrancheAmt / discount.
     function _fromStdTrancheAmt(uint256 stdTrancheAmt, uint256 discount) private pure returns (uint256) {
-        return MathUpgradeable.mulDiv(stdTrancheAmt, UNIT_DISCOUNT, discount);
+        return stdTrancheAmt.mulDiv(UNIT_DISCOUNT, discount);
     }
 }
