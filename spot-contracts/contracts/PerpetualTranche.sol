@@ -133,12 +133,58 @@ contract PerpetualTranche is
     ReentrancyGuardUpgradeable,
     IPerpetualTranche
 {
+    //-------------------------------------------------------------------------
+    // Libraries
+
     // data handling
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
     using BondHelpers for IBondController;
 
     // ERC20 operations
     using SafeERC20Upgradeable for IERC20Upgradeable;
+
+    //-------------------------------------------------------------------------
+    // Events
+
+    /// @notice Event emitted when the keeper is updated.
+    /// @param prevKeeper The address of the previous keeper.
+    /// @param newKeeper The address of the new keeper.
+    event UpdatedKeeper(address prevKeeper, address newKeeper);
+
+    /// @notice Event emitted when the bond issuer is updated.
+    /// @param issuer Address of the issuer contract.
+    event UpdatedBondIssuer(IBondIssuer issuer);
+
+    /// @notice Event emitted when the fee strategy is updated.
+    /// @param strategy Address of the strategy contract.
+    event UpdatedFeeStrategy(IFeeStrategy strategy);
+
+    /// @notice Event emitted when the pricing strategy is updated.
+    /// @param strategy Address of the strategy contract.
+    event UpdatedPricingStrategy(IPricingStrategy strategy);
+
+    /// @notice Event emitted when the discount strategy is updated.
+    /// @param strategy Address of the strategy contract.
+    event UpdatedDiscountStrategy(IDiscountStrategy strategy);
+
+    /// @notice Event emitted when maturity tolerance parameters are updated.
+    /// @param min The minimum maturity time.
+    /// @param max The maximum maturity time.
+    event UpdatedTolerableTrancheMaturity(uint256 min, uint256 max);
+
+    /// @notice Event emitted when the supply caps are updated.
+    /// @param maxSupply The max total supply.
+    /// @param maxMintAmtPerTranche The max mint amount per tranche.
+    event UpdatedMintingLimits(uint256 maxSupply, uint256 maxMintAmtPerTranche);
+
+    /// @notice Event emitted when the mature value target percentage is updated.
+    /// @param matureValueTargetPerc The new target percentage.
+    event UpdatedMatureValueTargetPerc(uint256 matureValueTargetPerc);
+
+    /// @notice Event emitted when the authorized rollers are updated.
+    /// @param roller The address of the roller.
+    /// @param authorized If the roller is has been authorized or not.
+    event UpdatedRollerAuthorization(address roller, bool authorized);
 
     //-------------------------------------------------------------------------
     // Perp Math Basics:
