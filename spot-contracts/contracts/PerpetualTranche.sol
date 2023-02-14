@@ -268,7 +268,7 @@ contract PerpetualTranche is
     /// @dev The contract owner can modify this set.
     ///      NOTE: If the set is empty, all addresses are considered authorized and can execute rollovers.
     ///            else only addresses in the set can execute rollovers.
-    EnumerableSetUpgradeable.AddressSet private _authorizedRollers;
+    EnumerableSetUpgradeable.AddressSet private _rollers;
 
     //--------------------------------------------------------------------------
     // Modifiers
@@ -288,10 +288,10 @@ contract PerpetualTranche is
     }
 
     /// @dev Throws if called by any account other than an authorized roller.
-    modifier onlyAuthorizedRollers() {
+    modifier onlyRollers() {
         // If the set it empty, permit all callers
         // else permit only whitelisted callers.
-        if (_authorizedRollers.length() > 0 && !_authorizedRollers.contains(_msgSender())) {
+        if (_rollers.length() > 0 && !_rollers.contains(_msgSender())) {
             revert UnauthorizedCall(_msgSender(), address(0));
         }
         _;
@@ -365,10 +365,10 @@ contract PerpetualTranche is
     /// @param roller The address of the roller.
     /// @param authorize If the roller is to be authorized or unauthorized.
     function authorizeRoller(address roller, bool authorize) public onlyOwner {
-        if (authorize && !_authorizedRollers.contains(roller)) {
-            _authorizedRollers.add(roller);
-        } else if (!authorize && _authorizedRollers.contains(roller)) {
-            _authorizedRollers.remove(roller);
+        if (authorize && !_rollers.contains(roller)) {
+            _rollers.add(roller);
+        } else if (!authorize && _rollers.contains(roller)) {
+            _rollers.remove(roller);
         } else {
             revert RollerAuthorizationFailed();
         }
@@ -556,7 +556,7 @@ contract PerpetualTranche is
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable
-    ) external override onlyAuthorizedRollers nonReentrant whenNotPaused afterStateUpdate {
+    ) external override onlyRollers nonReentrant whenNotPaused afterStateUpdate {
         // verifies if rollover is acceptable
         if (!_isAcceptableRollover(trancheIn, tokenOut)) {
             revert UnacceptableRollover(trancheIn, tokenOut);
@@ -712,13 +712,13 @@ contract PerpetualTranche is
 
     /// @notice Returns the number of authorized rollers.
     function authorizedRollersCount() external view returns (uint256) {
-        return _authorizedRollers.length();
+        return _rollers.length();
     }
 
     /// @notice Gets the roller address from the authorized set by index.
     /// @param i The index of the address in the set.
     function authorizedRollerAt(uint256 i) external view returns (address) {
-        return _authorizedRollers.at(i);
+        return _rollers.at(i);
     }
 
     //--------------------------------------------------------------------------
