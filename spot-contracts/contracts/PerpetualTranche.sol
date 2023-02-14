@@ -252,7 +252,7 @@ contract PerpetualTranche is
     //--------------------------------------------------------------------------
     // RESERVE
 
-    /// @notice A set of all tokens in the reserve which back the perps.
+    /// @notice Set of all tokens in the reserve which back the perps.
     EnumerableSetUpgradeable.AddressSet private _reserves;
 
     /// @notice The amount of all the mature tranches extracted and held as the collateral token,
@@ -264,7 +264,7 @@ contract PerpetualTranche is
     //--------------------------------------------------------------------------
     // v1.1.0 STORAGE ADDITION
 
-    /// @notice A set of all authorized addresses which can execute rollovers.
+    /// @notice Set of all authorized addresses which can execute rollovers.
     /// @dev The contract owner can modify this set.
     ///      NOTE: If the set is empty, all addresses are considered authorized and can execute rollovers.
     ///            else only addresses in the set can execute rollovers.
