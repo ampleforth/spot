@@ -5,7 +5,7 @@ This repository is a collection of smart contracts that implement the SPOT perpe
 The official mainnet addresses are:
 
 - SPOT ERC-20 Token: [0xC1f33e0cf7e40a67375007104B929E49a581bafE](https://etherscan.io/address/0xC1f33e0cf7e40a67375007104B929E49a581bafE)
-- Bond issuer: [0x2E2E49eDCd5ce08677Bab6d791C863f1361B52F2](https://etherscan.io/address/0x2E2E49eDCd5ce08677Bab6d791C863f1361B52F2)
+- Bond issuer: [0x85d1BA777Eb3FCBb10C82cdf3aAa8231e21B6777](https://etherscan.io/address/0x85d1BA777Eb3FCBb10C82cdf3aAa8231e21B6777)
 - Router: [0x38f600e08540178719BF656e6B43FC15A529c393](https://etherscan.io/address/0x38f600e08540178719BF656e6B43FC15A529c393)
 
 ## Install

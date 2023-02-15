@@ -2,7 +2,7 @@
 ## DEPLOYMENT
 # monthly bonds, weekly issue, offset wednesday 2pm PST (DST)
 yarn hardhat --network mainnet deploy:BondIssuer \
-  --bond-factory-address "0x2b135C839d61808E1eC6F84151CD9429B0920374" \
+  --bond-factory-address "0x71868D38Ea3b3eB5e4db9a45ee355548B46c82E0" \
   --bond-duration "2419200" \
   --issue-frequency "604800" \
   --issue-window-offset "597600" \
@@ -27,7 +27,7 @@ yarn hardhat --network mainnet deploy:Router
 
 ########################################################################
 ## Transfer ownership
-yarn hardhat --network mainnet transferOwnership "0x2E2E49eDCd5ce08677Bab6d791C863f1361B52F2" \
+yarn hardhat --network mainnet transferOwnership "0x85d1BA777Eb3FCBb10C82cdf3aAa8231e21B6777" \
   --new-owner-address "0x57981B1EaFe4b18EC97f8B10859B40207b364662"
 
 yarn hardhat --network mainnet transferOwnership "0xFF732cA9EFc95E853FBD71a5c61647cd0C0898a3" \
@@ -41,7 +41,6 @@ yarn hardhat --network mainnet transferOwnership "0xC1f33e0cf7e40a67375007104B92
 
 yarn hardhat --network mainnet transferOwnership "0x2978B4103985A6668CE345555b0febdE64Fb092F" \
   --new-owner-address "0x57981B1EaFe4b18EC97f8B10859B40207b364662"
-
 
 ########################################################################
 ## OPS
@@ -69,9 +68,12 @@ yarn hardhat --network mainnet ops:redeemTranches \
 yarn hardhat --network mainnet ops:redeemTranches \
   --bond-issuer-address 0x2E2E49eDCd5ce08677Bab6d791C863f1361B52F2
 
+yarn hardhat --network mainnet ops:redeemTranches \
+  --bond-issuer-address 0x85d1BA777Eb3FCBb10C82cdf3aAa8231e21B6777
+
 yarn hardhat --network mainnet ops:preview_tx:redeemTranches \
   --wallet-address [INSERT_WALLET_ADDRESS] \
-  --bond-issuer-address 0x2E2E49eDCd5ce08677Bab6d791C863f1361B52F2
+  --bond-issuer-address 0x85d1BA777Eb3FCBb10C82cdf3aAa8231e21B6777
 
 yarn hardhat --network mainnet ops:preview_tx:trancheAndRollover \
   --wallet-address [INSERT_WALLET_ADDRESS] \
