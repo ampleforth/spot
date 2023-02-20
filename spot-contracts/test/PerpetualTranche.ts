@@ -262,15 +262,18 @@ describe("PerpetualTranche", function () {
       beforeEach(async function () {
         await perp.authorizeRoller(await otherUser.getAddress(), true);
       });
-      it("should revert", async function () {
-        await expect(perp.authorizeRoller(await otherUser.getAddress(), true)).to.be.reverted;
+      it("should NOT revert", async function () {
+        await expect(perp.authorizeRoller(await otherUser.getAddress(), true)).not.to.be.reverted;
+        expect(await perp.authorizedRollersCount()).to.eq(1);
+        expect(await perp.authorizedRollerAt(0)).to.eq(await otherUser.getAddress());
       });
     });
 
     describe("when roller is not authorized and is unauthorized", function () {
-      it("should revert", async function () {
+      it("should NOT revert", async function () {
         expect(await perp.authorizedRollersCount()).to.eq(0);
-        await expect(perp.authorizeRoller(await otherUser.getAddress(), false)).to.be.reverted;
+        await expect(perp.authorizeRoller(await otherUser.getAddress(), false)).not.to.be.reverted;
+        expect(await perp.authorizedRollersCount()).to.eq(0);
       });
     });
 

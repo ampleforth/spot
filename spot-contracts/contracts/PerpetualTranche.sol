@@ -94,9 +94,6 @@ error BelowMatureValueTargetPerc(uint256 matureValuePerc, uint256 matureValueTar
 /// @param token Address of the token transferred.
 error UnauthorizedTransferOut(IERC20Upgradeable token);
 
-/// @notice Expected new roller to be unauthorized or old roller to be authorized.
-error RollerAuthorizationFailed();
-
 /**
  *  @title PerpetualTranche
  *
@@ -420,7 +417,7 @@ contract PerpetualTranche is
         } else if (!authorize && _rollers.contains(roller)) {
             _rollers.remove(roller);
         } else {
-            revert RollerAuthorizationFailed();
+            return;
         }
 
         emit UpdatedRollerAuthorization(roller, authorize);
