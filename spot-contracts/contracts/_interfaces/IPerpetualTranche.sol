@@ -14,41 +14,6 @@ interface IPerpetualTranche is IERC20Upgradeable {
     //--------------------------------------------------------------------------
     // Events
 
-    /// @notice Event emitted when the keeper is updated.
-    /// @param prevKeeper The address of the previous keeper.
-    /// @param newKeeper The address of the new keeper.
-    event UpdatedKeeper(address prevKeeper, address newKeeper);
-
-    /// @notice Event emitted when the bond issuer is updated.
-    /// @param issuer Address of the issuer contract.
-    event UpdatedBondIssuer(IBondIssuer issuer);
-
-    /// @notice Event emitted when the fee strategy is updated.
-    /// @param strategy Address of the strategy contract.
-    event UpdatedFeeStrategy(IFeeStrategy strategy);
-
-    /// @notice Event emitted when the pricing strategy is updated.
-    /// @param strategy Address of the strategy contract.
-    event UpdatedPricingStrategy(IPricingStrategy strategy);
-
-    /// @notice Event emitted when the discount strategy is updated.
-    /// @param strategy Address of the strategy contract.
-    event UpdatedDiscountStrategy(IDiscountStrategy strategy);
-
-    /// @notice Event emitted when maturity tolerance parameters are updated.
-    /// @param min The minimum maturity time.
-    /// @param max The maximum maturity time.
-    event UpdatedTolerableTrancheMaturity(uint256 min, uint256 max);
-
-    /// @notice Event emitted when the supply caps are updated.
-    /// @param maxSupply The max total supply.
-    /// @param maxMintAmtPerTranche The max mint amount per tranche.
-    event UpdatedMintingLimits(uint256 maxSupply, uint256 maxMintAmtPerTranche);
-
-    /// @notice Event emitted when the mature value target percentage is updated.
-    /// @param matureValueTargetPerc The new target percentage.
-    event UpdatedMatureValueTargetPerc(uint256 matureValueTargetPerc);
-
     /// @notice Event emitted when the applied discount for a given token is set.
     /// @param token The address of the token.
     /// @param discount The discount factor applied.
@@ -108,6 +73,7 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @notice Checks if the given `trancheIn` can be rolled out for `tokenOut`.
     /// @param trancheIn The tranche token deposited.
     /// @param tokenOut The reserve token to be redeemed.
+    /// @return If the given pair is a valid rollover.
     function isAcceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut) external returns (bool);
 
     /// @notice The strategy contract with the fee computation logic.
@@ -131,24 +97,35 @@ interface IPerpetualTranche is IERC20Upgradeable {
     function feeToken() external view returns (IERC20Upgradeable);
 
     /// @notice Total count of tokens held in the reserve.
+    /// @return The reserve token count.
     function getReserveCount() external returns (uint256);
 
     /// @notice The token address from the reserve list by index.
     /// @param index The index of a token.
+    /// @return The reserve token address.
     function getReserveAt(uint256 index) external returns (IERC20Upgradeable);
 
     /// @notice Checks if the given token is part of the reserve.
     /// @param token The address of a token to check.
+    /// @return If the token is part of the reserve.
     function inReserve(IERC20Upgradeable token) external returns (bool);
 
     /// @notice Fetches the reserve's tranche token balance.
     /// @param tranche The address of the tranche token held by the reserve.
+    /// @return The ERC-20 balance of the reserve tranche token.
     function getReserveTrancheBalance(IERC20Upgradeable tranche) external returns (uint256);
 
+    /// @notice Calculates the reserve's tranche token value.
+    /// @param tranche The address of the tranche token held by the reserve.
+    /// @return The "value" of the reserve tranche balance held by the reserve.
+    function getReserveTrancheValue(IERC20Upgradeable tranche) external returns (uint256);
+
     /// @notice Computes the price of each perp token, i.e) reserve value / total supply.
+    /// @return The average price per perp token.
     function getAvgPrice() external returns (uint256);
 
     /// @notice Fetches the list of reserve tokens which are up for rollover.
+    /// @return The list of reserve tokens up for rollover.
     function getReserveTokensUpForRollover() external returns (IERC20Upgradeable[] memory);
 
     /// @notice Computes the amount of perp tokens minted when `trancheInAmt` `trancheIn` tokens

@@ -873,5 +873,77 @@ describe("PerpetualTranche", function () {
         expect(await perp.callStatic.getMatureTrancheBalance()).to.eq(toFixedPtAmt("375"));
       });
     });
+
+    describe("when redeeming entire supply", function () {
+      let newRedemptionTranche1: Contract, newRedemptionTranche2: Contract, tx: Transaction;
+      beforeEach(async function () {
+        await perp.updateTolerableTrancheMaturity(1200, 3600);
+
+        await advancePerpQueue(perp, 1200);
+
+        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
+        const tranches = await getTranches(newBond);
+        newRedemptionTranche1 = tranches[0];
+        newRedemptionTranche2 = tranches[1];
+
+        await pricingStrategy.setTranchePrice(newRedemptionTranche1.address, toPriceFixedPtAmt("1"));
+        await discountStrategy.setTrancheDiscount(newRedemptionTranche1.address, toDiscountFixedPtAmt("1"));
+
+        await pricingStrategy.setTranchePrice(newRedemptionTranche2.address, toPriceFixedPtAmt("1"));
+        await discountStrategy.setTrancheDiscount(newRedemptionTranche2.address, toDiscountFixedPtAmt("1"));
+
+        await newRedemptionTranche1.approve(perp.address, toFixedPtAmt("500"));
+        await perp.deposit(newRedemptionTranche1.address, toFixedPtAmt("500"));
+        await newRedemptionTranche2.approve(perp.address, toFixedPtAmt("500"));
+        await perp.deposit(newRedemptionTranche2.address, toFixedPtAmt("500"));
+
+        await checkReserveComposition(
+          perp,
+          [collateralToken, initialDepositTranche, newRedemptionTranche1, newRedemptionTranche2],
+          [toFixedPtAmt("0"), toFixedPtAmt("500"), toFixedPtAmt("500"), toFixedPtAmt("500")],
+        );
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("1500"));
+        expect(await perp.callStatic.getMatureTrancheBalance()).to.eq(toFixedPtAmt("0"));
+        tx = perp.redeem(await perp.balanceOf(deployerAddress));
+        await tx;
+      });
+
+      it("should update the reserve composition", async function () {
+        await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("0")]);
+      });
+      it("should emit reserve synced", async function () {
+        await expect(tx)
+          .to.emit(perp, "ReserveSynced")
+          .withArgs(collateralToken.address, toFixedPtAmt("0"))
+          .to.emit(perp, "ReserveSynced")
+          .withArgs(initialDepositTranche.address, toFixedPtAmt("0"))
+          .to.emit(perp, "ReserveSynced")
+          .withArgs(newRedemptionTranche1.address, toFixedPtAmt("0"))
+          .to.emit(perp, "ReserveSynced")
+          .withArgs(newRedemptionTranche2.address, toFixedPtAmt("0"));
+      });
+      it("should transfer tokens out", async function () {
+        await expect(tx)
+          .to.emit(initialDepositTranche, "Transfer")
+          .withArgs(perp.address, deployerAddress, toFixedPtAmt("500"))
+          .to.emit(newRedemptionTranche1, "Transfer")
+          .withArgs(perp.address, deployerAddress, toFixedPtAmt("500"))
+          .to.emit(newRedemptionTranche2, "Transfer")
+          .withArgs(perp.address, deployerAddress, toFixedPtAmt("500"));
+      });
+      it("should emit tranche balance update", async function () {
+        await expect(tx).to.emit(perp, "UpdatedMatureTrancheBalance").withArgs(toFixedPtAmt("0"));
+      });
+      it("should update the total supply", async function () {
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("0"));
+      });
+      it("should NOT update matureTrancheBalance", async function () {
+        expect(await perp.callStatic.getMatureTrancheBalance()).to.eq(toFixedPtAmt("0"));
+      });
+      it("should update the balance", async function () {
+        expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("0"));
+      });
+    });
   });
 });

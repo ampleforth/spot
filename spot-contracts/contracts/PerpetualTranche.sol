@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.18;
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -130,12 +130,62 @@ contract PerpetualTranche is
     ReentrancyGuardUpgradeable,
     IPerpetualTranche
 {
+    //-------------------------------------------------------------------------
+    // Libraries
+
     // data handling
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
     using BondHelpers for IBondController;
 
     // ERC20 operations
     using SafeERC20Upgradeable for IERC20Upgradeable;
+
+    // Math
+    using MathUpgradeable for uint256;
+    using SignedMathUpgradeable for int256;
+
+    //-------------------------------------------------------------------------
+    // Events
+
+    /// @notice Event emitted when the keeper is updated.
+    /// @param prevKeeper The address of the previous keeper.
+    /// @param newKeeper The address of the new keeper.
+    event UpdatedKeeper(address prevKeeper, address newKeeper);
+
+    /// @notice Event emitted when the bond issuer is updated.
+    /// @param issuer Address of the issuer contract.
+    event UpdatedBondIssuer(IBondIssuer issuer);
+
+    /// @notice Event emitted when the fee strategy is updated.
+    /// @param strategy Address of the strategy contract.
+    event UpdatedFeeStrategy(IFeeStrategy strategy);
+
+    /// @notice Event emitted when the pricing strategy is updated.
+    /// @param strategy Address of the strategy contract.
+    event UpdatedPricingStrategy(IPricingStrategy strategy);
+
+    /// @notice Event emitted when the discount strategy is updated.
+    /// @param strategy Address of the strategy contract.
+    event UpdatedDiscountStrategy(IDiscountStrategy strategy);
+
+    /// @notice Event emitted when maturity tolerance parameters are updated.
+    /// @param min The minimum maturity time.
+    /// @param max The maximum maturity time.
+    event UpdatedTolerableTrancheMaturity(uint256 min, uint256 max);
+
+    /// @notice Event emitted when the supply caps are updated.
+    /// @param maxSupply The max total supply.
+    /// @param maxMintAmtPerTranche The max mint amount per tranche.
+    event UpdatedMintingLimits(uint256 maxSupply, uint256 maxMintAmtPerTranche);
+
+    /// @notice Event emitted when the mature value target percentage is updated.
+    /// @param matureValueTargetPerc The new target percentage.
+    event UpdatedMatureValueTargetPerc(uint256 matureValueTargetPerc);
+
+    /// @notice Event emitted when the authorized rollers are updated.
+    /// @param roller The address of the roller.
+    /// @param authorized If the roller is has been authorized or not.
+    event UpdatedRollerAuthorization(address roller, bool authorized);
 
     //-------------------------------------------------------------------------
     // Perp Math Basics:
@@ -168,9 +218,9 @@ contract PerpetualTranche is
     // Redeem: ForEach ti => (p / supply(perps)) * bi
     //
     //
-    // When `ai` tokens of type `ti` are rotated in for tokens of type `tj`
+    // When `ai` tokens of type `ti` are rolled in for tokens of type `tj`
     //  => ai * discount(ti) * price(ti) =  aj * discount(tj) * price(tj)
-    // Rotation: aj => ai * discount(ti) * price(ti) / (discount(tj) * price(tj))
+    // Rollover: aj => ai * discount(ti) * price(ti) / (discount(tj) * price(tj))
     //
     //
     //-------------------------------------------------------------------------
@@ -249,7 +299,7 @@ contract PerpetualTranche is
     //--------------------------------------------------------------------------
     // RESERVE
 
-    /// @notice A record of all tokens in the reserve which back the perps.
+    /// @notice Set of all tokens in the reserve which back the perps.
     EnumerableSetUpgradeable.AddressSet private _reserves;
 
     /// @notice The amount of all the mature tranches extracted and held as the collateral token,
@@ -257,6 +307,15 @@ contract PerpetualTranche is
     /// @dev The mature tranche is assumed to have {UNIT_DISCOUNT}. So we do NOT have to
     ///      scale using the discount factor when dealing with the mature tranche balance.
     uint256 private _matureTrancheBalance;
+
+    //--------------------------------------------------------------------------
+    // v1.1.0 STORAGE ADDITION
+
+    /// @notice Set of all authorized addresses which can execute rollovers.
+    /// @dev The contract owner can modify this set.
+    ///      NOTE: If the set is empty, all addresses are considered authorized and can execute rollovers.
+    ///            else only addresses in the set can execute rollovers.
+    EnumerableSetUpgradeable.AddressSet private _rollers;
 
     //--------------------------------------------------------------------------
     // Modifiers
@@ -271,6 +330,16 @@ contract PerpetualTranche is
     modifier onlyKeeper() {
         if (keeper != _msgSender()) {
             revert UnauthorizedCall(_msgSender(), keeper);
+        }
+        _;
+    }
+
+    /// @dev Throws if called by any account other than an authorized roller.
+    modifier onlyRollers() {
+        // If the set it empty, permit all callers
+        // else permit only whitelisted callers.
+        if (_rollers.length() > 0 && !_rollers.contains(_msgSender())) {
+            revert UnauthorizedCall(_msgSender(), address(0));
         }
         _;
     }
@@ -333,12 +402,25 @@ contract PerpetualTranche is
     /// @notice Updates the reference to the keeper.
     /// @param newKeeper The address of the new keeper.
     function updateKeeper(address newKeeper) public virtual onlyOwner {
-        if (newKeeper == address(0)) {
-            revert UnacceptableReference();
-        }
         address prevKeeper = keeper;
         keeper = newKeeper;
         emit UpdatedKeeper(prevKeeper, newKeeper);
+    }
+
+    /// @notice Updates the authorized roller set.
+    /// @dev CAUTION: If the authorized roller set is empty, all rollers are authorized.
+    /// @param roller The address of the roller.
+    /// @param authorize If the roller is to be authorized or unauthorized.
+    function authorizeRoller(address roller, bool authorize) public onlyOwner {
+        if (authorize && !_rollers.contains(roller)) {
+            _rollers.add(roller);
+        } else if (!authorize && _rollers.contains(roller)) {
+            _rollers.remove(roller);
+        } else {
+            return;
+        }
+
+        emit UpdatedRollerAuthorization(roller, authorize);
     }
 
     /// @notice Update the reference to the bond issuer contract.
@@ -450,7 +532,7 @@ contract PerpetualTranche is
         whenNotPaused
         afterStateUpdate
     {
-        if (!_isBondTranche(trancheIn, _depositBond)) {
+        if (!_isDepositBondTranche(trancheIn)) {
             revert UnacceptableDepositTranche(trancheIn, _depositBond);
         }
 
@@ -495,7 +577,7 @@ contract PerpetualTranche is
         (int256 reserveFee, uint256 protocolFee) = feeStrategy.computeBurnFees(perpAmtBurnt);
 
         // updates the mature tranche balance
-        _updateMatureTrancheBalance((_matureTrancheBalance * (perpSupply - perpAmtBurnt)) / perpSupply);
+        _updateMatureTrancheBalance(_matureTrancheBalance.mulDiv((perpSupply - perpAmtBurnt), perpSupply));
 
         // settles fees
         _settleFee(msg.sender, reserveFee, protocolFee);
@@ -519,7 +601,7 @@ contract PerpetualTranche is
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable
-    ) external override nonReentrant whenNotPaused afterStateUpdate {
+    ) external override onlyRollers nonReentrant whenNotPaused afterStateUpdate {
         // verifies if rollover is acceptable
         if (!_isAcceptableRollover(trancheIn, tokenOut)) {
             revert UnacceptableRollover(trancheIn, tokenOut);
@@ -604,6 +686,16 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
+    function getReserveTrancheValue(IERC20Upgradeable tranche) external override afterStateUpdate returns (uint256) {
+        if (!_inReserve(tranche)) {
+            return 0;
+        }
+        uint256 balance = _isMatureTranche(tranche) ? _matureTrancheBalance : _reserveBalance(tranche);
+        uint256 stdTrancheAmt = _toStdTrancheAmt(balance, computeDiscount(tranche));
+        return stdTrancheAmt.mulDiv(computePrice(tranche), UNIT_PRICE);
+    }
+
+    /// @inheritdoc IPerpetualTranche
     /// @dev Reserve tokens which are not up for rollover are marked by `address(0)`.
     function getReserveTokensUpForRollover() external override afterStateUpdate returns (IERC20Upgradeable[] memory) {
         uint256 reserveCount = _reserveCount();
@@ -663,6 +755,17 @@ contract PerpetualTranche is
         return _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable, tokenOutAmtRequested);
     }
 
+    /// @notice Returns the number of authorized rollers.
+    function authorizedRollersCount() external view returns (uint256) {
+        return _rollers.length();
+    }
+
+    /// @notice Gets the roller address from the authorized set by index.
+    /// @param i The index of the address in the set.
+    function authorizedRollerAt(uint256 i) external view returns (address) {
+        return _rollers.at(i);
+    }
+
     //--------------------------------------------------------------------------
     // Public methods
 
@@ -684,10 +787,10 @@ contract PerpetualTranche is
 
         // Lazily checks if every reserve tranche has reached maturity.
         // If so redeems the tranche balance for the underlying collateral and
-        // removes the tranche from the reserve list.
-        // NOTE: We traverse the reserve list in the reverse order
+        // removes the tranche from the reserve set.
+        // NOTE: We traverse the reserve set in the reverse order
         //       as deletions involve swapping the deleted element to the
-        //       end of the list and removing the last element.
+        //       end of the set and removing the last element.
         //       We also skip the `reserveAt(0)`, i.e) the mature tranche,
         //       which is never removed.
         uint256 reserveCount = _reserveCount();
@@ -784,8 +887,8 @@ contract PerpetualTranche is
         uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmt, computeDiscount(trancheIn));
         uint256 trancheInPrice = computePrice(trancheIn);
         uint256 perpAmtMint = (totalSupply_ > 0)
-            ? (stdTrancheInAmt * trancheInPrice * totalSupply_) / _reserveValue()
-            : (stdTrancheInAmt * trancheInPrice) / UNIT_PRICE;
+            ? (stdTrancheInAmt * trancheInPrice).mulDiv(totalSupply_, _reserveValue())
+            : stdTrancheInAmt.mulDiv(trancheInPrice, UNIT_PRICE);
         return (perpAmtMint);
     }
 
@@ -802,7 +905,7 @@ contract PerpetualTranche is
         for (uint256 i = 0; i < reserveCount; i++) {
             reserveTokens[i] = _reserveAt(i);
             redemptionAmts[i] = (totalSupply_ > 0)
-                ? (_reserveBalance(reserveTokens[i]) * perpAmtBurnt) / totalSupply_
+                ? _reserveBalance(reserveTokens[i]).mulDiv(perpAmtBurnt, totalSupply_)
                 : 0;
         }
         return (reserveTokens, redemptionAmts);
@@ -822,7 +925,7 @@ contract PerpetualTranche is
         uint256 trancheInPrice = computePrice(trancheIn);
         uint256 trancheOutPrice = computePrice(tokenOut);
         uint256 tokenOutBalance = _reserveBalance(tokenOut);
-        tokenOutAmtRequested = MathUpgradeable.min(tokenOutAmtRequested, tokenOutBalance);
+        tokenOutAmtRequested = tokenOutAmtRequested.min(tokenOutBalance);
 
         if (trancheInDiscount == 0 || trancheOutDiscount == 0 || trancheInPrice == 0 || trancheOutPrice == 0) {
             r.remainingTrancheInAmt = trancheInAmtAvailable;
@@ -834,7 +937,7 @@ contract PerpetualTranche is
 
         // Basic rollover:
         // (stdTrancheInAmt . trancheInPrice) = (stdTrancheOutAmt . trancheOutPrice)
-        uint256 stdTrancheOutAmt = (stdTrancheInAmt * trancheInPrice) / trancheOutPrice;
+        uint256 stdTrancheOutAmt = stdTrancheInAmt.mulDiv(trancheInPrice, trancheOutPrice);
         r.trancheOutAmt = _fromStdTrancheAmt(stdTrancheOutAmt, trancheOutDiscount);
 
         // However, if the tokenOut is the mature tranche (held as naked collateral),
@@ -842,7 +945,7 @@ contract PerpetualTranche is
         // (tokenOutAmt = collateralBalance * trancheOutAmt / matureTrancheBalance)
         bool isMatureTrancheOut = _isMatureTranche(tokenOut);
         r.tokenOutAmt = isMatureTrancheOut
-            ? ((tokenOutBalance * r.trancheOutAmt) / _matureTrancheBalance)
+            ? tokenOutBalance.mulDiv(r.trancheOutAmt, _matureTrancheBalance)
             : r.trancheOutAmt;
 
         // When the token out balance is NOT covered:
@@ -850,19 +953,19 @@ contract PerpetualTranche is
         if (r.tokenOutAmt > tokenOutAmtRequested) {
             r.tokenOutAmt = tokenOutAmtRequested;
             r.trancheOutAmt = isMatureTrancheOut
-                ? (_matureTrancheBalance * r.tokenOutAmt) / tokenOutBalance
+                ? _matureTrancheBalance.mulDiv(r.tokenOutAmt, tokenOutBalance)
                 : r.tokenOutAmt;
             stdTrancheOutAmt = _toStdTrancheAmt(r.trancheOutAmt, trancheOutDiscount);
-            stdTrancheInAmt = (stdTrancheOutAmt * trancheOutPrice) / trancheInPrice;
+            stdTrancheInAmt = stdTrancheOutAmt.mulDiv(trancheOutPrice, trancheInPrice);
             r.trancheInAmt = _fromStdTrancheAmt(stdTrancheInAmt, trancheInDiscount);
         }
 
-        r.perpRolloverAmt = (stdTrancheOutAmt * trancheOutPrice * totalSupply()) / _reserveValue();
+        r.perpRolloverAmt = (stdTrancheOutAmt * trancheOutPrice).mulDiv(totalSupply(), _reserveValue());
         r.remainingTrancheInAmt = trancheInAmtAvailable - r.trancheInAmt;
         return r;
     }
 
-    /// @dev Transfers tokens from the given address to self and updates the reserve list.
+    /// @dev Transfers tokens from the given address to self and updates the reserve set.
     /// @return Reserve's token balance after transfer in.
     function _transferIntoReserve(
         address from,
@@ -873,7 +976,7 @@ contract PerpetualTranche is
         return _syncReserve(token);
     }
 
-    /// @dev Transfers tokens from self into the given address and updates the reserve list.
+    /// @dev Transfers tokens from self into the given address and updates the reserve set.
     /// @return Reserve's token balance after transfer out.
     function _transferOutOfReserve(
         address to,
@@ -891,15 +994,15 @@ contract PerpetualTranche is
         emit ReserveSynced(token, balance);
 
         // If token is the mature tranche,
-        // it NEVER gets removed from the `_reserves` list.
+        // it NEVER gets removed from the `_reserves` set.
         if (_isMatureTranche(token)) {
             return balance;
         }
 
-        // Otherwise `_reserves` list gets updated.
+        // Otherwise `_reserves` set gets updated.
         bool inReserve_ = _inReserve(token);
         if (balance > 0 && !inReserve_) {
-            // Inserts new tranche into reserve list.
+            // Inserts new tranche into reserve set.
             _reserves.add(address(token));
 
             // Stores the discount for future usage.
@@ -907,7 +1010,7 @@ contract PerpetualTranche is
         }
 
         if (balance == 0 && inReserve_) {
-            // Removes tranche from reserve list.
+            // Removes tranche from reserve set.
             _reserves.remove(address(token));
 
             // Frees up stored discount.
@@ -927,7 +1030,7 @@ contract PerpetualTranche is
         uint256 protocolFee
     ) private {
         // Handling reserve fees
-        uint256 reserveFeeAbs = SignedMathUpgradeable.abs(reserveFee);
+        uint256 reserveFeeAbs = reserveFee.abs();
         if (reserveFee > 0) {
             _handleFeeTransferIn(payer, reserve(), reserveFeeAbs);
         } else if (reserveFee < 0) {
@@ -966,7 +1069,7 @@ contract PerpetualTranche is
         // Funds are going out
         if (isNativeFeeToken) {
             uint256 balance = _reserveBalance(feeToken_);
-            feeToken_.safeTransfer(destination, MathUpgradeable.min(feeAmt, balance));
+            feeToken_.safeTransfer(destination, feeAmt.min(balance));
 
             // In case that the reserve's balance doesn't cover the entire fee amount,
             // we mint perps to cover the difference.
@@ -1005,14 +1108,14 @@ contract PerpetualTranche is
     function _isAcceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut) private view returns (bool) {
         // when rolling out the mature tranche
         if (_isMatureTranche(tokenOut)) {
-            return _isBondTranche(trancheIn, _depositBond);
+            return _isDepositBondTranche(trancheIn);
         }
 
         // when rolling out a normal tranche
         ITranche trancheOut = ITranche(address(tokenOut));
         IBondController bondOut = IBondController(trancheOut.bond());
-        return (_isBondTranche(trancheIn, _depositBond) &&
-            !_isBondTranche(trancheOut, _depositBond) &&
+        return (_isDepositBondTranche(trancheIn) &&
+            !_isDepositBondTranche(trancheOut) &&
             _inReserve(trancheOut) &&
             !_isAcceptableForReserve(bondOut));
     }
@@ -1029,10 +1132,10 @@ contract PerpetualTranche is
             timeToMaturity < maxTrancheMaturitySec);
     }
 
-    /// @dev Checks if the given tranche is a valid child of the given parent bond.
-    /// @return True if the bond is the tranche's parent.
-    function _isBondTranche(ITranche tranche, IBondController bond) private view returns (bool) {
-        return (bond.trancheTokenAddresses(tranche) && address(bond) == tranche.bond());
+    /// @dev Checks if the given tranche belongs to the current deposit bond.
+    /// @return True if the deposit bond is the tranche's parent.
+    function _isDepositBondTranche(ITranche tranche) private view returns (bool) {
+        return (_depositBond.trancheTokenAddresses(tranche) && address(_depositBond) == tranche.bond());
     }
 
     /// @dev Enforces the total supply cap. To be invoked AFTER the mint operation.
@@ -1064,7 +1167,7 @@ contract PerpetualTranche is
     ///      To be invoked AFTER the rollover operation.
     function _enforceMatureValueTarget() private view {
         uint256 matureValue = (_matureTrancheBalance * computePrice(_reserveAt(0)));
-        uint256 matureValuePerc = (matureValue * HUNDRED_PERC) / _reserveValue();
+        uint256 matureValuePerc = matureValue.mulDiv(HUNDRED_PERC, _reserveValue());
         if (matureValuePerc < matureValueTargetPerc) {
             revert BelowMatureValueTargetPerc(matureValuePerc, matureValueTargetPerc);
         }
@@ -1114,12 +1217,12 @@ contract PerpetualTranche is
     /// @dev Calculates the standardized tranche amount for internal book keeping.
     ///      stdTrancheAmt = (trancheAmt * discount).
     function _toStdTrancheAmt(uint256 trancheAmt, uint256 discount) private pure returns (uint256) {
-        return ((trancheAmt * discount) / UNIT_DISCOUNT);
+        return trancheAmt.mulDiv(discount, UNIT_DISCOUNT);
     }
 
     /// @dev Calculates the external tranche amount from the internal standardized tranche amount.
     ///      trancheAmt = stdTrancheAmt / discount.
     function _fromStdTrancheAmt(uint256 stdTrancheAmt, uint256 discount) private pure returns (uint256) {
-        return ((stdTrancheAmt * UNIT_DISCOUNT) / discount);
+        return stdTrancheAmt.mulDiv(UNIT_DISCOUNT, discount);
     }
 }

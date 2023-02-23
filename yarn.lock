@@ -17,7 +17,7 @@ __metadata:
     "@nomiclabs/hardhat-waffle": ^2.0.3
     "@openzeppelin/contracts-upgradeable": ^4.7.3
     "@openzeppelin/hardhat-upgrades": ^1.19.0
-    "@openzeppelin/upgrades-core": ^1.19.1
+    "@openzeppelin/upgrades-core": latest
     "@typechain/ethers-v5": ^10.1.0
     "@typechain/hardhat": ^6.1.2
     "@types/chai": ^4.3.1
@@ -927,9 +927,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@openzeppelin/upgrades-core@npm:^1.19.1":
-  version: 1.19.1
-  resolution: "@openzeppelin/upgrades-core@npm:1.19.1"
+"@openzeppelin/upgrades-core@npm:latest":
+  version: 1.23.0
+  resolution: "@openzeppelin/upgrades-core@npm:1.23.0"
   dependencies:
     cbor: ^8.0.0
     chalk: ^4.1.0
@@ -938,7 +938,7 @@ __metadata:
     ethereumjs-util: ^7.0.3
     proper-lockfile: ^4.1.1
     solidity-ast: ^0.4.15
-  checksum: 23ce6866c92c2afc39e8765a0e12935c4fbe1582a83ec00e1fa4488dc8d65c0e7db76e97dfd766b3e23639d4b2eafb8baf2444d18fd4a7807602899c930c3b56
+  checksum: 78bd12f96c1f77bdb51e6df3879cb8c882a03eea368d50ea54595850b712987f01d1bab90cc8dd9398c279e700088c94c38c0dbfcb27050bc8a79fd91bf9415d
   languageName: node
   linkType: hard
 

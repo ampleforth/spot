@@ -214,12 +214,6 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when set address is NOT valid", function () {
-      it("should revert", async function () {
-        await expect(perp.updateKeeper(constants.AddressZero)).to.be.revertedWith("UnacceptableReference");
-      });
-    });
-
     describe("when set address is valid", function () {
       beforeEach(async function () {
         tx = perp.updateKeeper(await otherUser.getAddress());
@@ -232,6 +226,71 @@ describe("PerpetualTranche", function () {
         await expect(tx)
           .to.emit(perp, "UpdatedKeeper")
           .withArgs(constants.AddressZero, await otherUser.getAddress());
+      });
+    });
+  });
+
+  describe("#authorizeRoller", function () {
+    let tx: Transaction;
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(perp.connect(otherUser).authorizeRoller(constants.AddressZero, true)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    describe("when roller is not authorized and is authorized", function () {
+      beforeEach(async function () {
+        expect(await perp.authorizedRollersCount()).to.eq(0);
+        tx = perp.authorizeRoller(await otherUser.getAddress(), true);
+        await tx;
+      });
+      it("should authorize roller", async function () {
+        expect(await perp.authorizedRollersCount()).to.eq(1);
+        expect(await perp.authorizedRollerAt(0)).to.eq(await otherUser.getAddress());
+      });
+      it("should emit event", async function () {
+        await expect(tx)
+          .to.emit(perp, "UpdatedRollerAuthorization")
+          .withArgs(await otherUser.getAddress(), true);
+      });
+    });
+
+    describe("when roller is already authorized and is authorized again", function () {
+      beforeEach(async function () {
+        await perp.authorizeRoller(await otherUser.getAddress(), true);
+      });
+      it("should NOT revert", async function () {
+        await expect(perp.authorizeRoller(await otherUser.getAddress(), true)).not.to.be.reverted;
+        expect(await perp.authorizedRollersCount()).to.eq(1);
+        expect(await perp.authorizedRollerAt(0)).to.eq(await otherUser.getAddress());
+      });
+    });
+
+    describe("when roller is not authorized and is unauthorized", function () {
+      it("should NOT revert", async function () {
+        expect(await perp.authorizedRollersCount()).to.eq(0);
+        await expect(perp.authorizeRoller(await otherUser.getAddress(), false)).not.to.be.reverted;
+        expect(await perp.authorizedRollersCount()).to.eq(0);
+      });
+    });
+
+    describe("when roller is authorized and is unauthorized", function () {
+      beforeEach(async function () {
+        await perp.authorizeRoller(await otherUser.getAddress(), true);
+        expect(await perp.authorizedRollersCount()).to.eq(1);
+        tx = perp.authorizeRoller(await otherUser.getAddress(), false);
+        await tx;
+      });
+      it("should unauthorize roller", async function () {
+        expect(await perp.authorizedRollersCount()).to.eq(0);
+      });
+      it("should emit event", async function () {
+        await expect(tx)
+          .to.emit(perp, "UpdatedRollerAuthorization")
+          .withArgs(await otherUser.getAddress(), false);
       });
     });
   });
@@ -1373,6 +1432,42 @@ describe("PerpetualTranche", function () {
       expect(await perp.callStatic.getReserveTrancheBalance(depositTranches[2].address)).to.eq(toFixedPtAmt("500"));
       expect(await perp.callStatic.getReserveTrancheBalance(depositTranches[3].address)).to.eq(toFixedPtAmt("500"));
       expect(await perp.callStatic.getReserveTrancheBalance(depositTranches[4].address)).to.eq(toFixedPtAmt("500"));
+    });
+  });
+
+  describe("#getReserveTrancheValue", async function () {
+    const depositTranches: Contract[] = [];
+    beforeEach(async function () {
+      const bondFactory = await setupBondFactory();
+      const BondIssuer = await ethers.getContractFactory("BondIssuer");
+      const issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
+      await issuer.init(10800, [500, 500], 1200, 0);
+      await perp.updateBondIssuer(issuer.address);
+      await perp.updateTolerableTrancheMaturity(600, 10800);
+      await advancePerpQueue(perp, 10900);
+      for (let i = 0; i < 5; i++) {
+        const depositBond = await bondAt(await perp.callStatic.getDepositBond());
+        const tranches = await getTranches(depositBond);
+        await pricingStrategy.setTranchePrice(tranches[0].address, toPriceFixedPtAmt("0.9"));
+        await discountStrategy.setTrancheDiscount(tranches[0].address, toDiscountFixedPtAmt("0.8"));
+        await depositIntoBond(depositBond, toFixedPtAmt("1000"), deployer);
+        await tranches[0].approve(perp.address, toFixedPtAmt("500"));
+        await perp.deposit(tranches[0].address, toFixedPtAmt("500"));
+        depositTranches[i] = tranches[0];
+        await advancePerpQueue(perp, 1200);
+      }
+      await advancePerpQueueToRollover(perp, await bondAt(depositTranches[2].bond()));
+      await pricingStrategy.setPrice(toPriceFixedPtAmt("1.1"));
+    });
+
+    it("should return the tranche value", async function () {
+      expect(await perp.callStatic.getReserveTrancheValue(perp.address)).to.eq("0");
+      expect(await perp.callStatic.getReserveTrancheValue(collateralToken.address)).to.eq(toFixedPtAmt("880"));
+      expect(await perp.callStatic.getReserveTrancheValue(depositTranches[0].address)).to.eq("0");
+      expect(await perp.callStatic.getReserveTrancheValue(depositTranches[1].address)).to.eq("0");
+      expect(await perp.callStatic.getReserveTrancheValue(depositTranches[2].address)).to.eq(toFixedPtAmt("360"));
+      expect(await perp.callStatic.getReserveTrancheValue(depositTranches[3].address)).to.eq(toFixedPtAmt("360"));
+      expect(await perp.callStatic.getReserveTrancheValue(depositTranches[4].address)).to.eq(toFixedPtAmt("360"));
     });
   });
 });

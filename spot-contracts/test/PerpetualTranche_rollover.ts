@@ -150,6 +150,26 @@ describe("PerpetualTranche", function () {
       });
     });
 
+    describe("when rollers are authorized", function () {
+      beforeEach(async function () {
+        await perp.authorizeRoller(await otherUser.getAddress(), true);
+      });
+
+      it("should revert when invoked from unauthorized roller ", async function () {
+        await expect(
+          perp.rollover(rolloverInTranche.address, reserveTranche2.address, toFixedPtAmt("500")),
+        ).to.revertedWith("UnauthorizedCall");
+      });
+
+      it("should NOT revert when invoked from authorized roller ", async function () {
+        await rolloverInTranche.transfer(await otherUser.getAddress(), toFixedPtAmt("500"));
+        await rolloverInTranche.connect(otherUser).approve(perp.address, toFixedPtAmt("500"));
+        await expect(
+          perp.connect(otherUser).rollover(rolloverInTranche.address, reserveTranche2.address, toFixedPtAmt("500")),
+        ).not.to.be.reverted;
+      });
+    });
+
     describe("when trancheIn and tokenOut belong to the same bond", function () {
       let tranches: Contract[];
       beforeEach(async function () {
