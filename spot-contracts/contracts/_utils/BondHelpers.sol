@@ -2,6 +2,7 @@
 pragma solidity ^0.8.18;
 
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
+import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
@@ -66,6 +67,9 @@ library TrancheHelpers {
  *
  */
 library BondHelpers {
+    using SafeCastUpgradeable for uint256;
+    using MathUpgradeable for uint256;
+
     // Replicating value used here:
     // https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
     uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
@@ -92,7 +96,7 @@ library BondHelpers {
     /// @return The tranche data.
     function getTrancheData(IBondController b) internal view returns (TrancheData memory) {
         TrancheData memory td;
-        td.trancheCount = SafeCastUpgradeable.toUint8(b.trancheCount());
+        td.trancheCount = b.trancheCount().toUint8();
         td.tranches = new ITranche[](td.trancheCount);
         td.trancheRatios = new uint256[](td.trancheCount);
         // Max tranches per bond < 2**8 - 1
@@ -191,8 +195,8 @@ library BondHelpers {
         return (td, collateralBalances, trancheSupplies);
     }
 
-    /// @notice Given a bond and a user address computes the tranche amounts proportional to the tranche ratios,
-    //          that can be redeemed for the collateral before maturity.
+    /// @notice For a given bond and user address, computes the maximum number of each of the bond's tranches
+    ///         the user is able to redeem before the bond's maturity. These tranche amounts necessarily match the bond's tranche ratios.
     /// @param b The address of the bond contract.
     /// @param u The address to check balance for.
     /// @return The tranche data and an array of tranche token balances.
@@ -204,18 +208,24 @@ library BondHelpers {
         TrancheData memory td = getTrancheData(b);
         uint256[] memory redeemableAmts = new uint256[](td.trancheCount);
 
-        // We calculate the minimum value of {trancheBal/trancheRatio} across tranches
-        uint256 min = type(uint256).max;
+        // Calculate how many underlying assets could be redeemed from each tranche balance,
+        // assuming other tranches are not an issue, and record the smallest amount.
+        uint256 minUnderlyingOut = type(uint256).max;
         uint8 i;
-        for (i = 0; i < td.trancheCount && min != 0; i++) {
-            uint256 d = (td.tranches[i].balanceOf(u) * TRANCHE_RATIO_GRANULARITY) / td.trancheRatios[i];
-            if (d < min) {
-                min = d;
+        for (i = 0; i < td.trancheCount; i++) {
+            uint256 d = td.tranches[i].balanceOf(u).mulDiv(TRANCHE_RATIO_GRANULARITY, td.trancheRatios[i]);
+            if (d < minUnderlyingOut) {
+                minUnderlyingOut = d;
+            }
+
+            // if one of the balances is zero, we return
+            if (minUnderlyingOut == 0) {
+                return (td, redeemableAmts);
             }
         }
 
         for (i = 0; i < td.trancheCount; i++) {
-            redeemableAmts[i] = (td.trancheRatios[i] * min) / TRANCHE_RATIO_GRANULARITY;
+            redeemableAmts[i] = td.trancheRatios[i].mulDiv(minUnderlyingOut, TRANCHE_RATIO_GRANULARITY);
         }
 
         return (td, redeemableAmts);
