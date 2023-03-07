@@ -107,25 +107,24 @@ async function computeRolloverBatchExact(
   const upForRotation = await perp.callStatic.getReserveTokensUpForRollover();
   const reserveTokens = [];
   const reserveTokenBalances = [];
-  const rotationTokens = [];
-  const rotationTokenBalances = [];
+  const _rotationTokensAndBals = [];
   for (let i = 0; i < reserveCount; i++) {
     const tranche = await hre.ethers.getContractAt("ITranche", await perp.callStatic.getReserveAt(i));
     const balance = await perp.callStatic.getReserveTrancheBalance(tranche.address);
     reserveTokens.push(tranche);
     reserveTokenBalances.push(balance);
     if (upForRotation[i] !== constants.AddressZero && balance.gt(0)) {
-      rotationTokens.push(tranche);
-      rotationTokenBalances.push(balance);
+      _rotationTokensAndBals.push({ token: tranche, balance });
     }
   }
+  const rotationTokensAndBals = _rotationTokensAndBals.sort((a, b) => (a.balance.lt(b.balance) ? 1 : -1));
 
   // continues to the next token when only DUST remains
   const DUST_AMOUNT = utils.parseUnits("1", await perp.decimals());
 
   // Amounts at the start
   const remainingTrancheInAmts: BigNumber[] = depositTrancheAmts.map((t: BigNumber) => t);
-  const remainingTokenOutAmts: BigNumber[] = rotationTokenBalances.map(b => b);
+  const remainingTokenOutAmts: BigNumber[] = rotationTokensAndBals.map(t => t.balance);
 
   // For each tranche token, and each token up for rollover
   // We try to rollover and once depleted (upto dust) and move on to the next pair
@@ -133,9 +132,9 @@ async function computeRolloverBatchExact(
   let totalRolloverAmt = BigNumber.from("0");
   let totalRolloverFee = BigNumber.from("0");
 
-  for (let i = 0, j = 0; i < depositTranches.length && j < rotationTokens.length; ) {
+  for (let i = 0, j = 0; i < depositTranches.length && j < rotationTokensAndBals.length; ) {
     const trancheIn = depositTranches[i];
-    const tokenOut = rotationTokens[j];
+    const tokenOut = rotationTokensAndBals[j].token;
     const [rd, , rolloverFee] = await router.callStatic.previewRollover(
       perp.address,
       trancheIn.address,
