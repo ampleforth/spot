@@ -120,7 +120,7 @@ async function computeRolloverBatchExact(
   const rotationTokensAndBals = _rotationTokensAndBals.sort((a, b) => (a.balance.lt(b.balance) ? 1 : -1));
 
   // continues to the next token when only DUST remains
-  const DUST_AMOUNT = utils.parseUnits("1", await perp.decimals());
+  const DUST_AMOUNT = utils.parseUnits("0.001", await perp.decimals());
 
   // Amounts at the start
   const remainingTrancheInAmts: BigNumber[] = depositTrancheAmts.map((t: BigNumber) => t);
