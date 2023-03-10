@@ -13,6 +13,8 @@ import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/
 import { TrancheData, TrancheHelpers, BondHelpers } from "../_utils/BondHelpers.sol";
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche } from "../_interfaces/IPerpetualTranche.sol";
 
+// TODO: create a IVault interface
+
 /// @notice Expected asset to be a vault asset.
 /// @param token Address of the token.
 error UnexpectedAsset(IERC20Upgradeable token);
@@ -117,23 +119,20 @@ contract RolloverVault is
     /// @notice Contract state initialization.
     /// @param name ERC-20 Name of the vault token.
     /// @param symbol ERC-20 Symbol of the vault token.
-    /// @param underlying_ ERC-20 address of the underlying token.
     /// @param perp_ ERC-20 address of the perpetual tranche rolled over.
     function init(
         string memory name,
         string memory symbol,
-        IERC20Upgradeable underlying_,
         IPerpetualTranche perp_
     ) public initializer {
         __ERC20_init(name, symbol);
         __Ownable_init();
+        __Pausable_init();
+        __ReentrancyGuard_init();
 
-        underlying = underlying_;
-        _syncAsset(underlying_);
+        underlying = perp_.collateral();
+        _syncAsset(underlying);
 
-        if (perp_.collateral() != underlying_) {
-            revert UnexpectedAsset(underlying_);
-        }
         perp = perp_;
     }
 
@@ -169,14 +168,15 @@ contract RolloverVault is
     //--------------------------------------------------------------------------
     // External & Public write methods
 
-    /// @notice Recovers deployed funds and redeploys them.
+    /// @notice Recovers deployed funds and redeploys them. Reverts if there are no funds to deploy.
     /// @dev Simply batches the `recover` and `deploy` functions.
-    function recoverAndRedeploy() external whenNotPaused {
+    function recoverAndRedeploy() external {
         recover();
         deploy();
     }
 
-    /// @notice Deploys deposited funds.
+    /// @notice Deploys deposited funds. Reverts if there are no funds to deploy.
+    /// @dev Its safer to call `recover` before `deploy` so the full available balance can be deployed.
     function deploy() public nonReentrant whenNotPaused {
         TrancheData memory td = _tranche(perp.getDepositBond());
         if (_rollover(perp, td) == 0) {
@@ -209,7 +209,7 @@ contract RolloverVault is
         return notes;
     }
 
-    struct RedemptionPreview {
+    struct TokenAmount {
         /// @notice The asset token redeemed.
         IERC20Upgradeable token;
         /// @notice The amount redeemed.
@@ -219,13 +219,13 @@ contract RolloverVault is
     /// @notice Burns notes and sends a proportional share vault's assets back to {msg.sender}.
     /// @param notes The amount of notes to be burnt.
     /// @return The list of asset tokens and amounts redeemed.
-    function redeem(uint256 notes) external nonReentrant whenNotPaused returns (RedemptionPreview[] memory) {
+    function redeem(uint256 notes) external nonReentrant whenNotPaused returns (TokenAmount[] memory) {
         uint256 totalNotes = totalSupply();
         uint256 deployedCount_ = deployedCount();
         uint256 earnedCount_ = earnedCount();
         uint256 assetCount = 1 + deployedCount_ + earnedCount_;
 
-        RedemptionPreview[] memory redemptions = new RedemptionPreview[](assetCount);
+        TokenAmount[] memory redemptions = new TokenAmount[](assetCount);
 
         // burn notes
         _burn(_msgSender(), notes);
