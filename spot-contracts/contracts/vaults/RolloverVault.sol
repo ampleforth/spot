@@ -71,7 +71,7 @@ contract RolloverVault is
     //-------------------------------------------------------------------------
     // Events
 
-    /// @notice Event emitted the vault's current asset token balance is recorded after change.
+    /// @notice Emits the vault asset's token balance that's recorded after a change.
     /// @param token Address of token.
     /// @param balance The recorded ERC-20 balance of the token.
     event AssetSynced(IERC20Upgradeable token, uint256 balance);
@@ -102,7 +102,7 @@ contract RolloverVault is
     IERC20Upgradeable public underlying;
 
     /// @dev The set of the intermediate ERC-20 tokens when the underlying asset has been put to use.
-    ///      In the cause of this vault, they represent the tranche tokens held till maturity.
+    ///      In the case of this vault, they represent the tranche tokens held before maturity.
     EnumerableSetUpgradeable.AddressSet private _deployed;
 
     //-------------------------------------------------------------------------
