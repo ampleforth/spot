@@ -14,6 +14,7 @@ import { TrancheData, TrancheHelpers, BondHelpers } from "../_utils/BondHelpers.
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche } from "../_interfaces/IPerpetualTranche.sol";
 
 // TODO: create a IVault interface
+// TODO: add mint cap
 
 /// @notice Expected asset to be a vault asset.
 /// @param token Address of the token.
