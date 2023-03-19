@@ -217,7 +217,7 @@ contract RolloverVault is
         uint256 amount;
     }
 
-    /// @notice Burns notes and sends a proportional share vault's assets back to {msg.sender}.
+    /// @notice Burns notes and sends a proportional share of vault's assets back to {msg.sender}.
     /// @param notes The amount of notes to be burnt.
     /// @return The list of asset tokens and amounts redeemed.
     function redeem(uint256 notes) external nonReentrant whenNotPaused returns (TokenAmount[] memory) {
@@ -293,7 +293,7 @@ contract RolloverVault is
     /// @notice Checks if the given token is held by the vault.
     /// @param token The address of a token to check.
     function isVaultAsset(IERC20Upgradeable token) public view returns (bool) {
-        return token == underlying || _deployed.contains(address(token)) || address(perp) == address(token);
+        return (token == underlying) || _deployed.contains(address(token)) || (address(perp) == address(token));
     }
 
     /// @notice Total count of deployed asset tokens held by the vault.
