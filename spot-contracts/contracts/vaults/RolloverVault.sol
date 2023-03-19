@@ -222,25 +222,21 @@ contract RolloverVault is
     /// @return The list of asset tokens and amounts redeemed.
     function redeem(uint256 notes) external nonReentrant whenNotPaused returns (TokenAmount[] memory) {
         uint256 totalNotes = totalSupply();
-        uint256 deployedCount_ = deployedCount();
-        uint256 earnedCount_ = earnedCount();
-        uint256 assetCount = 1 + deployedCount_ + earnedCount_;
-
-        TokenAmount[] memory redemptions = new TokenAmount[](assetCount);
+        uint256 deployedCount_ = _deployed.length();
+        uint256 assetCount = 2 + deployedCount_;
 
         // burn notes
         _burn(_msgSender(), notes);
 
         // aggregating vault assets to be redeemed
+        TokenAmount[] memory redemptions = new TokenAmount[](assetCount);
         redemptions[0].token = underlying;
         for (uint256 i = 0; i < deployedCount_; i++) {
-            redemptions[i + 1].token = deployedAt(i);
+            redemptions[i + 1].token = IERC20Upgradeable(_deployed.at(i));
         }
-        for (uint256 i = 0; i < earnedCount_; i++) {
-            redemptions[i + 1 + deployedCount_].token = earnedAt(i);
-        }
+        redemptions[deployedCount_ + 1].token = IERC20Upgradeable(perp);
 
-        // transferring assets out proportionally
+        // calculating amounts and transferring assets out proportionally
         for (uint256 i = 0; i < assetCount; i++) {
             redemptions[i].amount = _calculateAssetShare(redemptions[i].token, notes, totalNotes);
             redemptions[i].token.safeTransfer(_msgSender(), redemptions[i].amount);
@@ -250,7 +246,7 @@ contract RolloverVault is
         return redemptions;
     }
 
-    /// @notice Total value of assets currently held by the vault denominated in the underlying asset.
+    /// @return The total value of assets currently held by the vault, denominated in the underlying asset.
     function getTVL() public returns (uint256) {
         uint256 totalAssets = 0;
 
@@ -259,22 +255,19 @@ contract RolloverVault is
 
         // The deployed asset value denominated in the underlying
         for (uint256 i = 0; i < _deployed.length(); i++) {
-            ITranche tranche = deployedAt(i);
-            uint256 balance = tranche.balanceOf(address(this));
-            if (balance > 0) {
+            ITranche tranche = ITranche(_deployed.at(i));
+            uint256 trancheBalance = tranche.balanceOf(address(this));
+            if (trancheBalance > 0) {
                 (uint256 collateralBalance, uint256 debt) = tranche.getTrancheCollateralization();
-                totalAssets += balance.mulDiv(collateralBalance, debt);
+                totalAssets += trancheBalance.mulDiv(collateralBalance, debt);
             }
         }
 
         // The earned asset (perp token) value denominated in the underlying
-        for (uint256 i = 0; i < earnedCount(); i++) {
-            IERC20Upgradeable perp_ = earnedAt(i);
-            uint256 balance = perp_.balanceOf(address(this));
-            if (balance > 0) {
-                // The "earned" asset is assumed to be the perp token.
-                totalAssets += balance.mulDiv(IPerpetualTranche(address(perp_)).getAvgPrice(), PERP_UNIT_PRICE);
-            }
+        uint256 perpBalance = perp.balanceOf(address(this));
+        if (perpBalance > 0) {
+            // The "earned" asset is assumed to be the perp token.
+            totalAssets += perpBalance.mulDiv(IPerpetualTranche(address(perp)).getAvgPrice(), PERP_UNIT_PRICE);
         }
 
         return totalAssets;
@@ -283,44 +276,41 @@ contract RolloverVault is
     //--------------------------------------------------------------------------
     // External & Public read methods
 
-    /// @notice Fetches the vault's asset token balance.
     /// @param token The address of the asset ERC-20 token held by the vault.
-    /// @return The token balance.
-    function assetBalance(IERC20Upgradeable token) external view returns (uint256) {
+    /// @return The vault's asset token balance.
+    function vaultAssetBalance(IERC20Upgradeable token) external view returns (uint256) {
         return isVaultAsset(token) ? token.balanceOf(address(this)) : 0;
     }
 
-    /// @notice Checks if the given token is held by the vault.
-    /// @param token The address of a token to check.
-    function isVaultAsset(IERC20Upgradeable token) public view returns (bool) {
-        return (token == underlying) || _deployed.contains(address(token)) || (address(perp) == address(token));
-    }
-
-    /// @notice Total count of deployed asset tokens held by the vault.
-    /// @return The count.
-    function deployedCount() public view returns (uint256) {
+    /// @return Total count of deployed asset tokens held by the vault.
+    function deployedCount() external view returns (uint256) {
         return _deployed.length();
     }
 
-    /// @notice The token address from the deployed asset token list by index.
     /// @param i The index of a token.
-    function deployedAt(uint256 i) public view returns (ITranche) {
-        return ITranche(_deployed.at(i));
+    /// @return The token address from the deployed asset token list by index.
+    function deployedAt(uint256 i) external view returns (IERC20Upgradeable) {
+        return IERC20Upgradeable(_deployed.at(i));
     }
 
-    /// @notice Total count of earned income tokens held by the vault.
-    /// @return The count.
-    function earnedCount() public pure returns (uint256) {
+    /// @return Total count of earned income tokens held by the vault.
+    function earnedCount() external pure returns (uint256) {
         return 1;
     }
 
-    /// @notice The token address from the earned income token list by index.
     /// @param i The index of a token.
-    function earnedAt(uint256 i) public view returns (IERC20Upgradeable) {
+    /// @return The token address from the earned income token list by index.
+    function earnedAt(uint256 i) external view returns (IERC20Upgradeable) {
         if (i > 0) {
             revert OutOfBounds();
         }
         return IERC20Upgradeable(perp);
+    }
+
+    /// @param token The address of a token to check.
+    /// @return If the given token is held by the vault.
+    function isVaultAsset(IERC20Upgradeable token) public view returns (bool) {
+        return (token == underlying) || _deployed.contains(address(token)) || (address(perp) == address(token));
     }
 
     //--------------------------------------------------------------------------
@@ -428,7 +418,7 @@ contract RolloverVault is
     /// @notice Redeems the deployed tranche tokens for the underlying asset.
     function _redeemTranches() private {
         for (uint256 i = 0; i < _deployed.length(); i++) {
-            ITranche tranche = deployedAt(i);
+            ITranche tranche = ITranche(_deployed.at(i));
             IBondController bond = IBondController(tranche.bond());
 
             // if bond has mature, redeem the tranche token
@@ -458,7 +448,7 @@ contract RolloverVault is
         //       as deletions involve swapping the deleted element to the
         //       end of the set and removing the last element.
         for (uint256 i = _deployed.length(); i > 0; i--) {
-            _syncDeployedAsset(deployedAt(i - 1));
+            _syncDeployedAsset(IERC20Upgradeable(_deployed.at(i - i)));
         }
         _syncAsset(underlying);
     }
