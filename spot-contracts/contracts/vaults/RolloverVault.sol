@@ -152,6 +152,7 @@ contract RolloverVault is
         _unpause();
     }
 
+    /// @notice Transfers a non-vault token out of the contract, which may have been added accidentally.
     /// @param token The token address.
     /// @param to The destination address.
     /// @param amount The amount of tokens to be transferred.
@@ -225,9 +226,6 @@ contract RolloverVault is
         uint256 deployedCount_ = _deployed.length();
         uint256 assetCount = 2 + deployedCount_;
 
-        // burn notes
-        _burn(_msgSender(), notes);
-
         // aggregating vault assets to be redeemed
         TokenAmount[] memory redemptions = new TokenAmount[](assetCount);
         redemptions[0].token = underlying;
@@ -235,6 +233,9 @@ contract RolloverVault is
             redemptions[i + 1].token = IERC20Upgradeable(_deployed.at(i));
         }
         redemptions[deployedCount_ + 1].token = IERC20Upgradeable(perp);
+
+        // burn notes
+        _burn(_msgSender(), notes);
 
         // calculating amounts and transferring assets out proportionally
         for (uint256 i = 0; i < assetCount; i++) {
