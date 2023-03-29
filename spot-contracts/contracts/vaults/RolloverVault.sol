@@ -15,6 +15,7 @@ import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITr
 
 // TODO: create a IVault interface
 // TODO: add mint cap
+// TODO: limit size of vault assets
 
 /// @notice Expected asset to be a valid vault asset.
 /// @param token Address of the token.
@@ -453,8 +454,8 @@ contract RolloverVault is
         // NOTE: We traverse the deployed set in the reverse order
         //       as deletions involve swapping the deleted element to the
         //       end of the set and removing the last element.
-        for (uint256 i = _deployed.length(); i > 0; i--) {
-            _syncDeployedAsset(IERC20Upgradeable(_deployed.at(i - i)));
+        for (uint256 i = _deployed.length() - 1; i >= 0; i--) {
+            _syncDeployedAsset(IERC20Upgradeable(_deployed.at(i)));
         }
         _syncAsset(underlying);
     }
