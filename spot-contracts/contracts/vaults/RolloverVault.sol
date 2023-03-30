@@ -333,7 +333,7 @@ contract RolloverVault is
         }
 
         // balance is tranched
-        _checkAndApproveMax(underlying, address(bond), balance);
+        underlying.approve(address(bond), balance);
         bond.deposit(balance);
 
         // sync holdings
@@ -404,7 +404,7 @@ contract RolloverVault is
             }
 
             // Perform rollover
-            _checkAndApproveMax(trancheIntoPerp, address(perp_), trancheInAmtAvailable);
+            trancheIntoPerp.approve(address(perp_), trancheInAmtAvailable);
             perp_.rollover(trancheIntoPerp, tokenOutOfPerp, trancheInAmtAvailable);
 
             // sync holdings
@@ -486,18 +486,6 @@ contract RolloverVault is
         }
 
         return balance;
-    }
-
-    /// @dev Approves the spender to spend an infinite tokens from the vault's balance.
-    // NOTE: Only audited & immutable spender contracts should have infinite approvals.
-    function _checkAndApproveMax(
-        IERC20Upgradeable token,
-        address spender,
-        uint256 amount
-    ) private {
-        if (token.allowance(address(this), spender) < amount) {
-            token.approve(spender, type(uint256).max);
-        }
     }
 
     //--------------------------------------------------------------------------
