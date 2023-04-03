@@ -5,6 +5,7 @@ import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/O
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 import { SignedMathHelpers } from "../_utils/SignedMathHelpers.sol";
+import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { IFeeStrategy } from "../_interfaces/IFeeStrategy.sol";
@@ -26,8 +27,9 @@ error UnacceptablePercValue(int256 perc);
 contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     using SignedMathUpgradeable for int256;
     using SignedMathHelpers for int256;
-    using SafeCastUpgradeable for uint256;
     using SafeCastUpgradeable for int256;
+    using SafeCastUpgradeable for uint256;
+    using MathUpgradeable for uint256;
 
     /// @dev {10 ** PERC_DECIMALS} is considered 1%
     uint8 public constant PERC_DECIMALS = 6;
@@ -38,6 +40,10 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     IERC20Upgradeable public immutable override feeToken;
 
+    /// @notice The address of the fee reserve.
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
+    address public immutable feeReserve;
+
     /// @notice Fixed percentage of the mint amount to be used as fee.
     int256 public mintFeePerc;
 
@@ -46,6 +52,11 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
 
     /// @notice Fixed percentage of the rollover amount to be used as fee.
     int256 public rolloverFeePerc;
+
+    /// @notice Enables debasement of perp supply when the fee reserve is empty.
+    /// @dev When the fees to be paid out are negative, ie) paid from the user to the reserve
+    ///      this flag stops paying out more than the reserve balance through perp supply inflation.
+    bool public debasement;
 
     // EVENTS
 
@@ -61,10 +72,15 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     /// @param rolloverFeePerc Rollover fee percentage.
     event UpdatedRolloverPerc(int256 rolloverFeePerc);
 
+    /// @notice Event emitted when the debasement rule is updated.
+    /// @param debasement If debasement is enabled or not.
+    event UpdatedDebasementRule(bool debasement);
+
     /// @notice Contract constructor.
     /// @param feeToken_ Address of the fee ERC-20 token contract.
-    constructor(IERC20Upgradeable feeToken_) {
+    constructor(IERC20Upgradeable feeToken_, address feeReserve_) {
         feeToken = feeToken_;
+        feeReserve = feeReserve_;
     }
 
     /// @notice Contract initializer.
@@ -103,21 +119,47 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
         emit UpdatedRolloverPerc(rolloverFeePerc_);
     }
 
+    /// @notice Enables debasement when the fee reserve is depleted.
+    function enableDebasement() public onlyOwner {
+        debasement = true;
+        emit UpdatedDebasementRule(true);
+    }
+
+    /// @notice Disables debasement when the fee reserve is depleted.
+    function disableDebasement() public onlyOwner {
+        debasement = false;
+        emit UpdatedDebasementRule(false);
+    }
+
     /// @inheritdoc IFeeStrategy
     function computeMintFees(uint256 mintAmt) external view override returns (int256, uint256) {
-        uint256 absoluteFee = (mintFeePerc.abs() * mintAmt) / HUNDRED_PERC;
-        return (mintFeePerc.sign() * absoluteFee.toInt256(), 0);
+        return (_computeFeeAmt(mintAmt, mintFeePerc), 0);
     }
 
     /// @inheritdoc IFeeStrategy
     function computeBurnFees(uint256 burnAmt) external view override returns (int256, uint256) {
-        uint256 absoluteFee = (burnFeePerc.abs() * burnAmt) / HUNDRED_PERC;
-        return (burnFeePerc.sign() * absoluteFee.toInt256(), 0);
+        return (_computeFeeAmt(burnAmt, burnFeePerc), 0);
     }
 
     /// @inheritdoc IFeeStrategy
     function computeRolloverFees(uint256 rolloverAmt) external view override returns (int256, uint256) {
-        uint256 absoluteFee = (rolloverFeePerc.abs() * rolloverAmt) / HUNDRED_PERC;
-        return (rolloverFeePerc.sign() * absoluteFee.toInt256(), 0);
+        return (_computeFeeAmt(rolloverAmt, rolloverFeePerc), 0);
+    }
+
+    /// @dev Given the token amount and fee percentage, computes the integer amount to be charged as fees.
+    function _computeFeeAmt(uint256 amount, int256 feePerc) private view returns (int256) {
+        uint256 absoluteFee = (feePerc.abs() * amount) / HUNDRED_PERC;
+        int256 feeAmt = feePerc.sign() * absoluteFee.toInt256();
+
+        // when fee is to be paid to the user or when debasement is enabled
+        // use the entire fee amount
+        if (feeAmt >= 0 || debasement) {
+            return feeAmt;
+        }
+
+        // fee is to be paid to the user and debasement is not-enabled
+        // pay out only till the reserve is depleted
+        uint256 reserveBalance = feeToken.balanceOf(feeReserve);
+        return -1 * absoluteFee.min(reserveBalance).toInt256();
     }
 }
