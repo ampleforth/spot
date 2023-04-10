@@ -14,6 +14,9 @@ error UnauthorizedTransferOut(IERC20Upgradeable token);
 /// @notice Expected vault assets to be deployed.
 error NoDeployment();
 
+/// @notice Expected the number of vault assets deployed to be under the limit.
+error DeployedCountOverLimit();
+
 /*
  *  @title IVault
  *

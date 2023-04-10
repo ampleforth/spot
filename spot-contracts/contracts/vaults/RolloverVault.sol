@@ -12,10 +12,7 @@ import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/
 
 import { TrancheData, TrancheHelpers, BondHelpers } from "../_utils/BondHelpers.sol";
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche } from "../_interfaces/IPerpetualTranche.sol";
-import { IVault, UnexpectedAsset, UnauthorizedTransferOut, NoDeployment } from "../_interfaces/IVault.sol";
-
-// TODO: add mint cap
-// TODO: limit size of vault assets
+import { IVault, UnexpectedAsset, UnauthorizedTransferOut, NoDeployment, DeployedCountOverLimit } from "../_interfaces/IVault.sol";
 
 /// @notice Storage array access out of bounds.
 error OutOfBounds();
@@ -74,6 +71,9 @@ contract RolloverVault is
     /// @dev Values should line up as is in the perp contract.
     uint8 private constant PERP_PRICE_DECIMALS = 8;
     uint256 private constant PERP_UNIT_PRICE = (10**PERP_PRICE_DECIMALS);
+
+    /// @dev The maximum number of deployed assets that can be held in this vault at any given time.
+    uint256 public constant MAX_DEPLOYED_COUNT = 47;
 
     //--------------------------------------------------------------------------
     // ASSETS
@@ -446,6 +446,9 @@ contract RolloverVault is
         if (balance > 0 && !isHeld) {
             // Inserts new token into the deployed assets list.
             _deployed.add(address(token));
+            if (_deployed.length() > MAX_DEPLOYED_COUNT) {
+                revert DeployedCountOverLimit();
+            }
         }
 
         if (balance == 0 && isHeld) {
