@@ -366,6 +366,8 @@ contract PerpetualTranche is
     ) public initializer {
         __ERC20_init(name, symbol);
         __Ownable_init();
+        __Pausable_init();
+        __ReentrancyGuard_init();
         _decimals = IERC20MetadataUpgradeable(address(collateral_)).decimals();
 
         // NOTE: `_reserveAt(0)` always points to the underling collateral token
