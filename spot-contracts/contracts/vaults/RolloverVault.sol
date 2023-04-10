@@ -424,7 +424,12 @@ contract RolloverVault is
 
     /// @notice Redeems the deployed tranche tokens for the underlying asset.
     function _redeemTranches() private {
-        for (uint256 i = 0; i < _deployed.length(); i++) {
+        uint256 deployedCount_ = _deployed.length();
+        if (deployedCount_ <= 0) {
+            return;
+        }
+
+        for (uint256 i = 0; i < deployedCount_; i++) {
             ITranche tranche = ITranche(_deployed.at(i));
             IBondController bond = IBondController(tranche.bond());
 
@@ -454,8 +459,8 @@ contract RolloverVault is
         // NOTE: We traverse the deployed set in the reverse order
         //       as deletions involve swapping the deleted element to the
         //       end of the set and removing the last element.
-        for (uint256 i = _deployed.length() - 1; i >= 0; i--) {
-            _syncDeployedAsset(IERC20Upgradeable(_deployed.at(i)));
+        for (uint256 i = deployedCount_; i > 0; i--) {
+            _syncDeployedAsset(IERC20Upgradeable(_deployed.at(i - 1)));
         }
         _syncAsset(underlying);
     }
