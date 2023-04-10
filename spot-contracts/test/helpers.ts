@@ -218,12 +218,83 @@ export const logReserveComposition = async (perp: Contract) => {
 export const checkReserveComposition = async (perp: Contract, tokens: Contract[], balances: BigNumber[] = []) => {
   const checkBalances = balances.length > 0;
   expect(await perp.callStatic.getReserveCount()).to.eq(tokens.length);
+
+  const tokenMap = {};
+  const tokenBalanceMap = {};
   for (const i in tokens) {
-    expect(await perp.callStatic.inReserve(tokens[i].address)).to.eq(true);
-    expect(await perp.callStatic.getReserveAt(i)).to.eq(tokens[i].address);
+    tokenMap[tokens[i].address] = true;
     if (checkBalances) {
-      expect(await tokens[i].balanceOf(perp.reserve())).to.eq(balances[i]);
+      tokenBalanceMap[tokens[i].address] = balances[i];
+    }
+  }
+
+  const ERC20 = await ethers.getContractFactory("MockERC20");
+  for (let j = 0; j < tokens.length; j++) {
+    const reserveToken = ERC20.attach(await perp.callStatic.getReserveAt(j));
+    expect(tokenMap[reserveToken.address]).to.eq(true);
+    if (checkBalances) {
+      expect(await reserveToken.balanceOf(await perp.reserve())).to.eq(tokenBalanceMap[reserveToken.address]);
     }
   }
   await expect(perp.callStatic.getReserveAt(tokens.length)).to.be.reverted;
+};
+
+export const getReserveTokens = async (perp: Contract) => {
+  const ERC20 = await ethers.getContractFactory("MockERC20");
+  const reserves: Contract[] = [];
+  for (let i = 0; i < (await perp.callStatic.getReserveCount()); i++) {
+    reserves.push(await ERC20.attach(await perp.callStatic.getReserveAt(i)));
+  }
+  return reserves;
+};
+
+export const logVaultAssets = async (vault: Contract) => {
+  const ERC20 = await ethers.getContractFactory("MockERC20");
+  const deployedCount = (await vault.deployedCount()).toNumber();
+  const earnedCount = (await vault.earnedCount()).toNumber();
+  const count = 1 + deployedCount + earnedCount;
+  console.log("Asset count", count);
+
+  const underlying = await ERC20.attach(await vault.underlying());
+  console.log(
+    0,
+    underlying.address,
+    utils.formatUnits(await vault.assetBalance(underlying.address), await underlying.decimals()),
+  );
+  for (let i = 0; i < deployedCount; i++) {
+    const token = await ERC20.attach(await vault.deployedAt(i));
+    console.log(
+      i + 1,
+      token.address,
+      utils.formatUnits(await vault.assetBalance(token.address), await token.decimals()),
+    );
+  }
+  for (let j = 0; j < earnedCount; j++) {
+    const token = await ERC20.attach(await vault.earnedAt(j));
+    console.log(
+      j + 1 + deployedCount,
+      token.address,
+      utils.formatUnits(await vault.assetBalance(token.address), await token.decimals()),
+    );
+  }
+};
+
+export const checkVaultAssetComposition = async (vault: Contract, tokens: Contract[], balances: BigNumber[] = []) => {
+  expect(1 + (await vault.deployedCount()).toNumber() + (await vault.earnedCount()).toNumber()).to.eq(tokens.length);
+  for (const i in tokens) {
+    expect(await vault.assetBalance(tokens[i].address)).to.eq(balances[i]);
+  }
+};
+
+export const getVaultAssets = async (vault: Contract) => {
+  const ERC20 = await ethers.getContractFactory("MockERC20");
+  const assets: Contract[] = [];
+  assets.push(await ERC20.attach(await vault.underlying()));
+  for (let i = 0; i < (await vault.deployedCount()); i++) {
+    assets.push(await ERC20.attach(await vault.deployedAt(i)));
+  }
+  for (let i = 0; i < (await vault.earnedCount()); i++) {
+    assets.push(await ERC20.attach(await vault.earnedAt(i)));
+  }
+  return assets;
 };
