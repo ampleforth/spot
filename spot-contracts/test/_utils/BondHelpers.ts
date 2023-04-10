@@ -21,7 +21,7 @@ let bondFactory: Contract,
   accounts: Signer[],
   deployer: Signer,
   deployerAddress: string,
-  user:Signer,
+  user: Signer,
   userAddress: string;
 
 async function setupContracts() {

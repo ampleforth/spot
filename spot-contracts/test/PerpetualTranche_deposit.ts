@@ -189,7 +189,10 @@ describe("PerpetualTranche", function () {
       });
 
       it("should revert", async function () {
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWithCustomError(perp, "ExceededMaxSupply");
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWithCustomError(
+          perp,
+          "ExceededMaxSupply",
+        );
       });
     });
 
@@ -236,7 +239,10 @@ describe("PerpetualTranche", function () {
 
     describe("when tranche amount is zero", function () {
       it("should revert", async function () {
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("0"))).to.revertedWithCustomError(perp, "UnacceptableMintAmt");
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("0"))).to.revertedWithCustomError(
+          perp,
+          "UnacceptableMintAmt",
+        );
       });
     });
 
@@ -248,13 +254,19 @@ describe("PerpetualTranche", function () {
       });
 
       it("should revert", async function () {
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWithCustomError(perp, "UnacceptableMintAmt");
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWithCustomError(
+          perp,
+          "UnacceptableMintAmt",
+        );
       });
     });
 
     describe("when tranche discount is zero", function () {
       it("should revert", async function () {
-        await expect(perp.deposit(depositTrancheZ.address, toFixedPtAmt("500"))).to.revertedWithCustomError(perp, "UnacceptableMintAmt");
+        await expect(perp.deposit(depositTrancheZ.address, toFixedPtAmt("500"))).to.revertedWithCustomError(
+          perp,
+          "UnacceptableMintAmt",
+        );
       });
     });
 

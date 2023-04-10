@@ -184,7 +184,7 @@ export const advancePerpQueueToBondMaturity = async (perp: Contract, bond: Contr
   const matuirtyDate = await bond.maturityDate();
   await TimeHelpers.setNextBlockTimestamp(matuirtyDate.toNumber());
   await perp.updateState();
-  await TimeHelpers.increaseTime(1)
+  await TimeHelpers.increaseTime(1);
   return perp.updateState();
 };
 
@@ -194,7 +194,7 @@ export const advancePerpQueueToRollover = async (perp: Contract, bond: Contract)
   const matuirtyDate = await bond.maturityDate();
   await TimeHelpers.setNextBlockTimestamp(matuirtyDate.sub(bufferSec).toNumber());
   await perp.updateState();
-  await TimeHelpers.increaseTime(1)
+  await TimeHelpers.increaseTime(1);
   return perp.updateState();
 };
 
@@ -259,14 +259,14 @@ export const logVaultAssets = async (vault: Contract) => {
   console.log(
     0,
     underlying.address,
-    utils.formatUnits(await vault.assetBalance(underlying.address), await underlying.decimals()),
+    utils.formatUnits(await vault.vaultAssetBalance(underlying.address), await underlying.decimals()),
   );
   for (let i = 0; i < deployedCount; i++) {
     const token = await ERC20.attach(await vault.deployedAt(i));
     console.log(
       i + 1,
       token.address,
-      utils.formatUnits(await vault.assetBalance(token.address), await token.decimals()),
+      utils.formatUnits(await vault.vaultAssetBalance(token.address), await token.decimals()),
     );
   }
   for (let j = 0; j < earnedCount; j++) {
@@ -274,7 +274,7 @@ export const logVaultAssets = async (vault: Contract) => {
     console.log(
       j + 1 + deployedCount,
       token.address,
-      utils.formatUnits(await vault.assetBalance(token.address), await token.decimals()),
+      utils.formatUnits(await vault.vaultAssetBalance(token.address), await token.decimals()),
     );
   }
 };
@@ -282,7 +282,7 @@ export const logVaultAssets = async (vault: Contract) => {
 export const checkVaultAssetComposition = async (vault: Contract, tokens: Contract[], balances: BigNumber[] = []) => {
   expect(1 + (await vault.deployedCount()).toNumber() + (await vault.earnedCount()).toNumber()).to.eq(tokens.length);
   for (const i in tokens) {
-    expect(await vault.assetBalance(tokens[i].address)).to.eq(balances[i]);
+    expect(await vault.vaultAssetBalance(tokens[i].address)).to.eq(balances[i]);
   }
 };
 

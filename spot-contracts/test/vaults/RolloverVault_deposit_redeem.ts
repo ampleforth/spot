@@ -163,8 +163,8 @@ describe("RolloverVault", function () {
     await vault.init("RolloverVault", "VSHARE", perp.address);
 
     expect(await vault.deployedCount()).to.eq(0);
-    expect(await vault.assetBalance(await vault.underlying())).to.eq(0);
-    expect(await vault.assetBalance(await vault.earnedAt(0))).to.eq(0);
+    expect(await vault.vaultAssetBalance(await vault.underlying())).to.eq(0);
+    expect(await vault.vaultAssetBalance(await vault.earnedAt(0))).to.eq(0);
   });
 
   describe("#getTVL", function () {
@@ -193,7 +193,7 @@ describe("RolloverVault", function () {
           .whenCalledWith(rolloverInTranches[2].address)
           .returns(toDiscountFixedPtAmt("1"));
         await vault.deploy();
-        expect(await vault.assetBalance(await vault.underlying())).to.eq(0);
+        expect(await vault.vaultAssetBalance(await vault.underlying())).to.eq(0);
         expect(await vault.deployedCount()).to.eq(1);
       });
       it("should return tvl", async function () {
@@ -294,7 +294,10 @@ describe("RolloverVault", function () {
     let tx: Transaction, noteAmt: BigNumber;
     describe("when asset is not underlying", async function () {
       it("should revert", async function () {
-        await expect(vault.deposit(perp.address, toFixedPtAmt("1"))).to.be.revertedWithCustomError(vault, "UnexpectedAsset");
+        await expect(vault.deposit(perp.address, toFixedPtAmt("1"))).to.be.revertedWithCustomError(
+          vault,
+          "UnexpectedAsset",
+        );
       });
     });
 
@@ -481,7 +484,7 @@ describe("RolloverVault", function () {
           .returns(toDiscountFixedPtAmt("1"));
         await vault.deploy();
 
-        expect(await vault.assetBalance(await vault.underlying())).to.eq(0);
+        expect(await vault.vaultAssetBalance(await vault.underlying())).to.eq(0);
         expect(await vault.deployedCount()).to.eq(1);
 
         redemptionAmts = await vault.callStatic.redeem(await vault.balanceOf(deployerAddress));

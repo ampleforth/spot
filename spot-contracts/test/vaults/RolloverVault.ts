@@ -186,19 +186,17 @@ describe("RolloverVault", function () {
 
     describe("when underlying asset", function () {
       it("should revert", async function () {
-        await expect(vault.transferERC20(await vault.underlying(), toAddress, toFixedPtAmt("100"))).to.be.revertedWithCustomError(
-          vault,
-          "UnauthorizedTransferOut",
-        );
+        await expect(
+          vault.transferERC20(await vault.underlying(), toAddress, toFixedPtAmt("100")),
+        ).to.be.revertedWithCustomError(vault, "UnauthorizedTransferOut");
       });
     });
 
     describe("when earned asset", function () {
       it("should revert", async function () {
-        await expect(vault.transferERC20(await vault.earnedAt(0), toAddress, toFixedPtAmt("100"))).to.be.revertedWithCustomError(
-          vault,
-          "UnauthorizedTransferOut",
-        );
+        await expect(
+          vault.transferERC20(await vault.earnedAt(0), toAddress, toFixedPtAmt("100")),
+        ).to.be.revertedWithCustomError(vault, "UnauthorizedTransferOut");
       });
     });
 
@@ -268,14 +266,12 @@ describe("RolloverVault", function () {
         expect(await vault.deployedCount()).to.eq(2);
       });
       it("should revert", async function () {
-        await expect(vault.transferERC20(await vault.deployedAt(0), toAddress, toFixedPtAmt("100"))).to.be.revertedWithCustomError(
-          vault,
-          "UnauthorizedTransferOut",
-        );
-        await expect(vault.transferERC20(await vault.deployedAt(1), toAddress, toFixedPtAmt("100"))).to.be.revertedWithCustomError(
-          vault,
-          "UnauthorizedTransferOut",
-        );
+        await expect(
+          vault.transferERC20(await vault.deployedAt(0), toAddress, toFixedPtAmt("100")),
+        ).to.be.revertedWithCustomError(vault, "UnauthorizedTransferOut");
+        await expect(
+          vault.transferERC20(await vault.deployedAt(1), toAddress, toFixedPtAmt("100")),
+        ).to.be.revertedWithCustomError(vault, "UnauthorizedTransferOut");
       });
     });
   });

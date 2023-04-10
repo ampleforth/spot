@@ -160,16 +160,13 @@ describe("PerpetualTranche", function () {
 
       it("should revert", async function () {
         expect(await perp.balanceOf(deployerAddress)).to.lte(toFixedPtAmt("500"));
-        await expect(perp.redeem(toFixedPtAmt("500"))).to.revertedWithCustomError(
-          perp,
-          "UnacceptableBurnAmt",
-        );
+        await expect(perp.redeem(toFixedPtAmt("500"))).to.revertedWithCustomError(perp, "UnacceptableBurnAmt");
       });
     });
 
     describe("when requested amount is zero", function () {
       it("should revert", async function () {
-        await expect(perp.redeem(toFixedPtAmt("0"))).to.revertedWithCustomError(perp,"UnacceptableBurnAmt");
+        await expect(perp.redeem(toFixedPtAmt("0"))).to.revertedWithCustomError(perp, "UnacceptableBurnAmt");
       });
     });
 
@@ -920,11 +917,19 @@ describe("PerpetualTranche", function () {
         newRedemptionTranche1 = tranches[0];
         newRedemptionTranche2 = tranches[1];
 
-        await pricingStrategy.setTranchePrice(newRedemptionTranche1.address, toPriceFixedPtAmt("1"));
-        await discountStrategy.setTrancheDiscount(newRedemptionTranche1.address, toDiscountFixedPtAmt("1"));
+        await pricingStrategy.computeTranchePrice
+          .whenCalledWith(newRedemptionTranche1.address)
+          .returns(toPriceFixedPtAmt("1"));
+        await discountStrategy.computeTrancheDiscount
+          .whenCalledWith(newRedemptionTranche1.address)
+          .returns(toDiscountFixedPtAmt("1"));
 
-        await pricingStrategy.setTranchePrice(newRedemptionTranche2.address, toPriceFixedPtAmt("1"));
-        await discountStrategy.setTrancheDiscount(newRedemptionTranche2.address, toDiscountFixedPtAmt("1"));
+        await pricingStrategy.computeTranchePrice
+          .whenCalledWith(newRedemptionTranche2.address)
+          .returns(toPriceFixedPtAmt("1"));
+        await discountStrategy.computeTrancheDiscount
+          .whenCalledWith(newRedemptionTranche2.address)
+          .returns(toDiscountFixedPtAmt("1"));
 
         await newRedemptionTranche1.approve(perp.address, toFixedPtAmt("500"));
         await perp.deposit(newRedemptionTranche1.address, toFixedPtAmt("500"));

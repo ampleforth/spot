@@ -165,6 +165,7 @@ describe("RolloverVault", function () {
   describe("#recover", function () {
     describe("when no asset is deployed", function () {
       it("should be a no-op", async function () {
+        await vault.recover();
         await expect(vault.recover()).not.to.be.reverted;
         expect(await vault.deployedCount()).to.eq(0);
       });

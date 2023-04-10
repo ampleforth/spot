@@ -315,7 +315,10 @@ describe("PerpetualTranche", function () {
 
     describe("when set address is NOT valid", function () {
       it("should revert", async function () {
-        await expect(perp.updateBondIssuer(constants.AddressZero)).to.be.revertedWithCustomError(perp, "UnacceptableReference");
+        await expect(perp.updateBondIssuer(constants.AddressZero)).to.be.revertedWithCustomError(
+          perp,
+          "UnacceptableReference",
+        );
       });
     });
 
@@ -360,7 +363,10 @@ describe("PerpetualTranche", function () {
 
     describe("when set address is NOT valid", function () {
       it("should revert", async function () {
-        await expect(perp.updateFeeStrategy(constants.AddressZero)).to.be.revertedWithCustomError(perp, "UnacceptableReference");
+        await expect(perp.updateFeeStrategy(constants.AddressZero)).to.be.revertedWithCustomError(
+          perp,
+          "UnacceptableReference",
+        );
       });
     });
 
@@ -393,7 +399,10 @@ describe("PerpetualTranche", function () {
 
     describe("when set address is NOT valid", function () {
       it("should revert", async function () {
-        await expect(perp.updatePricingStrategy(constants.AddressZero)).to.be.revertedWithCustomError(perp, "UnacceptableReference");
+        await expect(perp.updatePricingStrategy(constants.AddressZero)).to.be.revertedWithCustomError(
+          perp,
+          "UnacceptableReference",
+        );
       });
     });
 
@@ -441,7 +450,10 @@ describe("PerpetualTranche", function () {
 
     describe("when set address is NOT valid", function () {
       it("should revert", async function () {
-        await expect(perp.updateDiscountStrategy(constants.AddressZero)).to.be.revertedWithCustomError(perp, "UnacceptableReference");
+        await expect(perp.updateDiscountStrategy(constants.AddressZero)).to.be.revertedWithCustomError(
+          perp,
+          "UnacceptableReference",
+        );
       });
     });
 
@@ -600,19 +612,17 @@ describe("PerpetualTranche", function () {
     describe("when reserve asset", function () {
       it("should revert", async function () {
         expect(await perp.callStatic.inReserve(collateralToken.address)).to.eq(true);
-        await expect(perp.transferERC20(collateralToken.address, toAddress, toFixedPtAmt("100"))).to.be.revertedWithCustomError(
-          perp,
-          "UnauthorizedTransferOut",
-        );
+        await expect(
+          perp.transferERC20(collateralToken.address, toAddress, toFixedPtAmt("100")),
+        ).to.be.revertedWithCustomError(perp, "UnauthorizedTransferOut");
       });
     });
 
     describe("when fee token", function () {
       it("should revert", async function () {
-        await expect(perp.transferERC20(await perp.feeToken(), toAddress, toFixedPtAmt("100"))).to.be.revertedWithCustomError(
-          perp,
-          "UnauthorizedTransferOut",
-        );
+        await expect(
+          perp.transferERC20(await perp.feeToken(), toAddress, toFixedPtAmt("100")),
+        ).to.be.revertedWithCustomError(perp, "UnauthorizedTransferOut");
       });
     });
   });
