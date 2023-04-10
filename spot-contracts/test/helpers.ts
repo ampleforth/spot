@@ -1,8 +1,10 @@
-import { expect } from "chai";
+import { expect, use } from "chai";
 import hre, { ethers } from "hardhat";
 import { Signer, Contract, BigNumber, ContractFactory, Transaction, utils } from "ethers";
 import * as fs from "fs";
 import * as path from "path";
+import { smock, FakeContract } from "@defi-wonderland/smock";
+use(smock.matchers);
 
 const TOKEN_DECIMALS = 18;
 const PRICE_DECIMALS = 8;
@@ -41,7 +43,7 @@ export const TimeHelpers = {
 // Rebasing collateral token (button tokens)
 interface ButtonTokenContracts {
   underlyingToken: Contract;
-  rebaseOracle: Contract;
+  rebaseOracle: FakeContract;
   collateralToken: Contract;
 }
 export const setupCollateralToken = async (name: string, symbol: string): Promise<ButtonTokenContracts> => {
@@ -49,10 +51,9 @@ export const setupCollateralToken = async (name: string, symbol: string): Promis
   const underlyingToken = await ERC20.deploy();
   await underlyingToken.init(name, symbol);
 
-  const MockOracle = await ethers.getContractFactory("MockOracle");
-  const rebaseOracle = await MockOracle.deploy();
-  await rebaseOracle.deployed();
-  await rebaseOracle.setData(ORACLE_BASE_PRICE, true);
+  const MedianOracle = await getContractFactoryFromExternalArtifacts("MedianOracle");
+  const rebaseOracle = await smock.fake(MedianOracle);
+  await rebaseOracle.getData.returns([ORACLE_BASE_PRICE, true]);
 
   const ButtonToken = await getContractFactoryFromExternalArtifacts("ButtonToken");
   const collateralToken = await ButtonToken.deploy();
@@ -75,10 +76,11 @@ export const mintCollteralToken = async (collateralToken: Contract, amount: BigN
   await collateralToken.connect(from).mint(amount);
 };
 
-export const rebase = async (token: Contract, oracle: Contract, perc: number) => {
+export const rebase = async (token: Contract, oracle: FakeContract, perc: number) => {
   const p = await token.lastPrice();
   const newPrice = p.mul(ORACLE_BASE_PRICE.add(ORACLE_BASE_PRICE.toNumber() * perc)).div(ORACLE_BASE_PRICE);
-  await oracle.setData(newPrice, true);
+  await oracle.getData.returns([newPrice, true]);
+  await token.rebase();
 };
 
 // Button tranche
@@ -133,6 +135,7 @@ export interface BondDeposit {
   feeBps: BigNumber;
   from: string;
 }
+
 export const depositIntoBond = async (bond: Contract, amount: BigNumber, from: Signer): Promise<BondDeposit> => {
   const ButtonToken = await getContractFactoryFromExternalArtifacts("ButtonToken");
   const collateralToken = await ButtonToken.attach(await bond.collateralToken());
@@ -167,35 +170,47 @@ export const getTrancheBalances = async (bond: Contract, user: string): Promise<
   return balances;
 };
 
+export const getDepositBond = async (perp: Contract): Contract => {
+  return bondAt(await perp.callStatic.getDepositBond());
+};
+
 export const advancePerpQueue = async (perp: Contract, time: number): Promise<Transaction> => {
   await TimeHelpers.increaseTime(time);
   return perp.updateState();
 };
 
 export const advancePerpQueueToBondMaturity = async (perp: Contract, bond: Contract): Promise<Transaction> => {
+  await perp.updateState();
   const matuirtyDate = await bond.maturityDate();
-  await TimeHelpers.setNextBlockTimestamp(matuirtyDate.toNumber() + 1);
+  await TimeHelpers.setNextBlockTimestamp(matuirtyDate.toNumber());
+  await perp.updateState();
+  await TimeHelpers.increaseTime(1)
   return perp.updateState();
 };
 
 export const advancePerpQueueToRollover = async (perp: Contract, bond: Contract): Promise<Transaction> => {
+  await perp.updateState();
   const bufferSec = await perp.minTrancheMaturitySec();
   const matuirtyDate = await bond.maturityDate();
-  await TimeHelpers.setNextBlockTimestamp(matuirtyDate.sub(bufferSec).toNumber() + 1);
+  await TimeHelpers.setNextBlockTimestamp(matuirtyDate.sub(bufferSec).toNumber());
+  await perp.updateState();
+  await TimeHelpers.increaseTime(1)
   return perp.updateState();
 };
 
 export const logReserveComposition = async (perp: Contract) => {
+  const ERC20 = await ethers.getContractFactory("MockERC20");
   const count = await perp.callStatic.getReserveCount();
   console.log("Reserve count", count);
   for (let i = 0; i < count; i++) {
-    const token = await perp.callStatic.getReserveAt(i);
+    const token = await ERC20.attach(await perp.callStatic.getReserveAt(i));
     console.log(
       i,
-      token,
-      utils.formatUnits(await perp.callStatic.getReserveTrancheBalance(token), await perp.decimals()),
-      utils.formatUnits(await perp.computeDiscount(token), await perp.DISCOUNT_DECIMALS()),
-      utils.formatUnits(await perp.computePrice(token), await perp.PRICE_DECIMALS()),
+      token.address,
+      utils.formatUnits(await token.balanceOf(await perp.reserve()), await perp.decimals()),
+      utils.formatUnits(await perp.callStatic.getReserveTrancheBalance(token.address), await perp.decimals()),
+      utils.formatUnits(await perp.computeDiscount(token.address), await perp.DISCOUNT_DECIMALS()),
+      utils.formatUnits(await perp.computePrice(token.address), await perp.PRICE_DECIMALS()),
     );
   }
 };
