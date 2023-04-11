@@ -295,7 +295,7 @@ describe("BasicFeeStrategy", function () {
       });
 
       describe("when perc < 0 && reserve balance = 0", function () {
-        it("should return the mint fee", async function () {
+        it("should return the debasement-free mint fee", async function () {
           await feeStrategy.init("-2500000", "0", "0");
           await feeStrategy.disableDebasement();
 
@@ -330,7 +330,7 @@ describe("BasicFeeStrategy", function () {
       });
 
       describe("when perc < 0 && reserve balance < fee to be paid", function () {
-        it("should return the mint fee", async function () {
+        it("should return the the debasement-free mint fee", async function () {
           await feeToken.mint(feeToken.address, toFixedPtAmt("18"));
           await feeStrategy.init("-2500000", "0", "0");
           await feeStrategy.disableDebasement();
@@ -366,7 +366,7 @@ describe("BasicFeeStrategy", function () {
       });
 
       describe("when perc < 0 && reserve balance = 0", function () {
-        it("should return the burn fee", async function () {
+        it("should return the the debasement-free burn fee", async function () {
           await feeStrategy.init("0", "-1500000", "0");
           await feeStrategy.disableDebasement();
 
@@ -401,7 +401,7 @@ describe("BasicFeeStrategy", function () {
       });
 
       describe("when perc < 0 && reserve balance < fee to be paid", function () {
-        it("should return the burn fee", async function () {
+        it("should return the the debasement-free burn fee", async function () {
           await feeToken.mint(feeToken.address, toFixedPtAmt("11"));
           await feeStrategy.init("0", "-1500000", "0");
           await feeStrategy.disableDebasement();
@@ -437,7 +437,7 @@ describe("BasicFeeStrategy", function () {
       });
 
       describe("when perc < 0 && reserve balance = 0", function () {
-        it("should return the rollover fee", async function () {
+        it("should return the the debasement-free rollover fee", async function () {
           await feeStrategy.init("0", "0", "-5000000");
           await feeStrategy.disableDebasement();
 
@@ -472,7 +472,7 @@ describe("BasicFeeStrategy", function () {
       });
 
       describe("when perc < 0 && reserve balance < fee to be paid", function () {
-        it("should return the rollover fee", async function () {
+        it("should return the the debasement-free rollover fee", async function () {
           await feeToken.mint(feeToken.address, toFixedPtAmt("1000"));
           await feeStrategy.init("0", "0", "-5000000");
           await feeStrategy.disableDebasement();
