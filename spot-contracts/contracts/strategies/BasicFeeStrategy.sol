@@ -159,7 +159,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
 
         // fee is to be paid to the user and debasement is not-enabled
         // pay out only till the reserve is depleted
-        uint256 reserveBalance = feeToken.balanceOf(feeReserve);
-        return -1 * absoluteFee.min(reserveBalance).toInt256();
+        return -1 * feeToken.balanceOf(feeReserve).min(absoluteFee).toInt256();
     }
 }
