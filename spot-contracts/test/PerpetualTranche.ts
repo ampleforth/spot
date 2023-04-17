@@ -510,7 +510,7 @@ describe("PerpetualTranche", function () {
 
     describe("when triggered by keeper", function () {
       beforeEach(async function () {
-        await perp.updateKeeper(await otherUser.getAddress())
+        await perp.updateKeeper(await otherUser.getAddress());
         tx = perp.connect(otherUser).updateMintingLimits(toFixedPtAmt("100"), toFixedPtAmt("20"));
         await tx;
       });
