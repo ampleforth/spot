@@ -4,8 +4,8 @@ pragma solidity ^0.8.19;
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
-import { SignedMathHelpers } from "../_utils/SignedMathHelpers.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
+import { SignedMathHelpers } from "../_utils/SignedMathHelpers.sol";
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { IFeeStrategy } from "../_interfaces/IFeeStrategy.sol";
@@ -29,7 +29,6 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     using SignedMathHelpers for int256;
     using SafeCastUpgradeable for int256;
     using SafeCastUpgradeable for uint256;
-    using MathUpgradeable for uint256;
 
     /// @dev {10 ** PERC_DECIMALS} is considered 1%
     uint8 public constant PERC_DECIMALS = 6;
@@ -56,7 +55,7 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     /// @notice Allows debasement of perp supply when the fee reserve is empty.
     /// @dev When the fee amount is negative, ie) paid from the reserve to the user
     ///      this flag stops paying out more than the reserve balance through perp supply inflation.
-    bool public debasement;
+    bool public allowDebase;
 
     // EVENTS
 
@@ -73,11 +72,12 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     event UpdatedRolloverPerc(int256 rolloverFeePerc);
 
     /// @notice Event emitted when the debasement rule is updated.
-    /// @param debasement If debasement is enabled or not.
-    event UpdatedDebasementRule(bool debasement);
+    /// @param allow If debasement is allowed or not.
+    event UpdatedDebasementRule(bool allow);
 
     /// @notice Contract constructor.
     /// @param feeToken_ Address of the fee ERC-20 token contract.
+    /// @param feeReserve_ Address of the fee reserve.
     constructor(IERC20Upgradeable feeToken_, address feeReserve_) {
         feeToken = feeToken_;
         feeReserve = feeReserve_;
@@ -119,16 +119,11 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
         emit UpdatedRolloverPerc(rolloverFeePerc_);
     }
 
-    /// @notice Enables debasement when the fee reserve is depleted.
-    function enableDebasement() public onlyOwner {
-        debasement = true;
-        emit UpdatedDebasementRule(true);
-    }
-
-    /// @notice Disables debasement when the fee reserve is depleted.
-    function disableDebasement() public onlyOwner {
-        debasement = false;
-        emit UpdatedDebasementRule(false);
+    /// @notice Update debasement rule.
+    /// @param allow If debasement is allowed or not.
+    function allowDebasement(bool allow) public onlyOwner {
+        allowDebase = allow;
+        emit UpdatedDebasementRule(allow);
     }
 
     /// @inheritdoc IFeeStrategy
@@ -151,14 +146,14 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
         uint256 absoluteFee = (feePerc.abs() * amount) / HUNDRED_PERC;
         int256 feeAmt = feePerc.sign() * absoluteFee.toInt256();
 
-        // when fee is to be paid by the user or when debasement is enabled
+        // when fee is to be paid by the user or when debasement is allowed
         // use the entire fee amount
-        if (feeAmt >= 0 || debasement) {
+        if (feeAmt >= 0 || allowDebase) {
             return feeAmt;
         }
 
-        // fee is to be paid to the user and debasement is not-enabled
+        // fee is to be paid to the user and debasement is not allowed
         // pay out only till the reserve is depleted
-        return -1 * feeToken.balanceOf(feeReserve).min(absoluteFee).toInt256();
+        return -1 * MathUpgradeable.min(feeToken.balanceOf(feeReserve), absoluteFee).toInt256();
     }
 }

@@ -27,7 +27,7 @@ describe("BasicFeeStrategy", function () {
       expect(await feeStrategy.feeToken()).to.eq(feeToken.address);
     });
     it("should return the debasement flag", async function () {
-      expect(await feeStrategy.debasement()).to.eq(false);
+      expect(await feeStrategy.allowDebase()).to.eq(false);
     });
     it("should return owner", async function () {
       expect(await feeStrategy.owner()).to.eq(await deployer.getAddress());
@@ -126,7 +126,7 @@ describe("BasicFeeStrategy", function () {
 
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
-        await expect(feeStrategy.connect(otherUser).enableDebasement()).to.be.revertedWith(
+        await expect(feeStrategy.connect(otherUser).allowDebasement(true)).to.be.revertedWith(
           "Ownable: caller is not the owner",
         );
       });
@@ -134,11 +134,11 @@ describe("BasicFeeStrategy", function () {
 
     describe("when debasement is enabled", function () {
       beforeEach(async function () {
-        tx = feeStrategy.connect(deployer).enableDebasement();
+        tx = feeStrategy.connect(deployer).allowDebasement(true);
         await tx;
       });
       it("should update flag", async function () {
-        expect(await feeStrategy.debasement()).to.eq(true);
+        expect(await feeStrategy.allowDebase()).to.eq(true);
       });
       it("should emit event", async function () {
         await expect(tx).to.emit(feeStrategy, "UpdatedDebasementRule").withArgs(true);
@@ -154,7 +154,7 @@ describe("BasicFeeStrategy", function () {
 
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
-        await expect(feeStrategy.connect(otherUser).disableDebasement()).to.be.revertedWith(
+        await expect(feeStrategy.connect(otherUser).allowDebasement(false)).to.be.revertedWith(
           "Ownable: caller is not the owner",
         );
       });
@@ -162,11 +162,11 @@ describe("BasicFeeStrategy", function () {
 
     describe("when debasement is disabled", function () {
       beforeEach(async function () {
-        tx = feeStrategy.connect(deployer).disableDebasement();
+        tx = feeStrategy.connect(deployer).allowDebasement(false);
         await tx;
       });
       it("should update flag", async function () {
-        expect(await feeStrategy.debasement()).to.eq(false);
+        expect(await feeStrategy.allowDebase()).to.eq(false);
       });
       it("should emit event", async function () {
         await expect(tx).to.emit(feeStrategy, "UpdatedDebasementRule").withArgs(false);
@@ -179,7 +179,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc > 0", function () {
         it("should return the mint fee", async function () {
           await feeStrategy.init("1500000", "0", "0");
-          await feeStrategy.enableDebasement();
+          await feeStrategy.allowDebasement(true);
 
           const r = await feeStrategy.computeMintFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq(toFixedPtAmt("15"));
@@ -190,7 +190,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc < 0", function () {
         it("should return the mint fee", async function () {
           await feeStrategy.init("-2500000", "0", "0");
-          await feeStrategy.enableDebasement();
+          await feeStrategy.allowDebasement(true);
 
           const r = await feeStrategy.computeMintFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq(toFixedPtAmt("-25"));
@@ -201,7 +201,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc = 0", function () {
         it("should return the mint fee", async function () {
           await feeStrategy.init("0", "0", "0");
-          await feeStrategy.enableDebasement();
+          await feeStrategy.allowDebasement(true);
 
           const r = await feeStrategy.computeMintFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq("0");
@@ -214,7 +214,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc > 0", function () {
         it("should return the burn fee", async function () {
           await feeStrategy.init("0", "2500000", "0");
-          await feeStrategy.enableDebasement();
+          await feeStrategy.allowDebasement(true);
 
           const r = await feeStrategy.computeBurnFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq(toFixedPtAmt("25"));
@@ -225,7 +225,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc < 0", function () {
         it("should return the burn fee", async function () {
           await feeStrategy.init("0", "-1500000", "0");
-          await feeStrategy.enableDebasement();
+          await feeStrategy.allowDebasement(true);
 
           const r = await feeStrategy.computeBurnFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq(toFixedPtAmt("-15"));
@@ -236,7 +236,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc = 0", function () {
         it("should return the burn fee", async function () {
           await feeStrategy.init("0", "0", "0");
-          await feeStrategy.enableDebasement();
+          await feeStrategy.allowDebasement(true);
 
           const r = await feeStrategy.computeBurnFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq("0");
@@ -249,7 +249,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc > 0", function () {
         it("should return the rollover fee", async function () {
           await feeStrategy.init("0", "0", "1000000");
-          await feeStrategy.enableDebasement();
+          await feeStrategy.allowDebasement(true);
 
           const r = await feeStrategy.computeRolloverFees(toFixedPtAmt("100000"));
           expect(r[0]).to.eq(toFixedPtAmt("1000"));
@@ -260,7 +260,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc < 0", function () {
         it("should return the rollover fee", async function () {
           await feeStrategy.init("0", "0", "-5000000");
-          await feeStrategy.enableDebasement();
+          await feeStrategy.allowDebasement(true);
 
           const r = await feeStrategy.computeRolloverFees(toFixedPtAmt("100000"));
           expect(r[0]).to.eq(toFixedPtAmt("-5000"));
@@ -271,7 +271,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc = 0", function () {
         it("should return the rollover fee", async function () {
           await feeStrategy.init("0", "0", "0");
-          await feeStrategy.enableDebasement();
+          await feeStrategy.allowDebasement(true);
 
           const r = await feeStrategy.computeRolloverFees(toFixedPtAmt("100000"));
           expect(r[0]).to.eq("0");
@@ -286,7 +286,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc > 0", function () {
         it("should return the mint fee", async function () {
           await feeStrategy.init("1500000", "0", "0");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeMintFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq(toFixedPtAmt("15"));
@@ -297,7 +297,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc < 0 && reserve balance = 0", function () {
         it("should return the debasement-free mint fee", async function () {
           await feeStrategy.init("-2500000", "0", "0");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeMintFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq("0");
@@ -309,7 +309,7 @@ describe("BasicFeeStrategy", function () {
         it("should return the mint fee", async function () {
           await feeToken.mint(feeToken.address, toFixedPtAmt("30"));
           await feeStrategy.init("-2500000", "0", "0");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeMintFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq(toFixedPtAmt("-25"));
@@ -321,7 +321,7 @@ describe("BasicFeeStrategy", function () {
         it("should return the mint fee", async function () {
           await feeToken.mint(feeToken.address, toFixedPtAmt("25"));
           await feeStrategy.init("-2500000", "0", "0");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeMintFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq(toFixedPtAmt("-25"));
@@ -333,7 +333,7 @@ describe("BasicFeeStrategy", function () {
         it("should return the the debasement-free mint fee", async function () {
           await feeToken.mint(feeToken.address, toFixedPtAmt("18"));
           await feeStrategy.init("-2500000", "0", "0");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeMintFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq(toFixedPtAmt("-18"));
@@ -344,7 +344,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc = 0", function () {
         it("should return the mint fee", async function () {
           await feeStrategy.init("0", "0", "0");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeMintFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq("0");
@@ -357,7 +357,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc > 0", function () {
         it("should return the burn fee", async function () {
           await feeStrategy.init("0", "2500000", "0");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeBurnFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq(toFixedPtAmt("25"));
@@ -368,7 +368,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc < 0 && reserve balance = 0", function () {
         it("should return the the debasement-free burn fee", async function () {
           await feeStrategy.init("0", "-1500000", "0");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeBurnFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq("0");
@@ -380,7 +380,7 @@ describe("BasicFeeStrategy", function () {
         it("should return the burn fee", async function () {
           await feeToken.mint(feeToken.address, toFixedPtAmt("20"));
           await feeStrategy.init("0", "-1500000", "0");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeBurnFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq(toFixedPtAmt("-15"));
@@ -392,7 +392,7 @@ describe("BasicFeeStrategy", function () {
         it("should return the burn fee", async function () {
           await feeToken.mint(feeToken.address, toFixedPtAmt("15"));
           await feeStrategy.init("0", "-1500000", "0");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeBurnFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq(toFixedPtAmt("-15"));
@@ -404,7 +404,7 @@ describe("BasicFeeStrategy", function () {
         it("should return the the debasement-free burn fee", async function () {
           await feeToken.mint(feeToken.address, toFixedPtAmt("11"));
           await feeStrategy.init("0", "-1500000", "0");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeBurnFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq(toFixedPtAmt("-11"));
@@ -415,7 +415,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc = 0", function () {
         it("should return the burn fee", async function () {
           await feeStrategy.init("0", "0", "0");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeBurnFees(toFixedPtAmt("1000"));
           expect(r[0]).to.eq("0");
@@ -428,7 +428,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc > 0", function () {
         it("should return the rollover fee", async function () {
           await feeStrategy.init("0", "0", "1000000");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeRolloverFees(toFixedPtAmt("100000"));
           expect(r[0]).to.eq(toFixedPtAmt("1000"));
@@ -439,7 +439,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc < 0 && reserve balance = 0", function () {
         it("should return the the debasement-free rollover fee", async function () {
           await feeStrategy.init("0", "0", "-5000000");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeRolloverFees(toFixedPtAmt("100000"));
           expect(r[0]).to.eq("0");
@@ -451,7 +451,7 @@ describe("BasicFeeStrategy", function () {
         it("should return the rollover fee", async function () {
           await feeToken.mint(feeToken.address, toFixedPtAmt("10000"));
           await feeStrategy.init("0", "0", "-5000000");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeRolloverFees(toFixedPtAmt("100000"));
           expect(r[0]).to.eq(toFixedPtAmt("-5000"));
@@ -463,7 +463,7 @@ describe("BasicFeeStrategy", function () {
         it("should return the rollover fee", async function () {
           await feeToken.mint(feeToken.address, toFixedPtAmt("5000"));
           await feeStrategy.init("0", "0", "-5000000");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeRolloverFees(toFixedPtAmt("100000"));
           expect(r[0]).to.eq(toFixedPtAmt("-5000"));
@@ -475,7 +475,7 @@ describe("BasicFeeStrategy", function () {
         it("should return the the debasement-free rollover fee", async function () {
           await feeToken.mint(feeToken.address, toFixedPtAmt("1000"));
           await feeStrategy.init("0", "0", "-5000000");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeRolloverFees(toFixedPtAmt("100000"));
           expect(r[0]).to.eq(toFixedPtAmt("-1000"));
@@ -486,7 +486,7 @@ describe("BasicFeeStrategy", function () {
       describe("when perc = 0", function () {
         it("should return the rollover fee", async function () {
           await feeStrategy.init("0", "0", "0");
-          await feeStrategy.disableDebasement();
+          await feeStrategy.allowDebasement(false);
 
           const r = await feeStrategy.computeRolloverFees(toFixedPtAmt("100000"));
           expect(r[0]).to.eq("0");
