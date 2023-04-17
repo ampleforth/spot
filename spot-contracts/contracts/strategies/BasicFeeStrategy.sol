@@ -53,8 +53,8 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     /// @notice Fixed percentage of the rollover amount to be used as fee.
     int256 public rolloverFeePerc;
 
-    /// @notice Enables debasement of perp supply when the fee reserve is empty.
-    /// @dev When the fees to be paid out are negative, ie) paid from the user to the reserve
+    /// @notice Allows debasement of perp supply when the fee reserve is empty.
+    /// @dev When the fee amount is negative, ie) paid from the reserve to the user
     ///      this flag stops paying out more than the reserve balance through perp supply inflation.
     bool public debasement;
 
@@ -151,7 +151,7 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
         uint256 absoluteFee = (feePerc.abs() * amount) / HUNDRED_PERC;
         int256 feeAmt = feePerc.sign() * absoluteFee.toInt256();
 
-        // when fee is to be paid to the user or when debasement is enabled
+        // when fee is to be paid by the user or when debasement is enabled
         // use the entire fee amount
         if (feeAmt >= 0 || debasement) {
             return feeAmt;
