@@ -169,6 +169,7 @@ describe("PerpetualTranche", function () {
 
     describe("when the supply cap is exceeded", function () {
       beforeEach(async function () {
+        await perp.updateKeeper(await deployer.getAddress());
         await perp.updateMintingLimits(toFixedPtAmt("499"), toFixedPtAmt("1000"));
       });
 
@@ -180,6 +181,7 @@ describe("PerpetualTranche", function () {
     describe("when the supply cap is exceeded and existing supply > 0", function () {
       beforeEach(async function () {
         await perp.deposit(depositTrancheA.address, toFixedPtAmt("400"));
+        await perp.updateKeeper(await deployer.getAddress());
         await perp.updateMintingLimits(toFixedPtAmt("499"), toFixedPtAmt("1000"));
       });
 
@@ -192,6 +194,7 @@ describe("PerpetualTranche", function () {
 
     describe("when the tranche mint limit is exceeded", function () {
       beforeEach(async function () {
+        await perp.updateKeeper(await deployer.getAddress());
         await perp.updateMintingLimits(toFixedPtAmt("1000"), toFixedPtAmt("499"));
       });
 
@@ -205,6 +208,7 @@ describe("PerpetualTranche", function () {
     describe("when the tranche mint limit is exceeded and existing supply > 0", function () {
       beforeEach(async function () {
         await perp.deposit(depositTrancheA.address, toFixedPtAmt("400"));
+        await perp.updateKeeper(await deployer.getAddress());
         await perp.updateMintingLimits(toFixedPtAmt("1000"), toFixedPtAmt("499"));
       });
 

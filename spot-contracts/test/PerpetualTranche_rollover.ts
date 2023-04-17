@@ -295,6 +295,7 @@ describe("PerpetualTranche", function () {
     describe("when the supply cap is exceeded", function () {
       beforeEach(async function () {
         await feeStrategy.setRolloverFee(toFixedPtAmt("-100"));
+        await perp.updateKeeper(await deployer.getAddress());
         await perp.updateMintingLimits(toFixedPtAmt("100"), toFixedPtAmt("1"));
       });
 
