@@ -1,6 +1,7 @@
-import { expect } from "chai";
+import { expect, use } from "chai";
 import { network, ethers } from "hardhat";
 import { Contract, Signer } from "ethers";
+import { smock } from "@defi-wonderland/smock";
 
 import {
   TimeHelpers,
@@ -12,6 +13,7 @@ import {
   depositIntoBond,
   getTranches,
 } from "../helpers";
+use(smock.matchers);
 
 let bondFactory: Contract,
   collateralToken: Contract,
@@ -27,9 +29,9 @@ async function setupContracts() {
   bondFactory = await setupBondFactory();
   ({ collateralToken, rebaseOracle } = await setupCollateralToken("Bitcoin", "BTC"));
 
-  const PerpetualTranche = await ethers.getContractFactory("MockPerpetualTranche");
-  perp = await PerpetualTranche.deploy();
-  await perp.setCollateral(collateralToken.address);
+  const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
+  perp = await smock.fake(PerpetualTranche);
+  await perp.collateral.returns(collateralToken.address);
 
   const CDRPricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
   pricingStrategy = await CDRPricingStrategy.deploy();

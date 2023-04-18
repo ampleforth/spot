@@ -1,7 +1,7 @@
-import { expect } from "chai";
+import { expect, use } from "chai";
 import { network, ethers, upgrades } from "hardhat";
 import { Contract, Transaction, Signer, constants } from "ethers";
-
+import { smock } from "@defi-wonderland/smock";
 import {
   setupCollateralToken,
   setupBondFactory,
@@ -15,6 +15,7 @@ import {
   advancePerpQueue,
   checkReserveComposition,
 } from "./helpers";
+use(smock.matchers);
 
 let perp: Contract,
   bondFactory: Contract,
@@ -44,14 +45,24 @@ describe("PerpetualTranche", function () {
     issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
     await issuer.init(3600, [500, 500], 1200, 0);
 
-    const FeeStrategy = await ethers.getContractFactory("MockFeeStrategy");
-    feeStrategy = await FeeStrategy.deploy();
+    const FeeStrategy = await ethers.getContractFactory("BasicFeeStrategy");
+    feeStrategy = await smock.fake(FeeStrategy);
+    await feeStrategy.computeMintFees.returns(["0", "0"]);
+    await feeStrategy.computeBurnFees.returns(["0", "0"]);
+    await feeStrategy.computeRolloverFees.returns(["0", "0"]);
 
-    const PricingStrategy = await ethers.getContractFactory("MockPricingStrategy");
-    pricingStrategy = await PricingStrategy.deploy();
+    const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
+    pricingStrategy = await smock.fake(PricingStrategy);
+    await pricingStrategy.decimals.returns(8);
+    await pricingStrategy.computeMatureTranchePrice.returns(toPriceFixedPtAmt("1"));
+    await pricingStrategy.computeTranchePrice.returns(toPriceFixedPtAmt("1"));
 
-    const DiscountStrategy = await ethers.getContractFactory("MockDiscountStrategy");
-    discountStrategy = await DiscountStrategy.deploy();
+    const DiscountStrategy = await ethers.getContractFactory("TrancheClassDiscountStrategy");
+    discountStrategy = await smock.fake(DiscountStrategy);
+    await discountStrategy.decimals.returns(18);
+    await discountStrategy.computeTrancheDiscount
+      .whenCalledWith(collateralToken.address)
+      .returns(toDiscountFixedPtAmt("1"));
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -74,10 +85,12 @@ describe("PerpetualTranche", function () {
     depositBond = await bondAt(await perp.callStatic.getDepositBond());
     [depositTrancheA, depositTrancheZ] = await getTranches(depositBond);
 
-    await feeStrategy.setFeeToken(perp.address);
-    await feeStrategy.setMintFee(toFixedPtAmt("0"));
-    await pricingStrategy.setTranchePrice(depositTrancheA.address, toPriceFixedPtAmt("1"));
-    await discountStrategy.setTrancheDiscount(depositTrancheA.address, toDiscountFixedPtAmt("1"));
+    await feeStrategy.feeToken.returns(perp.address);
+
+    await pricingStrategy.computeTranchePrice.whenCalledWith(depositTrancheA.address).returns(toPriceFixedPtAmt("1"));
+    await discountStrategy.computeTrancheDiscount
+      .whenCalledWith(depositTrancheA.address)
+      .returns(toDiscountFixedPtAmt("1"));
 
     await depositIntoBond(depositBond, toFixedPtAmt("1000"), deployer);
     await depositTrancheA.approve(perp.address, toFixedPtAmt("500"));
@@ -103,11 +116,12 @@ describe("PerpetualTranche", function () {
     describe("when bond issuer is NOT set correctly", function () {
       let bond: Contract;
       beforeEach(async function () {
-        const BondIssuer = await ethers.getContractFactory("MockBondIssuer");
-        const newIssuer = await BondIssuer.deploy(collateralToken.address);
+        const BondIssuer = await ethers.getContractFactory("BondIssuer");
+        const newIssuer = await smock.fake(BondIssuer);
+        await newIssuer.collateral.returns(collateralToken.address);
         await perp.updateBondIssuer(newIssuer.address);
         bond = await createBondWithFactory(bondFactory, perp, [200, 300, 500], 3600);
-        await newIssuer.setLatestBond(bond.address);
+        await newIssuer.getLatestBond.returns(bond.address);
       });
       it("should not update the deposit bond", async function () {
         await depositTrancheA.approve(perp.address, toFixedPtAmt("500"));
@@ -124,7 +138,8 @@ describe("PerpetualTranche", function () {
       });
       it("should revert", async function () {
         await depositTrancheA.approve(perp.address, toFixedPtAmt("500"));
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWith(
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWithCustomError(
+          perp,
           "UnacceptableDepositTranche",
         );
       });
@@ -138,7 +153,8 @@ describe("PerpetualTranche", function () {
         await maliciousTranche.mint(deployerAddress, toFixedPtAmt("500"));
         await maliciousTranche.setBond(await perp.callStatic.getDepositBond());
         await maliciousTranche.approve(perp.address, toFixedPtAmt("500"));
-        await expect(perp.deposit(maliciousTranche.address, toFixedPtAmt("500"))).to.revertedWith(
+        await expect(perp.deposit(maliciousTranche.address, toFixedPtAmt("500"))).to.revertedWithCustomError(
+          perp,
           "UnacceptableDepositTranche",
         );
       });
@@ -172,8 +188,11 @@ describe("PerpetualTranche", function () {
         await perp.updateMintingLimits(toFixedPtAmt("499"), toFixedPtAmt("1000"));
       });
 
-      it("should mint the correct amount", async function () {
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWith("ExceededMaxSupply");
+      it("should revert", async function () {
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWithCustomError(
+          perp,
+          "ExceededMaxSupply",
+        );
       });
     });
 
@@ -183,9 +202,10 @@ describe("PerpetualTranche", function () {
         await perp.updateMintingLimits(toFixedPtAmt("499"), toFixedPtAmt("1000"));
       });
 
-      it("should mint the correct amount", async function () {
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("100"))).to.revertedWith(
-          "ExceededMaxSupply(500000000000000000000, 499000000000000000000)",
+      it("should revert", async function () {
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("100"))).to.revertedWithCustomError(
+          perp,
+          "ExceededMaxSupply",
         );
       });
     });
@@ -195,8 +215,9 @@ describe("PerpetualTranche", function () {
         await perp.updateMintingLimits(toFixedPtAmt("1000"), toFixedPtAmt("499"));
       });
 
-      it("should mint the correct amount", async function () {
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWith(
+      it("should revert", async function () {
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWithCustomError(
+          perp,
           "ExceededMaxMintPerTranche",
         );
       });
@@ -208,39 +229,53 @@ describe("PerpetualTranche", function () {
         await perp.updateMintingLimits(toFixedPtAmt("1000"), toFixedPtAmt("499"));
       });
 
-      it("should mint the correct amount", async function () {
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("100"))).to.revertedWith(
-          `ExceededMaxMintPerTranche("${depositTrancheA.address}", 500000000000000000000, 499000000000000000000)`,
+      it("should revert", async function () {
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("100"))).to.revertedWithCustomError(
+          perp,
+          `ExceededMaxMintPerTranche`,
         );
       });
     });
 
     describe("when tranche amount is zero", function () {
       it("should revert", async function () {
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("0"))).to.revertedWith("UnacceptableMintAmt");
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("0"))).to.revertedWithCustomError(
+          perp,
+          "UnacceptableMintAmt",
+        );
       });
     });
 
     describe("when tranche price is zero", function () {
       beforeEach(async function () {
-        await pricingStrategy.setTranchePrice(depositTrancheA.address, toPriceFixedPtAmt("0"));
+        await pricingStrategy.computeTranchePrice
+          .whenCalledWith(depositTrancheA.address)
+          .returns(toPriceFixedPtAmt("0"));
       });
 
       it("should revert", async function () {
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWith("UnacceptableMintAmt");
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWithCustomError(
+          perp,
+          "UnacceptableMintAmt",
+        );
       });
     });
 
     describe("when tranche discount is zero", function () {
       it("should revert", async function () {
-        await expect(perp.deposit(depositTrancheZ.address, toFixedPtAmt("500"))).to.revertedWith("UnacceptableMintAmt");
+        await expect(perp.deposit(depositTrancheZ.address, toFixedPtAmt("500"))).to.revertedWithCustomError(
+          perp,
+          "UnacceptableMintAmt",
+        );
       });
     });
 
     describe("when total supply is zero", function () {
       describe("when tranche price is 0.5", function () {
         beforeEach(async function () {
-          await pricingStrategy.setTranchePrice(depositTrancheA.address, toPriceFixedPtAmt("0.5"));
+          await pricingStrategy.computeTranchePrice
+            .whenCalledWith(depositTrancheA.address)
+            .returns(toPriceFixedPtAmt("0.5"));
         });
 
         it("should mint the correct amount", async function () {
@@ -251,7 +286,9 @@ describe("PerpetualTranche", function () {
 
       describe("when tranche discount is 0.5", function () {
         beforeEach(async function () {
-          await discountStrategy.setTrancheDiscount(depositTrancheA.address, toDiscountFixedPtAmt("0.5"));
+          await discountStrategy.computeTrancheDiscount
+            .whenCalledWith(depositTrancheA.address)
+            .returns(toDiscountFixedPtAmt("0.5"));
         });
 
         it("should mint the correct amount", async function () {
@@ -262,8 +299,12 @@ describe("PerpetualTranche", function () {
 
       describe("when tranche discount is 0.5 and tranche price is 0.5", function () {
         beforeEach(async function () {
-          await pricingStrategy.setTranchePrice(depositTrancheA.address, toPriceFixedPtAmt("0.5"));
-          await discountStrategy.setTrancheDiscount(depositTrancheA.address, toDiscountFixedPtAmt("0.5"));
+          await pricingStrategy.computeTranchePrice
+            .whenCalledWith(depositTrancheA.address)
+            .returns(toPriceFixedPtAmt("0.5"));
+          await discountStrategy.computeTrancheDiscount
+            .whenCalledWith(depositTrancheA.address)
+            .returns(toDiscountFixedPtAmt("0.5"));
         });
 
         it("should mint the correct amount", async function () {
@@ -276,8 +317,12 @@ describe("PerpetualTranche", function () {
     describe("when total supply > zero", function () {
       let newBond: Contract, newTranche: Contract;
       beforeEach(async function () {
-        await discountStrategy.setTrancheDiscount(depositTrancheA.address, toDiscountFixedPtAmt("1"));
-        await pricingStrategy.setTranchePrice(depositTrancheA.address, toPriceFixedPtAmt("1"));
+        await discountStrategy.computeTrancheDiscount
+          .whenCalledWith(depositTrancheA.address)
+          .returns(toDiscountFixedPtAmt("1"));
+        await pricingStrategy.computeTranchePrice
+          .whenCalledWith(depositTrancheA.address)
+          .returns(toPriceFixedPtAmt("1"));
         await perp.deposit(depositTrancheA.address, toFixedPtAmt("200"));
 
         await advancePerpQueue(perp, 1200);
@@ -291,8 +336,12 @@ describe("PerpetualTranche", function () {
       describe("when price is eql to avg reserve price", function () {
         describe("when discount is 1", function () {
           beforeEach(async function () {
-            await discountStrategy.setTrancheDiscount(newTranche.address, toDiscountFixedPtAmt("1"));
-            await pricingStrategy.setTranchePrice(newTranche.address, toPriceFixedPtAmt("1"));
+            await discountStrategy.computeTrancheDiscount
+              .whenCalledWith(newTranche.address)
+              .returns(toDiscountFixedPtAmt("1"));
+            await pricingStrategy.computeTranchePrice
+              .whenCalledWith(newTranche.address)
+              .returns(toPriceFixedPtAmt("1"));
           });
 
           it("should mint the correct amount", async function () {
@@ -303,8 +352,12 @@ describe("PerpetualTranche", function () {
 
         describe("when discount < 1", function () {
           beforeEach(async function () {
-            await discountStrategy.setTrancheDiscount(newTranche.address, toDiscountFixedPtAmt("0.5"));
-            await pricingStrategy.setTranchePrice(newTranche.address, toPriceFixedPtAmt("1"));
+            await discountStrategy.computeTrancheDiscount
+              .whenCalledWith(newTranche.address)
+              .returns(toDiscountFixedPtAmt("0.5"));
+            await pricingStrategy.computeTranchePrice
+              .whenCalledWith(newTranche.address)
+              .returns(toPriceFixedPtAmt("1"));
           });
 
           it("should mint the correct amount", async function () {
@@ -315,8 +368,12 @@ describe("PerpetualTranche", function () {
 
         describe("when discount > 1", function () {
           beforeEach(async function () {
-            await discountStrategy.setTrancheDiscount(newTranche.address, toDiscountFixedPtAmt("2"));
-            await pricingStrategy.setTranchePrice(newTranche.address, toPriceFixedPtAmt("1"));
+            await discountStrategy.computeTrancheDiscount
+              .whenCalledWith(newTranche.address)
+              .returns(toDiscountFixedPtAmt("2"));
+            await pricingStrategy.computeTranchePrice
+              .whenCalledWith(newTranche.address)
+              .returns(toPriceFixedPtAmt("1"));
           });
 
           it("should mint the correct amount", async function () {
@@ -328,9 +385,13 @@ describe("PerpetualTranche", function () {
 
       describe("when price is > avg reserve price", function () {
         beforeEach(async function () {
-          await pricingStrategy.setTranchePrice(depositTrancheA.address, toPriceFixedPtAmt("0.5"));
-          await discountStrategy.setTrancheDiscount(newTranche.address, toDiscountFixedPtAmt("1"));
-          await pricingStrategy.setTranchePrice(newTranche.address, toPriceFixedPtAmt("1"));
+          await pricingStrategy.computeTranchePrice
+            .whenCalledWith(depositTrancheA.address)
+            .returns(toPriceFixedPtAmt("0.5"));
+          await discountStrategy.computeTrancheDiscount
+            .whenCalledWith(newTranche.address)
+            .returns(toDiscountFixedPtAmt("1"));
+          await pricingStrategy.computeTranchePrice.whenCalledWith(newTranche.address).returns(toPriceFixedPtAmt("1"));
         });
 
         it("should mint the correct amount", async function () {
@@ -341,9 +402,13 @@ describe("PerpetualTranche", function () {
 
       describe("when price is < avg reserve price", function () {
         beforeEach(async function () {
-          await pricingStrategy.setTranchePrice(depositTrancheA.address, toPriceFixedPtAmt("2"));
-          await discountStrategy.setTrancheDiscount(newTranche.address, toDiscountFixedPtAmt("1"));
-          await pricingStrategy.setTranchePrice(newTranche.address, toPriceFixedPtAmt("1"));
+          await pricingStrategy.computeTranchePrice
+            .whenCalledWith(depositTrancheA.address)
+            .returns(toPriceFixedPtAmt("2"));
+          await discountStrategy.computeTrancheDiscount
+            .whenCalledWith(newTranche.address)
+            .returns(toDiscountFixedPtAmt("1"));
+          await pricingStrategy.computeTranchePrice.whenCalledWith(newTranche.address).returns(toPriceFixedPtAmt("1"));
         });
 
         it("should mint the correct amount", async function () {
@@ -383,7 +448,7 @@ describe("PerpetualTranche", function () {
       });
       describe("when fee > 0", function () {
         beforeEach(async function () {
-          await feeStrategy.setMintFee(toFixedPtAmt("1"));
+          await feeStrategy.computeMintFees.returns([toFixedPtAmt("1"), "0"]);
         });
         it("should mint perp tokens", async function () {
           await expect(() => perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.changeTokenBalance(
@@ -417,7 +482,7 @@ describe("PerpetualTranche", function () {
           await depositTrancheA.increaseAllowance(perp.address, toFixedPtAmt("1"));
           await perp.deposit(depositTrancheA.address, toFixedPtAmt("1"));
           await perp.transfer(perp.address, toFixedPtAmt("1"));
-          await feeStrategy.setMintFee(toFixedPtAmt("-1"));
+          await feeStrategy.computeMintFees.returns([toFixedPtAmt("-1"), "0"]);
         });
         it("should mint perp tokens", async function () {
           await expect(() => perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.changeTokenBalance(
@@ -451,7 +516,7 @@ describe("PerpetualTranche", function () {
           await depositTrancheA.increaseAllowance(perp.address, toFixedPtAmt("1"));
           await perp.deposit(depositTrancheA.address, toFixedPtAmt("1"));
           await perp.transfer(perp.address, toFixedPtAmt("0.5"));
-          await feeStrategy.setMintFee(toFixedPtAmt("-1"));
+          await feeStrategy.computeMintFees.returns([toFixedPtAmt("-1"), "0"]);
         });
         it("should mint perp tokens", async function () {
           await expect(() => perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.changeTokenBalance(
@@ -487,8 +552,7 @@ describe("PerpetualTranche", function () {
       describe("when protocol fee > 0", function () {
         beforeEach(async function () {
           await perp.transferOwnership(await otherUser.getAddress());
-          await feeStrategy.setMintFee(toFixedPtAmt("1"));
-          await feeStrategy.setProtocolFee(toFixedPtAmt("1"));
+          await feeStrategy.computeMintFees.returns([toFixedPtAmt("1"), toFixedPtAmt("1")]);
         });
         it("should mint perp tokens", async function () {
           await expect(() => perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.changeTokenBalance(
@@ -531,7 +595,7 @@ describe("PerpetualTranche", function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
         feeToken = await ERC20.deploy();
         await feeToken.init("Mock token", "MOCK");
-        await feeStrategy.setFeeToken(feeToken.address);
+        await feeStrategy.feeToken.returns(feeToken.address);
       });
 
       describe("when fee is zero", async function () {
@@ -563,7 +627,7 @@ describe("PerpetualTranche", function () {
       });
       describe("when fee > 0", async function () {
         beforeEach(async function () {
-          await feeStrategy.setMintFee(toFixedPtAmt("1"));
+          await feeStrategy.computeMintFees.returns([toFixedPtAmt("1"), "0"]);
         });
 
         describe("with no approval", function () {
@@ -588,7 +652,7 @@ describe("PerpetualTranche", function () {
 
         describe("with sufficient fee", async function () {
           beforeEach(async function () {
-            await feeStrategy.setMintFee(toFixedPtAmt("1"));
+            await feeStrategy.computeMintFees.returns([toFixedPtAmt("1"), "0"]);
             await feeToken.mint(deployerAddress, toFixedPtAmt("1"));
             await feeToken.approve(perp.address, toFixedPtAmt("1"));
           });
@@ -622,7 +686,7 @@ describe("PerpetualTranche", function () {
       });
       describe("when fee < 0", async function () {
         beforeEach(async function () {
-          await feeStrategy.setMintFee(toFixedPtAmt("-1"));
+          await feeStrategy.computeMintFees.returns([toFixedPtAmt("-1"), "0"]);
           await feeToken.mint(perp.address, toFixedPtAmt("1"));
         });
 
@@ -655,8 +719,7 @@ describe("PerpetualTranche", function () {
       describe("when protocol fee > 0", async function () {
         beforeEach(async function () {
           await perp.transferOwnership(await otherUser.getAddress());
-          await feeStrategy.setMintFee(toFixedPtAmt("1"));
-          await feeStrategy.setProtocolFee(toFixedPtAmt("0.5"));
+          await feeStrategy.computeMintFees.returns([toFixedPtAmt("1"), toFixedPtAmt("0.5")]);
           await feeToken.mint(deployerAddress, toFixedPtAmt("1.5"));
           await feeToken.approve(perp.address, toFixedPtAmt("1.5"));
         });
@@ -775,8 +838,12 @@ describe("PerpetualTranche", function () {
           await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
           const tranches = await getTranches(newBond);
           newTranche = tranches[0];
-          await discountStrategy.setTrancheDiscount(newTranche.address, toDiscountFixedPtAmt("0.5"));
-          await pricingStrategy.setTranchePrice(newTranche.address, toPriceFixedPtAmt("0.2"));
+          await discountStrategy.computeTrancheDiscount
+            .whenCalledWith(newTranche.address)
+            .returns(toDiscountFixedPtAmt("0.5"));
+          await pricingStrategy.computeTranchePrice
+            .whenCalledWith(newTranche.address)
+            .returns(toPriceFixedPtAmt("0.2"));
 
           await checkReserveComposition(
             perp,

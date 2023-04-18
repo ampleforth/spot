@@ -1,7 +1,7 @@
-import { expect } from "chai";
+import { expect, use } from "chai";
 import { network, ethers, upgrades } from "hardhat";
 import { constants, Contract, Signer } from "ethers";
-
+import { smock } from "@defi-wonderland/smock";
 import {
   setupCollateralToken,
   setupBondFactory,
@@ -15,6 +15,7 @@ import {
   mintCollteralToken,
   advancePerpQueueToRollover,
 } from "./helpers";
+use(smock.matchers);
 
 let perp: Contract,
   bondFactory: Contract,
@@ -44,14 +45,24 @@ describe("RouterV1", function () {
     issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
     await issuer.init(3600, [200, 300, 500], 1200, 0);
 
-    const FeeStrategy = await ethers.getContractFactory("MockFeeStrategy");
-    feeStrategy = await FeeStrategy.deploy();
+    const FeeStrategy = await ethers.getContractFactory("BasicFeeStrategy");
+    feeStrategy = await smock.fake(FeeStrategy);
+    await feeStrategy.computeMintFees.returns(["0", "0"]);
+    await feeStrategy.computeBurnFees.returns(["0", "0"]);
+    await feeStrategy.computeRolloverFees.returns(["0", "0"]);
 
-    const PricingStrategy = await ethers.getContractFactory("MockPricingStrategy");
-    pricingStrategy = await PricingStrategy.deploy();
+    const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
+    pricingStrategy = await smock.fake(PricingStrategy);
+    await pricingStrategy.decimals.returns(8);
+    await pricingStrategy.computeMatureTranchePrice.returns(toPriceFixedPtAmt("1"));
+    await pricingStrategy.computeTranchePrice.returns(toPriceFixedPtAmt("1"));
 
-    const DiscountStrategy = await ethers.getContractFactory("MockDiscountStrategy");
-    discountStrategy = await DiscountStrategy.deploy();
+    const DiscountStrategy = await ethers.getContractFactory("TrancheClassDiscountStrategy");
+    discountStrategy = await smock.fake(DiscountStrategy);
+    await discountStrategy.decimals.returns(18);
+    await discountStrategy.computeTrancheDiscount
+      .whenCalledWith(collateralToken.address)
+      .returns(toDiscountFixedPtAmt("1"));
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -75,15 +86,23 @@ describe("RouterV1", function () {
     depositBond = await bondAt(await perp.callStatic.getDepositBond());
     depositTranches = await getTranches(depositBond);
 
-    await pricingStrategy.setTranchePrice(depositTranches[0].address, toPriceFixedPtAmt("1"));
-    await discountStrategy.setTrancheDiscount(depositTranches[0].address, toDiscountFixedPtAmt("1"));
+    await pricingStrategy.computeTranchePrice
+      .whenCalledWith(depositTranches[0].address)
+      .returns(toPriceFixedPtAmt("1"));
+    await discountStrategy.computeTrancheDiscount
+      .whenCalledWith(depositTranches[0].address)
+      .returns(toDiscountFixedPtAmt("1"));
 
-    await pricingStrategy.setTranchePrice(depositTranches[1].address, toPriceFixedPtAmt("1"));
-    await discountStrategy.setTrancheDiscount(depositTranches[1].address, toDiscountFixedPtAmt("0.75"));
+    await pricingStrategy.computeTranchePrice
+      .whenCalledWith(depositTranches[1].address)
+      .returns(toPriceFixedPtAmt("1"));
+    await discountStrategy.computeTrancheDiscount
+      .whenCalledWith(depositTranches[1].address)
+      .returns(toDiscountFixedPtAmt("0.75"));
 
-    await feeStrategy.setFeeToken(perp.address);
-    await feeStrategy.setMintFee(toFixedPtAmt("0"));
-    await feeStrategy.setBurnFee(toFixedPtAmt("0"));
+    await feeStrategy.feeToken.returns(perp.address);
+    await feeStrategy.computeMintFees.returns([toFixedPtAmt("0"), "0"]);
+    await feeStrategy.computeBurnFees.returns([toFixedPtAmt("0"), "0"]);
 
     const Router = await ethers.getContractFactory("RouterV1");
     router = await Router.deploy();
@@ -108,7 +127,7 @@ describe("RouterV1", function () {
 
   describe("#previewDeposit", function () {
     beforeEach(async function () {
-      await feeStrategy.setMintFee(toFixedPtAmt("10"));
+      await feeStrategy.computeMintFees.returns([toFixedPtAmt("10"), "0"]);
     });
 
     describe("when fee token is the native token", async function () {
@@ -126,7 +145,7 @@ describe("RouterV1", function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
         feeToken = await ERC20.deploy();
         await feeToken.init("Mock token", "MOCK");
-        await feeStrategy.setFeeToken(feeToken.address);
+        await feeStrategy.feeToken.returns(feeToken.address);
       });
 
       it("should compute the mint amount and fee", async function () {
@@ -141,16 +160,24 @@ describe("RouterV1", function () {
   describe("#previewRedeem", function () {
     let depositTranches1: Contract[], depositTranches2: Contract[], depositTranches3: Contract[];
     beforeEach(async function () {
-      await feeStrategy.setBurnFee(toFixedPtAmt("12.75"));
+      await feeStrategy.computeBurnFees.returns([toFixedPtAmt("12.75"), "0"]);
 
       const depositBond1 = await bondAt(await perp.callStatic.getDepositBond());
       depositTranches1 = await getTranches(depositBond1);
       await depositIntoBond(depositBond1, toFixedPtAmt("1000"), deployer);
 
-      await pricingStrategy.setTranchePrice(depositTranches1[0].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(depositTranches1[0].address, toDiscountFixedPtAmt("1"));
-      await pricingStrategy.setTranchePrice(depositTranches1[1].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(depositTranches1[1].address, toDiscountFixedPtAmt("0.75"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(depositTranches1[0].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(depositTranches1[0].address)
+        .returns(toDiscountFixedPtAmt("1"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(depositTranches1[1].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(depositTranches1[1].address)
+        .returns(toDiscountFixedPtAmt("0.75"));
 
       await depositTranches1[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(depositTranches1[0].address, toFixedPtAmt("200"));
@@ -163,10 +190,18 @@ describe("RouterV1", function () {
       depositTranches2 = await getTranches(depositBond2);
       await depositIntoBond(depositBond2, toFixedPtAmt("1000"), deployer);
 
-      await pricingStrategy.setTranchePrice(depositTranches2[0].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(depositTranches2[0].address, toDiscountFixedPtAmt("1"));
-      await pricingStrategy.setTranchePrice(depositTranches2[1].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(depositTranches2[1].address, toDiscountFixedPtAmt("0.75"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(depositTranches2[0].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(depositTranches2[0].address)
+        .returns(toDiscountFixedPtAmt("1"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(depositTranches2[1].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(depositTranches2[1].address)
+        .returns(toDiscountFixedPtAmt("0.75"));
 
       await depositTranches2[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(depositTranches2[0].address, toFixedPtAmt("200"));
@@ -179,10 +214,18 @@ describe("RouterV1", function () {
       depositTranches3 = await getTranches(depositBond3);
       await depositIntoBond(depositBond3, toFixedPtAmt("1000"), deployer);
 
-      await pricingStrategy.setTranchePrice(depositTranches3[0].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(depositTranches3[0].address, toDiscountFixedPtAmt("1"));
-      await pricingStrategy.setTranchePrice(depositTranches3[1].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(depositTranches3[1].address, toDiscountFixedPtAmt("0.75"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(depositTranches3[0].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(depositTranches3[0].address)
+        .returns(toDiscountFixedPtAmt("1"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(depositTranches3[1].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(depositTranches3[1].address)
+        .returns(toDiscountFixedPtAmt("0.75"));
 
       await depositTranches3[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(depositTranches3[0].address, toFixedPtAmt("200"));
@@ -246,7 +289,7 @@ describe("RouterV1", function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
         feeToken = await ERC20.deploy();
         await feeToken.init("Mock token", "MOCK");
-        await feeStrategy.setFeeToken(feeToken.address);
+        await feeStrategy.feeToken.returns(feeToken.address);
       });
 
       it("should compute the burn amount and fee", async function () {
@@ -277,16 +320,24 @@ describe("RouterV1", function () {
   describe("#previewRollover", function () {
     let holdingPenTranches: Contract[], reserveTranches: Contract[], depositTranches: Contract[];
     beforeEach(async function () {
-      await feeStrategy.setBurnFee(toFixedPtAmt("10"));
+      await feeStrategy.computeBurnFees.returns([toFixedPtAmt("10"), "0"]);
 
       const holdingPenBond = await bondAt(await perp.callStatic.getDepositBond());
       holdingPenTranches = await getTranches(holdingPenBond);
       await depositIntoBond(holdingPenBond, toFixedPtAmt("1000"), deployer);
 
-      await pricingStrategy.setTranchePrice(holdingPenTranches[0].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(holdingPenTranches[0].address, toDiscountFixedPtAmt("1"));
-      await pricingStrategy.setTranchePrice(holdingPenTranches[1].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(holdingPenTranches[1].address, toDiscountFixedPtAmt("0.75"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(holdingPenTranches[0].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(holdingPenTranches[0].address)
+        .returns(toDiscountFixedPtAmt("1"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(holdingPenTranches[1].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(holdingPenTranches[1].address)
+        .returns(toDiscountFixedPtAmt("0.75"));
 
       await holdingPenTranches[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(holdingPenTranches[0].address, toFixedPtAmt("200"));
@@ -299,10 +350,18 @@ describe("RouterV1", function () {
       reserveTranches = await getTranches(reserveBond);
       await depositIntoBond(reserveBond, toFixedPtAmt("1000"), deployer);
 
-      await pricingStrategy.setTranchePrice(reserveTranches[0].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(reserveTranches[0].address, toDiscountFixedPtAmt("1"));
-      await pricingStrategy.setTranchePrice(reserveTranches[1].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(reserveTranches[1].address, toDiscountFixedPtAmt("0.75"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(reserveTranches[0].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(reserveTranches[0].address)
+        .returns(toDiscountFixedPtAmt("1"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(reserveTranches[1].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(reserveTranches[1].address)
+        .returns(toDiscountFixedPtAmt("0.75"));
 
       await reserveTranches[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(reserveTranches[0].address, toFixedPtAmt("200"));
@@ -315,10 +374,18 @@ describe("RouterV1", function () {
       depositTranches = await getTranches(depositBond);
       await depositIntoBond(depositBond, toFixedPtAmt("1000"), deployer);
 
-      await pricingStrategy.setTranchePrice(depositTranches[0].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(depositTranches[0].address, toDiscountFixedPtAmt("1"));
-      await pricingStrategy.setTranchePrice(depositTranches[1].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(depositTranches[1].address, toDiscountFixedPtAmt("0.75"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(depositTranches[0].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(depositTranches[0].address)
+        .returns(toDiscountFixedPtAmt("1"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(depositTranches[1].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(depositTranches[1].address)
+        .returns(toDiscountFixedPtAmt("0.75"));
 
       await depositTranches[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(depositTranches[0].address, toFixedPtAmt("200"));
@@ -328,7 +395,7 @@ describe("RouterV1", function () {
 
     describe("when rollover is not acceptable", function () {
       beforeEach(async function () {
-        await await feeStrategy.setRolloverFee(toFixedPtAmt("1"));
+        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
       });
       it("should return 0", async function () {
         const r = await router.callStatic.previewRollover(
@@ -349,7 +416,7 @@ describe("RouterV1", function () {
 
     describe("when tranche out balance is NOT covered", function () {
       beforeEach(async function () {
-        await await feeStrategy.setRolloverFee(toFixedPtAmt("1"));
+        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -370,7 +437,7 @@ describe("RouterV1", function () {
 
     describe("when tranche in has different rate", function () {
       beforeEach(async function () {
-        await await feeStrategy.setRolloverFee(toFixedPtAmt("1"));
+        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -391,7 +458,7 @@ describe("RouterV1", function () {
 
     describe("when tranche out has different rate", function () {
       beforeEach(async function () {
-        await await feeStrategy.setRolloverFee(toFixedPtAmt("1"));
+        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -412,7 +479,7 @@ describe("RouterV1", function () {
 
     describe("when tranche out balance is covered exactly", function () {
       beforeEach(async function () {
-        await await feeStrategy.setRolloverFee(toFixedPtAmt("1"));
+        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -433,7 +500,7 @@ describe("RouterV1", function () {
 
     describe("when tranche out used is less than the balance", function () {
       beforeEach(async function () {
-        await await feeStrategy.setRolloverFee(toFixedPtAmt("1"));
+        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -454,7 +521,7 @@ describe("RouterV1", function () {
 
     describe("when tranche out balance is covered", function () {
       beforeEach(async function () {
-        await await feeStrategy.setRolloverFee(toFixedPtAmt("1"));
+        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -475,7 +542,7 @@ describe("RouterV1", function () {
 
     describe("when collateral token is transferred out", function () {
       beforeEach(async function () {
-        await await feeStrategy.setRolloverFee(toFixedPtAmt("1"));
+        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -496,7 +563,7 @@ describe("RouterV1", function () {
 
     describe("when fee is -ve", function () {
       beforeEach(async function () {
-        await await feeStrategy.setRolloverFee(toFixedPtAmt("-1"));
+        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("-1"), "0"]);
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -521,8 +588,8 @@ describe("RouterV1", function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
         feeToken = await ERC20.deploy();
         await feeToken.init("Mock token", "MOCK");
-        await feeStrategy.setFeeToken(feeToken.address);
-        await await feeStrategy.setRolloverFee(toFixedPtAmt("1"));
+        await feeStrategy.feeToken.returns(feeToken.address);
+        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -545,7 +612,7 @@ describe("RouterV1", function () {
   describe("#trancheAndDeposit", function () {
     beforeEach(async function () {
       await mintCollteralToken(collateralToken, toFixedPtAmt("2000"), deployer);
-      await feeStrategy.setMintFee(toFixedPtAmt("5"));
+      await feeStrategy.computeMintFees.returns([toFixedPtAmt("5"), "0"]);
     });
 
     describe("when deposit bond is incorrect", function () {
@@ -556,7 +623,7 @@ describe("RouterV1", function () {
       it("should revert", async function () {
         await expect(
           router.trancheAndDeposit(perp.address, depositBond.address, toFixedPtAmt("1000"), 0),
-        ).to.revertedWith("UnacceptableDepositTranche");
+        ).to.revertedWithCustomError(perp, "UnacceptableDepositTranche");
       });
     });
 
@@ -587,7 +654,7 @@ describe("RouterV1", function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
         feeToken = await ERC20.deploy();
         await feeToken.init("Mock token", "MOCK");
-        await feeStrategy.setFeeToken(feeToken.address);
+        await feeStrategy.feeToken.returns(feeToken.address);
         await feeToken.mint(deployerAddress, toFixedPtAmt("10"));
 
         await feeToken.approve(router.address, constants.MaxUint256);
@@ -621,7 +688,7 @@ describe("RouterV1", function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
         feeToken = await ERC20.deploy();
         await feeToken.init("Mock token", "MOCK");
-        await feeStrategy.setFeeToken(feeToken.address);
+        await feeStrategy.feeToken.returns(feeToken.address);
         await feeToken.mint(deployerAddress, toFixedPtAmt("25"));
 
         await feeToken.approve(router.address, constants.MaxUint256);
@@ -660,16 +727,24 @@ describe("RouterV1", function () {
   describe("#trancheAndRollover", function () {
     let holdingPenTranches: Contract[], reserveTranches: Contract[], depositBond: Contract, depositTranches: Contract[];
     beforeEach(async function () {
-      await feeStrategy.setBurnFee(toFixedPtAmt("10"));
+      await feeStrategy.computeBurnFees.returns([toFixedPtAmt("10"), "0"]);
 
       const holdingPenBond = await bondAt(await perp.callStatic.getDepositBond());
       holdingPenTranches = await getTranches(holdingPenBond);
       await depositIntoBond(holdingPenBond, toFixedPtAmt("1000"), deployer);
 
-      await pricingStrategy.setTranchePrice(holdingPenTranches[0].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(holdingPenTranches[0].address, toDiscountFixedPtAmt("1"));
-      await pricingStrategy.setTranchePrice(holdingPenTranches[1].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(holdingPenTranches[1].address, toDiscountFixedPtAmt("1"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(holdingPenTranches[0].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(holdingPenTranches[0].address)
+        .returns(toDiscountFixedPtAmt("1"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(holdingPenTranches[1].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(holdingPenTranches[1].address)
+        .returns(toDiscountFixedPtAmt("1"));
 
       await holdingPenTranches[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(holdingPenTranches[0].address, toFixedPtAmt("200"));
@@ -682,10 +757,18 @@ describe("RouterV1", function () {
       reserveTranches = await getTranches(reserveBond);
       await depositIntoBond(reserveBond, toFixedPtAmt("1000"), deployer);
 
-      await pricingStrategy.setTranchePrice(reserveTranches[0].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(reserveTranches[0].address, toDiscountFixedPtAmt("1"));
-      await pricingStrategy.setTranchePrice(reserveTranches[1].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(reserveTranches[1].address, toDiscountFixedPtAmt("1"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(reserveTranches[0].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(reserveTranches[0].address)
+        .returns(toDiscountFixedPtAmt("1"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(reserveTranches[1].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(reserveTranches[1].address)
+        .returns(toDiscountFixedPtAmt("1"));
 
       await reserveTranches[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(reserveTranches[0].address, toFixedPtAmt("200"));
@@ -697,15 +780,23 @@ describe("RouterV1", function () {
       depositBond = await bondAt(await perp.callStatic.getDepositBond());
       depositTranches = await getTranches(depositBond);
 
-      await pricingStrategy.setTranchePrice(depositTranches[0].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(depositTranches[0].address, toDiscountFixedPtAmt("1"));
-      await pricingStrategy.setTranchePrice(depositTranches[1].address, toPriceFixedPtAmt("1"));
-      await discountStrategy.setTrancheDiscount(depositTranches[1].address, toDiscountFixedPtAmt("1"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(depositTranches[0].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(depositTranches[0].address)
+        .returns(toDiscountFixedPtAmt("1"));
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(depositTranches[1].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(depositTranches[1].address)
+        .returns(toDiscountFixedPtAmt("1"));
     });
 
     describe("successful tranche & rollover and return the remainder", function () {
       beforeEach(async function () {
-        await await feeStrategy.setRolloverFee(toFixedPtAmt("1"));
+        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
         await perp.approve(router.address, toFixedPtAmt("15"));
 
         await mintCollteralToken(collateralToken, toFixedPtAmt("2000"), deployer);
@@ -761,7 +852,7 @@ describe("RouterV1", function () {
 
     describe("successful tranche & rollover and return the remainder (with no fees)", function () {
       beforeEach(async function () {
-        await await feeStrategy.setRolloverFee("0");
+        await feeStrategy.computeRolloverFees.returns(["0", "0"]);
 
         await mintCollteralToken(collateralToken, toFixedPtAmt("2000"), deployer);
         await collateralToken.approve(router.address, toFixedPtAmt("2000"));

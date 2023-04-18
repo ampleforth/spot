@@ -3,6 +3,7 @@ import { Wallet } from "ethers";
 
 import "@nomiclabs/hardhat-ethers";
 import "@nomiclabs/hardhat-waffle";
+import "@nomicfoundation/hardhat-chai-matchers";
 import "@openzeppelin/hardhat-upgrades";
 import "solidity-coverage";
 import "hardhat-gas-reporter";
@@ -46,7 +47,7 @@ export default {
   solidity: {
     compilers: [
       {
-        version: "0.8.18",
+        version: "0.8.19",
         settings: {
           optimizer: {
             enabled: true,

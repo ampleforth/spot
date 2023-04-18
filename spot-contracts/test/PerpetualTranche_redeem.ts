@@ -1,7 +1,7 @@
-import { expect } from "chai";
+import { expect, use } from "chai";
 import { network, ethers, upgrades } from "hardhat";
 import { Contract, Transaction, Signer, constants } from "ethers";
-
+import { smock } from "@defi-wonderland/smock";
 import {
   setupCollateralToken,
   setupBondFactory,
@@ -15,6 +15,7 @@ import {
   checkReserveComposition,
   rebase,
 } from "./helpers";
+use(smock.matchers);
 
 let perp: Contract,
   bondFactory: Contract,
@@ -45,14 +46,24 @@ describe("PerpetualTranche", function () {
     issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
     await issuer.init(3600, [500, 500], 1200, 0);
 
-    const FeeStrategy = await ethers.getContractFactory("MockFeeStrategy");
-    feeStrategy = await FeeStrategy.deploy();
+    const FeeStrategy = await ethers.getContractFactory("BasicFeeStrategy");
+    feeStrategy = await smock.fake(FeeStrategy);
+    await feeStrategy.computeMintFees.returns(["0", "0"]);
+    await feeStrategy.computeBurnFees.returns(["0", "0"]);
+    await feeStrategy.computeRolloverFees.returns(["0", "0"]);
 
-    const PricingStrategy = await ethers.getContractFactory("MockPricingStrategy");
-    pricingStrategy = await PricingStrategy.deploy();
+    const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
+    pricingStrategy = await smock.fake(PricingStrategy);
+    await pricingStrategy.decimals.returns(8);
+    await pricingStrategy.computeMatureTranchePrice.returns(toPriceFixedPtAmt("1"));
+    await pricingStrategy.computeTranchePrice.returns(toPriceFixedPtAmt("1"));
 
-    const DiscountStrategy = await ethers.getContractFactory("MockDiscountStrategy");
-    discountStrategy = await DiscountStrategy.deploy();
+    const DiscountStrategy = await ethers.getContractFactory("TrancheClassDiscountStrategy");
+    discountStrategy = await smock.fake(DiscountStrategy);
+    await discountStrategy.decimals.returns(18);
+    await discountStrategy.computeTrancheDiscount
+      .whenCalledWith(collateralToken.address)
+      .returns(toDiscountFixedPtAmt("1"));
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -75,10 +86,13 @@ describe("PerpetualTranche", function () {
     depositBond = await bondAt(await perp.callStatic.getDepositBond());
     [initialDepositTranche] = await getTranches(depositBond);
 
-    await feeStrategy.setFeeToken(perp.address);
-    await feeStrategy.setMintFee(toFixedPtAmt("0"));
-    await pricingStrategy.setTranchePrice(initialDepositTranche.address, toPriceFixedPtAmt("1"));
-    await discountStrategy.setTrancheDiscount(initialDepositTranche.address, toDiscountFixedPtAmt("1"));
+    await feeStrategy.feeToken.returns(perp.address);
+    await pricingStrategy.computeTranchePrice
+      .whenCalledWith(initialDepositTranche.address)
+      .returns(toPriceFixedPtAmt("1"));
+    await discountStrategy.computeTrancheDiscount
+      .whenCalledWith(initialDepositTranche.address)
+      .returns(toDiscountFixedPtAmt("1"));
 
     await depositIntoBond(depositBond, toFixedPtAmt("1000"), deployer);
     await initialDepositTranche.approve(perp.address, toFixedPtAmt("500"));
@@ -146,15 +160,13 @@ describe("PerpetualTranche", function () {
 
       it("should revert", async function () {
         expect(await perp.balanceOf(deployerAddress)).to.lte(toFixedPtAmt("500"));
-        await expect(perp.redeem(toFixedPtAmt("500"))).to.revertedWith(
-          "UnacceptableBurnAmt(500000000000000000000, 250000000000000000000)",
-        );
+        await expect(perp.redeem(toFixedPtAmt("500"))).to.revertedWithCustomError(perp, "UnacceptableBurnAmt");
       });
     });
 
     describe("when requested amount is zero", function () {
       it("should revert", async function () {
-        await expect(perp.redeem(toFixedPtAmt("0"))).to.revertedWith("UnacceptableBurnAmt(0, 500000000000000000000)");
+        await expect(perp.redeem(toFixedPtAmt("0"))).to.revertedWithCustomError(perp, "UnacceptableBurnAmt");
       });
     });
 
@@ -164,7 +176,7 @@ describe("PerpetualTranche", function () {
       });
 
       it("should revert", async function () {
-        await expect(perp.redeem(toFixedPtAmt("100"))).to.revertedWith("UnacceptableBurnAmt(100000000000000000000, 0)");
+        await expect(perp.redeem(toFixedPtAmt("100"))).to.revertedWithCustomError(perp, "UnacceptableBurnAmt");
       });
 
       it("should return 0", async function () {
@@ -176,11 +188,11 @@ describe("PerpetualTranche", function () {
 
     describe("when the supply increases", function () {
       beforeEach(async function () {
-        await feeStrategy.setBurnFee(toFixedPtAmt("-1"));
+        await feeStrategy.computeBurnFees.returns([toFixedPtAmt("-1"), "0"]);
       });
 
       it("should revert", async function () {
-        await expect(perp.redeem(toFixedPtAmt("0.01"))).to.revertedWith("ExpectedSupplyReduction");
+        await expect(perp.redeem(toFixedPtAmt("0.01"))).to.revertedWithCustomError(perp, "ExpectedSupplyReduction");
       });
     });
 
@@ -214,7 +226,7 @@ describe("PerpetualTranche", function () {
           await depositIntoBond(await bondAt(await perp.callStatic.getDepositBond()), toFixedPtAmt("2"), deployer);
           await initialDepositTranche.increaseAllowance(perp.address, toFixedPtAmt("1"));
           await perp.deposit(initialDepositTranche.address, toFixedPtAmt("1"));
-          await feeStrategy.setBurnFee(toFixedPtAmt("1"));
+          await feeStrategy.computeBurnFees.returns([toFixedPtAmt("1"), "0"]);
         });
         it("should burn perp tokens", async function () {
           await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
@@ -248,7 +260,7 @@ describe("PerpetualTranche", function () {
           await initialDepositTranche.increaseAllowance(perp.address, toFixedPtAmt("1"));
           await perp.deposit(initialDepositTranche.address, toFixedPtAmt("1"));
           await perp.transfer(perp.address, toFixedPtAmt("1"));
-          await feeStrategy.setBurnFee(toFixedPtAmt("-1"));
+          await feeStrategy.computeBurnFees.returns([toFixedPtAmt("-1"), "0"]);
         });
         it("should burn perp tokens", async function () {
           await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
@@ -282,7 +294,7 @@ describe("PerpetualTranche", function () {
           await initialDepositTranche.increaseAllowance(perp.address, toFixedPtAmt("1"));
           await perp.deposit(initialDepositTranche.address, toFixedPtAmt("1"));
           await perp.transfer(perp.address, toFixedPtAmt("0.5"));
-          await feeStrategy.setBurnFee(toFixedPtAmt("-1"));
+          await feeStrategy.computeBurnFees.returns([toFixedPtAmt("-1"), "0"]);
         });
         it("should burn perp tokens", async function () {
           await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
@@ -321,8 +333,7 @@ describe("PerpetualTranche", function () {
           await depositIntoBond(await bondAt(await perp.callStatic.getDepositBond()), toFixedPtAmt("3"), deployer);
           await initialDepositTranche.increaseAllowance(perp.address, toFixedPtAmt("1.5"));
           await perp.deposit(initialDepositTranche.address, toFixedPtAmt("1.5"));
-          await feeStrategy.setBurnFee(toFixedPtAmt("1"));
-          await feeStrategy.setProtocolFee(toFixedPtAmt("0.5"));
+          await feeStrategy.computeBurnFees.returns([toFixedPtAmt("1"), toFixedPtAmt("0.5")]);
         });
         it("should burn perp tokens", async function () {
           await expect(() => perp.redeem(toFixedPtAmt("500"))).to.changeTokenBalance(
@@ -364,7 +375,7 @@ describe("PerpetualTranche", function () {
         const ERC20 = await ethers.getContractFactory("MockERC20");
         feeToken = await ERC20.deploy();
         await feeToken.init("Mock token", "MOCK");
-        await feeStrategy.setFeeToken(feeToken.address);
+        await feeStrategy.feeToken.returns(feeToken.address);
       });
 
       describe("when fee is zero", async function () {
@@ -400,7 +411,7 @@ describe("PerpetualTranche", function () {
 
       describe("when fee > 0", async function () {
         beforeEach(async function () {
-          await feeStrategy.setBurnFee(toFixedPtAmt("1"));
+          await feeStrategy.computeBurnFees.returns([toFixedPtAmt("1"), "0"]);
         });
 
         describe("with no approval", function () {
@@ -421,7 +432,7 @@ describe("PerpetualTranche", function () {
 
         describe("with sufficient fee", async function () {
           beforeEach(async function () {
-            await feeStrategy.setBurnFee(toFixedPtAmt("1"));
+            await feeStrategy.computeBurnFees.returns([toFixedPtAmt("1"), "0"]);
             await feeToken.mint(deployerAddress, toFixedPtAmt("1"));
             await feeToken.approve(perp.address, toFixedPtAmt("1"));
           });
@@ -459,7 +470,7 @@ describe("PerpetualTranche", function () {
 
       describe("when fee < 0", async function () {
         beforeEach(async function () {
-          await feeStrategy.setBurnFee(toFixedPtAmt("-1"));
+          await feeStrategy.computeBurnFees.returns([toFixedPtAmt("-1"), "0"]);
           await feeToken.mint(perp.address, toFixedPtAmt("1"));
         });
 
@@ -496,8 +507,7 @@ describe("PerpetualTranche", function () {
       describe("when protocol fee > 0", async function () {
         beforeEach(async function () {
           await perp.transferOwnership(await otherUser.getAddress());
-          await feeStrategy.setBurnFee(toFixedPtAmt("1"));
-          await feeStrategy.setProtocolFee(toFixedPtAmt("0.5"));
+          await feeStrategy.computeBurnFees.returns([toFixedPtAmt("1"), toFixedPtAmt("0.5")]);
           await feeToken.mint(deployerAddress, toFixedPtAmt("1.5"));
           await feeToken.approve(perp.address, toFixedPtAmt("1.5"));
         });
@@ -560,8 +570,12 @@ describe("PerpetualTranche", function () {
         const tranches = await getTranches(newBond);
         newRedemptionTranche = tranches[0];
 
-        await pricingStrategy.setTranchePrice(newRedemptionTranche.address, toPriceFixedPtAmt("1"));
-        await discountStrategy.setTrancheDiscount(newRedemptionTranche.address, toDiscountFixedPtAmt("0.5"));
+        await pricingStrategy.computeTranchePrice
+          .whenCalledWith(newRedemptionTranche.address)
+          .returns(toPriceFixedPtAmt("1"));
+        await discountStrategy.computeTrancheDiscount
+          .whenCalledWith(newRedemptionTranche.address)
+          .returns(toDiscountFixedPtAmt("0.5"));
 
         await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
         await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
@@ -629,8 +643,12 @@ describe("PerpetualTranche", function () {
         const tranches = await getTranches(newBond);
         newRedemptionTranche = tranches[0];
 
-        await pricingStrategy.setTranchePrice(newRedemptionTranche.address, toPriceFixedPtAmt("1"));
-        await discountStrategy.setTrancheDiscount(newRedemptionTranche.address, toDiscountFixedPtAmt("0.5"));
+        await pricingStrategy.computeTranchePrice
+          .whenCalledWith(newRedemptionTranche.address)
+          .returns(toPriceFixedPtAmt("1"));
+        await discountStrategy.computeTrancheDiscount
+          .whenCalledWith(newRedemptionTranche.address)
+          .returns(toDiscountFixedPtAmt("0.5"));
 
         await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
         await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
@@ -693,8 +711,12 @@ describe("PerpetualTranche", function () {
         const tranches = await getTranches(newBond);
         newRedemptionTranche = tranches[0];
 
-        await pricingStrategy.setTranchePrice(newRedemptionTranche.address, toPriceFixedPtAmt("1"));
-        await discountStrategy.setTrancheDiscount(newRedemptionTranche.address, toDiscountFixedPtAmt("0.5"));
+        await pricingStrategy.computeTranchePrice
+          .whenCalledWith(newRedemptionTranche.address)
+          .returns(toPriceFixedPtAmt("1"));
+        await discountStrategy.computeTrancheDiscount
+          .whenCalledWith(newRedemptionTranche.address)
+          .returns(toDiscountFixedPtAmt("0.5"));
 
         await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
         await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
@@ -764,8 +786,12 @@ describe("PerpetualTranche", function () {
         const tranches = await getTranches(newBond);
         newRedemptionTranche = tranches[0];
 
-        await pricingStrategy.setTranchePrice(newRedemptionTranche.address, toPriceFixedPtAmt("1"));
-        await discountStrategy.setTrancheDiscount(newRedemptionTranche.address, toDiscountFixedPtAmt("0.5"));
+        await pricingStrategy.computeTranchePrice
+          .whenCalledWith(newRedemptionTranche.address)
+          .returns(toPriceFixedPtAmt("1"));
+        await discountStrategy.computeTrancheDiscount
+          .whenCalledWith(newRedemptionTranche.address)
+          .returns(toDiscountFixedPtAmt("0.5"));
 
         await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
         await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
@@ -829,8 +855,12 @@ describe("PerpetualTranche", function () {
         const tranches = await getTranches(newBond);
         newRedemptionTranche = tranches[0];
 
-        await pricingStrategy.setTranchePrice(newRedemptionTranche.address, toPriceFixedPtAmt("1"));
-        await discountStrategy.setTrancheDiscount(newRedemptionTranche.address, toDiscountFixedPtAmt("0.5"));
+        await pricingStrategy.computeTranchePrice
+          .whenCalledWith(newRedemptionTranche.address)
+          .returns(toPriceFixedPtAmt("1"));
+        await discountStrategy.computeTrancheDiscount
+          .whenCalledWith(newRedemptionTranche.address)
+          .returns(toDiscountFixedPtAmt("0.5"));
 
         await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
         await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
@@ -887,11 +917,19 @@ describe("PerpetualTranche", function () {
         newRedemptionTranche1 = tranches[0];
         newRedemptionTranche2 = tranches[1];
 
-        await pricingStrategy.setTranchePrice(newRedemptionTranche1.address, toPriceFixedPtAmt("1"));
-        await discountStrategy.setTrancheDiscount(newRedemptionTranche1.address, toDiscountFixedPtAmt("1"));
+        await pricingStrategy.computeTranchePrice
+          .whenCalledWith(newRedemptionTranche1.address)
+          .returns(toPriceFixedPtAmt("1"));
+        await discountStrategy.computeTrancheDiscount
+          .whenCalledWith(newRedemptionTranche1.address)
+          .returns(toDiscountFixedPtAmt("1"));
 
-        await pricingStrategy.setTranchePrice(newRedemptionTranche2.address, toPriceFixedPtAmt("1"));
-        await discountStrategy.setTrancheDiscount(newRedemptionTranche2.address, toDiscountFixedPtAmt("1"));
+        await pricingStrategy.computeTranchePrice
+          .whenCalledWith(newRedemptionTranche2.address)
+          .returns(toPriceFixedPtAmt("1"));
+        await discountStrategy.computeTrancheDiscount
+          .whenCalledWith(newRedemptionTranche2.address)
+          .returns(toDiscountFixedPtAmt("1"));
 
         await newRedemptionTranche1.approve(perp.address, toFixedPtAmt("500"));
         await perp.deposit(newRedemptionTranche1.address, toFixedPtAmt("500"));
