@@ -12,21 +12,10 @@ import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/
 
 import { TrancheData, TrancheHelpers, BondHelpers } from "../_utils/BondHelpers.sol";
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche } from "../_interfaces/IPerpetualTranche.sol";
+import { IVault, UnexpectedAsset, UnauthorizedTransferOut, NoDeployment } from "../_interfaces/IVault.sol";
 
-// TODO: create a IVault interface
 // TODO: add mint cap
 // TODO: limit size of vault assets
-
-/// @notice Expected asset to be a valid vault asset.
-/// @param token Address of the token.
-error UnexpectedAsset(IERC20Upgradeable token);
-
-/// @notice Expected transfer out asset to not be a vault asset.
-/// @param token Address of the token transferred.
-error UnauthorizedTransferOut(IERC20Upgradeable token);
-
-/// @notice Expected vault assets to be deployed.
-error NoDeployment();
 
 /// @notice Storage array access out of bounds.
 error OutOfBounds();
@@ -35,23 +24,15 @@ error OutOfBounds();
  *  @title RolloverVault
  *
  *  @notice A vault which generates yield (from fees) by performing rollovers on PerpetualTranche (or perp).
+ *          The vault takes in AMPL or any other rebasing collateral as the "underlying" asset.
  *
- *          Users deposit a "underlying" asset (like AMPL or any other rebasing collateral) and mint "notes".
- *          The vault "deploys" underlying asset in a rules-based fashion to "earn" income.
- *          It "recovers" deployed assets once the investment matures.
- *
- *          The vault operates through two external poke functions which off-chain keepers can execute.
- *              1) `deploy`: When executed, the vault deposits the underlying asset into perp's current deposit bond
+ *          Vault strategy:
+ *              1) deploy: The vault deposits the underlying asset into perp's current deposit bond
  *                 to get tranche tokens in return, it then swaps these fresh tranche tokens for
  *                 older tranche tokens (ones mature or approaching maturity) from perp.
  *                 system through a rollover operation and earns an income in perp tokens.
- *              2) `recover`: When executed, the vault redeems tranches for the underlying asset.
+ *              2) recover: The vault redeems tranches for the underlying asset.
  *                 NOTE: It performs both mature and immature redemption. Read more: https://bit.ly/3tuN6OC
- *
- *          At any time the vault will hold multiple ERC20 tokens, together referred to as the vault's "assets".
- *          They can be a combination of the underlying asset, the earned asset and multiple tranches (deployed assets).
- *
- *          On redemption users burn their "notes" to receive a proportional slice of all the vault's assets.
  *
  *
  */
@@ -59,7 +40,8 @@ contract RolloverVault is
     ERC20BurnableUpgradeable,
     OwnableUpgradeable,
     PausableUpgradeable,
-    ReentrancyGuardUpgradeable
+    ReentrancyGuardUpgradeable,
+    IVault
 {
     // data handling
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
@@ -172,15 +154,16 @@ contract RolloverVault is
     //--------------------------------------------------------------------------
     // External & Public write methods
 
-    /// @notice Recovers deployed funds and redeploys them. Reverts if there are no funds to deploy.
-    /// @dev Simply batches the `recover` and `deploy` functions.
-    function recoverAndRedeploy() external {
+    /// @inheritdoc IVault
+    /// @dev Simply batches the `recover` and `deploy` functions. Reverts if there are no funds to deploy.
+    function recoverAndRedeploy() external override {
         recover();
         deploy();
     }
 
-    /// @notice Deploys deposited funds. Reverts if there are no funds to deploy.
+    /// @inheritdoc IVault
     /// @dev Its safer to call `recover` before `deploy` so the full available balance can be deployed.
+    ///      Reverts if there are no funds to deploy.
     function deploy() public nonReentrant whenNotPaused {
         TrancheData memory td = _tranche(perp.getDepositBond());
         if (_rollover(perp, td) == 0) {
@@ -188,21 +171,13 @@ contract RolloverVault is
         }
     }
 
-    /// @notice Recovers deployed funds.
+    /// @inheritdoc IVault
     function recover() public nonReentrant whenNotPaused {
         _redeemTranches();
     }
 
-    /// @notice Deposits the provided asset from {msg.sender} into the vault and mints notes.
-    /// @param token The address of the asset to deposit.
-    /// @param amount The amount tokens to be deposited into the vault.
-    /// @return The amount of notes.
-    function deposit(IERC20Upgradeable token, uint256 amount) external nonReentrant whenNotPaused returns (uint256) {
-        // NOTE: The vault only accepts the underlying asset tokens.
-        if (token != underlying) {
-            revert UnexpectedAsset(token);
-        }
-
+    /// @inheritdoc IVault
+    function deposit(uint256 amount) external override nonReentrant whenNotPaused returns (uint256) {
         uint256 totalSupply_ = totalSupply();
         uint256 notes = (totalSupply_ > 0) ? amount.mulDiv(totalSupply_, getTVL()) : (amount * INITIAL_RATE);
 
@@ -213,23 +188,14 @@ contract RolloverVault is
         return notes;
     }
 
-    struct TokenAmount {
-        /// @notice The asset token redeemed.
-        IERC20Upgradeable token;
-        /// @notice The amount redeemed.
-        uint256 amount;
-    }
-
-    /// @notice Burns notes and sends a proportional share of vault's assets back to {msg.sender}.
-    /// @param notes The amount of notes to be burnt.
-    /// @return The list of asset tokens and amounts redeemed.
-    function redeem(uint256 notes) external nonReentrant whenNotPaused returns (TokenAmount[] memory) {
+    /// @inheritdoc IVault
+    function redeem(uint256 notes) external override nonReentrant whenNotPaused returns (IVault.TokenAmount[] memory) {
         uint256 totalNotes = totalSupply();
         uint256 deployedCount_ = _deployed.length();
         uint256 assetCount = 2 + deployedCount_;
 
         // aggregating vault assets to be redeemed
-        TokenAmount[] memory redemptions = new TokenAmount[](assetCount);
+        IVault.TokenAmount[] memory redemptions = new IVault.TokenAmount[](assetCount);
         redemptions[0].token = underlying;
         for (uint256 i = 0; i < deployedCount_; i++) {
             redemptions[i + 1].token = IERC20Upgradeable(_deployed.at(i));
@@ -249,8 +215,9 @@ contract RolloverVault is
         return redemptions;
     }
 
-    /// @return The total value of assets currently held by the vault, denominated in the underlying asset.
-    function getTVL() public returns (uint256) {
+    /// @inheritdoc IVault
+    /// @dev The total value is denominated in the underlying asset.
+    function getTVL() public override returns (uint256) {
         uint256 totalAssets = 0;
 
         // The underlying balance
@@ -279,40 +246,36 @@ contract RolloverVault is
     //--------------------------------------------------------------------------
     // External & Public read methods
 
-    /// @param token The address of the asset ERC-20 token held by the vault.
-    /// @return The vault's asset token balance.
-    function vaultAssetBalance(IERC20Upgradeable token) external view returns (uint256) {
+    /// @inheritdoc IVault
+    function vaultAssetBalance(IERC20Upgradeable token) external view override returns (uint256) {
         return isVaultAsset(token) ? token.balanceOf(address(this)) : 0;
     }
 
-    /// @return Total count of deployed asset tokens held by the vault.
-    function deployedCount() external view returns (uint256) {
+    /// @inheritdoc IVault
+    function deployedCount() external view override returns (uint256) {
         return _deployed.length();
     }
 
-    /// @param i The index of a token.
-    /// @return The token address from the deployed asset token list by index.
-    function deployedAt(uint256 i) external view returns (IERC20Upgradeable) {
+    /// @inheritdoc IVault
+    function deployedAt(uint256 i) external view override returns (IERC20Upgradeable) {
         return IERC20Upgradeable(_deployed.at(i));
     }
 
-    /// @return Total count of earned income tokens held by the vault.
+    /// @inheritdoc IVault
     function earnedCount() external pure returns (uint256) {
         return 1;
     }
 
-    /// @param i The index of a token.
-    /// @return The token address from the earned income token list by index.
-    function earnedAt(uint256 i) external view returns (IERC20Upgradeable) {
+    /// @inheritdoc IVault
+    function earnedAt(uint256 i) external view override returns (IERC20Upgradeable) {
         if (i > 0) {
             revert OutOfBounds();
         }
         return IERC20Upgradeable(perp);
     }
 
-    /// @param token The address of a token to check.
-    /// @return If the given token is held by the vault.
-    function isVaultAsset(IERC20Upgradeable token) public view returns (bool) {
+    /// @inheritdoc IVault
+    function isVaultAsset(IERC20Upgradeable token) public view override returns (bool) {
         return (token == underlying) || _deployed.contains(address(token)) || (address(perp) == address(token));
     }
 

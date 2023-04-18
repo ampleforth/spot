@@ -34,6 +34,7 @@ __metadata:
     eslint-config-standard: ^17.0.0
     eslint-plugin-import: ^2.26.0
     eslint-plugin-n: ^15.2.4
+    eslint-plugin-no-only-tests: ^3.1.0
     eslint-plugin-node: ^11.1.0
     eslint-plugin-prettier: ^4.2.1
     eslint-plugin-promise: ^6.0.0
@@ -5371,6 +5372,13 @@ __metadata:
   peerDependencies:
     eslint: ">=7.0.0"
   checksum: dd651651ab76120e45707ee968d846e3ffffb42d1035792fdef6d3b0dcfddf3673bc6a09cb2fac8c5f1d081f14f2a67fc52295d5ed1d2edfb5beead93284eaac
+  languageName: node
+  linkType: hard
+
+"eslint-plugin-no-only-tests@npm:^3.1.0":
+  version: 3.1.0
+  resolution: "eslint-plugin-no-only-tests@npm:3.1.0"
+  checksum: 2a5de82f3a732dbd46792661dd0f8546cf819f76d8828968166dee35741e8039904ba473dafe1eed585f401a496d260c2c38354bb887c94bd4ced0ddca00fb62
   languageName: node
   linkType: hard
 
