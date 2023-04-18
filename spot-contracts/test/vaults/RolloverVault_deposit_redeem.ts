@@ -292,20 +292,12 @@ describe("RolloverVault", function () {
 
   describe("#deposit", function () {
     let tx: Transaction, noteAmt: BigNumber;
-    describe("when asset is not underlying", async function () {
-      it("should revert", async function () {
-        await expect(vault.deposit(perp.address, toFixedPtAmt("1"))).to.be.revertedWithCustomError(
-          vault,
-          "UnexpectedAsset",
-        );
-      });
-    });
 
     describe("when total supply = 0", async function () {
       beforeEach(async function () {
         await collateralToken.approve(vault.address, toFixedPtAmt("100"));
-        noteAmt = await vault.callStatic.deposit(collateralToken.address, toFixedPtAmt("100"));
-        tx = vault.deposit(collateralToken.address, toFixedPtAmt("100"));
+        noteAmt = await vault.callStatic.deposit(toFixedPtAmt("100"));
+        tx = vault.deposit(toFixedPtAmt("100"));
         await tx;
       });
       it("should transfer underlying", async function () {
@@ -328,11 +320,11 @@ describe("RolloverVault", function () {
     describe("when total supply > 0 and tvl = ts", async function () {
       beforeEach(async function () {
         await collateralToken.approve(vault.address, toFixedPtAmt("100"));
-        await vault.deposit(collateralToken.address, toFixedPtAmt("100"));
+        await vault.deposit(toFixedPtAmt("100"));
         await collateralToken.transfer(otherUserAddress, toFixedPtAmt("100"));
         await collateralToken.connect(otherUser).approve(vault.address, toFixedPtAmt("100"));
-        noteAmt = await vault.connect(otherUser).callStatic.deposit(collateralToken.address, toFixedPtAmt("100"));
-        tx = vault.connect(otherUser).deposit(collateralToken.address, toFixedPtAmt("100"));
+        noteAmt = await vault.connect(otherUser).callStatic.deposit(toFixedPtAmt("100"));
+        tx = vault.connect(otherUser).deposit(toFixedPtAmt("100"));
         await tx;
       });
       it("should transfer underlying", async function () {
@@ -356,12 +348,12 @@ describe("RolloverVault", function () {
     describe("when total supply > 0 and tvl > ts", async function () {
       beforeEach(async function () {
         await collateralToken.approve(vault.address, toFixedPtAmt("100"));
-        await vault.deposit(collateralToken.address, toFixedPtAmt("100"));
+        await vault.deposit(toFixedPtAmt("100"));
         await collateralToken.transfer(vault.address, toFixedPtAmt("100"));
         await collateralToken.transfer(otherUserAddress, toFixedPtAmt("100"));
         await collateralToken.connect(otherUser).approve(vault.address, toFixedPtAmt("100"));
-        noteAmt = await vault.connect(otherUser).callStatic.deposit(collateralToken.address, toFixedPtAmt("100"));
-        tx = vault.connect(otherUser).deposit(collateralToken.address, toFixedPtAmt("100"));
+        noteAmt = await vault.connect(otherUser).callStatic.deposit(toFixedPtAmt("100"));
+        tx = vault.connect(otherUser).deposit(toFixedPtAmt("100"));
         await tx;
       });
       it("should transfer underlying", async function () {
@@ -385,12 +377,12 @@ describe("RolloverVault", function () {
     describe("when total supply > 0 and tvl < ts", async function () {
       beforeEach(async function () {
         await collateralToken.approve(vault.address, toFixedPtAmt("100"));
-        await vault.deposit(collateralToken.address, toFixedPtAmt("100"));
+        await vault.deposit(toFixedPtAmt("100"));
         await rebase(collateralToken, rebaseOracle, -0.5);
         await collateralToken.transfer(otherUserAddress, toFixedPtAmt("100"));
         await collateralToken.connect(otherUser).approve(vault.address, toFixedPtAmt("100"));
-        noteAmt = await vault.connect(otherUser).callStatic.deposit(collateralToken.address, toFixedPtAmt("100"));
-        tx = vault.connect(otherUser).deposit(collateralToken.address, toFixedPtAmt("100"));
+        noteAmt = await vault.connect(otherUser).callStatic.deposit(toFixedPtAmt("100"));
+        tx = vault.connect(otherUser).deposit(toFixedPtAmt("100"));
         await tx;
       });
       it("should transfer underlying", async function () {
@@ -423,7 +415,7 @@ describe("RolloverVault", function () {
     describe("when burning more than balance", function () {
       beforeEach(async function () {
         await collateralToken.approve(vault.address, toFixedPtAmt("100"));
-        await vault.deposit(collateralToken.address, toFixedPtAmt("100"));
+        await vault.deposit(toFixedPtAmt("100"));
       });
 
       it("should revert", async function () {
@@ -435,11 +427,11 @@ describe("RolloverVault", function () {
     describe("when vault has only usable balance", function () {
       beforeEach(async function () {
         await collateralToken.approve(vault.address, toFixedPtAmt("100"));
-        await vault.deposit(collateralToken.address, toFixedPtAmt("100"));
+        await vault.deposit(toFixedPtAmt("100"));
 
         await collateralToken.transfer(otherUserAddress, toFixedPtAmt("100"));
         await collateralToken.connect(otherUser).approve(vault.address, toFixedPtAmt("100"));
-        await vault.connect(otherUser).deposit(collateralToken.address, toFixedPtAmt("100"));
+        await vault.connect(otherUser).deposit(toFixedPtAmt("100"));
 
         redemptionAmts = await vault.callStatic.redeem(await vault.balanceOf(deployerAddress));
         tx = vault.redeem(await vault.balanceOf(deployerAddress));
@@ -470,11 +462,11 @@ describe("RolloverVault", function () {
     describe("when vault has only deployed balance", function () {
       beforeEach(async function () {
         await collateralToken.approve(vault.address, toFixedPtAmt("100"));
-        await vault.deposit(collateralToken.address, toFixedPtAmt("100"));
+        await vault.deposit(toFixedPtAmt("100"));
 
         await collateralToken.transfer(otherUserAddress, toFixedPtAmt("100"));
         await collateralToken.connect(otherUser).approve(vault.address, toFixedPtAmt("100"));
-        await vault.connect(otherUser).deposit(collateralToken.address, toFixedPtAmt("100"));
+        await vault.connect(otherUser).deposit(toFixedPtAmt("100"));
 
         await discountStrategy.computeTrancheDiscount
           .whenCalledWith(rolloverInTranches[1].address)
@@ -519,11 +511,11 @@ describe("RolloverVault", function () {
       let redemptionAmts: [string, BigNumber][];
       beforeEach(async function () {
         await collateralToken.approve(vault.address, toFixedPtAmt("100"));
-        await vault.deposit(collateralToken.address, toFixedPtAmt("100"));
+        await vault.deposit(toFixedPtAmt("100"));
 
         await collateralToken.transfer(otherUserAddress, toFixedPtAmt("100"));
         await collateralToken.connect(otherUser).approve(vault.address, toFixedPtAmt("100"));
-        await vault.connect(otherUser).deposit(collateralToken.address, toFixedPtAmt("100"));
+        await vault.connect(otherUser).deposit(toFixedPtAmt("100"));
 
         await vault.deploy();
         await collateralToken.transfer(vault.address, toFixedPtAmt("20"));
@@ -579,11 +571,11 @@ describe("RolloverVault", function () {
       let redemptionAmts: [string, BigNumber][];
       beforeEach(async function () {
         await collateralToken.approve(vault.address, toFixedPtAmt("100"));
-        await vault.deposit(collateralToken.address, toFixedPtAmt("100"));
+        await vault.deposit(toFixedPtAmt("100"));
 
         await collateralToken.transfer(otherUserAddress, toFixedPtAmt("100"));
         await collateralToken.connect(otherUser).approve(vault.address, toFixedPtAmt("100"));
-        await vault.connect(otherUser).deposit(collateralToken.address, toFixedPtAmt("100"));
+        await vault.connect(otherUser).deposit(toFixedPtAmt("100"));
 
         await vault.deploy();
         await collateralToken.transfer(vault.address, toFixedPtAmt("20"));
@@ -639,11 +631,11 @@ describe("RolloverVault", function () {
       let redemptionAmts: [string, BigNumber][];
       beforeEach(async function () {
         await collateralToken.approve(vault.address, toFixedPtAmt("100"));
-        await vault.deposit(collateralToken.address, toFixedPtAmt("100"));
+        await vault.deposit(toFixedPtAmt("100"));
 
         await collateralToken.transfer(otherUserAddress, toFixedPtAmt("100"));
         await collateralToken.connect(otherUser).approve(vault.address, toFixedPtAmt("100"));
-        await vault.connect(otherUser).deposit(collateralToken.address, toFixedPtAmt("100"));
+        await vault.connect(otherUser).deposit(toFixedPtAmt("100"));
 
         await vault.deploy();
         await collateralToken.transfer(vault.address, toFixedPtAmt("20"));

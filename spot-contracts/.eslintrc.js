@@ -5,7 +5,7 @@ module.exports = {
     mocha: true,
     node: true,
   },
-  plugins: ["@typescript-eslint"],
+  plugins: ["@typescript-eslint", "no-only-tests"],
   extends: ["standard", "plugin:prettier/recommended", "plugin:node/recommended"],
   parser: "@typescript-eslint/parser",
   parserOptions: {
@@ -26,5 +26,6 @@ module.exports = {
         allowModules: ["hardhat", "ethers", "@openzeppelin/upgrades-core"],
       },
     ],
+    "no-only-tests/no-only-tests": "error",
   },
 };
