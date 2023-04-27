@@ -439,7 +439,6 @@ contract RolloverVault is
     ///      which wrap this function with the internal book-keeping necessary to keep track of the vault's assets.
     function _execTrancheRedemption(ITranche tranche) private returns (TrancheData memory) {
         IBondController bond = IBondController(tranche.bond());
-        TrancheData memory td;
 
         // if bond has matured, redeem the tranche token
         if (bond.timeToMaturity() <= 0) {
@@ -447,28 +446,26 @@ contract RolloverVault is
                 bond.mature();
             }
 
-            td = bond.getTrancheData();
             uint256 trancheBalance = tranche.balanceOf(address(this));
-            if (trancheBalance <= 0) {
-                return td;
+            if (trancheBalance > 0) {
+                bond.redeemMature(address(tranche), trancheBalance);
             }
 
-            bond.redeemMature(address(tranche), trancheBalance);
+            return bond.getTrancheData();
         }
         // else redeem using proportional balances, redeems all tranches part of the bond
         else {
             uint256[] memory trancheAmts;
+            TrancheData memory td;
             (td, trancheAmts) = bond.computeRedeemableTrancheAmounts(address(this));
 
             // NOTE: It is guaranteed that if one tranche amount is zero, all amounts are zeros.
-            if (trancheAmts[0] <= 0) {
-                return td;
+            if (trancheAmts[0] > 0) {
+                bond.redeem(trancheAmts);
             }
 
-            bond.redeem(trancheAmts);
+            return td;
         }
-
-        return td;
     }
 
     /// @dev Syncs balance and adds the given asset into the deployed list if the vault has a balance.
