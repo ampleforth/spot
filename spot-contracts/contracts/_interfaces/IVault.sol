@@ -50,6 +50,7 @@ interface IVault {
     function recover() external;
 
     /// @notice Recovers a given deployed asset.
+    /// @param token The ERC-20 token address of the deployed asset.
     function recover(IERC20Upgradeable token) external;
 
     /// @notice Deposits the underlying asset from {msg.sender} into the vault and mints notes.
