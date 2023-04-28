@@ -179,11 +179,14 @@ export const advancePerpQueue = async (perp: Contract, time: number): Promise<Tr
   return perp.updateState();
 };
 
-export const advancePerpQueueToBondMaturity = async (perp: Contract, bond: Contract): Promise<Transaction> => {
+export const advancePerpQueueUpToBondMaturity = async (perp: Contract, bond: Contract): Promise<Transaction> => {
   await perp.updateState();
   const matuirtyDate = await bond.maturityDate();
   await TimeHelpers.setNextBlockTimestamp(matuirtyDate.toNumber());
-  await perp.updateState();
+};
+
+export const advancePerpQueueToBondMaturity = async (perp: Contract, bond: Contract): Promise<Transaction> => {
+  await advancePerpQueueUpToBondMaturity(perp, bond);
   await TimeHelpers.increaseTime(1);
   return perp.updateState();
 };

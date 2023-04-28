@@ -56,44 +56,55 @@ describe("CDRPricingStrategy", function () {
     let bond: Contract, tranches: Contract[];
     beforeEach(async function () {
       bond = await createBondWithFactory(bondFactory, collateralToken, [500, 500], 86400);
-      await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
       tranches = await getTranches(bond);
     });
 
-    describe("when pricing the tranche", function () {
-      describe("when bond not mature", function () {
-        it("should return the price", async function () {
-          expect(await pricingStrategy.computeTranchePrice(tranches[0].address)).to.eq("100000000");
-        });
+    describe("when bond is empty", function () {
+      it("should return zero", async function () {
+        expect(await pricingStrategy.computeTranchePrice(tranches[0].address)).to.eq("100000000");
+      });
+    });
+
+    describe("when bond has assets", function () {
+      beforeEach(async function () {
+        await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
       });
 
-      describe("when bond is mature", function () {
-        beforeEach(async function () {
-          await TimeHelpers.increaseTime(86400);
-          await bond.mature(); // NOTE: Any rebase after maturity goes directly to the tranches
-        });
-
-        describe("when cdr = 1", async function () {
+      describe("when pricing the tranche", function () {
+        describe("when bond not mature", function () {
           it("should return the price", async function () {
             expect(await pricingStrategy.computeTranchePrice(tranches[0].address)).to.eq("100000000");
           });
         });
 
-        describe("when cdr > 1", async function () {
+        describe("when bond is mature", function () {
           beforeEach(async function () {
-            await rebase(collateralToken, rebaseOracle, 0.1);
+            await TimeHelpers.increaseTime(86400);
+            await bond.mature(); // NOTE: Any rebase after maturity goes directly to the tranches
           });
-          it("should return the price", async function () {
-            expect(await pricingStrategy.computeTranchePrice(tranches[0].address)).to.eq("110000000");
-          });
-        });
 
-        describe("when cdr < 1", async function () {
-          beforeEach(async function () {
-            await rebase(collateralToken, rebaseOracle, -0.1);
+          describe("when cdr = 1", async function () {
+            it("should return the price", async function () {
+              expect(await pricingStrategy.computeTranchePrice(tranches[0].address)).to.eq("100000000");
+            });
           });
-          it("should return the price", async function () {
-            expect(await pricingStrategy.computeTranchePrice(tranches[0].address)).to.eq("90000000");
+
+          describe("when cdr > 1", async function () {
+            beforeEach(async function () {
+              await rebase(collateralToken, rebaseOracle, 0.1);
+            });
+            it("should return the price", async function () {
+              expect(await pricingStrategy.computeTranchePrice(tranches[0].address)).to.eq("110000000");
+            });
+          });
+
+          describe("when cdr < 1", async function () {
+            beforeEach(async function () {
+              await rebase(collateralToken, rebaseOracle, -0.1);
+            });
+            it("should return the price", async function () {
+              expect(await pricingStrategy.computeTranchePrice(tranches[0].address)).to.eq("90000000");
+            });
           });
         });
       });
@@ -101,6 +112,18 @@ describe("CDRPricingStrategy", function () {
   });
 
   describe("computeMatureTranchePrice", function () {
+    describe("when debt is zero", function () {
+      it("should return zero", async function () {
+        expect(
+          await pricingStrategy.computeMatureTranchePrice(
+            collateralToken.address,
+            toFixedPtAmt("0"),
+            toFixedPtAmt("0"),
+          ),
+        ).to.eq("100000000");
+      });
+    });
+
     describe("when cdr = 1", async function () {
       it("should return the price", async function () {
         expect(
