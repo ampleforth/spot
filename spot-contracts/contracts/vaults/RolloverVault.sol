@@ -217,7 +217,7 @@ contract RolloverVault is
 
         // calculating amounts and transferring assets out proportionally
         for (uint256 i = 0; i < assetCount; i++) {
-            redemptions[i].amount = _calculateAssetShare(redemptions[i].token, notes, totalNotes);
+            redemptions[i].amount = redemptions[i].token.balanceOf(address(this)).mulDiv(notes, totalNotes);
             redemptions[i].token.safeTransfer(_msgSender(), redemptions[i].amount);
             _syncAsset(redemptions[i].token);
         }
@@ -503,17 +503,5 @@ contract RolloverVault is
         emit AssetSynced(token, balance);
 
         return balance;
-    }
-
-    //--------------------------------------------------------------------------
-    // Private read methods
-
-    /// @dev Computes the proportional share of the vault's asset token balance for a given amount of notes.
-    function _calculateAssetShare(
-        IERC20Upgradeable asset,
-        uint256 notes,
-        uint256 totalNotes
-    ) private view returns (uint256) {
-        return asset.balanceOf(address(this)).mulDiv(notes, totalNotes);
     }
 }
