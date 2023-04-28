@@ -1056,4 +1056,42 @@ describe("RolloverVault", function () {
       });
     });
   });
+
+  describe("deploy limit", function () {
+    async function setupDeployment() {
+      const curBondIn = await bondAt(await perp.callStatic.getDepositBond());
+      await advancePerpQueueToRollover(perp, curBondIn);
+      const newBondIn = await bondAt(await perp.callStatic.getDepositBond());
+      const newTranchesIn = await getTranches(newBondIn);
+      await pricingStrategy.computeTranchePrice
+        .whenCalledWith(newTranchesIn[0].address)
+        .returns(toPriceFixedPtAmt("1"));
+      await discountStrategy.computeTrancheDiscount
+        .whenCalledWith(newTranchesIn[0].address)
+        .returns(toDiscountFixedPtAmt("1"));
+      await collateralToken.transfer(vault.address, toFixedPtAmt("10"));
+    }
+
+    beforeEach(async function () {
+      for (let i = 0; i < 23; i++) {
+        await setupDeployment();
+        await vault.deploy();
+      }
+    });
+
+    it("should revert after limit is reached", async function () {
+      expect(await vault.deployedCount()).to.eq(46);
+      await setupDeployment();
+      await expect(vault.deploy()).to.be.revertedWith("DeployedCountOverLimit");
+    });
+    it("redemption should be within gas limit", async function () {
+      await collateralToken.approve(vault.address, toFixedPtAmt("10"));
+      await vault.deposit(toFixedPtAmt("10"));
+      await expect(vault.redeem(await vault.balanceOf(await deployer.getAddress()))).not.to.be.reverted;
+    });
+
+    it("recovery should be within gas limit", async function () {
+      await expect(vault.recover()).not.to.be.reverted;
+    });
+  });
 });
