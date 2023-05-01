@@ -2,7 +2,7 @@
 
 <img src="https://assets.coingecko.com/coins/images/28426/small/SPOT_Logo_200x200_square.png" /> 
 
-SPOT is an inflation-resistant store of value fully collateralized by AMPL backed derivatives. [Learn more](https://docs.ampleforth.org/learn/about-the-spot-perpetual-note).
+SPOT is an inflation-resistant store of value fully collateralized by AMPL backed derivatives. [Learn more](https://spot.cash/).
 
 [![Nightly](https://github.com/ampleforth/spot/actions/workflows/nightly.yml/badge.svg)](https://github.com/ampleforth/spot/actions/workflows/nightly.yml)&nbsp;&nbsp;[![Coverage Status](https://coveralls.io/repos/github/ampleforth/spot/badge.svg?branch=main&t=Qptbxq)](https://coveralls.io/github/ampleforth/spot?branch=main)
 
