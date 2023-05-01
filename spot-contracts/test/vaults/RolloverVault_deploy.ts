@@ -1091,7 +1091,7 @@ describe("RolloverVault", function () {
     });
 
     it("recovery should be within gas limit", async function () {
-      await expect(vault.recover()).not.to.be.reverted;
+      await expect(vault["recover()"]()).not.to.be.reverted;
     });
   });
 });
