@@ -12,7 +12,7 @@ import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/
 
 import { TrancheData, TrancheHelpers, BondHelpers } from "../_utils/BondHelpers.sol";
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche } from "../_interfaces/IPerpetualTranche.sol";
-import { IVault, UnexpectedAsset, UnauthorizedTransferOut, NoDeployment, DeployedCountOverLimit } from "../_interfaces/IVault.sol";
+import { IVault, UnexpectedAsset, UnauthorizedTransferOut, InsufficientDeployment, DeployedCountOverLimit } from "../_interfaces/IVault.sol";
 
 /// @notice Storage array access out of bounds.
 error OutOfBounds();
@@ -75,6 +75,14 @@ contract RolloverVault is
     /// @dev The maximum number of deployed assets that can be held in this vault at any given time.
     uint256 public constant MAX_DEPLOYED_COUNT = 47;
 
+    //-------------------------------------------------------------------------
+    // Storage
+
+    /// @notice The enforced minimum amount of assets to that have to be deployed in each iteration.
+    /// @dev The deployment transaction reverts, if the vaults does not have sufficient usable balance
+    ///      to cover the the minimum deployment amount.
+    uint256 public minDeploymentAmt;
+
     //--------------------------------------------------------------------------
     // ASSETS
     //
@@ -136,6 +144,12 @@ contract RolloverVault is
         _unpause();
     }
 
+    /// @notice Updates the minimum deployment amount.
+    /// @param minDeploymentAmt_ The new minimum deployment amount.
+    function updateMinDeploymentAmt(uint256 minDeploymentAmt_) public onlyOwner {
+        minDeploymentAmt = minDeploymentAmt_;
+    }
+
     /// @notice Transfers a non-vault token out of the contract, which may have been added accidentally.
     /// @param token The token address.
     /// @param to The destination address.
@@ -166,8 +180,8 @@ contract RolloverVault is
     ///      Reverts if there are no funds to deploy.
     function deploy() public override nonReentrant whenNotPaused {
         TrancheData memory td = _tranche(perp.getDepositBond());
-        if (_rollover(perp, td) <= 0) {
-            revert NoDeployment();
+        if (_rollover(perp, td) <= minDeploymentAmt) {
+            revert InsufficientDeployment();
         }
     }
 

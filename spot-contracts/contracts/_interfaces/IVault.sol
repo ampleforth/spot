@@ -11,8 +11,8 @@ error UnexpectedAsset(IERC20Upgradeable token);
 /// @param token Address of the token transferred.
 error UnauthorizedTransferOut(IERC20Upgradeable token);
 
-/// @notice Expected vault assets to be deployed.
-error NoDeployment();
+/// @notice Expected a minimum amount of vault assets to be deployed.
+error InsufficientDeployment();
 
 /// @notice Expected the number of vault assets deployed to be under the limit.
 error DeployedCountOverLimit();
