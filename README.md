@@ -4,7 +4,7 @@
 
 SPOT is an inflation-resistant store of value fully collateralized by AMPL backed derivatives. [Learn more](https://spot.cash/).
 
-[![Nightly](https://github.com/ampleforth/spot/actions/workflows/nightly.yml/badge.svg)](https://github.com/ampleforth/spot/actions/workflows/nightly.yml)&nbsp;&nbsp;[![Coverage Status](https://coveralls.io/repos/github/ampleforth/spot/badge.svg?branch=main&t=Qptbxq)](https://coveralls.io/github/ampleforth/spot?branch=main)
+[![Nightly](https://github.com/ampleforth/spot/actions/workflows/nightly.yml/badge.svg)](https://github.com/ampleforth/spot/actions/workflows/nightly.yml)&nbsp;&nbsp;[![Coverage Status](https://coveralls.io/repos/github/ampleforth/spot/badge.svg?branch=main)](https://coveralls.io/github/ampleforth/spot?branch=main)
 
 
 ### Package organization
