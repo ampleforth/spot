@@ -320,7 +320,7 @@ contract RolloverVault is
 
         // Skip if balance is zero
         if (balance <= 0) {
-            return (balance, td);
+            return (0, td);
         }
 
         // balance is tranched
