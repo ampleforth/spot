@@ -268,6 +268,31 @@ contract RolloverVault is
         return totalAssets;
     }
 
+    /// @inheritdoc IVault
+    /// @dev The asset value is denominated in the underlying asset.
+    function getVaultAssetValue(IERC20Upgradeable token) external override returns (uint256) {
+        uint256 balance = token.balanceOf(address(this));
+        if (balance <= 0) {
+            return 0;
+        }
+
+        // Underlying asset
+        if (token == underlying) {
+            return balance;
+        }
+        // Deployed asset
+        else if (_deployed.contains(address(token))) {
+            (uint256 collateralBalance, uint256 debt) = ITranche(address(token)).getTrancheCollateralization();
+            return balance.mulDiv(collateralBalance, debt);
+        }
+        // Earned asset
+        else if (address(token) == address(perp)) {
+            return balance.mulDiv(IPerpetualTranche(address(perp)).getAvgPrice(), PERP_UNIT_PRICE);
+        }
+
+        return 0;
+    }
+
     //--------------------------------------------------------------------------
     // External & Public read methods
 
