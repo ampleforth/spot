@@ -177,10 +177,11 @@ contract RolloverVault is
 
     /// @inheritdoc IVault
     /// @dev Its safer to call `recover` before `deploy` so the full available balance can be deployed.
-    ///      Reverts if there are no funds to deploy.
+    ///      Reverts if no funds are rolled over or if the minimum deployment threshold is not reached.
     function deploy() public override nonReentrant whenNotPaused {
-        TrancheData memory td = _tranche(perp.getDepositBond());
-        if (_rollover(perp, td) <= minDeploymentAmt) {
+        (uint256 underlyingDeployed, TrancheData memory td) = _tranche(perp.getDepositBond());
+        uint256 perpsRolledOver = _rollover(perp, td);
+        if (underlyingDeployed <= minDeploymentAmt || perpsRolledOver <= 0) {
             revert InsufficientDeployment();
         }
     }
@@ -308,16 +309,18 @@ contract RolloverVault is
 
     /// @dev Deposits underlying balance into the provided bond and receives tranche tokens in return.
     ///      And performs some book-keeping to keep track of the vault's assets.
-    function _tranche(IBondController bond) private returns (TrancheData memory) {
+    /// @return balance The amount of underlying assets tranched.
+    /// @return td The given bonds tranche data.
+    function _tranche(IBondController bond) private returns (uint256, TrancheData memory) {
         // Get bond's tranche data
         TrancheData memory td = bond.getTrancheData();
 
         // Get underlying balance
         uint256 balance = underlying.balanceOf(address(this));
 
-        // Ensure initial deposit remains unspent
+        // Skip if balance is zero
         if (balance <= 0) {
-            return td;
+            return (balance, td);
         }
 
         // balance is tranched
@@ -330,7 +333,7 @@ contract RolloverVault is
         }
         _syncAsset(underlying);
 
-        return td;
+        return (balance, td);
     }
 
     /// @dev Rolls over freshly tranched tokens from the given bond for older tranches (close to maturity) from perp.
