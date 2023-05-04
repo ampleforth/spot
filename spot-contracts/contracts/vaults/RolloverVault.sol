@@ -78,8 +78,8 @@ contract RolloverVault is
     //-------------------------------------------------------------------------
     // Storage
 
-    /// @notice Minimum amount of assets that must be deployed for a deploy operation to succeed, denominated in perps.
-    /// @dev The deployment transaction reverts, if the vaults does not have sufficient usable balance
+    /// @notice Minimum amount of underlying assets that must be deployed, for a deploy operation to succeed.
+    /// @dev The deployment transaction reverts, if the vaults does not have sufficient underlying tokens
     ///      to cover the the minimum deployment amount.
     uint256 public minDeploymentAmt;
 
@@ -145,7 +145,7 @@ contract RolloverVault is
     }
 
     /// @notice Updates the minimum deployment amount.
-    /// @param minDeploymentAmt_ The new minimum deployment amount, denominated in perps.
+    /// @param minDeploymentAmt_ The new minimum deployment amount, denominated in underlying tokens.
     function updateMinDeploymentAmt(uint256 minDeploymentAmt_) external onlyOwner {
         minDeploymentAmt = minDeploymentAmt_;
     }
@@ -179,9 +179,9 @@ contract RolloverVault is
     /// @dev Its safer to call `recover` before `deploy` so the full available balance can be deployed.
     ///      Reverts if no funds are rolled over or if the minimum deployment threshold is not reached.
     function deploy() public override nonReentrant whenNotPaused {
-        (uint256 underlyingDeployed, TrancheData memory td) = _tranche(perp.getDepositBond());
+        (uint256 deployedAmt, TrancheData memory td) = _tranche(perp.getDepositBond());
         uint256 perpsRolledOver = _rollover(perp, td);
-        if (underlyingDeployed <= minDeploymentAmt || perpsRolledOver <= 0) {
+        if (deployedAmt <= minDeploymentAmt || perpsRolledOver <= 0) {
             revert InsufficientDeployment();
         }
     }
