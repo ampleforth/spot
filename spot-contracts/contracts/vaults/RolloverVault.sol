@@ -78,7 +78,7 @@ contract RolloverVault is
     //-------------------------------------------------------------------------
     // Storage
 
-    /// @notice The enforced minimum amount of assets to that have to be deployed in each iteration.
+    /// @notice Minimum amount of assets that must be deployed for a deploy operation to succeed, denominated in perps.
     /// @dev The deployment transaction reverts, if the vaults does not have sufficient usable balance
     ///      to cover the the minimum deployment amount.
     uint256 public minDeploymentAmt;
@@ -145,8 +145,8 @@ contract RolloverVault is
     }
 
     /// @notice Updates the minimum deployment amount.
-    /// @param minDeploymentAmt_ The new minimum deployment amount.
-    function updateMinDeploymentAmt(uint256 minDeploymentAmt_) public onlyOwner {
+    /// @param minDeploymentAmt_ The new minimum deployment amount, denominated in perps.
+    function updateMinDeploymentAmt(uint256 minDeploymentAmt_) external onlyOwner {
         minDeploymentAmt = minDeploymentAmt_;
     }
 
