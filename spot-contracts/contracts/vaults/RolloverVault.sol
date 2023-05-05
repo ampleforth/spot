@@ -80,7 +80,7 @@ contract RolloverVault is
 
     /// @notice Minimum amount of underlying assets that must be deployed, for a deploy operation to succeed.
     /// @dev The deployment transaction reverts, if the vaults does not have sufficient underlying tokens
-    ///      to cover the the minimum deployment amount.
+    ///      to cover the minimum deployment amount.
     uint256 public minDeploymentAmt;
 
     //--------------------------------------------------------------------------
