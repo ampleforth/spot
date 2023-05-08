@@ -181,6 +181,7 @@ contract RolloverVault is
     function deploy() public override nonReentrant whenNotPaused {
         (uint256 deployedAmt, TrancheData memory td) = _tranche(perp.getDepositBond());
         uint256 perpsRolledOver = _rollover(perp, td);
+        // NOTE: The following enforces that we only tranche the underlying if it can immediately be used for rotations.
         if (deployedAmt <= minDeploymentAmt || perpsRolledOver <= 0) {
             revert InsufficientDeployment();
         }
