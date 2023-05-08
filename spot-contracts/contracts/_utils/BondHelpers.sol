@@ -42,7 +42,7 @@ library TrancheDataHelpers {
 /**
  *  @title TrancheHelpers
  *
- *  @notice Library with helper for functions tranche tokens.
+ *  @notice Library with helper functions for tranche tokens.
  *
  */
 library TrancheHelpers {
