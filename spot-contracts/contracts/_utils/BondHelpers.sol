@@ -21,7 +21,7 @@ struct TrancheData {
 /**
  *  @title TrancheDataHelpers
  *
- *  @notice Library with helper functions the bond's retrieved tranche data.
+ *  @notice Library with helper functions for the bond's retrieved tranche data.
  *
  */
 library TrancheDataHelpers {
@@ -42,7 +42,7 @@ library TrancheDataHelpers {
 /**
  *  @title TrancheHelpers
  *
- *  @notice Library with helper functions tranche tokens.
+ *  @notice Library with helper functions for tranche tokens.
  *
  */
 library TrancheHelpers {
