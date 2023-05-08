@@ -12,7 +12,7 @@ import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/
 
 import { TrancheData, TrancheHelpers, BondHelpers } from "../_utils/BondHelpers.sol";
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche } from "../_interfaces/IPerpetualTranche.sol";
-import { IVault, UnexpectedAsset, UnauthorizedTransferOut, NoDeployment, DeployedCountOverLimit } from "../_interfaces/IVault.sol";
+import { IVault, UnexpectedAsset, UnauthorizedTransferOut, InsufficientDeployment, DeployedCountOverLimit } from "../_interfaces/IVault.sol";
 
 /// @notice Storage array access out of bounds.
 error OutOfBounds();
@@ -75,6 +75,14 @@ contract RolloverVault is
     /// @dev The maximum number of deployed assets that can be held in this vault at any given time.
     uint256 public constant MAX_DEPLOYED_COUNT = 47;
 
+    //-------------------------------------------------------------------------
+    // Storage
+
+    /// @notice Minimum amount of underlying assets that must be deployed, for a deploy operation to succeed.
+    /// @dev The deployment transaction reverts, if the vaults does not have sufficient underlying tokens
+    ///      to cover the minimum deployment amount.
+    uint256 public minDeploymentAmt;
+
     //--------------------------------------------------------------------------
     // ASSETS
     //
@@ -136,6 +144,12 @@ contract RolloverVault is
         _unpause();
     }
 
+    /// @notice Updates the minimum deployment amount.
+    /// @param minDeploymentAmt_ The new minimum deployment amount, denominated in underlying tokens.
+    function updateMinDeploymentAmt(uint256 minDeploymentAmt_) external onlyOwner {
+        minDeploymentAmt = minDeploymentAmt_;
+    }
+
     /// @notice Transfers a non-vault token out of the contract, which may have been added accidentally.
     /// @param token The token address.
     /// @param to The destination address.
@@ -163,11 +177,13 @@ contract RolloverVault is
 
     /// @inheritdoc IVault
     /// @dev Its safer to call `recover` before `deploy` so the full available balance can be deployed.
-    ///      Reverts if there are no funds to deploy.
+    ///      Reverts if no funds are rolled over or if the minimum deployment threshold is not reached.
     function deploy() public override nonReentrant whenNotPaused {
-        TrancheData memory td = _tranche(perp.getDepositBond());
-        if (_rollover(perp, td) <= 0) {
-            revert NoDeployment();
+        (uint256 deployedAmt, TrancheData memory td) = _tranche(perp.getDepositBond());
+        uint256 perpsRolledOver = _rollover(perp, td);
+        // NOTE: The following enforces that we only tranche the underlying if it can immediately be used for rotations.
+        if (deployedAmt <= minDeploymentAmt || perpsRolledOver <= 0) {
+            revert InsufficientDeployment();
         }
     }
 
@@ -253,6 +269,31 @@ contract RolloverVault is
         return totalAssets;
     }
 
+    /// @inheritdoc IVault
+    /// @dev The asset value is denominated in the underlying asset.
+    function getVaultAssetValue(IERC20Upgradeable token) external override returns (uint256) {
+        uint256 balance = token.balanceOf(address(this));
+        if (balance <= 0) {
+            return 0;
+        }
+
+        // Underlying asset
+        if (token == underlying) {
+            return balance;
+        }
+        // Deployed asset
+        else if (_deployed.contains(address(token))) {
+            (uint256 collateralBalance, uint256 debt) = ITranche(address(token)).getTrancheCollateralization();
+            return balance.mulDiv(collateralBalance, debt);
+        }
+        // Earned asset
+        else if (address(token) == address(perp)) {
+            return balance.mulDiv(IPerpetualTranche(address(perp)).getAvgPrice(), PERP_UNIT_PRICE);
+        }
+
+        return 0;
+    }
+
     //--------------------------------------------------------------------------
     // External & Public read methods
 
@@ -294,16 +335,18 @@ contract RolloverVault is
 
     /// @dev Deposits underlying balance into the provided bond and receives tranche tokens in return.
     ///      And performs some book-keeping to keep track of the vault's assets.
-    function _tranche(IBondController bond) private returns (TrancheData memory) {
+    /// @return balance The amount of underlying assets tranched.
+    /// @return td The given bonds tranche data.
+    function _tranche(IBondController bond) private returns (uint256, TrancheData memory) {
         // Get bond's tranche data
         TrancheData memory td = bond.getTrancheData();
 
         // Get underlying balance
         uint256 balance = underlying.balanceOf(address(this));
 
-        // Ensure initial deposit remains unspent
+        // Skip if balance is zero
         if (balance <= 0) {
-            return td;
+            return (0, td);
         }
 
         // balance is tranched
@@ -316,7 +359,7 @@ contract RolloverVault is
         }
         _syncAsset(underlying);
 
-        return td;
+        return (balance, td);
     }
 
     /// @dev Rolls over freshly tranched tokens from the given bond for older tranches (close to maturity) from perp.

@@ -165,7 +165,27 @@ describe("RolloverVault", function () {
   describe("#deploy", function () {
     describe("when usable balance is zero", function () {
       it("should revert", async function () {
-        await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "NoDeployment");
+        await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "InsufficientDeployment");
+      });
+    });
+
+    describe("when usable balance is lower than the min deployment", function () {
+      beforeEach(async function () {
+        await collateralToken.transfer(vault.address, toFixedPtAmt("999"));
+        await vault.updateMinDeploymentAmt(toFixedPtAmt("1000"));
+      });
+      it("should revert", async function () {
+        await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "InsufficientDeployment");
+      });
+    });
+
+    describe("when usable balance is higher than the min deployment", function () {
+      beforeEach(async function () {
+        await collateralToken.transfer(vault.address, toFixedPtAmt("1000"));
+        await vault.updateMinDeploymentAmt(toFixedPtAmt("100"));
+      });
+      it("should not revert", async function () {
+        await expect(vault.deploy()).not.to.be.reverted;
       });
     });
 
@@ -180,7 +200,7 @@ describe("RolloverVault", function () {
         await collateralToken.transfer(vault.address, toFixedPtAmt("10"));
       });
       it("should revert", async function () {
-        await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "NoDeployment");
+        await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "InsufficientDeployment");
       });
     });
 

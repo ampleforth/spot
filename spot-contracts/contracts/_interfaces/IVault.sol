@@ -11,8 +11,8 @@ error UnexpectedAsset(IERC20Upgradeable token);
 /// @param token Address of the token transferred.
 error UnauthorizedTransferOut(IERC20Upgradeable token);
 
-/// @notice Expected vault assets to be deployed.
-error NoDeployment();
+/// @notice Expected a minimum amount of vault assets to be deployed.
+error InsufficientDeployment();
 
 /// @notice Expected the number of vault assets deployed to be under the limit.
 error DeployedCountOverLimit();
@@ -75,6 +75,10 @@ interface IVault {
 
     /// @return The total value of assets currently held by the vault, denominated in a standard unit of account.
     function getTVL() external returns (uint256);
+
+    /// @param token The address of the asset ERC-20 token held by the vault.
+    /// @return The vault's asset token value, denominated in a standard unit of account.
+    function getVaultAssetValue(IERC20Upgradeable token) external returns (uint256);
 
     /// @notice The ERC20 token that can be deposited into this vault.
     function underlying() external view returns (IERC20Upgradeable);

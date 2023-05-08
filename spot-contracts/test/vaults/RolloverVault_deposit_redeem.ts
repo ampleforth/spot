@@ -167,10 +167,12 @@ describe("RolloverVault", function () {
     expect(await vault.vaultAssetBalance(await vault.earnedAt(0))).to.eq(0);
   });
 
-  describe("#getTVL", function () {
+  describe("get asset value", function () {
     describe("when vault is empty", function () {
-      it("should return 0", async function () {
+      it("should return 0 vaule", async function () {
         expect(await vault.callStatic.getTVL()).to.eq(0);
+        expect(await vault.callStatic.getVaultAssetValue(collateralToken.address)).to.eq(0);
+        expect(await vault.callStatic.getVaultAssetValue(perp.address)).to.eq(0);
       });
     });
 
@@ -180,6 +182,10 @@ describe("RolloverVault", function () {
       });
       it("should return tvl", async function () {
         expect(await vault.callStatic.getTVL()).to.eq(toFixedPtAmt("100"));
+      });
+      it("should return asset value", async function () {
+        expect(await vault.callStatic.getVaultAssetValue(collateralToken.address)).to.eq(toFixedPtAmt("100"));
+        expect(await vault.callStatic.getVaultAssetValue(perp.address)).to.eq(0);
       });
     });
 
@@ -199,6 +205,11 @@ describe("RolloverVault", function () {
       it("should return tvl", async function () {
         expect(await vault.callStatic.getTVL()).to.eq(toFixedPtAmt("100"));
       });
+      it("should return asset value", async function () {
+        expect(await vault.callStatic.getVaultAssetValue(collateralToken.address)).to.eq(0);
+        expect(await vault.callStatic.getVaultAssetValue(reserveTranches[0].address)).to.eq(toFixedPtAmt("100"));
+        expect(await vault.callStatic.getVaultAssetValue(perp.address)).to.eq(0);
+      });
     });
 
     describe("when vault has only earned balance", function () {
@@ -207,6 +218,10 @@ describe("RolloverVault", function () {
       });
       it("should return tvl", async function () {
         expect(await vault.callStatic.getTVL()).to.eq(toFixedPtAmt("100"));
+      });
+      it("should return asset value", async function () {
+        expect(await vault.callStatic.getVaultAssetValue(collateralToken.address)).to.eq(0);
+        expect(await vault.callStatic.getVaultAssetValue(perp.address)).to.eq(toFixedPtAmt("100"));
       });
     });
 
@@ -219,6 +234,14 @@ describe("RolloverVault", function () {
       });
       it("should return tvl", async function () {
         expect(await vault.callStatic.getTVL()).to.eq(toFixedPtAmt("2200"));
+      });
+      it("should return asset value", async function () {
+        expect(await vault.callStatic.getVaultAssetValue(collateralToken.address)).to.eq(toFixedPtAmt("100"));
+        expect(await vault.callStatic.getVaultAssetValue(reserveTranches[0].address)).to.eq(toFixedPtAmt("200"));
+        expect(await vault.callStatic.getVaultAssetValue(reserveTranches[1].address)).to.eq(toFixedPtAmt("200"));
+        expect(await vault.callStatic.getVaultAssetValue(rolloverInTranches[1].address)).to.eq(toFixedPtAmt("600"));
+        expect(await vault.callStatic.getVaultAssetValue(rolloverInTranches[2].address)).to.eq(toFixedPtAmt("1000"));
+        expect(await vault.callStatic.getVaultAssetValue(perp.address)).to.eq(toFixedPtAmt("100"));
       });
     });
 
@@ -233,6 +256,14 @@ describe("RolloverVault", function () {
       it("should return tvl", async function () {
         expect(await vault.callStatic.getTVL()).to.eq(toFixedPtAmt("2410"));
       });
+      it("should return asset value", async function () {
+        expect(await vault.callStatic.getVaultAssetValue(collateralToken.address)).to.eq(toFixedPtAmt("110"));
+        expect(await vault.callStatic.getVaultAssetValue(reserveTranches[0].address)).to.eq(toFixedPtAmt("200"));
+        expect(await vault.callStatic.getVaultAssetValue(reserveTranches[1].address)).to.eq(toFixedPtAmt("200"));
+        expect(await vault.callStatic.getVaultAssetValue(rolloverInTranches[1].address)).to.eq(toFixedPtAmt("600"));
+        expect(await vault.callStatic.getVaultAssetValue(rolloverInTranches[2].address)).to.eq(toFixedPtAmt("1200"));
+        expect(await vault.callStatic.getVaultAssetValue(perp.address)).to.eq(toFixedPtAmt("100"));
+      });
     });
 
     describe("when vault has many balances and rebases down", function () {
@@ -245,6 +276,14 @@ describe("RolloverVault", function () {
       });
       it("should return tvl", async function () {
         expect(await vault.callStatic.getTVL()).to.eq(toFixedPtAmt("1990"));
+      });
+      it("should return asset value", async function () {
+        expect(await vault.callStatic.getVaultAssetValue(collateralToken.address)).to.eq(toFixedPtAmt("90"));
+        expect(await vault.callStatic.getVaultAssetValue(reserveTranches[0].address)).to.eq(toFixedPtAmt("200"));
+        expect(await vault.callStatic.getVaultAssetValue(reserveTranches[1].address)).to.eq(toFixedPtAmt("200"));
+        expect(await vault.callStatic.getVaultAssetValue(rolloverInTranches[1].address)).to.eq(toFixedPtAmt("600"));
+        expect(await vault.callStatic.getVaultAssetValue(rolloverInTranches[2].address)).to.eq(toFixedPtAmt("800"));
+        expect(await vault.callStatic.getVaultAssetValue(perp.address)).to.eq(toFixedPtAmt("100"));
       });
     });
 
@@ -286,6 +325,17 @@ describe("RolloverVault", function () {
       });
       it("should return tvl", async function () {
         expect(await vault.callStatic.getTVL()).to.eq(toFixedPtAmt("390"));
+      });
+
+      it("should return asset value", async function () {
+        expect(await vault.callStatic.getVaultAssetValue(collateralToken.address)).to.eq(toFixedPtAmt("10"));
+        expect(await vault.callStatic.getVaultAssetValue(reserveTranches[0].address)).to.eq(toFixedPtAmt("100"));
+        expect(await vault.callStatic.getVaultAssetValue(reserveTranches[1].address)).to.eq(toFixedPtAmt("0"));
+        expect(await vault.callStatic.getVaultAssetValue(reserveTranches[2].address)).to.eq(toFixedPtAmt("0"));
+        expect(await vault.callStatic.getVaultAssetValue(rolloverInTranches[0].address)).to.eq(toFixedPtAmt("250"));
+        expect(await vault.callStatic.getVaultAssetValue(rolloverInTranches[1].address)).to.eq(toFixedPtAmt("0"));
+        expect(await vault.callStatic.getVaultAssetValue(rolloverInTranches[2].address)).to.eq(toFixedPtAmt("0"));
+        expect(await vault.callStatic.getVaultAssetValue(perp.address)).to.eq(toFixedPtAmt("30"));
       });
     });
   });
