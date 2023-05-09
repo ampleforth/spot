@@ -423,17 +423,22 @@ contract RolloverVault is
             trancheIntoPerp.approve(address(perp_), trancheInAmtAvailable);
             perp_.rollover(trancheIntoPerp, tokenOutOfPerp, trancheInAmtAvailable);
 
-            // sync holdings
+            // sync deployed asset sent to perp
             _syncAndRemoveDeployedAsset(trancheIntoPerp);
+
+            // skip insertion into the deployed list the case of the mature tranche, ie underlying
             if (tokenOutOfPerp != underlying) {
+                // sync deployed asset retrieved from perp
                 _syncAndAddDeployedAsset(tokenOutOfPerp);
             }
-            _syncAsset(perp_);
-            _syncAsset(underlying);
 
             // keep track of total amount rolled over
             totalPerpRolledOver += rd.perpRolloverAmt;
         }
+
+        // sync underlying and earned (ie perp)
+        _syncAsset(underlying);
+        _syncAsset(perp_);
 
         return totalPerpRolledOver;
     }
