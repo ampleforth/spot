@@ -99,6 +99,15 @@ library BondHelpers {
         return td;
     }
 
+    /// @notice Given a bond, returns the tranche at the specified index.
+    /// @param b The address of the bond contract.
+    /// @param i Index of the tranche.
+    /// @return t The tranche address.
+    function trancheAt(IBondController b, uint8 i) internal view returns (ITranche t) {
+        (t, ) = b.tranches(i);
+        return t;
+    }
+
     /// @notice Helper function to estimate the amount of tranches minted when a given amount of collateral
     ///         is deposited into the bond.
     /// @dev This function is used off-chain services (using callStatic) to preview tranches minted after

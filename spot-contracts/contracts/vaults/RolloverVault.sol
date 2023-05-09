@@ -195,34 +195,88 @@ contract RolloverVault is
 
         // execute redemption on each deployed asset
         for (uint256 i = 0; i < deployedCount_; i++) {
-            _execTrancheRedemption(ITranche(_deployed.at(i)));
+            ITranche tranche = ITranche(_deployed.at(i));
+            uint256 trancheBalance = tranche.balanceOf(address(this));
+
+            // if the vault has no tranche balance,
+            // we update our internal book-keeping and continue to the next one.
+            if (trancheBalance <= 0) {
+                continue;
+            }
+
+            // get the parent bond
+            IBondController bond = IBondController(tranche.bond());
+
+            // if bond has matured, redeem the tranche token
+            if (bond.secondsToMaturity() <= 0) {
+                // execute redemption
+                _execMatureTrancheRedemption(bond, tranche, trancheBalance);
+            }
+
+            // if not redeem using proportional balances
+            // redeems this tranche and it's siblings if the vault holds balances.
+            // NOTE: For gas optimization, we perform this operation only once
+            // ie) when we encounter the most-senior tranche.
+            else if (tranche == bond.trancheAt(0)) {
+                // execute redemption
+                _execImmatureTrancheRedemption(bond);
+            }
         }
 
-        // sync holdings
+        // sync deployed tranches
         // NOTE: We traverse the deployed set in the reverse order
         //       as deletions involve swapping the deleted element to the
         //       end of the set and removing the last element.
         for (uint256 i = deployedCount_; i > 0; i--) {
             _syncAndRemoveDeployedAsset(IERC20Upgradeable(_deployed.at(i - 1)));
         }
+
+        // sync underlying
         _syncAsset(underlying);
     }
 
     /// @inheritdoc IVault
     /// @dev Reverts when attempting to recover a tranche which is not part of the deployed list.
     ///      In the case of immature redemption, this method will recover other sibling tranches as well.
-    function recover(IERC20Upgradeable tranche) external override nonReentrant whenNotPaused {
-        if (!_deployed.contains(address(tranche))) {
-            revert UnexpectedAsset(tranche);
+    function recover(IERC20Upgradeable token) external override nonReentrant whenNotPaused {
+        if (!_deployed.contains(address(token))) {
+            revert UnexpectedAsset(token);
         }
 
-        BondTranches memory td = _execTrancheRedemption(ITranche(address(tranche)));
+        ITranche tranche = ITranche(address(token));
+        uint256 trancheBalance = tranche.balanceOf(address(this));
 
-        // sync holdings
-        // Note: Immature redemption, may remove sibling tranches from the deployed list.
-        for (uint8 i = 0; i < td.tranches.length; i++) {
-            _syncAndRemoveDeployedAsset(td.tranches[i]);
+        // if the vault has no tranche balance,
+        // we update our internal book-keeping and return.
+        if (trancheBalance <= 0) {
+            _syncAndRemoveDeployedAsset(tranche);
+            return;
         }
+
+        // get the parent bond
+        IBondController bond = IBondController(tranche.bond());
+
+        // if bond has matured, redeem the tranche token
+        if (bond.secondsToMaturity() <= 0) {
+            // execute redemption
+            _execMatureTrancheRedemption(bond, tranche, trancheBalance);
+
+            // sync deployed asset
+            _syncAndRemoveDeployedAsset(tranche);
+        }
+        // if not redeem using proportional balances
+        // redeems this tranche and it's siblings if the vault holds balances.
+        else {
+            // execute redemption
+            BondTranches memory td = _execImmatureTrancheRedemption(bond);
+
+            // sync deployed asset, ie current tranche and all its siblings.
+            for (uint8 j = 0; j < td.tranches.length; j++) {
+                _syncAndRemoveDeployedAsset(td.tranches[j]);
+            }
+        }
+
+        // sync underlying
         _syncAsset(underlying);
     }
 
@@ -468,40 +522,38 @@ contract RolloverVault is
         return totalPerpRolledOver;
     }
 
-    /// @dev Low level method that redeems the given deployed tranche tokens for the underlying asset.
+    /// @dev Low level method that redeems the given mature tranche for the underlying asset.
+    ///      It interacts with the button-wood bond contract.
     ///      This function should NOT be called directly, use `recover()` or `recover(tranche)`
     ///      which wrap this function with the internal book-keeping necessary,
     ///      to keep track of the vault's assets.
-    function _execTrancheRedemption(ITranche tranche) private returns (BondTranches memory) {
-        IBondController bond = IBondController(tranche.bond());
-        uint256 trancheBalance = tranche.balanceOf(address(this));
+    function _execMatureTrancheRedemption(
+        IBondController bond,
+        ITranche tranche,
+        uint256 amount
+    ) private {
+        if (!bond.isMature()) {
+            bond.mature();
+        }
+        bond.redeemMature(address(tranche), amount);
+    }
 
-        if (trancheBalance <= 0) {
-            return bond.getTranches();
+    /// @dev Low level method that redeems the given tranche for the underlying asset, before maturity.
+    ///      If the vault holds sibling tranches with proportional balances, those will also get redeemed.
+    ///      It interacts with the button-wood bond contract.
+    ///      This function should NOT be called directly, use `recover()` or `recover(tranche)`
+    ///      which wrap this function with the internal book-keeping necessary,
+    ///      to keep track of the vault's assets.
+    function _execImmatureTrancheRedemption(IBondController bond) private returns (BondTranches memory td) {
+        uint256[] memory trancheAmts;
+        (td, trancheAmts) = bond.computeRedeemableTrancheAmounts(address(this));
+
+        // NOTE: It is guaranteed that if one tranche amount is zero, all amounts are zeros.
+        if (trancheAmts[0] > 0) {
+            bond.redeem(trancheAmts);
         }
 
-        // if bond has matured, redeem the tranche token
-        if (bond.secondsToMaturity() <= 0) {
-            if (!bond.isMature()) {
-                bond.mature();
-            }
-
-            bond.redeemMature(address(tranche), trancheBalance);
-            return bond.getTranches();
-        }
-        // else redeem using proportional balances, redeems all tranches part of the bond
-        else {
-            uint256[] memory trancheAmts;
-            BondTranches memory td;
-            (td, trancheAmts) = bond.computeRedeemableTrancheAmounts(address(this));
-
-            // NOTE: It is guaranteed that if one tranche amount is zero, all amounts are zeros.
-            if (trancheAmts[0] > 0) {
-                bond.redeem(trancheAmts);
-            }
-
-            return td;
-        }
+        return td;
     }
 
     /// @dev Syncs balance and adds the given asset into the deployed list if the vault has a balance.
