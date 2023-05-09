@@ -362,6 +362,7 @@ contract PerpetualTranche is
         IDiscountStrategy discountStrategy_
     ) public initializer {
         __ERC20_init(name, symbol);
+        __ERC20Burnable_init();
         __Ownable_init();
         __Pausable_init();
         __ReentrancyGuard_init();
