@@ -122,15 +122,15 @@ library BondHelpers {
         uint256 feeBps = b.feeBps();
 
         for (uint8 i = 0; i < td.tranches.length; i++) {
-            uint256 trancheValue = (collateralAmount * td.trancheRatios[i]) / TRANCHE_RATIO_GRANULARITY;
+            uint256 trancheAmt = collateralAmount.mulDiv(td.trancheRatios[i], TRANCHE_RATIO_GRANULARITY);
             if (collateralBalance > 0) {
-                trancheValue = (trancheValue * totalDebt) / collateralBalance;
+                trancheAmt = trancheAmt.mulDiv(totalDebt, collateralBalance);
             }
-            fees[i] = (trancheValue * feeBps) / BPS;
+            fees[i] = trancheAmt.mulDiv(feeBps, BPS);
             if (fees[i] > 0) {
-                trancheValue -= fees[i];
+                trancheAmt -= fees[i];
             }
-            trancheAmts[i] = trancheValue;
+            trancheAmts[i] = trancheAmt;
         }
 
         return (td, trancheAmts, fees);
