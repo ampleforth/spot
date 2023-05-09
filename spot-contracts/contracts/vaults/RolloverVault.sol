@@ -188,17 +188,42 @@ contract RolloverVault is
 
     /// @inheritdoc IVault
     function recover() public override nonReentrant whenNotPaused {
-        _redeemTranches();
+        uint256 deployedCount_ = _deployed.length();
+        if (deployedCount_ <= 0) {
+            return;
+        }
+
+        // execute redemption on each deployed asset
+        for (uint256 i = 0; i < deployedCount_; i++) {
+            _execTrancheRedemption(ITranche(_deployed.at(i)));
+        }
+
+        // sync holdings
+        // NOTE: We traverse the deployed set in the reverse order
+        //       as deletions involve swapping the deleted element to the
+        //       end of the set and removing the last element.
+        for (uint256 i = deployedCount_; i > 0; i--) {
+            _syncAndRemoveDeployedAsset(IERC20Upgradeable(_deployed.at(i - 1)));
+        }
+        _syncAsset(underlying);
     }
 
     /// @inheritdoc IVault
     /// @dev Reverts when attempting to recover a tranche which is not part of the deployed list.
     ///      In the case of immature redemption, this method will recover other sibling tranches as well.
-    function recover(IERC20Upgradeable token) external override nonReentrant whenNotPaused {
-        if (!_deployed.contains(address(token))) {
-            revert UnexpectedAsset(token);
+    function recover(IERC20Upgradeable tranche) external override nonReentrant whenNotPaused {
+        if (!_deployed.contains(address(tranche))) {
+            revert UnexpectedAsset(tranche);
         }
-        _redeemTranche(ITranche(address(token)));
+
+        BondTranches memory td = _execTrancheRedemption(ITranche(address(tranche)));
+
+        // sync holdings
+        // Note: Immature redemption, may remove sibling tranches from the deployed list.
+        for (uint8 i = 0; i < td.tranches.length; i++) {
+            _syncAndRemoveDeployedAsset(td.tranches[i]);
+        }
+        _syncAsset(underlying);
     }
 
     /// @inheritdoc IVault
@@ -443,48 +468,17 @@ contract RolloverVault is
         return totalPerpRolledOver;
     }
 
-    /// @dev Redeems all deployed tranches for the underlying asset and
-    ///      performs internal book-keeping to keep track of the vault assets.
-    function _redeemTranches() private {
-        uint256 deployedCount_ = _deployed.length();
-        if (deployedCount_ <= 0) {
-            return;
-        }
-
-        // execute redemption on each deployed asset
-        for (uint256 i = 0; i < deployedCount_; i++) {
-            _execTrancheRedemption(ITranche(_deployed.at(i)));
-        }
-
-        // sync holdings
-        // NOTE: We traverse the deployed set in the reverse order
-        //       as deletions involve swapping the deleted element to the
-        //       end of the set and removing the last element.
-        for (uint256 i = deployedCount_; i > 0; i--) {
-            _syncAndRemoveDeployedAsset(IERC20Upgradeable(_deployed.at(i - 1)));
-        }
-        _syncAsset(underlying);
-    }
-
-    /// @dev Redeems the given tranche for the underlying asset and
-    ///      performs internal book-keeping to keep track of the vault assets.
-    function _redeemTranche(ITranche tranche) private {
-        BondTranches memory td = _execTrancheRedemption(tranche);
-
-        // sync holdings
-        // Note: Immature redemption, may remove sibling tranches from the deployed list.
-        for (uint8 i = 0; i < td.tranches.length; i++) {
-            _syncAndRemoveDeployedAsset(td.tranches[i]);
-        }
-        _syncAsset(underlying);
-    }
-
     /// @dev Low level method that redeems the given deployed tranche tokens for the underlying asset.
-    ///      When the tranche is not up for redemption, its a no-op.
-    ///      This function should NOT be called directly, use `_redeemTranches` or `_redeemTranche`
-    ///      which wrap this function with the internal book-keeping necessary to keep track of the vault's assets.
+    ///      This function should NOT be called directly, use `recover()` or `recover(tranche)`
+    ///      which wrap this function with the internal book-keeping necessary,
+    ///      to keep track of the vault's assets.
     function _execTrancheRedemption(ITranche tranche) private returns (BondTranches memory) {
         IBondController bond = IBondController(tranche.bond());
+        uint256 trancheBalance = tranche.balanceOf(address(this));
+
+        if (trancheBalance <= 0) {
+            return bond.getTranches();
+        }
 
         // if bond has matured, redeem the tranche token
         if (bond.secondsToMaturity() <= 0) {
@@ -492,11 +486,7 @@ contract RolloverVault is
                 bond.mature();
             }
 
-            uint256 trancheBalance = tranche.balanceOf(address(this));
-            if (trancheBalance > 0) {
-                bond.redeemMature(address(tranche), trancheBalance);
-            }
-
+            bond.redeemMature(address(tranche), trancheBalance);
             return bond.getTranches();
         }
         // else redeem using proportional balances, redeems all tranches part of the bond
