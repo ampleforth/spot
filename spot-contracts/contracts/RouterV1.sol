@@ -51,11 +51,11 @@ contract RouterV1 {
     {
         IBondController bond = perp.getDepositBond();
 
-        BondTranches memory td;
+        BondTranches memory bt;
         uint256[] memory trancheAmts;
-        (td, trancheAmts, ) = bond.previewDeposit(collateralAmount);
+        (bt, trancheAmts, ) = bond.previewDeposit(collateralAmount);
 
-        return (bond, td.tranches, trancheAmts);
+        return (bond, bt.tranches, trancheAmts);
     }
 
     /// @notice Calculates the amount of perp tokens minted and fees for the operation.
@@ -100,7 +100,7 @@ contract RouterV1 {
         uint256 collateralAmount,
         uint256 feePaid
     ) external afterPerpStateUpdate(perp) {
-        BondTranches memory td = bond.getTranches();
+        BondTranches memory bt = bond.getTranches();
         IERC20Upgradeable collateralToken = IERC20Upgradeable(bond.collateralToken());
         IERC20Upgradeable feeToken = perp.feeToken();
 
@@ -119,18 +119,18 @@ contract RouterV1 {
         // approves fee to be spent to mint perp tokens
         _checkAndApproveMax(feeToken, address(perp), feePaid);
 
-        for (uint8 i = 0; i < td.tranches.length; i++) {
-            uint256 trancheAmt = td.tranches[i].balanceOf(address(this));
-            uint256 mintAmt = perp.computeMintAmt(td.tranches[i], trancheAmt);
+        for (uint8 i = 0; i < bt.tranches.length; i++) {
+            uint256 trancheAmt = bt.tranches[i].balanceOf(address(this));
+            uint256 mintAmt = perp.computeMintAmt(bt.tranches[i], trancheAmt);
             if (mintAmt > 0) {
                 // approves tranches to be spent
-                _checkAndApproveMax(td.tranches[i], address(perp), trancheAmt);
+                _checkAndApproveMax(bt.tranches[i], address(perp), trancheAmt);
 
                 // mints perp tokens using tranches
-                perp.deposit(td.tranches[i], trancheAmt);
+                perp.deposit(bt.tranches[i], trancheAmt);
             } else {
                 // transfers unused tranches back
-                td.tranches[i].safeTransfer(msg.sender, trancheAmt);
+                bt.tranches[i].safeTransfer(msg.sender, trancheAmt);
             }
         }
 
@@ -238,7 +238,7 @@ contract RouterV1 {
         RolloverBatch[] calldata rollovers,
         uint256 feePaid
     ) external afterPerpStateUpdate(perp) {
-        BondTranches memory td = bond.getTranches();
+        BondTranches memory bt = bond.getTranches();
         IERC20Upgradeable collateralToken = IERC20Upgradeable(bond.collateralToken());
         IERC20Upgradeable feeToken = perp.feeToken();
 
@@ -276,10 +276,10 @@ contract RouterV1 {
         }
 
         // transfers unused tranches back
-        for (uint8 i = 0; i < td.tranches.length; i++) {
-            uint256 trancheBalance = td.tranches[i].balanceOf(address(this));
+        for (uint8 i = 0; i < bt.tranches.length; i++) {
+            uint256 trancheBalance = bt.tranches[i].balanceOf(address(this));
             if (trancheBalance > 0) {
-                td.tranches[i].safeTransfer(msg.sender, trancheBalance);
+                bt.tranches[i].safeTransfer(msg.sender, trancheBalance);
             }
         }
 

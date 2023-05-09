@@ -13,7 +13,7 @@ contract BondHelpersTester {
         return b.secondsToMaturity();
     }
 
-    function getTranches(IBondController b) public view returns (BondTranches memory td) {
+    function getTranches(IBondController b) public view returns (BondTranches memory bt) {
         return b.getTranches();
     }
 
@@ -33,7 +33,7 @@ contract BondHelpersTester {
         public
         view
         returns (
-            BondTranches memory td,
+            BondTranches memory bt,
             uint256[] memory,
             uint256[] memory
         )
@@ -42,14 +42,14 @@ contract BondHelpersTester {
     }
 
     function indexOf(IBondController b, ITranche t) public view returns (uint8) {
-        BondTranches memory td = b.getTranches();
-        return td.indexOf(t);
+        BondTranches memory bt = b.getTranches();
+        return bt.indexOf(t);
     }
 
     function computeRedeemableTrancheAmounts(IBondController b, address u)
         public
         view
-        returns (BondTranches memory td, uint256[] memory)
+        returns (BondTranches memory bt, uint256[] memory)
     {
         return b.computeRedeemableTrancheAmounts(u);
     }

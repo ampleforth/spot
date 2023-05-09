@@ -25,12 +25,12 @@ struct BondTranches {
  */
 library BondTranchesHelpers {
     /// @notice Iterates through the tranche data to find the seniority index of the given tranche.
-    /// @param td The tranche data object.
+    /// @param bt The tranche data object.
     /// @param t The address of the tranche to check.
     /// @return the index of the tranche in the tranches array.
-    function indexOf(BondTranches memory td, ITranche t) internal pure returns (uint8) {
-        for (uint8 i = 0; i < td.tranches.length; i++) {
-            if (td.tranches[i] == t) {
+    function indexOf(BondTranches memory bt, ITranche t) internal pure returns (uint8) {
+        for (uint8 i = 0; i < bt.tranches.length; i++) {
+            if (bt.tranches[i] == t) {
                 return i;
             }
         }
@@ -50,11 +50,11 @@ library TrancheHelpers {
     /// @return The collateral balance and the tranche token supply.
     function getTrancheCollateralization(ITranche t) internal view returns (uint256, uint256) {
         IBondController bond = IBondController(t.bond());
-        BondTranches memory td;
+        BondTranches memory bt;
         uint256[] memory collateralBalances;
         uint256[] memory trancheSupplies;
-        (td, collateralBalances, trancheSupplies) = BondHelpers.getTrancheCollateralizations(bond);
-        uint256 trancheIndex = BondTranchesHelpers.indexOf(td, t);
+        (bt, collateralBalances, trancheSupplies) = BondHelpers.getTrancheCollateralizations(bond);
+        uint256 trancheIndex = BondTranchesHelpers.indexOf(bt, t);
         return (collateralBalances[trancheIndex], trancheSupplies[trancheIndex]);
     }
 }
@@ -86,17 +86,17 @@ library BondHelpers {
     /// @param b The address of the bond contract.
     /// @return The tranche data.
     function getTranches(IBondController b) internal view returns (BondTranches memory) {
-        BondTranches memory td;
+        BondTranches memory bt;
         uint8 trancheCount = b.trancheCount().toUint8();
-        td.tranches = new ITranche[](trancheCount);
-        td.trancheRatios = new uint256[](trancheCount);
+        bt.tranches = new ITranche[](trancheCount);
+        bt.trancheRatios = new uint256[](trancheCount);
         // Max tranches per bond < 2**8 - 1
         for (uint8 i = 0; i < trancheCount; i++) {
             (ITranche t, uint256 ratio) = b.tranches(i);
-            td.tranches[i] = t;
-            td.trancheRatios[i] = ratio;
+            bt.tranches[i] = t;
+            bt.trancheRatios[i] = ratio;
         }
-        return td;
+        return bt;
     }
 
     /// @notice Given a bond, returns the tranche at the specified index.
@@ -122,29 +122,29 @@ library BondHelpers {
             uint256[] memory
         )
     {
-        BondTranches memory td = getTranches(b);
-        uint256[] memory trancheAmts = new uint256[](td.tranches.length);
-        uint256[] memory fees = new uint256[](td.tranches.length);
+        BondTranches memory bt = getTranches(b);
+        uint256[] memory trancheAmts = new uint256[](bt.tranches.length);
+        uint256[] memory fees = new uint256[](bt.tranches.length);
 
         uint256 totalDebt = b.totalDebt();
         uint256 collateralBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(address(b));
         uint256 feeBps = b.feeBps();
 
-        for (uint8 i = 0; i < td.tranches.length; i++) {
-            trancheAmts[i] = collateralAmount.mulDiv(td.trancheRatios[i], TRANCHE_RATIO_GRANULARITY);
+        for (uint8 i = 0; i < bt.tranches.length; i++) {
+            trancheAmts[i] = collateralAmount.mulDiv(bt.trancheRatios[i], TRANCHE_RATIO_GRANULARITY);
             if (collateralBalance > 0) {
                 trancheAmts[i] = trancheAmts[i].mulDiv(totalDebt, collateralBalance);
             }
         }
 
         if (feeBps > 0) {
-            for (uint8 i = 0; i < td.tranches.length; i++) {
+            for (uint8 i = 0; i < bt.tranches.length; i++) {
                 fees[i] = trancheAmts[i].mulDiv(feeBps, BPS);
                 trancheAmts[i] -= fees[i];
             }
         }
 
-        return (td, trancheAmts, fees);
+        return (bt, trancheAmts, fees);
     }
 
     /// @notice Given a bond, for each tranche token retrieves the total collateral redeemable
@@ -162,24 +162,24 @@ library BondHelpers {
             uint256[] memory
         )
     {
-        BondTranches memory td = getTranches(b);
-        uint256[] memory collateralBalances = new uint256[](td.tranches.length);
-        uint256[] memory trancheSupplies = new uint256[](td.tranches.length);
+        BondTranches memory bt = getTranches(b);
+        uint256[] memory collateralBalances = new uint256[](bt.tranches.length);
+        uint256[] memory trancheSupplies = new uint256[](bt.tranches.length);
 
         // When the bond is mature, the collateral is transferred over to the individual tranche token contracts
         if (b.isMature()) {
-            for (uint8 i = 0; i < td.tranches.length; i++) {
-                trancheSupplies[i] = td.tranches[i].totalSupply();
-                collateralBalances[i] = IERC20Upgradeable(b.collateralToken()).balanceOf(address(td.tranches[i]));
+            for (uint8 i = 0; i < bt.tranches.length; i++) {
+                trancheSupplies[i] = bt.tranches[i].totalSupply();
+                collateralBalances[i] = IERC20Upgradeable(b.collateralToken()).balanceOf(address(bt.tranches[i]));
             }
-            return (td, collateralBalances, trancheSupplies);
+            return (bt, collateralBalances, trancheSupplies);
         }
 
         // Before the bond is mature, all the collateral is held by the bond contract
         uint256 bondCollateralBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(address(b));
-        uint256 zTrancheIndex = td.tranches.length - 1;
-        for (uint8 i = 0; i < td.tranches.length; i++) {
-            trancheSupplies[i] = td.tranches[i].totalSupply();
+        uint256 zTrancheIndex = bt.tranches.length - 1;
+        for (uint8 i = 0; i < bt.tranches.length; i++) {
+            trancheSupplies[i] = bt.tranches[i].totalSupply();
 
             // a to y tranches
             if (i != zTrancheIndex) {
@@ -194,7 +194,7 @@ library BondHelpers {
             }
         }
 
-        return (td, collateralBalances, trancheSupplies);
+        return (bt, collateralBalances, trancheSupplies);
     }
 
     /// @notice For a given bond and user address, computes the maximum number of each of the bond's tranches
@@ -207,29 +207,29 @@ library BondHelpers {
         view
         returns (BondTranches memory, uint256[] memory)
     {
-        BondTranches memory td = getTranches(b);
-        uint256[] memory redeemableAmts = new uint256[](td.tranches.length);
+        BondTranches memory bt = getTranches(b);
+        uint256[] memory redeemableAmts = new uint256[](bt.tranches.length);
 
         // Calculate how many underlying assets could be redeemed from each tranche balance,
         // assuming other tranches are not an issue, and record the smallest amount.
         uint256 minUnderlyingOut = type(uint256).max;
         uint8 i;
-        for (i = 0; i < td.tranches.length; i++) {
-            uint256 d = td.tranches[i].balanceOf(u).mulDiv(TRANCHE_RATIO_GRANULARITY, td.trancheRatios[i]);
+        for (i = 0; i < bt.tranches.length; i++) {
+            uint256 d = bt.tranches[i].balanceOf(u).mulDiv(TRANCHE_RATIO_GRANULARITY, bt.trancheRatios[i]);
             if (d < minUnderlyingOut) {
                 minUnderlyingOut = d;
             }
 
             // if one of the balances is zero, we return
             if (minUnderlyingOut == 0) {
-                return (td, redeemableAmts);
+                return (bt, redeemableAmts);
             }
         }
 
-        for (i = 0; i < td.tranches.length; i++) {
-            redeemableAmts[i] = td.trancheRatios[i].mulDiv(minUnderlyingOut, TRANCHE_RATIO_GRANULARITY);
+        for (i = 0; i < bt.tranches.length; i++) {
+            redeemableAmts[i] = bt.trancheRatios[i].mulDiv(minUnderlyingOut, TRANCHE_RATIO_GRANULARITY);
         }
 
-        return (td, redeemableAmts);
+        return (bt, redeemableAmts);
     }
 }

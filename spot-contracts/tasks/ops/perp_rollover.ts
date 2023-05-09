@@ -51,12 +51,12 @@ function computeProportionalBalances(balances: BigNumber[], ratios: BigNumber[])
   return redeemableAmts;
 }
 
-async function computeRedeemableTrancheAmounts(td: [Contract, BigNumber][], address: string): Promise<BigNumber[]> {
+async function computeRedeemableTrancheAmounts(bt: [Contract, BigNumber][], address: string): Promise<BigNumber[]> {
   const balances: BigNumber[] = [];
   const ratios: BigNumber[] = [];
-  for (let i = 0; i < td.length; i++) {
-    balances.push(await td[i][0].balanceOf(address));
-    ratios.push(td[i][1]);
+  for (let i = 0; i < bt.length; i++) {
+    balances.push(await bt[i][0].balanceOf(address));
+    ratios.push(bt[i][1]);
   }
   return computeProportionalBalances(balances, ratios);
 }
@@ -235,21 +235,21 @@ task("ops:redeemTranches")
       console.log("---------------------------------------------------------------");
       console.log("Processing bond", bondAddress);
 
-      const td = await getTranches(hre, bond);
+      const bt = await getTranches(hre, bond);
       const isMature = await matureBond(bond, signer);
 
       if (isMature) {
-        for (let j = 0; j < td.length; j++) {
-          const b = await td[j][0].balanceOf(signerAddress);
+        for (let j = 0; j < bt.length; j++) {
+          const b = await bt[j][0].balanceOf(signerAddress);
           if (b.gt(0)) {
-            console.log("Redeeming mature tranche", td[j][0].address);
-            const tx = await bond.connect(signer).redeemMature(td[j][0].address, b);
+            console.log("Redeeming mature tranche", bt[j][0].address);
+            const tx = await bond.connect(signer).redeemMature(bt[j][0].address, b);
             await tx.wait();
             console.log("Tx:", tx.hash);
           }
         }
       } else {
-        const redemptionAmounts = await computeRedeemableTrancheAmounts(td, signerAddress);
+        const redemptionAmounts = await computeRedeemableTrancheAmounts(bt, signerAddress);
         if (redemptionAmounts[0].gt("0")) {
           console.log(
             "Redeeming immature bond",
@@ -410,22 +410,22 @@ task("ops:preview_tx:redeemTranches")
       const bondAddress = await bondIssuer.callStatic.issuedBondAt(i);
       const bond = await hre.ethers.getContractAt("IBondController", bondAddress);
 
-      const td = await getTranches(hre, bond);
+      const bt = await getTranches(hre, bond);
       const isMature = await bond.isMature();
 
       if (isMature) {
-        for (let j = 0; j < td.length; j++) {
-          const b = await td[j][0].balanceOf(walletAddress);
+        for (let j = 0; j < bt.length; j++) {
+          const b = await bt[j][0].balanceOf(walletAddress);
           if (b.gt(0)) {
             txs.push({
               contract: bond,
               method: "redeemMature",
-              args: [td[j][0].address, b.toString()],
+              args: [bt[j][0].address, b.toString()],
             });
           }
         }
       } else {
-        const redemptionAmounts = await computeRedeemableTrancheAmounts(td, walletAddress);
+        const redemptionAmounts = await computeRedeemableTrancheAmounts(bt, walletAddress);
         if (redemptionAmounts[0].gt("0")) {
           txs.push({
             contract: bond,
