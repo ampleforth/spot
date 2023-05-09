@@ -401,7 +401,6 @@ contract RolloverVault is
         // We pair tranche tokens held by the vault with tranche tokens held by perp,
         // And execute the rollover and continue to the next token with a usable balance.
         while (vaultTrancheIdx < td.tranches.length && perpTokenIdx < rolloverTokens.length) {
-
             // trancheIntoPerp refers to the tranche going into perp from the vault
             ITranche trancheIntoPerp = td.tranches[vaultTrancheIdx];
 
