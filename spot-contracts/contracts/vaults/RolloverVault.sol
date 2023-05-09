@@ -353,7 +353,7 @@ contract RolloverVault is
         bond.deposit(balance);
 
         // sync holdings
-        for (uint8 i = 0; i < td.trancheCount; i++) {
+        for (uint8 i = 0; i < td.tranches.length; i++) {
             _syncAndAddDeployedAsset(td.tranches[i]);
         }
         _syncAsset(underlying);
@@ -376,7 +376,7 @@ contract RolloverVault is
 
         // We pair tranche tokens held by the vault with tranche tokens held by perp,
         // And execute the rollover and continue to the next token with a usable balance.
-        while (vaultTokenIdx < td.trancheCount && perpTokenIdx < rolloverTokens.length) {
+        while (vaultTokenIdx < td.tranches.length && perpTokenIdx < rolloverTokens.length) {
             // trancheIntoPerp refers to the tranche going into perp from the vault
             ITranche trancheIntoPerp = td.tranches[vaultTokenIdx];
 
@@ -469,7 +469,7 @@ contract RolloverVault is
 
         // sync holdings
         // Note: Immature redemption, may remove sibling tranches from the deployed list.
-        for (uint8 i = 0; i < td.trancheCount; i++) {
+        for (uint8 i = 0; i < td.tranches.length; i++) {
             _syncAndRemoveDeployedAsset(td.tranches[i]);
         }
         _syncAsset(underlying);

@@ -15,7 +15,6 @@ error UnacceptableTranche(ITranche tranche);
 struct TrancheData {
     ITranche[] tranches;
     uint256[] trancheRatios;
-    uint8 trancheCount;
 }
 
 /**
@@ -30,7 +29,7 @@ library TrancheDataHelpers {
     /// @param t The address of the tranche to check.
     /// @return the index of the tranche in the tranches array.
     function getTrancheIndex(TrancheData memory td, ITranche t) internal pure returns (uint256) {
-        for (uint8 i = 0; i < td.trancheCount; i++) {
+        for (uint8 i = 0; i < td.tranches.length; i++) {
             if (td.tranches[i] == t) {
                 return i;
             }
@@ -96,11 +95,11 @@ library BondHelpers {
     /// @return The tranche data.
     function getTrancheData(IBondController b) internal view returns (TrancheData memory) {
         TrancheData memory td;
-        td.trancheCount = b.trancheCount().toUint8();
-        td.tranches = new ITranche[](td.trancheCount);
-        td.trancheRatios = new uint256[](td.trancheCount);
+        uint8 trancheCount = b.trancheCount().toUint8();
+        td.tranches = new ITranche[](trancheCount);
+        td.trancheRatios = new uint256[](trancheCount);
         // Max tranches per bond < 2**8 - 1
-        for (uint8 i = 0; i < td.trancheCount; i++) {
+        for (uint8 i = 0; i < trancheCount; i++) {
             (ITranche t, uint256 ratio) = b.tranches(i);
             td.tranches[i] = t;
             td.trancheRatios[i] = ratio;
@@ -123,14 +122,14 @@ library BondHelpers {
         )
     {
         TrancheData memory td = getTrancheData(b);
-        uint256[] memory trancheAmts = new uint256[](td.trancheCount);
-        uint256[] memory fees = new uint256[](td.trancheCount);
+        uint256[] memory trancheAmts = new uint256[](td.tranches.length);
+        uint256[] memory fees = new uint256[](td.tranches.length);
 
         uint256 totalDebt = b.totalDebt();
         uint256 collateralBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(address(b));
         uint256 feeBps = b.feeBps();
 
-        for (uint256 i = 0; i < td.trancheCount; i++) {
+        for (uint256 i = 0; i < td.tranches.length; i++) {
             uint256 trancheValue = (collateralAmount * td.trancheRatios[i]) / TRANCHE_RATIO_GRANULARITY;
             if (collateralBalance > 0) {
                 trancheValue = (trancheValue * totalDebt) / collateralBalance;
@@ -161,12 +160,12 @@ library BondHelpers {
         )
     {
         TrancheData memory td = getTrancheData(b);
-        uint256[] memory collateralBalances = new uint256[](td.trancheCount);
-        uint256[] memory trancheSupplies = new uint256[](td.trancheCount);
+        uint256[] memory collateralBalances = new uint256[](td.tranches.length);
+        uint256[] memory trancheSupplies = new uint256[](td.tranches.length);
 
         // When the bond is mature, the collateral is transferred over to the individual tranche token contracts
         if (b.isMature()) {
-            for (uint8 i = 0; i < td.trancheCount; i++) {
+            for (uint8 i = 0; i < td.tranches.length; i++) {
                 trancheSupplies[i] = td.tranches[i].totalSupply();
                 collateralBalances[i] = IERC20Upgradeable(b.collateralToken()).balanceOf(address(td.tranches[i]));
             }
@@ -175,8 +174,8 @@ library BondHelpers {
 
         // Before the bond is mature, all the collateral is held by the bond contract
         uint256 bondCollateralBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(address(b));
-        uint256 zTrancheIndex = td.trancheCount - 1;
-        for (uint8 i = 0; i < td.trancheCount; i++) {
+        uint256 zTrancheIndex = td.tranches.length - 1;
+        for (uint8 i = 0; i < td.tranches.length; i++) {
             trancheSupplies[i] = td.tranches[i].totalSupply();
 
             // a to y tranches
@@ -206,13 +205,13 @@ library BondHelpers {
         returns (TrancheData memory, uint256[] memory)
     {
         TrancheData memory td = getTrancheData(b);
-        uint256[] memory redeemableAmts = new uint256[](td.trancheCount);
+        uint256[] memory redeemableAmts = new uint256[](td.tranches.length);
 
         // Calculate how many underlying assets could be redeemed from each tranche balance,
         // assuming other tranches are not an issue, and record the smallest amount.
         uint256 minUnderlyingOut = type(uint256).max;
         uint8 i;
-        for (i = 0; i < td.trancheCount; i++) {
+        for (i = 0; i < td.tranches.length; i++) {
             uint256 d = td.tranches[i].balanceOf(u).mulDiv(TRANCHE_RATIO_GRANULARITY, td.trancheRatios[i]);
             if (d < minUnderlyingOut) {
                 minUnderlyingOut = d;
@@ -224,7 +223,7 @@ library BondHelpers {
             }
         }
 
-        for (i = 0; i < td.trancheCount; i++) {
+        for (i = 0; i < td.tranches.length; i++) {
             redeemableAmts[i] = td.trancheRatios[i].mulDiv(minUnderlyingOut, TRANCHE_RATIO_GRANULARITY);
         }
 

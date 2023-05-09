@@ -119,7 +119,7 @@ contract RouterV1 {
         // approves fee to be spent to mint perp tokens
         _checkAndApproveMax(feeToken, address(perp), feePaid);
 
-        for (uint8 i = 0; i < td.trancheCount; i++) {
+        for (uint8 i = 0; i < td.tranches.length; i++) {
             uint256 trancheAmt = td.tranches[i].balanceOf(address(this));
             uint256 mintAmt = perp.computeMintAmt(td.tranches[i], trancheAmt);
             if (mintAmt > 0) {
@@ -276,7 +276,7 @@ contract RouterV1 {
         }
 
         // transfers unused tranches back
-        for (uint8 i = 0; i < td.trancheCount; i++) {
+        for (uint8 i = 0; i < td.tranches.length; i++) {
             uint256 trancheBalance = td.tranches[i].balanceOf(address(this));
             if (trancheBalance > 0) {
                 td.tranches[i].safeTransfer(msg.sender, trancheBalance);

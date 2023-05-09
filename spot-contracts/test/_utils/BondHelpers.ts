@@ -81,7 +81,7 @@ describe("BondHelpers", function () {
 
     it("should return the tranche data", async function () {
       const td = await bondHelpers.getTrancheData(bond.address);
-      expect(td.trancheCount).to.eq(3);
+      expect(td.tranches.length).to.eq(3);
       expect(td.trancheRatios.length).to.eq(3);
       expect(td.trancheRatios[0]).to.eq(201);
       expect(td.trancheRatios[1]).to.eq(301);
