@@ -60,7 +60,6 @@ describe("BondHelpers", function () {
       it("should return the time to maturity", async function () {
         await TimeHelpers.setNextBlockTimestamp(maturityDate - bondLength / 2);
         expect(await bondHelpers.secondsToMaturity(bond.address)).to.eq(bondLength / 2);
-        expect(bondLength - (await bondHelpers.duration(bond.address)).toNumber()).to.lte(1);
       });
     });
 
@@ -68,7 +67,6 @@ describe("BondHelpers", function () {
       it("should return the time to maturity", async function () {
         await TimeHelpers.setNextBlockTimestamp(maturityDate + 1);
         expect(await bondHelpers.secondsToMaturity(bond.address)).to.eq(0);
-        expect(bondLength - (await bondHelpers.duration(bond.address)).toNumber()).to.lte(1);
       });
     });
   });

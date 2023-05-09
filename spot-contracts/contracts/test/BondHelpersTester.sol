@@ -13,10 +13,6 @@ contract BondHelpersTester {
         return b.secondsToMaturity();
     }
 
-    function duration(IBondController b) public view returns (uint256) {
-        return b.duration();
-    }
-
     function getTranches(IBondController b) public view returns (BondTranches memory td) {
         return b.getTranches();
     }
