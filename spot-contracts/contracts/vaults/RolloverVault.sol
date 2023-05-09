@@ -243,10 +243,10 @@ contract RolloverVault is
     /// @inheritdoc IVault
     /// @dev The total value is denominated in the underlying asset.
     function getTVL() public override returns (uint256) {
-        uint256 totalAssets = 0;
+        uint256 totalValue = 0;
 
         // The underlying balance
-        totalAssets += underlying.balanceOf(address(this));
+        totalValue += underlying.balanceOf(address(this));
 
         // The deployed asset value denominated in the underlying
         for (uint256 i = 0; i < _deployed.length(); i++) {
@@ -254,7 +254,7 @@ contract RolloverVault is
             uint256 trancheBalance = tranche.balanceOf(address(this));
             if (trancheBalance > 0) {
                 (uint256 collateralBalance, uint256 trancheSupply) = tranche.getTrancheCollateralization();
-                totalAssets += collateralBalance.mulDiv(trancheBalance, trancheSupply);
+                totalValue += collateralBalance.mulDiv(trancheBalance, trancheSupply);
             }
         }
 
@@ -263,10 +263,10 @@ contract RolloverVault is
         if (perpBalance > 0) {
             // The "earned" asset is assumed to be the perp token.
             // Perp tokens are assumed to have the same denomination as the underlying
-            totalAssets += perpBalance.mulDiv(IPerpetualTranche(address(perp)).getAvgPrice(), PERP_UNIT_PRICE);
+            totalValue += perpBalance.mulDiv(IPerpetualTranche(address(perp)).getAvgPrice(), PERP_UNIT_PRICE);
         }
 
-        return totalAssets;
+        return totalValue;
     }
 
     /// @inheritdoc IVault
