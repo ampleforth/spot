@@ -515,42 +515,33 @@ contract RolloverVault is
     }
 
     /// @dev Syncs balance and adds the given asset into the deployed list if the vault has a balance.
-    /// @return The Vault's token balance.
-    function _syncAndAddDeployedAsset(IERC20Upgradeable token) private returns (uint256) {
-        uint256 balance = _syncAsset(token);
-        bool isHeld = _deployed.contains(address(token));
+    function _syncAndAddDeployedAsset(IERC20Upgradeable token) private {
+        uint256 balance = token.balanceOf(address(this));
+        emit AssetSynced(token, balance);
 
-        if (balance > 0 && !isHeld) {
+        if (balance > 0 && !_deployed.contains(address(token))) {
             // Inserts new token into the deployed assets list.
             _deployed.add(address(token));
             if (_deployed.length() > MAX_DEPLOYED_COUNT) {
                 revert DeployedCountOverLimit();
             }
         }
-
-        return balance;
     }
 
     /// @dev Syncs balance and removes the given asset from the deployed list if the vault has no balance.
-    /// @return The Vault's token balance.
-    function _syncAndRemoveDeployedAsset(IERC20Upgradeable token) private returns (uint256) {
-        uint256 balance = _syncAsset(token);
-        bool isHeld = _deployed.contains(address(token));
-
-        if (balance <= 0 && isHeld) {
-            // Removes token into the deployed assets list.
-            _deployed.remove(address(token));
-        }
-
-        return balance;
-    }
-
-    /// @dev Logs the token balance held by the vault.
-    /// @return The Vault's token balance.
-    function _syncAsset(IERC20Upgradeable token) private returns (uint256) {
+    function _syncAndRemoveDeployedAsset(IERC20Upgradeable token) private {
         uint256 balance = token.balanceOf(address(this));
         emit AssetSynced(token, balance);
 
-        return balance;
+        if (balance <= 0 && _deployed.contains(address(token))) {
+            // Removes token into the deployed assets list.
+            _deployed.remove(address(token));
+        }
+    }
+
+    /// @dev Logs the token balance held by the vault.
+    function _syncAsset(IERC20Upgradeable token) private {
+        uint256 balance = token.balanceOf(address(this));
+        emit AssetSynced(token, balance);
     }
 }
