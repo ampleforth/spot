@@ -924,7 +924,7 @@ contract PerpetualTranche is
         uint256 trancheInPrice = computePrice(trancheIn);
         uint256 trancheOutPrice = computePrice(tokenOut);
         uint256 tokenOutBalance = _reserveBalance(tokenOut);
-        tokenOutAmtRequested = tokenOutAmtRequested.min(tokenOutBalance);
+        tokenOutAmtRequested = MathUpgradeable.min(tokenOutAmtRequested, tokenOutBalance);
 
         if (trancheInDiscount == 0 || trancheOutDiscount == 0 || trancheInPrice == 0 || trancheOutPrice == 0) {
             r.remainingTrancheInAmt = trancheInAmtAvailable;
@@ -1068,7 +1068,7 @@ contract PerpetualTranche is
         // Funds are going out
         if (isNativeFeeToken) {
             uint256 balance = _reserveBalance(feeToken_);
-            feeToken_.safeTransfer(destination, feeAmt.min(balance));
+            feeToken_.safeTransfer(destination, MathUpgradeable.min(feeAmt, balance));
 
             // In case that the reserve's balance doesn't cover the entire fee amount,
             // we mint perps to cover the difference.
