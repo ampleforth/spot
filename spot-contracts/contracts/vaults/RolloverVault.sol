@@ -178,8 +178,8 @@ contract RolloverVault is
     /// @dev Its safer to call `recover` before `deploy` so the full available balance can be deployed.
     ///      Reverts if no funds are rolled over or if the minimum deployment threshold is not reached.
     function deploy() public override nonReentrant whenNotPaused {
-        (uint256 deployedAmt, BondTranches memory td) = _tranche(perp.getDepositBond());
-        uint256 perpsRolledOver = _rollover(perp, td);
+        (uint256 deployedAmt, BondTranches memory bt) = _tranche(perp.getDepositBond());
+        uint256 perpsRolledOver = _rollover(perp, bt);
         // NOTE: The following enforces that we only tranche the underlying if it can immediately be used for rotations.
         if (deployedAmt <= minDeploymentAmt || perpsRolledOver <= 0) {
             revert InsufficientDeployment();
@@ -212,7 +212,6 @@ contract RolloverVault is
                 // execute redemption
                 _execMatureTrancheRedemption(bond, tranche, trancheBalance);
             }
-
             // if not redeem using proportional balances
             // redeems this tranche and it's siblings if the vault holds balances.
             // NOTE: For gas optimization, we perform this operation only once
@@ -268,11 +267,11 @@ contract RolloverVault is
         // redeems this tranche and it's siblings if the vault holds balances.
         else {
             // execute redemption
-            BondTranches memory td = _execImmatureTrancheRedemption(bond);
+            BondTranches memory bt = _execImmatureTrancheRedemption(bond);
 
             // sync deployed asset, ie current tranche and all its siblings.
-            for (uint8 j = 0; j < td.tranches.length; j++) {
-                _syncAndRemoveDeployedAsset(td.tranches[j]);
+            for (uint8 j = 0; j < bt.tranches.length; j++) {
+                _syncAndRemoveDeployedAsset(bt.tranches[j]);
             }
         }
 
@@ -413,17 +412,17 @@ contract RolloverVault is
     /// @dev Deposits underlying balance into the provided bond and receives tranche tokens in return.
     ///      And performs some book-keeping to keep track of the vault's assets.
     /// @return balance The amount of underlying assets tranched.
-    /// @return td The given bonds tranche data.
+    /// @return bt The given bonds tranche data.
     function _tranche(IBondController bond) private returns (uint256, BondTranches memory) {
         // Get bond's tranche data
-        BondTranches memory td = bond.getTranches();
+        BondTranches memory bt = bond.getTranches();
 
         // Get underlying balance
         uint256 balance = underlying.balanceOf(address(this));
 
         // Skip if balance is zero
         if (balance <= 0) {
-            return (0, td);
+            return (0, bt);
         }
 
         // balance is tranched
@@ -431,18 +430,18 @@ contract RolloverVault is
         bond.deposit(balance);
 
         // sync holdings
-        for (uint8 i = 0; i < td.tranches.length; i++) {
-            _syncAndAddDeployedAsset(td.tranches[i]);
+        for (uint8 i = 0; i < bt.tranches.length; i++) {
+            _syncAndAddDeployedAsset(bt.tranches[i]);
         }
         _syncAsset(underlying);
 
-        return (balance, td);
+        return (balance, bt);
     }
 
     /// @dev Rolls over freshly tranched tokens from the given bond for older tranches (close to maturity) from perp.
     ///      And performs some book-keeping to keep track of the vault's assets.
     /// @return The amount of perps rolled over.
-    function _rollover(IPerpetualTranche perp_, BondTranches memory td) private returns (uint256) {
+    function _rollover(IPerpetualTranche perp_, BondTranches memory bt) private returns (uint256) {
         // NOTE: The first element of the list is the mature tranche,
         //       there after the list is NOT ordered by maturity.
         IERC20Upgradeable[] memory rolloverTokens = perp_.getReserveTokensUpForRollover();
@@ -454,9 +453,9 @@ contract RolloverVault is
 
         // We pair tranche tokens held by the vault with tranche tokens held by perp,
         // And execute the rollover and continue to the next token with a usable balance.
-        while (vaultTrancheIdx < td.tranches.length && perpTokenIdx < rolloverTokens.length) {
+        while (vaultTrancheIdx < bt.tranches.length && perpTokenIdx < rolloverTokens.length) {
             // trancheIntoPerp refers to the tranche going into perp from the vault
-            ITranche trancheIntoPerp = td.tranches[vaultTrancheIdx];
+            ITranche trancheIntoPerp = bt.tranches[vaultTrancheIdx];
 
             // tokenOutOfPerp is the reserve token coming out of perp into the vault
             IERC20Upgradeable tokenOutOfPerp = rolloverTokens[perpTokenIdx];
@@ -544,16 +543,16 @@ contract RolloverVault is
     ///      This function should NOT be called directly, use `recover()` or `recover(tranche)`
     ///      which wrap this function with the internal book-keeping necessary,
     ///      to keep track of the vault's assets.
-    function _execImmatureTrancheRedemption(IBondController bond) private returns (BondTranches memory td) {
+    function _execImmatureTrancheRedemption(IBondController bond) private returns (BondTranches memory bt) {
         uint256[] memory trancheAmts;
-        (td, trancheAmts) = bond.computeRedeemableTrancheAmounts(address(this));
+        (bt, trancheAmts) = bond.computeRedeemableTrancheAmounts(address(this));
 
         // NOTE: It is guaranteed that if one tranche amount is zero, all amounts are zeros.
         if (trancheAmts[0] > 0) {
             bond.redeem(trancheAmts);
         }
 
-        return td;
+        return bt;
     }
 
     /// @dev Syncs balance and adds the given asset into the deployed list if the vault has a balance.

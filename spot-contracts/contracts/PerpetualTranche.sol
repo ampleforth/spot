@@ -678,6 +678,16 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
+    function getReserveTokenBalance(IERC20Upgradeable token) external override afterStateUpdate returns (uint256) {
+        if (!_inReserve(token)) {
+            return 0;
+        }
+        return _reserveBalance(token);
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    /// @dev In the case of the collateral token, it returns the "virtual" tranche balance.
+    //       In all other cases, it just returns the token balance.
     function getReserveTrancheBalance(IERC20Upgradeable tranche) external override afterStateUpdate returns (uint256) {
         if (!_inReserve(tranche)) {
             return 0;

@@ -73,7 +73,7 @@ contract TrancheClassDiscountStrategy is IDiscountStrategy, OwnableUpgradeable {
     /// @return The class hash.
     function trancheClass(ITranche tranche) public view returns (bytes32) {
         IBondController bond = IBondController(tranche.bond());
-        BondTranches memory td = bond.getTranches();
-        return keccak256(abi.encode(bond.collateralToken(), td.trancheRatios, td.indexOf(tranche)));
+        BondTranches memory bt = bond.getTranches();
+        return keccak256(abi.encode(bond.collateralToken(), bt.trancheRatios, bt.indexOf(tranche)));
     }
 }

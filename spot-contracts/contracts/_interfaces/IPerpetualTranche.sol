@@ -110,6 +110,11 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @return If the token is part of the reserve.
     function inReserve(IERC20Upgradeable token) external returns (bool);
 
+    /// @notice Fetches the reserve's token balance.
+    /// @param token The address of the tranche token held by the reserve.
+    /// @return The ERC-20 balance of the reserve token.
+    function getReserveTokenBalance(IERC20Upgradeable token) external returns (uint256);
+
     /// @notice Fetches the reserve's tranche token balance.
     /// @param tranche The address of the tranche token held by the reserve.
     /// @return The ERC-20 balance of the reserve tranche token.
