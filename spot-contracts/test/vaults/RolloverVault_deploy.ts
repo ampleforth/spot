@@ -1050,20 +1050,16 @@ describe("RolloverVault", function () {
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[0].address, toFixedPtAmt("300"));
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[1].address, toFixedPtAmt("450"));
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[2].address, toFixedPtAmt("750"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("0"));
 
-        // Roll rollIn[0] for collateralToken
+        // Rollover
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[0].address, toFixedPtAmt("0"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("300"));
-
-        // Roll rollIn[1] for collateralToken
         await expect(tx)
           .to.emit(vault, "AssetSynced")
           .withArgs(rolloverInTranches[1].address, toFixedPtAmt("183.333333333333333334"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("500"));
-
-        // Roll rollIn[1] for reserve[2]
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[1].address, toFixedPtAmt("0"));
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(reserveTranches[2].address, toFixedPtAmt("137.5"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("500"));
 
         // rewards
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(perp.address, toFixedPtAmt("15"));
