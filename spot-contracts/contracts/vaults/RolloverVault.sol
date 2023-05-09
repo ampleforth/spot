@@ -373,7 +373,7 @@ contract RolloverVault is
         }
 
         // balance is tranched
-        underlying.approve(address(bond), balance);
+        _checkAndApproveMax(underlying, address(bond), balance);
         bond.deposit(balance);
 
         // sync holdings
@@ -445,7 +445,7 @@ contract RolloverVault is
             }
 
             // Perform rollover
-            trancheIntoPerp.approve(address(perp_), trancheInAmtAvailable);
+            _checkAndApproveMax(trancheIntoPerp, address(perp_), trancheInAmtAvailable);
             perp_.rollover(trancheIntoPerp, tokenOutOfPerp, trancheInAmtAvailable);
 
             // sync deployed asset sent to perp
@@ -533,5 +533,17 @@ contract RolloverVault is
     function _syncAsset(IERC20Upgradeable token) private {
         uint256 balance = token.balanceOf(address(this));
         emit AssetSynced(token, balance);
+    }
+
+    /// @dev Checks if the spender has sufficient allowance. If not, approves the maximum possible amount.
+    function _checkAndApproveMax(
+        IERC20Upgradeable token,
+        address spender,
+        uint256 amount
+    ) private {
+        uint256 allowance = token.allowance(address(this), spender);
+        if (allowance < amount) {
+            token.safeApprove(spender, type(uint256).max);
+        }
     }
 }
