@@ -212,7 +212,6 @@ contract RolloverVault is
                 // execute redemption
                 _execMatureTrancheRedemption(bond, tranche, trancheBalance);
             }
-
             // if not redeem using proportional balances
             // redeems this tranche and it's siblings if the vault holds balances.
             // NOTE: For gas optimization, we perform this operation only once
