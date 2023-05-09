@@ -10,7 +10,7 @@ import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/
 
 /// @notice Expected tranche to be part of bond.
 /// @param tranche Address of the tranche token.
-error UnacceptableTrancheIndex(ITranche tranche);
+error UnacceptableTranche(ITranche tranche);
 
 struct TrancheData {
     ITranche[] tranches;
@@ -35,7 +35,7 @@ library TrancheDataHelpers {
                 return i;
             }
         }
-        revert UnacceptableTrancheIndex(t);
+        revert UnacceptableTranche(t);
     }
 }
 

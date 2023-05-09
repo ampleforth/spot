@@ -104,15 +104,15 @@ describe("BondHelpers", function () {
 
       await expect(bondHelpers.getTrancheIndex(bond.address, bond.address)).to.be.revertedWithCustomError(
         bondHelpers,
-        "UnacceptableTrancheIndex",
+        "UnacceptableTranche",
       );
       await expect(bondHelpers.getTrancheIndex(bond.address, deployerAddress)).to.be.revertedWithCustomError(
         bondHelpers,
-        "UnacceptableTrancheIndex",
+        "UnacceptableTranche",
       );
       await expect(bondHelpers.getTrancheIndex(bond.address, constants.AddressZero)).to.be.revertedWithCustomError(
         bondHelpers,
-        "UnacceptableTrancheIndex",
+        "UnacceptableTranche",
       );
     });
   });
