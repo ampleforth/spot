@@ -97,7 +97,7 @@ describe("BondHelpers", function () {
       const td = await bondHelpers.getTranches(bond.address);
 
       for (const t in td.tranches) {
-        expect(await bondHelpers.indexOf(bond.address, td.tranches[t])).to.eq(t);
+        expect(await bondHelpers.indexOf(bond.address, td.tranches[t])).to.eq(parseInt(t));
       }
 
       await expect(bondHelpers.indexOf(bond.address, bond.address)).to.be.revertedWithCustomError(
