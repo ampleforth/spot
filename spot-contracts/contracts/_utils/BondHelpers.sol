@@ -121,7 +121,7 @@ library BondHelpers {
         uint256 collateralBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(address(b));
         uint256 feeBps = b.feeBps();
 
-        for (uint256 i = 0; i < td.tranches.length; i++) {
+        for (uint8 i = 0; i < td.tranches.length; i++) {
             uint256 trancheValue = (collateralAmount * td.trancheRatios[i]) / TRANCHE_RATIO_GRANULARITY;
             if (collateralBalance > 0) {
                 trancheValue = (trancheValue * totalDebt) / collateralBalance;
