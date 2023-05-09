@@ -133,13 +133,13 @@ contract RolloverVault is
 
     /// @notice Pauses deposits, withdrawals and vault operations.
     /// @dev NOTE: ERC-20 functions, like transfers will always remain operational.
-    function pause() public onlyOwner {
+    function pause() external onlyOwner {
         _pause();
     }
 
     /// @notice Unpauses deposits, withdrawals and vault operations.
     /// @dev NOTE: ERC-20 functions, like transfers will always remain operational.
-    function unpause() public onlyOwner {
+    function unpause() external onlyOwner {
         _unpause();
     }
 
