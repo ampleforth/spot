@@ -125,7 +125,6 @@ contract RolloverVault is
         underlying = perp_.collateral();
         _syncAsset(underlying);
 
-        require(underlying != perp_, "RolloverVault: unacceptable perp");
         perp = perp_;
     }
 
