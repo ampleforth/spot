@@ -272,25 +272,23 @@ contract RolloverVault is
     /// @inheritdoc IVault
     /// @dev The asset value is denominated in the underlying asset.
     function getVaultAssetValue(IERC20Upgradeable token) external override returns (uint256) {
-        uint256 balance = token.balanceOf(address(this));
-        if (balance <= 0) {
-            return 0;
-        }
-
         // Underlying asset
         if (token == underlying) {
-            return balance;
+            return token.balanceOf(address(this));
         }
         // Deployed asset
         else if (_deployed.contains(address(token))) {
             (uint256 collateralBalance, uint256 trancheSupply) = ITranche(address(token)).getTrancheCollateralization();
-            return collateralBalance.mulDiv(balance, trancheSupply);
+            return collateralBalance.mulDiv(token.balanceOf(address(this)), trancheSupply);
         }
         // Earned asset
         else if (address(token) == address(perp)) {
-            return balance.mulDiv(IPerpetualTranche(address(perp)).getAvgPrice(), PERP_UNIT_PRICE);
+            return (
+                token.balanceOf(address(this)).mulDiv(IPerpetualTranche(address(perp)).getAvgPrice(), PERP_UNIT_PRICE)
+            );
         }
 
+        // Not a vault asset, so returning zero
         return 0;
     }
 
