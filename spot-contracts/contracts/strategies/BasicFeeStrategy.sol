@@ -96,6 +96,8 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
         updateMintFeePerc(mintFeePerc_);
         updateBurnFeePerc(burnFeePerc_);
         updateRolloverFeePerc(rolloverFeePerc_);
+        // The default value is set to false when the contract is initialized.
+        allowDebasement(false);
     }
 
     /// @notice Updates the mint fee percentage.
