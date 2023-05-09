@@ -204,7 +204,7 @@ contract RolloverVault is
     /// @inheritdoc IVault
     function deposit(uint256 amount) external override nonReentrant whenNotPaused returns (uint256) {
         uint256 totalSupply_ = totalSupply();
-        uint256 notes = (totalSupply_ > 0) ? amount.mulDiv(totalSupply_, getTVL()) : (amount * INITIAL_RATE);
+        uint256 notes = (totalSupply_ > 0) ? totalSupply_.mulDiv(amount, getTVL()) : (amount * INITIAL_RATE);
 
         underlying.safeTransferFrom(_msgSender(), address(this), amount);
         _syncAsset(underlying);
@@ -253,8 +253,8 @@ contract RolloverVault is
             ITranche tranche = ITranche(_deployed.at(i));
             uint256 trancheBalance = tranche.balanceOf(address(this));
             if (trancheBalance > 0) {
-                (uint256 collateralBalance, uint256 debt) = tranche.getTrancheCollateralization();
-                totalAssets += trancheBalance.mulDiv(collateralBalance, debt);
+                (uint256 collateralBalance, uint256 trancheSupply) = tranche.getTrancheCollateralization();
+                totalAssets += collateralBalance.mulDiv(trancheBalance, trancheSupply);
             }
         }
 
@@ -262,6 +262,7 @@ contract RolloverVault is
         uint256 perpBalance = perp.balanceOf(address(this));
         if (perpBalance > 0) {
             // The "earned" asset is assumed to be the perp token.
+            // Perp tokens are assumed to have the same denomination as the underlying
             totalAssets += perpBalance.mulDiv(IPerpetualTranche(address(perp)).getAvgPrice(), PERP_UNIT_PRICE);
         }
 
@@ -282,8 +283,8 @@ contract RolloverVault is
         }
         // Deployed asset
         else if (_deployed.contains(address(token))) {
-            (uint256 collateralBalance, uint256 debt) = ITranche(address(token)).getTrancheCollateralization();
-            return balance.mulDiv(collateralBalance, debt);
+            (uint256 collateralBalance, uint256 trancheSupply) = ITranche(address(token)).getTrancheCollateralization();
+            return collateralBalance.mulDiv(balance, trancheSupply);
         }
         // Earned asset
         else if (address(token) == address(perp)) {
