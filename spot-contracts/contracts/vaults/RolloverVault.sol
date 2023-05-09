@@ -325,7 +325,7 @@ contract RolloverVault is
 
     /// @inheritdoc IVault
     function isVaultAsset(IERC20Upgradeable token) public view override returns (bool) {
-        return (token == underlying) || _deployed.contains(address(token)) || (address(perp) == address(token));
+        return (token == underlying) || _deployed.contains(address(token)) || (address(token) == address(perp));
     }
 
     //--------------------------------------------------------------------------
