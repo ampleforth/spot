@@ -410,7 +410,7 @@ contract PerpetualTranche is
     /// @dev CAUTION: If the authorized roller set is empty, all rollers are authorized.
     /// @param roller The address of the roller.
     /// @param authorize If the roller is to be authorized or unauthorized.
-    function authorizeRoller(address roller, bool authorize) public onlyOwner {
+    function authorizeRoller(address roller, bool authorize) external onlyOwner {
         if (authorize && !_rollers.contains(roller)) {
             _rollers.add(roller);
         } else if (!authorize && _rollers.contains(roller)) {
