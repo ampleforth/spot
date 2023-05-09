@@ -1,31 +1,27 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.19;
 
-import { BondHelpers, TrancheData, TrancheDataHelpers } from "../_utils/BondHelpers.sol";
+import { BondHelpers, BondTranches, BondTranchesHelpers } from "../_utils/BondHelpers.sol";
 import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 
 contract BondHelpersTester {
     using BondHelpers for IBondController;
-    using TrancheDataHelpers for TrancheData;
+    using BondTranchesHelpers for BondTranches;
 
-    function timeToMaturity(IBondController b) public view returns (uint256) {
-        return b.timeToMaturity();
+    function secondsToMaturity(IBondController b) public view returns (uint256) {
+        return b.secondsToMaturity();
     }
 
-    function duration(IBondController b) public view returns (uint256) {
-        return b.duration();
-    }
-
-    function getTrancheData(IBondController b) public view returns (TrancheData memory td) {
-        return b.getTrancheData();
+    function getTranches(IBondController b) public view returns (BondTranches memory td) {
+        return b.getTranches();
     }
 
     function previewDeposit(IBondController b, uint256 collateralAmount)
         public
         view
         returns (
-            TrancheData memory,
+            BondTranches memory,
             uint256[] memory,
             uint256[] memory
         )
@@ -37,7 +33,7 @@ contract BondHelpersTester {
         public
         view
         returns (
-            TrancheData memory td,
+            BondTranches memory td,
             uint256[] memory,
             uint256[] memory
         )
@@ -45,15 +41,15 @@ contract BondHelpersTester {
         return b.getTrancheCollateralizations();
     }
 
-    function getTrancheIndex(IBondController b, ITranche t) public view returns (uint256) {
-        TrancheData memory td = b.getTrancheData();
-        return td.getTrancheIndex(t);
+    function indexOf(IBondController b, ITranche t) public view returns (uint8) {
+        BondTranches memory td = b.getTranches();
+        return td.indexOf(t);
     }
 
     function computeRedeemableTrancheAmounts(IBondController b, address u)
         public
         view
-        returns (TrancheData memory td, uint256[] memory)
+        returns (BondTranches memory td, uint256[] memory)
     {
         return b.computeRedeemableTrancheAmounts(u);
     }

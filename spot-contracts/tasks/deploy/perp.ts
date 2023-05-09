@@ -111,7 +111,7 @@ task("deploy:DiscountStrategy:setDiscount")
     const discountStrategy = await hre.ethers.getContractAt("TrancheClassDiscountStrategy", discountStrategyAddress);
     const abiCoder = new hre.ethers.utils.AbiCoder();
     const hash = hre.ethers.utils.keccak256(
-      abiCoder.encode(["address", "uint256[]", "uint256"], [collateralTokenAddress, trancheRatios, trancheIndex]),
+      abiCoder.encode(["address", "uint256[]", "uint8"], [collateralTokenAddress, trancheRatios, trancheIndex]),
     );
     const tx = await discountStrategy.updateDefinedDiscount(
       hash,

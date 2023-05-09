@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.19;
 
+import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import { IFeeStrategy } from "../_interfaces/IFeeStrategy.sol";
+import { IPerpetualTranche } from "../_interfaces/IPerpetualTranche.sol";
+
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SignedMathHelpers } from "../_utils/SignedMathHelpers.sol";
-
-import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
-import { IFeeStrategy } from "../_interfaces/IFeeStrategy.sol";
-import { IPerpetualTranche } from "../_interfaces/IPerpetualTranche.sol";
 
 /// @notice Expected perc value to be less than 100 with {PERC_DECIMALS}.
 /// @param perc The percentage value.
@@ -96,6 +96,8 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
         updateMintFeePerc(mintFeePerc_);
         updateBurnFeePerc(burnFeePerc_);
         updateRolloverFeePerc(rolloverFeePerc_);
+        // The default value is set to false when the contract is initialized.
+        allowDebasement(false);
     }
 
     /// @notice Updates the mint fee percentage.

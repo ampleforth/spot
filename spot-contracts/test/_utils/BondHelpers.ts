@@ -59,29 +59,27 @@ describe("BondHelpers", function () {
     describe("when bond is NOT mature", function () {
       it("should return the time to maturity", async function () {
         await TimeHelpers.setNextBlockTimestamp(maturityDate - bondLength / 2);
-        expect(await bondHelpers.timeToMaturity(bond.address)).to.eq(bondLength / 2);
-        expect(bondLength - (await bondHelpers.duration(bond.address)).toNumber()).to.lte(1);
+        expect(await bondHelpers.secondsToMaturity(bond.address)).to.eq(bondLength / 2);
       });
     });
 
     describe("when bond is mature", function () {
       it("should return the time to maturity", async function () {
         await TimeHelpers.setNextBlockTimestamp(maturityDate + 1);
-        expect(await bondHelpers.timeToMaturity(bond.address)).to.eq(0);
-        expect(bondLength - (await bondHelpers.duration(bond.address)).toNumber()).to.lte(1);
+        expect(await bondHelpers.secondsToMaturity(bond.address)).to.eq(0);
       });
     });
   });
 
-  describe("#getTrancheData", function () {
+  describe("#getTranches", function () {
     let bond: Contract;
     beforeEach(async function () {
       bond = await createBondWithFactory(bondFactory, collateralToken, [201, 301, 498], 86400);
     });
 
     it("should return the tranche data", async function () {
-      const td = await bondHelpers.getTrancheData(bond.address);
-      expect(td.trancheCount).to.eq(3);
+      const td = await bondHelpers.getTranches(bond.address);
+      expect(td.tranches.length).to.eq(3);
       expect(td.trancheRatios.length).to.eq(3);
       expect(td.trancheRatios[0]).to.eq(201);
       expect(td.trancheRatios[1]).to.eq(301);
@@ -93,26 +91,26 @@ describe("BondHelpers", function () {
     });
   });
 
-  describe("#getTrancheIndex", function () {
+  describe("#indexOf", function () {
     it("should return the tranche index", async function () {
       const bond = await createBondWithFactory(bondFactory, collateralToken, [100, 100, 100, 100, 100, 500], 86400);
-      const td = await bondHelpers.getTrancheData(bond.address);
+      const td = await bondHelpers.getTranches(bond.address);
 
       for (const t in td.tranches) {
-        expect(await bondHelpers.getTrancheIndex(bond.address, td.tranches[t])).to.eq(t);
+        expect(await bondHelpers.indexOf(bond.address, td.tranches[t])).to.eq(parseInt(t));
       }
 
-      await expect(bondHelpers.getTrancheIndex(bond.address, bond.address)).to.be.revertedWithCustomError(
+      await expect(bondHelpers.indexOf(bond.address, bond.address)).to.be.revertedWithCustomError(
         bondHelpers,
-        "UnacceptableTrancheIndex",
+        "UnacceptableTranche",
       );
-      await expect(bondHelpers.getTrancheIndex(bond.address, deployerAddress)).to.be.revertedWithCustomError(
+      await expect(bondHelpers.indexOf(bond.address, deployerAddress)).to.be.revertedWithCustomError(
         bondHelpers,
-        "UnacceptableTrancheIndex",
+        "UnacceptableTranche",
       );
-      await expect(bondHelpers.getTrancheIndex(bond.address, constants.AddressZero)).to.be.revertedWithCustomError(
+      await expect(bondHelpers.indexOf(bond.address, constants.AddressZero)).to.be.revertedWithCustomError(
         bondHelpers,
-        "UnacceptableTrancheIndex",
+        "UnacceptableTranche",
       );
     });
   });

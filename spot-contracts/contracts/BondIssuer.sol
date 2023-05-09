@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.19;
 
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
-
-import { BondHelpers } from "./_utils/BondHelpers.sol";
-
 import { IBondFactory } from "./_interfaces/buttonwood/IBondFactory.sol";
 import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
 import { IBondIssuer, NoMaturedBonds } from "./_interfaces/IBondIssuer.sol";
+
+import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
+import { BondHelpers } from "./_utils/BondHelpers.sol";
 
 /**
  *  @title BondIssuer
@@ -131,7 +130,7 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
         //       swapping the deleted element to the end of the list and removing the last element.
         for (uint256 i = _activeBondIDXs.length; i > 0; i--) {
             IBondController bond = IBondController(_issuedBonds.at(_activeBondIDXs[i - 1]));
-            if (bond.timeToMaturity() <= 0) {
+            if (bond.secondsToMaturity() <= 0) {
                 if (!bond.isMature()) {
                     bond.mature();
                 }

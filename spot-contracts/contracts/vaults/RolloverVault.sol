@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.19;
+
+import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche } from "../_interfaces/IPerpetualTranche.sol";
+import { IVault, UnexpectedAsset, UnauthorizedTransferOut, InsufficientDeployment, DeployedCountOverLimit } from "../_interfaces/IVault.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
-
 import { ERC20BurnableUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
-
-import { TrancheData, TrancheHelpers, BondHelpers } from "../_utils/BondHelpers.sol";
-import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche } from "../_interfaces/IPerpetualTranche.sol";
-import { IVault, UnexpectedAsset, UnauthorizedTransferOut, InsufficientDeployment, DeployedCountOverLimit } from "../_interfaces/IVault.sol";
+import { BondTranches, TrancheHelpers, BondHelpers } from "../_utils/BondHelpers.sol";
 
 /// @notice Storage array access out of bounds.
 error OutOfBounds();
@@ -118,6 +117,7 @@ contract RolloverVault is
         IPerpetualTranche perp_
     ) public initializer {
         __ERC20_init(name, symbol);
+        __ERC20Burnable_init();
         __Ownable_init();
         __Pausable_init();
         __ReentrancyGuard_init();
@@ -125,7 +125,6 @@ contract RolloverVault is
         underlying = perp_.collateral();
         _syncAsset(underlying);
 
-        require(underlying != perp_, "RolloverVault: unacceptable perp");
         perp = perp_;
     }
 
@@ -134,13 +133,13 @@ contract RolloverVault is
 
     /// @notice Pauses deposits, withdrawals and vault operations.
     /// @dev NOTE: ERC-20 functions, like transfers will always remain operational.
-    function pause() public onlyOwner {
+    function pause() external onlyOwner {
         _pause();
     }
 
     /// @notice Unpauses deposits, withdrawals and vault operations.
     /// @dev NOTE: ERC-20 functions, like transfers will always remain operational.
-    function unpause() public onlyOwner {
+    function unpause() external onlyOwner {
         _unpause();
     }
 
@@ -179,7 +178,7 @@ contract RolloverVault is
     /// @dev Its safer to call `recover` before `deploy` so the full available balance can be deployed.
     ///      Reverts if no funds are rolled over or if the minimum deployment threshold is not reached.
     function deploy() public override nonReentrant whenNotPaused {
-        (uint256 deployedAmt, TrancheData memory td) = _tranche(perp.getDepositBond());
+        (uint256 deployedAmt, BondTranches memory td) = _tranche(perp.getDepositBond());
         uint256 perpsRolledOver = _rollover(perp, td);
         // NOTE: The following enforces that we only tranche the underlying if it can immediately be used for rotations.
         if (deployedAmt <= minDeploymentAmt || perpsRolledOver <= 0) {
@@ -189,23 +188,48 @@ contract RolloverVault is
 
     /// @inheritdoc IVault
     function recover() public override nonReentrant whenNotPaused {
-        _redeemTranches();
+        uint256 deployedCount_ = _deployed.length();
+        if (deployedCount_ <= 0) {
+            return;
+        }
+
+        // execute redemption on each deployed asset
+        for (uint256 i = 0; i < deployedCount_; i++) {
+            _execTrancheRedemption(ITranche(_deployed.at(i)));
+        }
+
+        // sync holdings
+        // NOTE: We traverse the deployed set in the reverse order
+        //       as deletions involve swapping the deleted element to the
+        //       end of the set and removing the last element.
+        for (uint256 i = deployedCount_; i > 0; i--) {
+            _syncAndRemoveDeployedAsset(IERC20Upgradeable(_deployed.at(i - 1)));
+        }
+        _syncAsset(underlying);
     }
 
     /// @inheritdoc IVault
     /// @dev Reverts when attempting to recover a tranche which is not part of the deployed list.
     ///      In the case of immature redemption, this method will recover other sibling tranches as well.
-    function recover(IERC20Upgradeable token) external override nonReentrant whenNotPaused {
-        if (!_deployed.contains(address(token))) {
-            revert UnexpectedAsset(token);
+    function recover(IERC20Upgradeable tranche) external override nonReentrant whenNotPaused {
+        if (!_deployed.contains(address(tranche))) {
+            revert UnexpectedAsset(tranche);
         }
-        _redeemTranche(ITranche(address(token)));
+
+        BondTranches memory td = _execTrancheRedemption(ITranche(address(tranche)));
+
+        // sync holdings
+        // Note: Immature redemption, may remove sibling tranches from the deployed list.
+        for (uint8 i = 0; i < td.tranches.length; i++) {
+            _syncAndRemoveDeployedAsset(td.tranches[i]);
+        }
+        _syncAsset(underlying);
     }
 
     /// @inheritdoc IVault
     function deposit(uint256 amount) external override nonReentrant whenNotPaused returns (uint256) {
         uint256 totalSupply_ = totalSupply();
-        uint256 notes = (totalSupply_ > 0) ? amount.mulDiv(totalSupply_, getTVL()) : (amount * INITIAL_RATE);
+        uint256 notes = (totalSupply_ > 0) ? totalSupply_.mulDiv(amount, getTVL()) : (amount * INITIAL_RATE);
 
         underlying.safeTransferFrom(_msgSender(), address(this), amount);
         _syncAsset(underlying);
@@ -244,18 +268,18 @@ contract RolloverVault is
     /// @inheritdoc IVault
     /// @dev The total value is denominated in the underlying asset.
     function getTVL() public override returns (uint256) {
-        uint256 totalAssets = 0;
+        uint256 totalValue = 0;
 
         // The underlying balance
-        totalAssets += underlying.balanceOf(address(this));
+        totalValue += underlying.balanceOf(address(this));
 
         // The deployed asset value denominated in the underlying
         for (uint256 i = 0; i < _deployed.length(); i++) {
             ITranche tranche = ITranche(_deployed.at(i));
             uint256 trancheBalance = tranche.balanceOf(address(this));
             if (trancheBalance > 0) {
-                (uint256 collateralBalance, uint256 debt) = tranche.getTrancheCollateralization();
-                totalAssets += trancheBalance.mulDiv(collateralBalance, debt);
+                (uint256 collateralBalance, uint256 trancheSupply) = tranche.getTrancheCollateralization();
+                totalValue += collateralBalance.mulDiv(trancheBalance, trancheSupply);
             }
         }
 
@@ -263,34 +287,33 @@ contract RolloverVault is
         uint256 perpBalance = perp.balanceOf(address(this));
         if (perpBalance > 0) {
             // The "earned" asset is assumed to be the perp token.
-            totalAssets += perpBalance.mulDiv(IPerpetualTranche(address(perp)).getAvgPrice(), PERP_UNIT_PRICE);
+            // Perp tokens are assumed to have the same denomination as the underlying
+            totalValue += perpBalance.mulDiv(IPerpetualTranche(address(perp)).getAvgPrice(), PERP_UNIT_PRICE);
         }
 
-        return totalAssets;
+        return totalValue;
     }
 
     /// @inheritdoc IVault
     /// @dev The asset value is denominated in the underlying asset.
     function getVaultAssetValue(IERC20Upgradeable token) external override returns (uint256) {
-        uint256 balance = token.balanceOf(address(this));
-        if (balance <= 0) {
-            return 0;
-        }
-
         // Underlying asset
         if (token == underlying) {
-            return balance;
+            return token.balanceOf(address(this));
         }
         // Deployed asset
         else if (_deployed.contains(address(token))) {
-            (uint256 collateralBalance, uint256 debt) = ITranche(address(token)).getTrancheCollateralization();
-            return balance.mulDiv(collateralBalance, debt);
+            (uint256 collateralBalance, uint256 trancheSupply) = ITranche(address(token)).getTrancheCollateralization();
+            return collateralBalance.mulDiv(token.balanceOf(address(this)), trancheSupply);
         }
         // Earned asset
         else if (address(token) == address(perp)) {
-            return balance.mulDiv(IPerpetualTranche(address(perp)).getAvgPrice(), PERP_UNIT_PRICE);
+            return (
+                token.balanceOf(address(this)).mulDiv(IPerpetualTranche(address(perp)).getAvgPrice(), PERP_UNIT_PRICE)
+            );
         }
 
+        // Not a vault asset, so returning zero
         return 0;
     }
 
@@ -327,7 +350,7 @@ contract RolloverVault is
 
     /// @inheritdoc IVault
     function isVaultAsset(IERC20Upgradeable token) public view override returns (bool) {
-        return (token == underlying) || _deployed.contains(address(token)) || (address(perp) == address(token));
+        return (token == underlying) || _deployed.contains(address(token)) || (address(token) == address(perp));
     }
 
     //--------------------------------------------------------------------------
@@ -337,9 +360,9 @@ contract RolloverVault is
     ///      And performs some book-keeping to keep track of the vault's assets.
     /// @return balance The amount of underlying assets tranched.
     /// @return td The given bonds tranche data.
-    function _tranche(IBondController bond) private returns (uint256, TrancheData memory) {
+    function _tranche(IBondController bond) private returns (uint256, BondTranches memory) {
         // Get bond's tranche data
-        TrancheData memory td = bond.getTrancheData();
+        BondTranches memory td = bond.getTranches();
 
         // Get underlying balance
         uint256 balance = underlying.balanceOf(address(this));
@@ -350,11 +373,11 @@ contract RolloverVault is
         }
 
         // balance is tranched
-        underlying.approve(address(bond), balance);
+        _checkAndApproveMax(underlying, address(bond), balance);
         bond.deposit(balance);
 
         // sync holdings
-        for (uint8 i = 0; i < td.trancheCount; i++) {
+        for (uint8 i = 0; i < td.tranches.length; i++) {
             _syncAndAddDeployedAsset(td.tranches[i]);
         }
         _syncAsset(underlying);
@@ -365,21 +388,21 @@ contract RolloverVault is
     /// @dev Rolls over freshly tranched tokens from the given bond for older tranches (close to maturity) from perp.
     ///      And performs some book-keeping to keep track of the vault's assets.
     /// @return The amount of perps rolled over.
-    function _rollover(IPerpetualTranche perp_, TrancheData memory td) private returns (uint256) {
+    function _rollover(IPerpetualTranche perp_, BondTranches memory td) private returns (uint256) {
         // NOTE: The first element of the list is the mature tranche,
         //       there after the list is NOT ordered by maturity.
         IERC20Upgradeable[] memory rolloverTokens = perp_.getReserveTokensUpForRollover();
 
         // Batch rollover
         uint256 totalPerpRolledOver = 0;
-        uint8 vaultTokenIdx = 0;
+        uint8 vaultTrancheIdx = 0;
         uint256 perpTokenIdx = 0;
 
         // We pair tranche tokens held by the vault with tranche tokens held by perp,
         // And execute the rollover and continue to the next token with a usable balance.
-        while (vaultTokenIdx < td.trancheCount && perpTokenIdx < rolloverTokens.length) {
+        while (vaultTrancheIdx < td.tranches.length && perpTokenIdx < rolloverTokens.length) {
             // trancheIntoPerp refers to the tranche going into perp from the vault
-            ITranche trancheIntoPerp = td.tranches[vaultTokenIdx];
+            ITranche trancheIntoPerp = td.tranches[vaultTrancheIdx];
 
             // tokenOutOfPerp is the reserve token coming out of perp into the vault
             IERC20Upgradeable tokenOutOfPerp = rolloverTokens[perpTokenIdx];
@@ -392,7 +415,7 @@ contract RolloverVault is
             // trancheIntoPerp tokens are NOT exhausted but tokenOutOfPerp is exhausted
             if (tokenOutAmtAvailable <= 0) {
                 // Rollover is a no-op, so skipping to next tokenOutOfPerp
-                perpTokenIdx++;
+                ++perpTokenIdx;
                 continue;
             }
 
@@ -402,7 +425,7 @@ contract RolloverVault is
             // trancheInAmtAvailable is exhausted
             if (trancheInAmtAvailable <= 0) {
                 // Rollover is a no-op, so skipping to next trancheIntoPerp
-                vaultTokenIdx++;
+                ++vaultTrancheIdx;
                 continue;
             }
 
@@ -417,89 +440,59 @@ contract RolloverVault is
             // trancheIntoPerp isn't accepted by perp, likely because it's yield=0, refer perp docs for more info
             if (rd.perpRolloverAmt <= 0) {
                 // Rollover is a no-op, so skipping to next trancheIntoPerp
-                vaultTokenIdx++;
+                ++vaultTrancheIdx;
                 continue;
             }
 
             // Perform rollover
-            trancheIntoPerp.approve(address(perp_), trancheInAmtAvailable);
+            _checkAndApproveMax(trancheIntoPerp, address(perp_), trancheInAmtAvailable);
             perp_.rollover(trancheIntoPerp, tokenOutOfPerp, trancheInAmtAvailable);
 
-            // sync holdings
+            // sync deployed asset sent to perp
             _syncAndRemoveDeployedAsset(trancheIntoPerp);
+
+            // skip insertion into the deployed list the case of the mature tranche, ie underlying
             if (tokenOutOfPerp != underlying) {
+                // sync deployed asset retrieved from perp
                 _syncAndAddDeployedAsset(tokenOutOfPerp);
             }
-            _syncAsset(perp_);
-            _syncAsset(underlying);
 
             // keep track of total amount rolled over
             totalPerpRolledOver += rd.perpRolloverAmt;
         }
 
+        // sync underlying and earned (ie perp)
+        _syncAsset(underlying);
+        _syncAsset(perp_);
+
         return totalPerpRolledOver;
     }
 
-    /// @dev Redeems all deployed tranches for the underlying asset and
-    ///      performs internal book-keeping to keep track of the vault assets.
-    function _redeemTranches() private {
-        uint256 deployedCount_ = _deployed.length();
-        if (deployedCount_ <= 0) {
-            return;
-        }
-
-        // execute redemption on each deployed asset
-        for (uint256 i = 0; i < deployedCount_; i++) {
-            _execTrancheRedemption(ITranche(_deployed.at(i)));
-        }
-
-        // sync holdings
-        // NOTE: We traverse the deployed set in the reverse order
-        //       as deletions involve swapping the deleted element to the
-        //       end of the set and removing the last element.
-        for (uint256 i = deployedCount_; i > 0; i--) {
-            _syncAndRemoveDeployedAsset(IERC20Upgradeable(_deployed.at(i - 1)));
-        }
-        _syncAsset(underlying);
-    }
-
-    /// @dev Redeems the given tranche for the underlying asset and
-    ///      performs internal book-keeping to keep track of the vault assets.
-    function _redeemTranche(ITranche tranche) private {
-        TrancheData memory td = _execTrancheRedemption(tranche);
-
-        // sync holdings
-        // Note: Immature redemption, may remove sibling tranches from the deployed list.
-        for (uint8 i = 0; i < td.trancheCount; i++) {
-            _syncAndRemoveDeployedAsset(td.tranches[i]);
-        }
-        _syncAsset(underlying);
-    }
-
     /// @dev Low level method that redeems the given deployed tranche tokens for the underlying asset.
-    ///      When the tranche is not up for redemption, its a no-op.
-    ///      This function should NOT be called directly, use `_redeemTranches` or `_redeemTranche`
-    ///      which wrap this function with the internal book-keeping necessary to keep track of the vault's assets.
-    function _execTrancheRedemption(ITranche tranche) private returns (TrancheData memory) {
+    ///      This function should NOT be called directly, use `recover()` or `recover(tranche)`
+    ///      which wrap this function with the internal book-keeping necessary,
+    ///      to keep track of the vault's assets.
+    function _execTrancheRedemption(ITranche tranche) private returns (BondTranches memory) {
         IBondController bond = IBondController(tranche.bond());
+        uint256 trancheBalance = tranche.balanceOf(address(this));
+
+        if (trancheBalance <= 0) {
+            return bond.getTranches();
+        }
 
         // if bond has matured, redeem the tranche token
-        if (bond.timeToMaturity() <= 0) {
+        if (bond.secondsToMaturity() <= 0) {
             if (!bond.isMature()) {
                 bond.mature();
             }
 
-            uint256 trancheBalance = tranche.balanceOf(address(this));
-            if (trancheBalance > 0) {
-                bond.redeemMature(address(tranche), trancheBalance);
-            }
-
-            return bond.getTrancheData();
+            bond.redeemMature(address(tranche), trancheBalance);
+            return bond.getTranches();
         }
         // else redeem using proportional balances, redeems all tranches part of the bond
         else {
             uint256[] memory trancheAmts;
-            TrancheData memory td;
+            BondTranches memory td;
             (td, trancheAmts) = bond.computeRedeemableTrancheAmounts(address(this));
 
             // NOTE: It is guaranteed that if one tranche amount is zero, all amounts are zeros.
@@ -512,42 +505,45 @@ contract RolloverVault is
     }
 
     /// @dev Syncs balance and adds the given asset into the deployed list if the vault has a balance.
-    /// @return The Vault's token balance.
-    function _syncAndAddDeployedAsset(IERC20Upgradeable token) private returns (uint256) {
-        uint256 balance = _syncAsset(token);
-        bool isHeld = _deployed.contains(address(token));
+    function _syncAndAddDeployedAsset(IERC20Upgradeable token) private {
+        uint256 balance = token.balanceOf(address(this));
+        emit AssetSynced(token, balance);
 
-        if (balance > 0 && !isHeld) {
+        if (balance > 0 && !_deployed.contains(address(token))) {
             // Inserts new token into the deployed assets list.
             _deployed.add(address(token));
             if (_deployed.length() > MAX_DEPLOYED_COUNT) {
                 revert DeployedCountOverLimit();
             }
         }
-
-        return balance;
     }
 
     /// @dev Syncs balance and removes the given asset from the deployed list if the vault has no balance.
-    /// @return The Vault's token balance.
-    function _syncAndRemoveDeployedAsset(IERC20Upgradeable token) private returns (uint256) {
-        uint256 balance = _syncAsset(token);
-        bool isHeld = _deployed.contains(address(token));
-
-        if (balance <= 0 && isHeld) {
-            // Removes token into the deployed assets list.
-            _deployed.remove(address(token));
-        }
-
-        return balance;
-    }
-
-    /// @dev Logs the token balance held by the vault.
-    /// @return The Vault's token balance.
-    function _syncAsset(IERC20Upgradeable token) private returns (uint256) {
+    function _syncAndRemoveDeployedAsset(IERC20Upgradeable token) private {
         uint256 balance = token.balanceOf(address(this));
         emit AssetSynced(token, balance);
 
-        return balance;
+        if (balance <= 0 && _deployed.contains(address(token))) {
+            // Removes token into the deployed assets list.
+            _deployed.remove(address(token));
+        }
+    }
+
+    /// @dev Logs the token balance held by the vault.
+    function _syncAsset(IERC20Upgradeable token) private {
+        uint256 balance = token.balanceOf(address(this));
+        emit AssetSynced(token, balance);
+    }
+
+    /// @dev Checks if the spender has sufficient allowance. If not, approves the maximum possible amount.
+    function _checkAndApproveMax(
+        IERC20Upgradeable token,
+        address spender,
+        uint256 amount
+    ) private {
+        uint256 allowance = token.allowance(address(this), spender);
+        if (allowance < amount) {
+            token.safeApprove(spender, type(uint256).max);
+        }
     }
 }

@@ -95,7 +95,7 @@ interface IVault {
     function deployedAt(uint256 i) external view returns (IERC20Upgradeable);
 
     /// @return Total count of earned income tokens held by the vault.
-    function earnedCount() external pure returns (uint256);
+    function earnedCount() external view returns (uint256);
 
     /// @param i The index of a token.
     /// @return The token address from the earned income token list by index.

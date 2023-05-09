@@ -1,21 +1,18 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.19;
 
+import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
+import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeeStrategy, IPricingStrategy, IDiscountStrategy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
+
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
-
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
-
 import { ERC20BurnableUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
-
 import { BondHelpers } from "./_utils/BondHelpers.sol";
-
-import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
-import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeeStrategy, IPricingStrategy, IDiscountStrategy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
 
 /// @notice Expected contract call to be triggered by authorized caller.
 /// @param caller The address which triggered the call.
@@ -365,6 +362,7 @@ contract PerpetualTranche is
         IDiscountStrategy discountStrategy_
     ) public initializer {
         __ERC20_init(name, symbol);
+        __ERC20Burnable_init();
         __Ownable_init();
         __Pausable_init();
         __ReentrancyGuard_init();
@@ -413,7 +411,7 @@ contract PerpetualTranche is
     /// @dev CAUTION: If the authorized roller set is empty, all rollers are authorized.
     /// @param roller The address of the roller.
     /// @param authorize If the roller is to be authorized or unauthorized.
-    function authorizeRoller(address roller, bool authorize) public onlyOwner {
+    function authorizeRoller(address roller, bool authorize) external onlyOwner {
         if (authorize && !_rollers.contains(roller)) {
             _rollers.add(roller);
         } else if (!authorize && _rollers.contains(roller)) {
@@ -757,12 +755,12 @@ contract PerpetualTranche is
         return _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable, tokenOutAmtRequested);
     }
 
-    /// @notice Returns the number of authorized rollers.
+    /// @return Returns the number of authorized rollers.
     function authorizedRollersCount() external view returns (uint256) {
         return _rollers.length();
     }
 
-    /// @notice Gets the roller address from the authorized set by index.
+    /// @return Returns the roller address from the authorized set by index.
     /// @param i The index of the address in the set.
     function authorizedRollerAt(uint256 i) external view returns (address) {
         return _rollers.at(i);
@@ -801,7 +799,7 @@ contract PerpetualTranche is
             IBondController bond = IBondController(tranche.bond());
 
             // If bond is not mature yet, move to the next tranche
-            if (bond.timeToMaturity() > 0) {
+            if (bond.secondsToMaturity() > 0) {
                 continue;
             }
 
@@ -927,7 +925,7 @@ contract PerpetualTranche is
         uint256 trancheInPrice = computePrice(trancheIn);
         uint256 trancheOutPrice = computePrice(tokenOut);
         uint256 tokenOutBalance = _reserveBalance(tokenOut);
-        tokenOutAmtRequested = tokenOutAmtRequested.min(tokenOutBalance);
+        tokenOutAmtRequested = MathUpgradeable.min(tokenOutAmtRequested, tokenOutBalance);
 
         if (trancheInDiscount == 0 || trancheOutDiscount == 0 || trancheInPrice == 0 || trancheOutPrice == 0) {
             r.remainingTrancheInAmt = trancheInAmtAvailable;
@@ -1071,7 +1069,7 @@ contract PerpetualTranche is
         // Funds are going out
         if (isNativeFeeToken) {
             uint256 balance = _reserveBalance(feeToken_);
-            feeToken_.safeTransfer(destination, feeAmt.min(balance));
+            feeToken_.safeTransfer(destination, MathUpgradeable.min(feeAmt, balance));
 
             // In case that the reserve's balance doesn't cover the entire fee amount,
             // we mint perps to cover the difference.
@@ -1127,11 +1125,11 @@ contract PerpetualTranche is
     ///      * Expects the bond's maturity to be within expected bounds.
     /// @return True if the bond is "acceptable".
     function _isAcceptableForReserve(IBondController bond) private view returns (bool) {
-        // NOTE: `timeToMaturity` will be 0 if the bond is past maturity.
-        uint256 timeToMaturity = bond.timeToMaturity();
+        // NOTE: `secondsToMaturity` will be 0 if the bond is past maturity.
+        uint256 secondsToMaturity = bond.secondsToMaturity();
         return (address(_reserveAt(0)) == bond.collateralToken() &&
-            timeToMaturity >= minTrancheMaturitySec &&
-            timeToMaturity < maxTrancheMaturitySec);
+            secondsToMaturity >= minTrancheMaturitySec &&
+            secondsToMaturity < maxTrancheMaturitySec);
     }
 
     /// @dev Checks if the given tranche belongs to the current deposit bond.
