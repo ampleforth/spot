@@ -483,7 +483,7 @@ contract RolloverVault is
         IBondController bond = IBondController(tranche.bond());
 
         // if bond has matured, redeem the tranche token
-        if (bond.timeToMaturity() <= 0) {
+        if (bond.secondsToMaturity() <= 0) {
             if (!bond.isMature()) {
                 bond.mature();
             }

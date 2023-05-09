@@ -9,8 +9,8 @@ contract BondHelpersTester {
     using BondHelpers for IBondController;
     using BondTranchesHelpers for BondTranches;
 
-    function timeToMaturity(IBondController b) public view returns (uint256) {
-        return b.timeToMaturity();
+    function secondsToMaturity(IBondController b) public view returns (uint256) {
+        return b.secondsToMaturity();
     }
 
     function duration(IBondController b) public view returns (uint256) {

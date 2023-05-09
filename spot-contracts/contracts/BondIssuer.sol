@@ -130,7 +130,7 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
         //       swapping the deleted element to the end of the list and removing the last element.
         for (uint256 i = _activeBondIDXs.length; i > 0; i--) {
             IBondController bond = IBondController(_issuedBonds.at(_activeBondIDXs[i - 1]));
-            if (bond.timeToMaturity() <= 0) {
+            if (bond.secondsToMaturity() <= 0) {
                 if (!bond.isMature()) {
                     bond.mature();
                 }

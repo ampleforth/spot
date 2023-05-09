@@ -798,7 +798,7 @@ contract PerpetualTranche is
             IBondController bond = IBondController(tranche.bond());
 
             // If bond is not mature yet, move to the next tranche
-            if (bond.timeToMaturity() > 0) {
+            if (bond.secondsToMaturity() > 0) {
                 continue;
             }
 
@@ -1124,11 +1124,11 @@ contract PerpetualTranche is
     ///      * Expects the bond's maturity to be within expected bounds.
     /// @return True if the bond is "acceptable".
     function _isAcceptableForReserve(IBondController bond) private view returns (bool) {
-        // NOTE: `timeToMaturity` will be 0 if the bond is past maturity.
-        uint256 timeToMaturity = bond.timeToMaturity();
+        // NOTE: `secondsToMaturity` will be 0 if the bond is past maturity.
+        uint256 secondsToMaturity = bond.secondsToMaturity();
         return (address(_reserveAt(0)) == bond.collateralToken() &&
-            timeToMaturity >= minTrancheMaturitySec &&
-            timeToMaturity < maxTrancheMaturitySec);
+            secondsToMaturity >= minTrancheMaturitySec &&
+            secondsToMaturity < maxTrancheMaturitySec);
     }
 
     /// @dev Checks if the given tranche belongs to the current deposit bond.

@@ -77,7 +77,7 @@ library BondHelpers {
     /// @notice Given a bond, calculates the time remaining to maturity.
     /// @param b The address of the bond contract.
     /// @return The number of seconds before the bond reaches maturity.
-    function timeToMaturity(IBondController b) internal view returns (uint256) {
+    function secondsToMaturity(IBondController b) internal view returns (uint256) {
         uint256 maturityDate = b.maturityDate();
         return maturityDate > block.timestamp ? maturityDate - block.timestamp : 0;
     }
