@@ -28,7 +28,7 @@ library BondTranchesHelpers {
     /// @param td The tranche data object.
     /// @param t The address of the tranche to check.
     /// @return the index of the tranche in the tranches array.
-    function indexOf(BondTranches memory td, ITranche t) internal pure returns (uint256) {
+    function indexOf(BondTranches memory td, ITranche t) internal pure returns (uint8) {
         for (uint8 i = 0; i < td.tranches.length; i++) {
             if (td.tranches[i] == t) {
                 return i;

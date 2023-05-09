@@ -45,7 +45,7 @@ contract BondHelpersTester {
         return b.getTrancheCollateralizations();
     }
 
-    function indexOf(IBondController b, ITranche t) public view returns (uint256) {
+    function indexOf(IBondController b, ITranche t) public view returns (uint8) {
         BondTranches memory td = b.getTranches();
         return td.indexOf(t);
     }
