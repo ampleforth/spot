@@ -754,12 +754,12 @@ contract PerpetualTranche is
         return _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable, tokenOutAmtRequested);
     }
 
-    /// @notice Returns the number of authorized rollers.
+    /// @return Returns the number of authorized rollers.
     function authorizedRollersCount() external view returns (uint256) {
         return _rollers.length();
     }
 
-    /// @notice Gets the roller address from the authorized set by index.
+    /// @return Returns the roller address from the authorized set by index.
     /// @param i The index of the address in the set.
     function authorizedRollerAt(uint256 i) external view returns (address) {
         return _rollers.at(i);
