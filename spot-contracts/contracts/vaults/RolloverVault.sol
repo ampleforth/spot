@@ -398,15 +398,16 @@ contract RolloverVault is
         uint8 vaultTrancheIdx = 0;
         uint256 perpTokenIdx = 0;
 
-        // trancheIntoPerp refers to the tranche going into perp from the vault
-        ITranche trancheIntoPerp = td.tranches[0];
-
-        // tokenOutOfPerp is the reserve token coming out of perp into the vault
-        IERC20Upgradeable tokenOutOfPerp = rolloverTokens[0];
-
         // We pair tranche tokens held by the vault with tranche tokens held by perp,
         // And execute the rollover and continue to the next token with a usable balance.
         while (vaultTrancheIdx < td.tranches.length && perpTokenIdx < rolloverTokens.length) {
+
+            // trancheIntoPerp refers to the tranche going into perp from the vault
+            ITranche trancheIntoPerp = td.tranches[vaultTrancheIdx];
+
+            // tokenOutOfPerp is the reserve token coming out of perp into the vault
+            IERC20Upgradeable tokenOutOfPerp = rolloverTokens[perpTokenIdx];
+
             // compute available token out
             uint256 tokenOutAmtAvailable = address(tokenOutOfPerp) != address(0)
                 ? tokenOutOfPerp.balanceOf(perp_.reserve())
@@ -415,7 +416,7 @@ contract RolloverVault is
             // trancheIntoPerp tokens are NOT exhausted but tokenOutOfPerp is exhausted
             if (tokenOutAmtAvailable <= 0) {
                 // Rollover is a no-op, so skipping to next tokenOutOfPerp
-                tokenOutOfPerp = rolloverTokens[++perpTokenIdx];
+                ++perpTokenIdx;
                 continue;
             }
 
@@ -425,7 +426,7 @@ contract RolloverVault is
             // trancheInAmtAvailable is exhausted
             if (trancheInAmtAvailable <= 0) {
                 // Rollover is a no-op, so skipping to next trancheIntoPerp
-                trancheIntoPerp = td.tranches[++vaultTrancheIdx];
+                ++vaultTrancheIdx;
                 continue;
             }
 
@@ -440,7 +441,7 @@ contract RolloverVault is
             // trancheIntoPerp isn't accepted by perp, likely because it's yield=0, refer perp docs for more info
             if (rd.perpRolloverAmt <= 0) {
                 // Rollover is a no-op, so skipping to next trancheIntoPerp
-                trancheIntoPerp = td.tranches[++vaultTrancheIdx];
+                ++vaultTrancheIdx;
                 continue;
             }
 
