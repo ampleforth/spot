@@ -7,7 +7,7 @@ import { IDiscountStrategy } from "../_interfaces/IDiscountStrategy.sol";
 import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import { TrancheData, TrancheDataHelpers, BondHelpers } from "../_utils/BondHelpers.sol";
+import { BondTranches, BondTranchesHelpers, BondHelpers } from "../_utils/BondHelpers.sol";
 
 /*
  *  @title TrancheClassDiscountStrategy
@@ -27,7 +27,7 @@ import { TrancheData, TrancheDataHelpers, BondHelpers } from "../_utils/BondHelp
  */
 contract TrancheClassDiscountStrategy is IDiscountStrategy, OwnableUpgradeable {
     using BondHelpers for IBondController;
-    using TrancheDataHelpers for TrancheData;
+    using BondTranchesHelpers for BondTranches;
 
     uint8 private constant DECIMALS = 18;
 
@@ -73,7 +73,7 @@ contract TrancheClassDiscountStrategy is IDiscountStrategy, OwnableUpgradeable {
     /// @return The class hash.
     function trancheClass(ITranche tranche) public view returns (bytes32) {
         IBondController bond = IBondController(tranche.bond());
-        TrancheData memory td = bond.getTrancheData();
+        BondTranches memory td = bond.getTranches();
         return keccak256(abi.encode(bond.collateralToken(), td.trancheRatios, td.getTrancheIndex(tranche)));
     }
 }

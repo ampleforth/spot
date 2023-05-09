@@ -73,14 +73,14 @@ describe("BondHelpers", function () {
     });
   });
 
-  describe("#getTrancheData", function () {
+  describe("#getTranches", function () {
     let bond: Contract;
     beforeEach(async function () {
       bond = await createBondWithFactory(bondFactory, collateralToken, [201, 301, 498], 86400);
     });
 
     it("should return the tranche data", async function () {
-      const td = await bondHelpers.getTrancheData(bond.address);
+      const td = await bondHelpers.getTranches(bond.address);
       expect(td.tranches.length).to.eq(3);
       expect(td.trancheRatios.length).to.eq(3);
       expect(td.trancheRatios[0]).to.eq(201);
@@ -96,7 +96,7 @@ describe("BondHelpers", function () {
   describe("#getTrancheIndex", function () {
     it("should return the tranche index", async function () {
       const bond = await createBondWithFactory(bondFactory, collateralToken, [100, 100, 100, 100, 100, 500], 86400);
-      const td = await bondHelpers.getTrancheData(bond.address);
+      const td = await bondHelpers.getTranches(bond.address);
 
       for (const t in td.tranches) {
         expect(await bondHelpers.getTrancheIndex(bond.address, td.tranches[t])).to.eq(t);

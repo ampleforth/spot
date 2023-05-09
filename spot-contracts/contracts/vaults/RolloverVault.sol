@@ -11,7 +11,7 @@ import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/
 import { ERC20BurnableUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
-import { TrancheData, TrancheHelpers, BondHelpers } from "../_utils/BondHelpers.sol";
+import { BondTranches, TrancheHelpers, BondHelpers } from "../_utils/BondHelpers.sol";
 
 /// @notice Storage array access out of bounds.
 error OutOfBounds();
@@ -178,7 +178,7 @@ contract RolloverVault is
     /// @dev Its safer to call `recover` before `deploy` so the full available balance can be deployed.
     ///      Reverts if no funds are rolled over or if the minimum deployment threshold is not reached.
     function deploy() public override nonReentrant whenNotPaused {
-        (uint256 deployedAmt, TrancheData memory td) = _tranche(perp.getDepositBond());
+        (uint256 deployedAmt, BondTranches memory td) = _tranche(perp.getDepositBond());
         uint256 perpsRolledOver = _rollover(perp, td);
         // NOTE: The following enforces that we only tranche the underlying if it can immediately be used for rotations.
         if (deployedAmt <= minDeploymentAmt || perpsRolledOver <= 0) {
@@ -336,9 +336,9 @@ contract RolloverVault is
     ///      And performs some book-keeping to keep track of the vault's assets.
     /// @return balance The amount of underlying assets tranched.
     /// @return td The given bonds tranche data.
-    function _tranche(IBondController bond) private returns (uint256, TrancheData memory) {
+    function _tranche(IBondController bond) private returns (uint256, BondTranches memory) {
         // Get bond's tranche data
-        TrancheData memory td = bond.getTrancheData();
+        BondTranches memory td = bond.getTranches();
 
         // Get underlying balance
         uint256 balance = underlying.balanceOf(address(this));
@@ -364,7 +364,7 @@ contract RolloverVault is
     /// @dev Rolls over freshly tranched tokens from the given bond for older tranches (close to maturity) from perp.
     ///      And performs some book-keeping to keep track of the vault's assets.
     /// @return The amount of perps rolled over.
-    function _rollover(IPerpetualTranche perp_, TrancheData memory td) private returns (uint256) {
+    function _rollover(IPerpetualTranche perp_, BondTranches memory td) private returns (uint256) {
         // NOTE: The first element of the list is the mature tranche,
         //       there after the list is NOT ordered by maturity.
         IERC20Upgradeable[] memory rolloverTokens = perp_.getReserveTokensUpForRollover();
@@ -465,7 +465,7 @@ contract RolloverVault is
     /// @dev Redeems the given tranche for the underlying asset and
     ///      performs internal book-keeping to keep track of the vault assets.
     function _redeemTranche(ITranche tranche) private {
-        TrancheData memory td = _execTrancheRedemption(tranche);
+        BondTranches memory td = _execTrancheRedemption(tranche);
 
         // sync holdings
         // Note: Immature redemption, may remove sibling tranches from the deployed list.
@@ -479,7 +479,7 @@ contract RolloverVault is
     ///      When the tranche is not up for redemption, its a no-op.
     ///      This function should NOT be called directly, use `_redeemTranches` or `_redeemTranche`
     ///      which wrap this function with the internal book-keeping necessary to keep track of the vault's assets.
-    function _execTrancheRedemption(ITranche tranche) private returns (TrancheData memory) {
+    function _execTrancheRedemption(ITranche tranche) private returns (BondTranches memory) {
         IBondController bond = IBondController(tranche.bond());
 
         // if bond has matured, redeem the tranche token
@@ -493,12 +493,12 @@ contract RolloverVault is
                 bond.redeemMature(address(tranche), trancheBalance);
             }
 
-            return bond.getTrancheData();
+            return bond.getTranches();
         }
         // else redeem using proportional balances, redeems all tranches part of the bond
         else {
             uint256[] memory trancheAmts;
-            TrancheData memory td;
+            BondTranches memory td;
             (td, trancheAmts) = bond.computeRedeemableTrancheAmounts(address(this));
 
             // NOTE: It is guaranteed that if one tranche amount is zero, all amounts are zeros.

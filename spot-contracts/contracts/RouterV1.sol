@@ -8,7 +8,7 @@ import { IPerpetualTranche } from "./_interfaces/IPerpetualTranche.sol";
 
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
-import { TrancheData, TrancheDataHelpers, BondHelpers } from "./_utils/BondHelpers.sol";
+import { BondTranches, BondTranchesHelpers, BondHelpers } from "./_utils/BondHelpers.sol";
 
 /**
  *  @title RouterV1
@@ -22,7 +22,7 @@ contract RouterV1 {
 
     // data handling
     using BondHelpers for IBondController;
-    using TrancheDataHelpers for TrancheData;
+    using BondTranchesHelpers for BondTranches;
 
     // ERC20 operations
     using SafeERC20Upgradeable for IERC20Upgradeable;
@@ -51,7 +51,7 @@ contract RouterV1 {
     {
         IBondController bond = perp.getDepositBond();
 
-        TrancheData memory td;
+        BondTranches memory td;
         uint256[] memory trancheAmts;
         (td, trancheAmts, ) = bond.previewDeposit(collateralAmount);
 
@@ -100,7 +100,7 @@ contract RouterV1 {
         uint256 collateralAmount,
         uint256 feePaid
     ) external afterPerpStateUpdate(perp) {
-        TrancheData memory td = bond.getTrancheData();
+        BondTranches memory td = bond.getTranches();
         IERC20Upgradeable collateralToken = IERC20Upgradeable(bond.collateralToken());
         IERC20Upgradeable feeToken = perp.feeToken();
 
@@ -238,7 +238,7 @@ contract RouterV1 {
         RolloverBatch[] calldata rollovers,
         uint256 feePaid
     ) external afterPerpStateUpdate(perp) {
-        TrancheData memory td = bond.getTrancheData();
+        BondTranches memory td = bond.getTranches();
         IERC20Upgradeable collateralToken = IERC20Upgradeable(bond.collateralToken());
         IERC20Upgradeable feeToken = perp.feeToken();
 

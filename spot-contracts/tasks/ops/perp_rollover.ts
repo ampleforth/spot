@@ -21,7 +21,7 @@ async function matureBond(bond: Contract, signer: Signer) {
   return true;
 }
 
-async function getTrancheData(hre: HardhatRuntimeEnvironment, bond: Contract): Promise<[Contract, BigNumber][]> {
+async function getTranches(hre: HardhatRuntimeEnvironment, bond: Contract): Promise<[Contract, BigNumber][]> {
   const trancheCount = await bond.trancheCount();
   const tranches: [Contract, BigNumber][] = [];
   for (let i = 0; i < trancheCount; i++) {
@@ -235,7 +235,7 @@ task("ops:redeemTranches")
       console.log("---------------------------------------------------------------");
       console.log("Processing bond", bondAddress);
 
-      const td = await getTrancheData(hre, bond);
+      const td = await getTranches(hre, bond);
       const isMature = await matureBond(bond, signer);
 
       if (isMature) {
@@ -410,7 +410,7 @@ task("ops:preview_tx:redeemTranches")
       const bondAddress = await bondIssuer.callStatic.issuedBondAt(i);
       const bond = await hre.ethers.getContractAt("IBondController", bondAddress);
 
-      const td = await getTrancheData(hre, bond);
+      const td = await getTranches(hre, bond);
       const isMature = await bond.isMature();
 
       if (isMature) {

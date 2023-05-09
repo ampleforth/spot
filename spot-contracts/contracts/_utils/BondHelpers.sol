@@ -12,23 +12,23 @@ import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/
 /// @param tranche Address of the tranche token.
 error UnacceptableTranche(ITranche tranche);
 
-struct TrancheData {
+struct BondTranches {
     ITranche[] tranches;
     uint256[] trancheRatios;
 }
 
 /**
- *  @title TrancheDataHelpers
+ *  @title BondTranchesHelpers
  *
  *  @notice Library with helper functions for the bond's retrieved tranche data.
  *
  */
-library TrancheDataHelpers {
+library BondTranchesHelpers {
     /// @notice Iterates through the tranche data to find the seniority index of the given tranche.
     /// @param td The tranche data object.
     /// @param t The address of the tranche to check.
     /// @return the index of the tranche in the tranches array.
-    function getTrancheIndex(TrancheData memory td, ITranche t) internal pure returns (uint256) {
+    function getTrancheIndex(BondTranches memory td, ITranche t) internal pure returns (uint256) {
         for (uint8 i = 0; i < td.tranches.length; i++) {
             if (td.tranches[i] == t) {
                 return i;
@@ -50,11 +50,11 @@ library TrancheHelpers {
     /// @return The collateral balance and the tranche token supply.
     function getTrancheCollateralization(ITranche t) internal view returns (uint256, uint256) {
         IBondController bond = IBondController(t.bond());
-        TrancheData memory td;
+        BondTranches memory td;
         uint256[] memory collateralBalances;
         uint256[] memory trancheSupplies;
         (td, collateralBalances, trancheSupplies) = BondHelpers.getTrancheCollateralizations(bond);
-        uint256 trancheIndex = TrancheDataHelpers.getTrancheIndex(td, t);
+        uint256 trancheIndex = BondTranchesHelpers.getTrancheIndex(td, t);
         return (collateralBalances[trancheIndex], trancheSupplies[trancheIndex]);
     }
 }
@@ -90,11 +90,11 @@ library BondHelpers {
         return b.maturityDate() - b.creationDate();
     }
 
-    /// @notice Given a bond, retrieves all of the bond's tranche related data.
+    /// @notice Given a bond, retrieves all of the bond's tranches.
     /// @param b The address of the bond contract.
     /// @return The tranche data.
-    function getTrancheData(IBondController b) internal view returns (TrancheData memory) {
-        TrancheData memory td;
+    function getTranches(IBondController b) internal view returns (BondTranches memory) {
+        BondTranches memory td;
         uint8 trancheCount = b.trancheCount().toUint8();
         td.tranches = new ITranche[](trancheCount);
         td.trancheRatios = new uint256[](trancheCount);
@@ -116,12 +116,12 @@ library BondHelpers {
         internal
         view
         returns (
-            TrancheData memory,
+            BondTranches memory,
             uint256[] memory,
             uint256[] memory
         )
     {
-        TrancheData memory td = getTrancheData(b);
+        BondTranches memory td = getTranches(b);
         uint256[] memory trancheAmts = new uint256[](td.tranches.length);
         uint256[] memory fees = new uint256[](td.tranches.length);
 
@@ -154,12 +154,12 @@ library BondHelpers {
         internal
         view
         returns (
-            TrancheData memory,
+            BondTranches memory,
             uint256[] memory,
             uint256[] memory
         )
     {
-        TrancheData memory td = getTrancheData(b);
+        BondTranches memory td = getTranches(b);
         uint256[] memory collateralBalances = new uint256[](td.tranches.length);
         uint256[] memory trancheSupplies = new uint256[](td.tranches.length);
 
@@ -202,9 +202,9 @@ library BondHelpers {
     function computeRedeemableTrancheAmounts(IBondController b, address u)
         internal
         view
-        returns (TrancheData memory, uint256[] memory)
+        returns (BondTranches memory, uint256[] memory)
     {
-        TrancheData memory td = getTrancheData(b);
+        BondTranches memory td = getTranches(b);
         uint256[] memory redeemableAmts = new uint256[](td.tranches.length);
 
         // Calculate how many underlying assets could be redeemed from each tranche balance,
