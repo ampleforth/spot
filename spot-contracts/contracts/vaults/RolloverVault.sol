@@ -370,14 +370,14 @@ contract RolloverVault is
 
         // Batch rollover
         uint256 totalPerpRolledOver = 0;
-        uint8 vaultTokenIdx = 0;
+        uint8 vaultTrancheIdx = 0;
         uint256 perpTokenIdx = 0;
 
         // We pair tranche tokens held by the vault with tranche tokens held by perp,
         // And execute the rollover and continue to the next token with a usable balance.
-        while (vaultTokenIdx < td.tranches.length && perpTokenIdx < rolloverTokens.length) {
+        while (vaultTrancheIdx < td.tranches.length && perpTokenIdx < rolloverTokens.length) {
             // trancheIntoPerp refers to the tranche going into perp from the vault
-            ITranche trancheIntoPerp = td.tranches[vaultTokenIdx];
+            ITranche trancheIntoPerp = td.tranches[vaultTrancheIdx];
 
             // tokenOutOfPerp is the reserve token coming out of perp into the vault
             IERC20Upgradeable tokenOutOfPerp = rolloverTokens[perpTokenIdx];
@@ -400,7 +400,7 @@ contract RolloverVault is
             // trancheInAmtAvailable is exhausted
             if (trancheInAmtAvailable <= 0) {
                 // Rollover is a no-op, so skipping to next trancheIntoPerp
-                vaultTokenIdx++;
+                vaultTrancheIdx++;
                 continue;
             }
 
@@ -415,7 +415,7 @@ contract RolloverVault is
             // trancheIntoPerp isn't accepted by perp, likely because it's yield=0, refer perp docs for more info
             if (rd.perpRolloverAmt <= 0) {
                 // Rollover is a no-op, so skipping to next trancheIntoPerp
-                vaultTokenIdx++;
+                vaultTrancheIdx++;
                 continue;
             }
 
