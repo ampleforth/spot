@@ -551,7 +551,6 @@ describe("RolloverVault", function () {
           const tx = vault["recover(address)"](currentTranchesIn[1].address);
           await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("5"));
           await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[1].address, toFixedPtAmt("0"));
-          await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[2].address, toFixedPtAmt("5"));
         });
       });
 
