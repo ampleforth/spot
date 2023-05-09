@@ -45,9 +45,9 @@ contract BondHelpersTester {
         return b.getTrancheCollateralizations();
     }
 
-    function getTrancheIndex(IBondController b, ITranche t) public view returns (uint256) {
+    function indexOf(IBondController b, ITranche t) public view returns (uint256) {
         BondTranches memory td = b.getTranches();
-        return td.getTrancheIndex(t);
+        return td.indexOf(t);
     }
 
     function computeRedeemableTrancheAmounts(IBondController b, address u)

@@ -28,7 +28,7 @@ library BondTranchesHelpers {
     /// @param td The tranche data object.
     /// @param t The address of the tranche to check.
     /// @return the index of the tranche in the tranches array.
-    function getTrancheIndex(BondTranches memory td, ITranche t) internal pure returns (uint256) {
+    function indexOf(BondTranches memory td, ITranche t) internal pure returns (uint256) {
         for (uint8 i = 0; i < td.tranches.length; i++) {
             if (td.tranches[i] == t) {
                 return i;
@@ -54,7 +54,7 @@ library TrancheHelpers {
         uint256[] memory collateralBalances;
         uint256[] memory trancheSupplies;
         (td, collateralBalances, trancheSupplies) = BondHelpers.getTrancheCollateralizations(bond);
-        uint256 trancheIndex = BondTranchesHelpers.getTrancheIndex(td, t);
+        uint256 trancheIndex = BondTranchesHelpers.indexOf(td, t);
         return (collateralBalances[trancheIndex], trancheSupplies[trancheIndex]);
     }
 }

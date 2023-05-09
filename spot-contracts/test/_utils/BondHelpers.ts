@@ -93,24 +93,24 @@ describe("BondHelpers", function () {
     });
   });
 
-  describe("#getTrancheIndex", function () {
+  describe("#indexOf", function () {
     it("should return the tranche index", async function () {
       const bond = await createBondWithFactory(bondFactory, collateralToken, [100, 100, 100, 100, 100, 500], 86400);
       const td = await bondHelpers.getTranches(bond.address);
 
       for (const t in td.tranches) {
-        expect(await bondHelpers.getTrancheIndex(bond.address, td.tranches[t])).to.eq(t);
+        expect(await bondHelpers.indexOf(bond.address, td.tranches[t])).to.eq(t);
       }
 
-      await expect(bondHelpers.getTrancheIndex(bond.address, bond.address)).to.be.revertedWithCustomError(
+      await expect(bondHelpers.indexOf(bond.address, bond.address)).to.be.revertedWithCustomError(
         bondHelpers,
         "UnacceptableTranche",
       );
-      await expect(bondHelpers.getTrancheIndex(bond.address, deployerAddress)).to.be.revertedWithCustomError(
+      await expect(bondHelpers.indexOf(bond.address, deployerAddress)).to.be.revertedWithCustomError(
         bondHelpers,
         "UnacceptableTranche",
       );
-      await expect(bondHelpers.getTrancheIndex(bond.address, constants.AddressZero)).to.be.revertedWithCustomError(
+      await expect(bondHelpers.indexOf(bond.address, constants.AddressZero)).to.be.revertedWithCustomError(
         bondHelpers,
         "UnacceptableTranche",
       );
