@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.19;
 
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche } from "../_interfaces/IPerpetualTranche.sol";
 import { IVault, UnexpectedAsset, UnauthorizedTransferOut, InsufficientDeployment, DeployedCountOverLimit } from "../_interfaces/IVault.sol";
