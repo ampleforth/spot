@@ -34,14 +34,15 @@ export default {
       accounts: {
         mnemonic: process.env.PROD_MNEMONIC || Wallet.createRandom().mnemonic.phrase,
       },
-      gasMultiplier: 1.1,
+      gasMultiplier: 1.03,
+      allowUnlimitedContractSize: true,
     },
     mainnet: {
       url: `https://mainnet.infura.io/v3/${process.env.INFURA_SECRET}`,
       accounts: {
         mnemonic: process.env.PROD_MNEMONIC || Wallet.createRandom().mnemonic.phrase,
       },
-      gasMultiplier: 1.02,
+      gasMultiplier: 1.01,
     },
   },
   solidity: {

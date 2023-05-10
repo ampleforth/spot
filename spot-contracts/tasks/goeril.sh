@@ -26,10 +26,15 @@ yarn hardhat --network goerli deploy:DiscountStrategy:setDiscount \
 
 yarn hardhat --network goerli deploy:Router
 
+yarn hardhat --network goerli deploy:RolloverVault \
+    --name "SPOT Rollover Vault Note" \
+    --symbol "SPOT-RV-NOTE" \
+    --perp-address "0x95014Bc18F82a98CFAA3253fbD3184125A01f848"
+
 
 ########################################################################
 ## OPS
-yarn hardhat --network goerli ops:info 0x95014Bc18F82a98CFAA3253fbD3184125A01f848
+yarn hardhat --network goerli ops:perp:info 0x95014Bc18F82a98CFAA3253fbD3184125A01f848
 
 yarn hardhat --network goerli ops:updateState 0x95014Bc18F82a98CFAA3253fbD3184125A01f848
 
@@ -63,8 +68,22 @@ yarn hardhat --network goerli ops:rebase:MockAMPL \
   --ampl-address "0x74567107828843070087F1c6ec8322A3e8450725" \
   --rebase-perc 0.1
 
+yarn hardhat --network goerli ops:vault:info 0xca36B64BEbdf141623911987b93767dcA4bF6F1f
+
+yarn hardhat --network goerli ops:vault:deposit \
+  --vault-address 0xca36B64BEbdf141623911987b93767dcA4bF6F1f \
+  --underlying-amount 1
+
+yarn hardhat --network goerli ops:vault:redeem \
+  --vault-address 0xca36B64BEbdf141623911987b93767dcA4bF6F1f \
+  --amount 1
+
+yarn hardhat --network goerli ops:vault:recoverAndRedeploy \
+  --vault-address 0xca36B64BEbdf141623911987b93767dcA4bF6F1f
 
 ########################################################################
 ## upgrade
 
 yarn hardhat --network goerli upgrade:perp:testnet 0x95014Bc18F82a98CFAA3253fbD3184125A01f848
+
+yarn hardhat --network goerli upgrade:rolloverVault:testnet 0xca36B64BEbdf141623911987b93767dcA4bF6F1f

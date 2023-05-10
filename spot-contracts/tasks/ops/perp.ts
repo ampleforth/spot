@@ -3,7 +3,7 @@ import { task, types } from "hardhat/config";
 import { TaskArguments } from "hardhat/types";
 import { utils, constants, BigNumber } from "ethers";
 
-task("ops:info")
+task("ops:perp:info")
   .addPositionalParam("perpAddress", "the address of the perp contract", undefined, types.string, false)
   .setAction(async function (args: TaskArguments, hre) {
     const { perpAddress } = args;

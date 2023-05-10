@@ -22,7 +22,7 @@ task("verify:contract", "Verifies on etherscan")
       });
     } catch (e) {
       console.log("Unable to verify on etherscan");
-      // console.warn(e)
+      console.warn(e);
       console.log(
         `yarn hardhat verify:contract --network ${hre.network.name} --address ${
           args.address

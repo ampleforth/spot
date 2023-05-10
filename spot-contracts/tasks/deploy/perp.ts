@@ -100,6 +100,19 @@ task("deploy:PerpetualTranche")
     });
   });
 
+task("deploy:DiscountStrategy:computeDiscountHash")
+  .addParam("collateralTokenAddress", "the address of the collateral token", undefined, types.string, false)
+  .addParam("trancheRatios", "the bond's tranche ratios", undefined, types.json, false)
+  .addParam("trancheIndex", "the tranche's index", undefined, types.string, false)
+  .setAction(async function (args: TaskArguments, hre) {
+    const { collateralTokenAddress, trancheRatios, trancheIndex } = args;
+    const abiCoder = new hre.ethers.utils.AbiCoder();
+    const hash = hre.ethers.utils.keccak256(
+      abiCoder.encode(["address", "uint256[]", "uint256"], [collateralTokenAddress, trancheRatios, trancheIndex]),
+    );
+    console.log(hash);
+  });
+
 task("deploy:DiscountStrategy:setDiscount")
   .addParam("discountStrategyAddress", "the address of the discount strategy contract", undefined, types.string, false)
   .addParam("collateralTokenAddress", "the address of the collateral token", undefined, types.string, false)
