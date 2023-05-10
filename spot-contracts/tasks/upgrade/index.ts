@@ -1,1 +1,2 @@
 import "./perp";
+import "./vaults";

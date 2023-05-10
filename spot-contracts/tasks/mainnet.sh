@@ -25,6 +25,13 @@ yarn hardhat --network mainnet deploy:DiscountStrategy:setDiscount \
 
 yarn hardhat --network mainnet deploy:Router
 
+yarn hardhat --network mainnet deploy:DiscountStrategy:computeDiscountHash \
+  --discount-strategy-address "0x2C85Fb101192e3B969c03533a3BE0b3d5f764cef" \
+  --collateral-token-address "0xD46bA6D942050d489DBd938a2C909A5d5039A161" \
+  --tranche-ratios "[250,750]" \
+  --tranche-index "0" \
+  --tranche-discount "1.0"
+
 ########################################################################
 ## Transfer ownership
 yarn hardhat --network mainnet transferOwnership "0x85d1BA777Eb3FCBb10C82cdf3aAa8231e21B6777" \
@@ -44,7 +51,7 @@ yarn hardhat --network mainnet transferOwnership "0x2978B4103985A6668CE345555b0f
 
 ########################################################################
 ## OPS
-yarn hardhat --network mainnet ops:info 0xC1f33e0cf7e40a67375007104B929E49a581bafE
+yarn hardhat --network mainnet ops:perp:info 0xC1f33e0cf7e40a67375007104B929E49a581bafE
 
 # test ops
 yarn hardhat --network mainnet ops:updateState 0xC1f33e0cf7e40a67375007104B929E49a581bafE

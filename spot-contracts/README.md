@@ -26,9 +26,10 @@ yarn test
 
 There is a testnet deployment on Goerli.
 
-- SPOT ERC-20 Token: [0x95014Bc18F82a98CFAA3253fbD3184125A01f848](https://https://goerli.etherscan.io//address/0x95014Bc18F82a98CFAA3253fbD3184125A01f848)
-- Bond issuer: [0xbC060a1EbEC5eC869C4D51d4563244d4a223D307](https://https://goerli.etherscan.io//address/0xbC060a1EbEC5eC869C4D51d4563244d4a223D307)
-- Router: [0x5e902bdCC408550b4BD612678bE2d57677664Dc9](https://https://goerli.etherscan.io//address/0x5e902bdCC408550b4BD612678bE2d57677664Dc9)
+- SPOT ERC-20 Token: [0x95014Bc18F82a98CFAA3253fbD3184125A01f848](https://goerli.etherscan.io//address/0x95014Bc18F82a98CFAA3253fbD3184125A01f848)
+- Bond issuer: [0xbC060a1EbEC5eC869C4D51d4563244d4a223D307](https://goerli.etherscan.io//address/0xbC060a1EbEC5eC869C4D51d4563244d4a223D307)
+- Router: [0x5e902bdCC408550b4BD612678bE2d57677664Dc9](https://goerli.etherscan.io//address/0x5e902bdCC408550b4BD612678bE2d57677664Dc9)
+- RolloverVault: [0xca36B64BEbdf141623911987b93767dcA4bF6F1f](https://goerli.etherscan.io//address/0xca36B64BEbdf141623911987b93767dcA4bF6F1f)
 
 ## Contribute
 
