@@ -74,14 +74,6 @@ contract RolloverVault is
     /// @dev The maximum number of deployed assets that can be held in this vault at any given time.
     uint256 public constant MAX_DEPLOYED_COUNT = 47;
 
-    //-------------------------------------------------------------------------
-    // Storage
-
-    /// @notice Minimum amount of underlying assets that must be deployed, for a deploy operation to succeed.
-    /// @dev The deployment transaction reverts, if the vaults does not have sufficient underlying tokens
-    ///      to cover the minimum deployment amount.
-    uint256 public minDeploymentAmt;
-
     //--------------------------------------------------------------------------
     // ASSETS
     //
@@ -99,7 +91,12 @@ contract RolloverVault is
     EnumerableSetUpgradeable.AddressSet private _deployed;
 
     //-------------------------------------------------------------------------
-    // Data
+    // Storage
+
+    /// @notice Minimum amount of underlying assets that must be deployed, for a deploy operation to succeed.
+    /// @dev The deployment transaction reverts, if the vaults does not have sufficient underlying tokens
+    ///      to cover the minimum deployment amount.
+    uint256 public minDeploymentAmt;
 
     /// @notice The perpetual token on which rollovers are performed.
     IPerpetualTranche public perp;
