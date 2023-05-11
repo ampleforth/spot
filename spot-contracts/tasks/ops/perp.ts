@@ -139,6 +139,22 @@ task("ops:perp:updateKeeper", "Updates the keeper address of perpetual tranche")
     await tx.wait();
   });
 
+task("ops:perp:updateTolerableTrancheMaturity", "Updates the tolerable maturity params of perpetual tranche")
+  .addParam("address", "the perpetual tranche contract address", undefined, types.string, false)
+  .addParam("minimum", "the new minimum tolerable tranche maturity", undefined, types.int, false)
+  .addParam("maximum", "the new maximum tolerable tranche maturity", undefined, types.int, false)
+  .setAction(async function (args: TaskArguments, hre) {
+    const { address, minimum, maximum } = args;
+    const signer = (await hre.ethers.getSigners())[0];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
+    const perp = await hre.ethers.getContractAt("PerpetualTranche", address);
+    console.log(`Updating tolerable tranche maturity range to ${minimum}, ${maximum}`);
+    const tx = await perp.updateTolerableTrancheMaturity(minimum, maximum);
+    console.log(tx.hash);
+    await tx.wait();
+  });
+
 task("ops:perp:pause", "Pauses operations on the perpetual tranche contract")
   .addParam("address", "the perpetual tranche contract address", undefined, types.string, false)
   .addParam("fromIdx", "the index of sender", 0, types.int)
