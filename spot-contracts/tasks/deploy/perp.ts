@@ -9,6 +9,7 @@ task("deploy:BondIssuer")
   .addParam("bondDuration", "length of the bonds", undefined, types.int, false)
   .addParam("collateralTokenAddress", "address of the collateral token", undefined, types.string, false)
   .addParam("trancheRatios", "list of tranche ratios", undefined, types.json, false)
+  .addParam("verify", "flag to set false for local deployments", true, types.boolean)
   .setAction(async function (args: TaskArguments, hre) {
     const {
       bondFactoryAddress,
@@ -17,6 +18,7 @@ task("deploy:BondIssuer")
       bondDuration,
       collateralTokenAddress,
       trancheRatios,
+      verify,
     } = args;
     console.log("Signer", await (await hre.ethers.getSigners())[0].getAddress());
 
@@ -27,11 +29,15 @@ task("deploy:BondIssuer")
     await (await bondIssuer.init(bondDuration, trancheRatios, issueFrequency, issueWindowOffset)).wait();
     await (await bondIssuer.issue()).wait();
 
-    await sleep(15);
-    await hre.run("verify:contract", {
-      address: bondIssuer.address,
-      constructorArguments: [bondFactoryAddress, collateralTokenAddress],
-    });
+    if (verify) {
+      await sleep(15);
+      await hre.run("verify:contract", {
+        address: bondIssuer.address,
+        constructorArguments: [bondFactoryAddress, collateralTokenAddress],
+      });
+    } else {
+      console.log("Skipping verification");
+    }
 
     console.log("Bond issuer", bondIssuer.address);
   });
@@ -42,8 +48,10 @@ task("deploy:PerpetualTranche")
   .addParam("name", "the ERC20 name", undefined, types.string, false)
   .addParam("symbol", "the ERC20 symbol", undefined, types.string, false)
   .addParam("pricingStrategyRef", "the pricing strategy to be used", "CDRPricingStrategy", types.string)
+  .addParam("verify", "flag to set false for local deployments", true, types.boolean)
+
   .setAction(async function (args: TaskArguments, hre) {
-    const { bondIssuerAddress, collateralTokenAddress, name, symbol, pricingStrategyRef } = args;
+    const { bondIssuerAddress, collateralTokenAddress, name, symbol, pricingStrategyRef, verify } = args;
     const deployer = (await hre.ethers.getSigners())[0];
     console.log("Signer", await deployer.getAddress());
 
@@ -52,7 +60,7 @@ task("deploy:PerpetualTranche")
     await perp.deployed();
 
     const BasicFeeStrategy = await hre.ethers.getContractFactory("BasicFeeStrategy");
-    const feeStrategy = await BasicFeeStrategy.deploy(perp.address);
+    const feeStrategy = await BasicFeeStrategy.deploy(perp.address, perp.address);
     await feeStrategy.deployed();
     await (await feeStrategy.init("0", "0", "0")).wait();
 
@@ -81,23 +89,27 @@ task("deploy:PerpetualTranche")
     );
     await initTx.wait();
 
-    await sleep(15);
-    await hre.run("verify:contract", {
-      address: feeStrategy.address,
-      constructorArguments: [perp.address, perp.address, "1000000", "1000000", "0"],
-    });
+    if (verify) {
+      await sleep(15);
+      await hre.run("verify:contract", {
+        address: feeStrategy.address,
+        constructorArguments: [perp.address, perp.address, "1000000", "1000000", "0"],
+      });
 
-    await hre.run("verify:contract", {
-      address: pricingStrategy.address,
-    });
+      await hre.run("verify:contract", {
+        address: pricingStrategy.address,
+      });
 
-    await hre.run("verify:contract", {
-      address: discountStrategy.address,
-    });
+      await hre.run("verify:contract", {
+        address: discountStrategy.address,
+      });
 
-    await hre.run("verify:contract", {
-      address: perp.address,
-    });
+      await hre.run("verify:contract", {
+        address: perp.address,
+      });
+    } else {
+      console.log("Skipping verification");
+    }
   });
 
 task("deploy:DiscountStrategy:computeDiscountHash")
@@ -134,16 +146,22 @@ task("deploy:DiscountStrategy:setDiscount")
     await tx.wait();
   });
 
-task("deploy:Router").setAction(async function (args: TaskArguments, hre) {
-  console.log("Signer", await (await hre.ethers.getSigners())[0].getAddress());
+task("deploy:Router")
+  .addParam("verify", "flag to set false for local deployments", true, types.boolean)
+  .setAction(async function (args: TaskArguments, hre) {
+    console.log("Signer", await (await hre.ethers.getSigners())[0].getAddress());
 
-  const RouterV1 = await hre.ethers.getContractFactory("RouterV1");
-  const router = await RouterV1.deploy();
-  await router.deployed();
-  console.log("router", router.address);
+    const RouterV1 = await hre.ethers.getContractFactory("RouterV1");
+    const router = await RouterV1.deploy();
+    await router.deployed();
+    console.log("router", router.address);
 
-  await sleep(15);
-  await hre.run("verify:contract", {
-    address: router.address,
+    if (args.verify) {
+      await sleep(15);
+      await hre.run("verify:contract", {
+        address: router.address,
+      });
+    } else {
+      console.log("Skipping verification");
+    }
   });
-});
