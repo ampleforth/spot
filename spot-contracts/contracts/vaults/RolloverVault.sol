@@ -27,7 +27,8 @@ error OutOfBounds();
  *                 to get tranche tokens in return, it then swaps these fresh tranche tokens for
  *                 older tranche tokens (ones mature or approaching maturity) from perp.
  *                 system through a rollover operation and earns an income in perp tokens.
- *              2) recover: The vault redeems tranches for the underlying asset.
+ *              2) recover: The vault redeems 1) perps for their underlying tranches and the
+ *                          2) tranches it holds for the underlying asset.
  *                 NOTE: It performs both mature and immature redemption. Read more: https://bit.ly/3tuN6OC
  *
  *
@@ -185,6 +186,25 @@ contract RolloverVault is
 
     /// @inheritdoc IVault
     function recover() public override nonReentrant whenNotPaused {
+        // Redeem perp for tranches
+        uint256 perpBalance = perp.balanceOf(address(this));
+        if (perpBalance > 0) {
+            (IERC20Upgradeable[] memory tranchesRedeemed, ) = perp.computeRedemptionAmts(perpBalance);
+            perp.redeem(perpBalance);
+
+            // sync underlying
+            // require(tranchesRedeemed[0] == underlying);
+            _syncAsset(underlying);
+
+            // sync new tranches
+            for (uint256 i = 1; i < tranchesRedeemed.length; i++) {
+                _syncAndAddDeployedAsset(tranchesRedeemed[i]);
+            }
+            // sync perp
+            _syncAsset(perp);
+        }
+
+        // Redeem deployed tranches
         uint256 deployedCount_ = _deployed.length();
         if (deployedCount_ <= 0) {
             return;
