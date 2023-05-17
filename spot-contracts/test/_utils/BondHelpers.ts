@@ -437,7 +437,10 @@ describe("BondHelpers", function () {
     describe("when the user has all the tranches in the right proportions", function () {
       describe("when the user has the entire supply", function () {
         it("should calculate the amounts", async function () {
-          const b = await bondHelpers.computeRedeemableTrancheAmounts(bond.address, deployerAddress);
+          const b = await bondHelpers["computeRedeemableTrancheAmounts(address,address)"](
+            bond.address,
+            deployerAddress,
+          );
           expect(b[1][0]).to.eq(toFixedPtAmt("200"));
           expect(b[1][1]).to.eq(toFixedPtAmt("300"));
           expect(b[1][2]).to.eq(toFixedPtAmt("500"));
@@ -452,12 +455,15 @@ describe("BondHelpers", function () {
           await tranches[2].transfer(userAddress, toFixedPtAmt("25"));
         });
         it("should calculate the amounts", async function () {
-          const b1 = await bondHelpers.computeRedeemableTrancheAmounts(bond.address, userAddress);
+          const b1 = await bondHelpers["computeRedeemableTrancheAmounts(address,address)"](bond.address, userAddress);
           expect(b1[1][0]).to.eq(toFixedPtAmt("10"));
           expect(b1[1][1]).to.eq(toFixedPtAmt("15"));
           expect(b1[1][2]).to.eq(toFixedPtAmt("25"));
 
-          const b2 = await bondHelpers.computeRedeemableTrancheAmounts(bond.address, deployerAddress);
+          const b2 = await bondHelpers["computeRedeemableTrancheAmounts(address,address)"](
+            bond.address,
+            deployerAddress,
+          );
           expect(b2[1][0]).to.eq(toFixedPtAmt("190"));
           expect(b2[1][1]).to.eq(toFixedPtAmt("285"));
           expect(b2[1][2]).to.eq(toFixedPtAmt("475"));
@@ -476,7 +482,7 @@ describe("BondHelpers", function () {
         for (const a in amounts) {
           await tranches[a].transfer(userAddress, toFixedPtAmt(amounts[a]));
         }
-        const b = await bondHelpers.computeRedeemableTrancheAmounts(bond.address, userAddress);
+        const b = await bondHelpers["computeRedeemableTrancheAmounts(address,address)"](bond.address, userAddress);
         for (const a in redemptionAmts) {
           expect(b[1][a]).to.eq(toFixedPtAmt(redemptionAmts[a]));
         }
@@ -527,6 +533,149 @@ describe("BondHelpers", function () {
       describe("[10, 15, 0]", async function () {
         it("should calculate the amounts", async function () {
           await checkRedeemableAmts(bond, userAddress, ["10", "15", "0"], ["0", "0", "0"]);
+        });
+      });
+    });
+  });
+
+  describe("#computeRedeemableTrancheAmounts", function () {
+    let bond: Contract, bondLength: number;
+    beforeEach(async function () {
+      bondLength = 86400;
+      bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], bondLength);
+    });
+
+    describe("when balances are in the right proportions", function () {
+      it("should calculate the amounts", async function () {
+        const b = await bondHelpers["computeRedeemableTrancheAmounts(address,uint256[])"](bond.address, [
+          toFixedPtAmt("200"),
+          toFixedPtAmt("300"),
+          toFixedPtAmt("500"),
+        ]);
+        expect(b[1][0]).to.eq(toFixedPtAmt("0"));
+        expect(b[1][1]).to.eq(toFixedPtAmt("0"));
+        expect(b[1][2]).to.eq(toFixedPtAmt("0"));
+      });
+
+      it("should calculate the amounts", async function () {
+        const b = await bondHelpers["computeRedeemableTrancheAmounts(address,uint256[])"](bond.address, [
+          toFixedPtAmt("6"),
+          toFixedPtAmt("9"),
+          toFixedPtAmt("15"),
+        ]);
+        expect(b[1][0]).to.eq(toFixedPtAmt("0"));
+        expect(b[1][1]).to.eq(toFixedPtAmt("0"));
+        expect(b[1][2]).to.eq(toFixedPtAmt("0"));
+      });
+
+      describe("when bond has balance", function () {
+        beforeEach(async function () {
+          await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
+        });
+
+        it("should calculate the amounts", async function () {
+          const b = await bondHelpers["computeRedeemableTrancheAmounts(address,uint256[])"](bond.address, [
+            toFixedPtAmt("202"),
+            toFixedPtAmt("303"),
+            toFixedPtAmt("505"),
+          ]);
+          expect(b[1][0]).to.eq(toFixedPtAmt("200"));
+          expect(b[1][1]).to.eq(toFixedPtAmt("300"));
+          expect(b[1][2]).to.eq(toFixedPtAmt("500"));
+        });
+
+        it("should calculate the amounts", async function () {
+          const b = await bondHelpers["computeRedeemableTrancheAmounts(address,uint256[])"](bond.address, [
+            toFixedPtAmt("200"),
+            toFixedPtAmt("300"),
+            toFixedPtAmt("500"),
+          ]);
+          expect(b[1][0]).to.eq(toFixedPtAmt("200"));
+          expect(b[1][1]).to.eq(toFixedPtAmt("300"));
+          expect(b[1][2]).to.eq(toFixedPtAmt("500"));
+        });
+
+        it("should calculate the amounts", async function () {
+          const b = await bondHelpers["computeRedeemableTrancheAmounts(address,uint256[])"](bond.address, [
+            toFixedPtAmt("6"),
+            toFixedPtAmt("9"),
+            toFixedPtAmt("15"),
+          ]);
+          expect(b[1][0]).to.eq(toFixedPtAmt("6"));
+          expect(b[1][1]).to.eq(toFixedPtAmt("9"));
+          expect(b[1][2]).to.eq(toFixedPtAmt("15"));
+        });
+      });
+    });
+
+    describe("when balances are not right proportions", function () {
+      async function checkRedeemableAmts(bond: Contract, amounts: string[] = [], redemptionAmts: string[] = []) {
+        const b = await bondHelpers["computeRedeemableTrancheAmounts(address,uint256[])"](
+          bond.address,
+          amounts.map(toFixedPtAmt),
+        );
+        for (const a in redemptionAmts) {
+          expect(b[1][a]).to.eq(toFixedPtAmt(redemptionAmts[a]));
+        }
+      }
+
+      describe("when bond has a balance", function () {
+        beforeEach(async function () {
+          await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
+        });
+
+        describe("[9, 15, 25]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts(bond, ["9", "15", "25"], ["9", "13.5", "22.5"]);
+          });
+        });
+
+        describe("[10, 15, 250]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts(bond, ["10", "15", "250"], ["10", "15", "25"]);
+          });
+        });
+
+        describe("[10, 12, 250]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts(bond, ["10", "12", "250"], ["8", "12", "20"]);
+          });
+        });
+
+        describe("[10, 12, 5]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts(bond, ["10", "12", "5"], ["2", "3", "5"]);
+          });
+        });
+
+        describe("[10, 12, 0.5]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts(bond, ["10", "12", "0.5"], ["0.2", "0.3", "0.5"]);
+          });
+        });
+
+        describe("[10, 0, 25]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts(bond, ["10", "0", "25"], ["0", "0", "0"]);
+          });
+        });
+
+        describe("[0, 15, 25]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts(bond, ["0", "15", "25"], ["0", "0", "0"]);
+          });
+        });
+
+        describe("[10, 15, 0]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts(bond, ["10", "15", "0"], ["0", "0", "0"]);
+          });
+        });
+
+        describe("[200, 300, 505]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts(bond, ["200", "300", "505"], ["200", "300", "500"]);
+          });
         });
       });
     });

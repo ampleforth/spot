@@ -8,7 +8,8 @@ import { IPerpetualTranche } from "./_interfaces/IPerpetualTranche.sol";
 
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
-import { BondTranches, BondTranchesHelpers, BondHelpers } from "./_utils/BondHelpers.sol";
+import { BondTranches, BondTranchesHelpers } from "./_utils/BondTranchesHelpers.sol";
+import { BondHelpers } from "./_utils/BondHelpers.sol";
 
 /**
  *  @title RouterV1

@@ -11,7 +11,9 @@ import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/
 import { ERC20BurnableUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
-import { BondTranches, TrancheHelpers, BondHelpers } from "../_utils/BondHelpers.sol";
+import { BondTranches, BondTranchesHelpers } from "../_utils/BondTranchesHelpers.sol";
+import { TrancheHelpers } from "../_utils/TrancheHelpers.sol";
+import { BondHelpers } from "../_utils/BondHelpers.sol";
 
 /// @notice Storage array access out of bounds.
 error OutOfBounds();
@@ -43,6 +45,7 @@ contract RolloverVault is
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
     using BondHelpers for IBondController;
     using TrancheHelpers for ITranche;
+    using BondTranchesHelpers for BondTranches;
 
     // ERC20 operations
     using SafeERC20Upgradeable for IERC20Upgradeable;
