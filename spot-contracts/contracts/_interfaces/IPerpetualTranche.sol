@@ -38,11 +38,29 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @notice Deposits tranche tokens into the system and mint perp tokens.
     /// @param trancheIn The address of the tranche token to be deposited.
     /// @param trancheInAmt The amount of tranche tokens deposited.
-    function deposit(ITranche trancheIn, uint256 trancheInAmt) external;
+    function deposit(ITranche trancheIn, uint256 trancheInAmt) external returns (uint256);
 
     /// @notice Burn perp tokens and redeem the share of reserve assets.
     /// @param perpAmtBurnt The amount of perp tokens burnt from the caller.
-    function redeem(uint256 perpAmtBurnt) external;
+    function redeem(uint256 perpAmtBurnt)
+        external
+        returns (IERC20Upgradeable[] memory tokensOut, uint256[] memory tokenOutAmts);
+
+    struct RolloverPreview {
+        /// @notice The perp denominated value of tokens rolled over.
+        uint256 perpRolloverAmt;
+        /// @notice The amount of tokens rolled out.
+        uint256 tokenOutAmt;
+        /// @notice The tranche denominated amount of tokens rolled out.
+        /// @dev tokenOutAmt and trancheOutAmt can only be different values
+        ///      in the case of rolling over the mature tranche.
+        uint256 trancheOutAmt;
+        /// @notice The amount of trancheIn tokens rolled in.
+        uint256 trancheInAmt;
+        /// @notice The difference between the available trancheIn amount and
+        ///        the amount of tokens used for the rollover.
+        uint256 remainingTrancheInAmt;
+    }
 
     /// @notice Rotates newer tranches in for reserve tokens.
     /// @param trancheIn The tranche token deposited.
@@ -52,7 +70,7 @@ interface IPerpetualTranche is IERC20Upgradeable {
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmt
-    ) external;
+    ) external returns (RolloverPreview memory);
 
     /// @notice Reference to the wallet or contract that has the ability to pause/unpause operations.
     /// @return The address of the keeper.
@@ -148,22 +166,6 @@ interface IPerpetualTranche is IERC20Upgradeable {
     function computeRedemptionAmts(uint256 perpAmtBurnt)
         external
         returns (IERC20Upgradeable[] memory tokensOut, uint256[] memory tokenOutAmts);
-
-    struct RolloverPreview {
-        /// @notice The perp denominated value of tokens rolled over.
-        uint256 perpRolloverAmt;
-        /// @notice The amount of tokens rolled out.
-        uint256 tokenOutAmt;
-        /// @notice The tranche denominated amount of tokens rolled out.
-        /// @dev tokenOutAmt and trancheOutAmt can only be different values
-        ///      in the case of rolling over the mature tranche.
-        uint256 trancheOutAmt;
-        /// @notice The amount of trancheIn tokens rolled in.
-        uint256 trancheInAmt;
-        /// @notice The difference between the available trancheIn amount and
-        ///        the amount of tokens used for the rollover.
-        uint256 remainingTrancheInAmt;
-    }
 
     /// @notice Computes the amount reserve tokens that are rolled out for the given number
     ///         of `trancheIn` tokens rolled in.

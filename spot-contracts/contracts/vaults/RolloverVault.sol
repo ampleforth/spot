@@ -189,8 +189,7 @@ contract RolloverVault is
         // Redeem perp for tranches
         uint256 perpBalance = perp.balanceOf(address(this));
         if (perpBalance > 0) {
-            (IERC20Upgradeable[] memory tranchesRedeemed, ) = perp.computeRedemptionAmts(perpBalance);
-            perp.redeem(perpBalance);
+            (IERC20Upgradeable[] memory tranchesRedeemed, ) = perp.redeem(perpBalance);
 
             // sync underlying
             // require(tranchesRedeemed[0] == underlying);
@@ -499,12 +498,12 @@ contract RolloverVault is
                 continue;
             }
 
-            // Preview rollover
-            IPerpetualTranche.RolloverPreview memory rd = perp_.computeRolloverAmt(
+            // Perform rollover
+            _checkAndApproveMax(trancheIntoPerp, address(perp_), trancheInAmtAvailable);
+            IPerpetualTranche.RolloverPreview memory rd = perp_.rollover(
                 trancheIntoPerp,
                 tokenOutOfPerp,
-                trancheInAmtAvailable,
-                tokenOutAmtAvailable
+                trancheInAmtAvailable
             );
 
             // trancheIntoPerp isn't accepted by perp, likely because it's yield=0, refer perp docs for more info
@@ -513,10 +512,6 @@ contract RolloverVault is
                 ++vaultTrancheIdx;
                 continue;
             }
-
-            // Perform rollover
-            _checkAndApproveMax(trancheIntoPerp, address(perp_), trancheInAmtAvailable);
-            perp_.rollover(trancheIntoPerp, tokenOutOfPerp, trancheInAmtAvailable);
 
             // sync deployed asset sent to perp
             _syncAndRemoveDeployedAsset(trancheIntoPerp);
