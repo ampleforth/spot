@@ -639,6 +639,9 @@ contract PerpetualTranche is
 
         // post-rollover checks
         _enforceMatureValueTarget();
+        // NOTE: though the rollover operation does not change the perp token's total supply,
+        // we sill enforce the supply cap here as the -ve rollover fees
+        // might mint more perp tokens which could increase the perp total supply.
         _enforceTotalSupplyCap();
     }
 
