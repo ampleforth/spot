@@ -500,7 +500,7 @@ contract RolloverVault is
 
             // Perform rollover
             _checkAndApproveMax(trancheIntoPerp, address(perp_), trancheInAmtAvailable);
-            IPerpetualTranche.RolloverPreview memory rd = perp_.rollover(
+            IPerpetualTranche.RolloverData memory rd = perp_.rollover(
                 trancheIntoPerp,
                 tokenOutOfPerp,
                 trancheInAmtAvailable

@@ -197,12 +197,12 @@ contract RouterV1 {
         external
         afterPerpStateUpdate(perp)
         returns (
-            IPerpetualTranche.RolloverPreview memory,
+            IPerpetualTranche.RolloverData memory,
             IERC20Upgradeable,
             int256
         )
     {
-        IPerpetualTranche.RolloverPreview memory r;
+        IPerpetualTranche.RolloverData memory r;
         r.remainingTrancheInAmt = trancheInAmtRequested;
 
         IERC20Upgradeable feeToken = perp.feeToken();
