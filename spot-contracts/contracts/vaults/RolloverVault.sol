@@ -591,6 +591,7 @@ contract RolloverVault is
     ) private {
         uint256 allowance = token.allowance(address(this), spender);
         if (allowance < amount) {
+            token.safeApprove(spender, 0);
             token.safeApprove(spender, type(uint256).max);
         }
     }
