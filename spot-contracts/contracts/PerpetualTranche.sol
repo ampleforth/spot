@@ -966,7 +966,7 @@ contract PerpetualTranche is
                 ? _matureTrancheBalance.mulDiv(r.tokenOutAmt, tokenOutBalance)
                 : r.tokenOutAmt;
             stdTrancheOutAmt = _toStdTrancheAmt(r.trancheOutAmt, trancheOutDiscount);
-            stdTrancheInAmt = stdTrancheOutAmt.mulDiv(trancheOutPrice, trancheInPrice);
+            stdTrancheInAmt = stdTrancheOutAmt.mulDiv(trancheOutPrice, trancheInPrice, MathUpgradeable.Rounding.Up);
             r.trancheInAmt = _fromStdTrancheAmt(stdTrancheInAmt, trancheInDiscount);
         }
 
