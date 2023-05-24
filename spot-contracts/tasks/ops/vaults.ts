@@ -29,6 +29,7 @@ task("ops:vault:info")
     console.log("paused:", await vault.paused());
     console.log("perp:", perp.address);
     console.log("underlying:", underlying.address);
+    console.log("minDeploymentAmt:", utils.formatUnits(await vault.minDeploymentAmt(), underlyingDecimals));
     console.log("TotalSupply:", utils.formatUnits(vaultSupply, vaultDecimals));
     console.log("tvl:", utils.formatUnits(await vault.callStatic.getTVL(), underlyingDecimals));
     console.log("---------------------------------------------------------------");
