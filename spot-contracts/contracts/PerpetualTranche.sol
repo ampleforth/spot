@@ -199,8 +199,8 @@ contract PerpetualTranche is
     //
     //
     // System reserve value:
-    // RV => t'1 . price(t1) + t'2 . price(t2) + .... + t'n . price(tn)
-    //    => Σ t'i . price(ti)
+    // RV => b'1 . price(t1) + b'2 . price(t2) + .... + b'n . price(tn)
+    //    => Σ b'i . price(ti)
     //
     //
     // When `ai` tokens of type `ti` are deposited into the system:
