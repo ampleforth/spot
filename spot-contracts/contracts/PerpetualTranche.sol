@@ -199,8 +199,8 @@ contract PerpetualTranche is
     //
     //
     // System reserve value:
-    // RV => t'1 . price(t1) + t'2 . price(t2) + .... + t'n . price(tn)
-    //    => Σ t'i . price(ti)
+    // RV => b'1 . price(t1) + b'2 . price(t2) + .... + b'n . price(tn)
+    //    => Σ b'i . price(ti)
     //
     //
     // When `ai` tokens of type `ti` are deposited into the system:
@@ -639,6 +639,9 @@ contract PerpetualTranche is
 
         // post-rollover checks
         _enforceMatureValueTarget();
+        // NOTE: though the rollover operation does not change the perp token's total supply,
+        // we still enforce the supply cap here as the -ve rollover fees
+        // might mint more perp tokens which could increase the perp total supply.
         _enforceTotalSupplyCap();
     }
 
@@ -966,7 +969,7 @@ contract PerpetualTranche is
                 ? _matureTrancheBalance.mulDiv(r.tokenOutAmt, tokenOutBalance)
                 : r.tokenOutAmt;
             stdTrancheOutAmt = _toStdTrancheAmt(r.trancheOutAmt, trancheOutDiscount);
-            stdTrancheInAmt = stdTrancheOutAmt.mulDiv(trancheOutPrice, trancheInPrice);
+            stdTrancheInAmt = stdTrancheOutAmt.mulDiv(trancheOutPrice, trancheInPrice, MathUpgradeable.Rounding.Up);
             r.trancheInAmt = _fromStdTrancheAmt(stdTrancheInAmt, trancheInDiscount);
         }
 
