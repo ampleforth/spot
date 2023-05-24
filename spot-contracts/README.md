@@ -7,6 +7,7 @@ The official mainnet addresses are:
 - SPOT ERC-20 Token: [0xC1f33e0cf7e40a67375007104B929E49a581bafE](https://etherscan.io/address/0xC1f33e0cf7e40a67375007104B929E49a581bafE)
 - Bond issuer: [0x85d1BA777Eb3FCBb10C82cdf3aAa8231e21B6777](https://etherscan.io/address/0x85d1BA777Eb3FCBb10C82cdf3aAa8231e21B6777)
 - Router: [0x38f600e08540178719BF656e6B43FC15A529c393](https://etherscan.io/address/0x38f600e08540178719BF656e6B43FC15A529c393)
+- RolloverVault: [0x82A91a0D599A45d8E9Af781D67f695d7C72869Bd](https://etherscan.io//address/0x82A91a0D599A45d8E9Af781D67f695d7C72869Bd)
 
 ## Install
 

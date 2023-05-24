@@ -32,6 +32,11 @@ yarn hardhat --network mainnet deploy:DiscountStrategy:computeDiscountHash \
   --tranche-index "0" \
   --tranche-discount "1.0"
 
+yarn hardhat --network mainnet deploy:RolloverVault \
+    --name "Rollover Vault Note (SPOT)" \
+    --symbol "RV-NOTE-SPOT" \
+    --perp-address "0xC1f33e0cf7e40a67375007104B929E49a581bafE"
+
 ########################################################################
 ## Transfer ownership
 yarn hardhat --network mainnet transferOwnership "0x85d1BA777Eb3FCBb10C82cdf3aAa8231e21B6777" \
@@ -47,6 +52,9 @@ yarn hardhat --network mainnet transferOwnership "0xC1f33e0cf7e40a67375007104B92
   --new-owner-address "0x57981B1EaFe4b18EC97f8B10859B40207b364662"
 
 yarn hardhat --network mainnet transferOwnership "0x2978B4103985A6668CE345555b0febdE64Fb092F" \
+  --new-owner-address "0x57981B1EaFe4b18EC97f8B10859B40207b364662"
+
+yarn hardhat --network mainnet transferOwnership "0x82A91a0D599A45d8E9Af781D67f695d7C72869Bd" \
   --new-owner-address "0x57981B1EaFe4b18EC97f8B10859B40207b364662"
 
 ########################################################################
@@ -91,6 +99,13 @@ yarn hardhat --network mainnet ops:trancheAndRollover \
   --router-address 0x38f600e08540178719BF656e6B43FC15A529c393 \
   --perp-address 0xC1f33e0cf7e40a67375007104B929E49a581bafE \
   --collateral-amount 200
+
+
+yarn hardhat --network mainnet ops:vault:info 0x82A91a0D599A45d8E9Af781D67f695d7C72869Bd
+
+yarn hardhat --network mainnet ops:vault:deposit \
+  --vault-address 0x82A91a0D599A45d8E9Af781D67f695d7C72869Bd \
+  --underlying-amount 2
 
 ########################################################################
 ## upgrade
