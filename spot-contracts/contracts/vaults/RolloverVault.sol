@@ -354,6 +354,8 @@ contract RolloverVault is
         whenNotPaused
         returns (uint256)
     {
+        // TODO: execute recover(), to ensure that the contract state is up to date!
+
         // get bond tranches
         BondTranches memory bt = bond.getTranches();
 
