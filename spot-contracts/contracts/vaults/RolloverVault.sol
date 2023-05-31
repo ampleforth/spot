@@ -238,7 +238,7 @@ contract RolloverVault is
             // ie) when we encounter the most-senior tranche.
             else if (tranche == bond.trancheAt(0)) {
                 // execute redemption
-                _execImmatureTrancheRedemption(bond);
+                _execImmatureTrancheRedemption(bond, bond.getTranches());
             }
         }
 
@@ -287,7 +287,8 @@ contract RolloverVault is
         // redeems this tranche and it's siblings if the vault holds balances.
         else {
             // execute redemption
-            BondTranches memory bt = _execImmatureTrancheRedemption(bond);
+            BondTranches memory bt = bond.getTranches();
+            _execImmatureTrancheRedemption(bond, bt);
 
             // sync deployed asset, ie current tranche and all its siblings.
             for (uint8 j = 0; j < bt.tranches.length; j++) {
@@ -354,8 +355,6 @@ contract RolloverVault is
         whenNotPaused
         returns (uint256)
     {
-        // TODO: execute recover(), to ensure that the contract state is up to date!
-
         // get bond tranches
         BondTranches memory bt = bond.getTranches();
 
@@ -383,6 +382,12 @@ contract RolloverVault is
 
         // track the vault's TVL before the match operation
         uint256 tvlBefore = getTVL();
+
+        // Fist we check if the vault has all the tranches for proportional redemption and if so recover the underlying.
+        // On successful redemption, The vault's individual tranche balances will decrease, and the underlying balances will increase.
+        // If the vault tranches are not eligible for proportional redemption, its a no-op.
+        // NOTE: We sync balances finally at the end of this function.
+        _execImmatureTrancheRedemption(bond, bt);
 
         // calculate total amount to be used by summing available amount from the user and the vault's balance
         uint256[] memory trancheAmtsUsed = new uint256[](bt.tranches.length);
@@ -665,16 +670,13 @@ contract RolloverVault is
     ///      This function should NOT be called directly, use `recover()` or `recover(tranche)`
     ///      which wrap this function with the internal book-keeping necessary,
     ///      to keep track of the vault's assets.
-    function _execImmatureTrancheRedemption(IBondController bond) private returns (BondTranches memory) {
-        BondTranches memory bt = bond.getTranches();
+    function _execImmatureTrancheRedemption(IBondController bond, BondTranches memory bt) private {
         uint256[] memory trancheAmts = bt.computeRedeemableTrancheAmounts(address(this));
 
         // NOTE: It is guaranteed that if one tranche amount is zero, all amounts are zeros.
         if (trancheAmts[0] > 0) {
             bond.redeem(trancheAmts);
         }
-
-        return bt;
     }
 
     /// @dev Syncs balance and adds the given asset into the deployed list if the vault has a balance.
