@@ -357,18 +357,25 @@ contract RolloverVault is
         // get bond tranches
         BondTranches memory bt = bond.getTranches();
 
-        // 1) We check that the bond's underlying collateral token matches the vault's underlying.
-        // 2) We validate that the bond has at least 2 tranches to perform the meld operation.
-        // 3) We validate that the bond hasn't reached maturity as matching only works through immature redemption.
-        // 4) We check if the given bond is NOT malicious, by examining if at least one of the bond's tranches
-        //    is already in the vault from previous deployments. And if the parent bond of the tranche already in the vault
-        //    is the given bond.
-        if (
-            bond.collateralToken() != address(underlying) ||
-            bt.tranches.length <= 1 ||
-            bond.isMature() ||
-            !_isDeployedBond(bond, bt)
-        ) {
+        // * We check that the bond's underlying collateral token matches the vault's underlying.
+        // * We validate that the bond has at least 2 tranches to perform the meld operation.
+        // * We validate that the bond hasn't reached maturity as matching only works through immature redemption.
+        if (bond.collateralToken() != address(underlying) || bt.tranches.length <= 1 || bond.isMature()) {
+            revert InvalidBond(bond);
+        }
+
+        // We check if the given bond is NOT malicious, by examining if at least one of the bond's tranches
+        // is already in the vault from previous deployments. And if the parent bond of the tranche already in the vault
+        // is the given bond.
+        bool isVaultBond = false;
+        for (uint8 i = 0; i < bt.tranches.length && !isVaultBond; i++) {
+            // NOTE: We have to double check if the tranche in the deployed set
+            //       links back to the incoming bond, to ensure that the bond is not malicious.
+            isVaultBond =
+                isVaultBond ||
+                (_deployed.contains(address(bt.tranches[i])) && bt.tranches[i].bond() != address(bond));
+        }
+        if (!isVaultBond) {
             revert InvalidBond(bond);
         }
 
@@ -722,19 +729,5 @@ contract RolloverVault is
         );
         uint256 appliedFeePerc = MAX_MELD_FEE_PERC.mulDiv(secondsToMaturity, bondDurationSec);
         return underlyingAmt.mulDiv(appliedFeePerc, HUNDRED_PERC);
-    }
-
-    /// @dev Checks if at least one of the bond's tranches is part of the deployed set.
-    ///      Based on this condition we can infer that the bond is NOT malicious,
-    ///      and accept other sibling tranches from this bond.
-    function _isDeployedBond(IBondController bond, BondTranches memory bt) private view returns (bool) {
-        for (uint8 i = 0; i < bt.tranches.length; i++) {
-            // NOTE: We have to double check if the tranche in the deployed set
-            //       links back to the incoming bond, to ensure that the bond is not malicious.
-            if (_deployed.contains(address(bt.tranches[i])) && bt.tranches[i].bond() == address(bond)) {
-                return true;
-            }
-        }
-        return false;
     }
 }
