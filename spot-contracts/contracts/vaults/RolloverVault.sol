@@ -25,7 +25,7 @@ error InvalidBond(IBondController bond);
 /// @notice Expected the operation not to decrease the vault's tvl.
 error TVLDecreased();
 
-/// @notice Expected assets transfers in to the vault to have non-zero value.
+/// @notice Expected assets transferred into the vault to have non-zero value.
 error ValuelessAssets();
 
 /*
