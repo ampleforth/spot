@@ -280,6 +280,29 @@ describe("RolloverVault", function () {
       });
     });
 
+    describe("when is malicious", function () {
+      let newBond: Contract;
+      beforeEach(async function () {
+        const BondController = await getContractFactoryFromExternalArtifacts("BondController");
+        const Tranche = await getContractFactoryFromExternalArtifacts("Tranche");
+
+        newBond = await smock.fake(BondController);
+        await newBond.collateralToken.returns(collateralToken.address);
+        await newBond.trancheCount.returns(2);
+
+        const tranche0 = await smock.fake(Tranche);
+        await tranche0.bond.returns(newBond.address);
+        await newBond.tranches.whenCalledWith(0).returns([tranche0.address, 200]);
+        await newBond.tranches.whenCalledWith(1).returns([currentTranchesIn[1].address, 300]);
+        await newBond.tranches.whenCalledWith(2).returns([currentTranchesIn[2].address, 500]);
+      });
+      it("should be reverted", async function () {
+        await expect(
+          vault.meld(newBond.address, [toFixedPtAmt("20"), toFixedPtAmt("0"), toFixedPtAmt("0")]),
+        ).to.be.revertedWith("InvalidBond");
+      });
+    });
+
     describe("when the user sends no tokens", function () {
       it("should be reverted", async function () {
         await expect(vault.meld(currentBondIn.address, ["0", "0", "0"])).to.be.revertedWith("ValuelessAssets");
