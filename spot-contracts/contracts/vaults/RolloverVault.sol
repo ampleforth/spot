@@ -364,16 +364,16 @@ contract RolloverVault is
             revert InvalidBond(bond);
         }
 
-        // We check if the given bond is NOT malicious, by examining if at least one of the bond's tranches
-        // is already in the vault from previous deployments. And if the parent bond of the tranche already in the vault
-        // is the given bond.
+        // We check if the given bond is NOT malicious by examining if:
+        // * The parent bond of all the children tranches is the given bond.
+        // * At least one of the bond's tranches is already in the vault from previous deployments.
         bool isVaultBond = false;
-        for (uint8 i = 0; i < bt.tranches.length && !isVaultBond; i++) {
-            // NOTE: We have to double check if the tranche in the deployed set
-            //       links back to the incoming bond, to ensure that the bond is not malicious.
-            isVaultBond =
-                isVaultBond ||
-                (_deployed.contains(address(bt.tranches[i])) && bt.tranches[i].bond() != address(bond));
+        for (uint8 i = 0; i < bt.tranches.length; i++) {
+            if (bt.tranches[i].bond() != address(bond)) {
+                revert InvalidBond(bond);
+            }
+
+            isVaultBond = isVaultBond || _deployed.contains(address(bt.tranches[i]));
         }
         if (!isVaultBond) {
             revert InvalidBond(bond);
