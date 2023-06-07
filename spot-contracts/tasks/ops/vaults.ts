@@ -21,6 +21,12 @@ task("ops:vault:info")
     const underlying = await hre.ethers.getContractAt("MockERC20", await vault.underlying());
     const underlyingDecimals = await underlying.decimals();
 
+    let pokeAvailable = true;
+    try {
+      await vault.callStatic.recoverAndRedeploy();
+    } catch (e) {
+      pokeAvailable = false;
+    }
     console.log("---------------------------------------------------------------");
     console.log("RolloverVault:", vault.address);
     console.log("proxyAdmin:", proxyAdminAddress);
@@ -30,8 +36,9 @@ task("ops:vault:info")
     console.log("perp:", perp.address);
     console.log("underlying:", underlying.address);
     console.log("minDeploymentAmt:", utils.formatUnits(await vault.minDeploymentAmt(), underlyingDecimals));
-    console.log("TotalSupply:", utils.formatUnits(vaultSupply, vaultDecimals));
+    console.log("totalSupply:", utils.formatUnits(vaultSupply, vaultDecimals));
     console.log("tvl:", utils.formatUnits(await vault.callStatic.getTVL(), underlyingDecimals));
+    console.log("pokeAvailable:", pokeAvailable);
     console.log("---------------------------------------------------------------");
     const data = [];
     const underlyingBalance = await vault.vaultAssetBalance(underlying.address);
