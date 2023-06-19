@@ -16,7 +16,7 @@
     "test": "yarn hardhat test test/*.ts test/**/*.ts"
   },
   "dependencies": {
-    "@openzeppelin/contracts-upgradeable": "^4.7.3"
+    "@openzeppelin/contracts-upgradeable": "^4.9.2"
   },
   "devDependencies": {
     "@defi-wonderland/smock": "^2.3.4",
