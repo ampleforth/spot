@@ -337,17 +337,27 @@ task("ops:preview_tx:trancheAndRollover")
   .addParam("walletAddress", "the address of the wallet with the collateral token", undefined, types.string, false)
   .addParam("perpAddress", "the address of the perp contract", undefined, types.string, false)
   .addParam("routerAddress", "the address of the router contract", undefined, types.string, false)
+  .addParam(
+    "collateralAvailable",
+    "the amount of collateral available for rollover, if not specified uses the token balance",
+    undefined,
+    types.string,
+    true,
+  )
   .setAction(async function (args: TaskArguments, hre) {
-    const { walletAddress, perpAddress, routerAddress } = args;
+    const { walletAddress, perpAddress, routerAddress, collateralAvailable } = args;
 
     const router = await hre.ethers.getContractAt("RouterV1", routerAddress);
     const perp = await hre.ethers.getContractAt("PerpetualTranche", perpAddress);
     const bondIssuer = await hre.ethers.getContractAt("BondIssuer", await perp.bondIssuer());
     const collateralToken = await hre.ethers.getContractAt("MockERC20", await bondIssuer.collateral());
 
-    const maxCollateralAvaiable = await collateralToken.balanceOf(walletAddress);
+    const maxCollateralAvailable =
+      collateralAvailable === undefined
+        ? await collateralToken.balanceOf(walletAddress)
+        : utils.parseUnits(collateralAvailable, await collateralToken.decimals());
     const { depositBond, totalRolloverAmt, totalRolloverFee, rolloverData, collateralUsed } =
-      await computeRolloverBatch(hre, router, perp, maxCollateralAvaiable);
+      await computeRolloverBatch(hre, router, perp, maxCollateralAvailable);
     const rolloverDataInput = rolloverData.map(r => [
       r.trancheIn.address,
       r.tokenOut.address,
@@ -356,7 +366,7 @@ task("ops:preview_tx:trancheAndRollover")
 
     console.log("---------------------------------------------------------------");
     console.log("Rollover preview");
-    console.log("balanceAvailable", utils.formatUnits(maxCollateralAvaiable, await collateralToken.decimals()));
+    console.log("balanceAvailable", utils.formatUnits(maxCollateralAvailable, await collateralToken.decimals()));
     console.log("collateralUsed", utils.formatUnits(collateralUsed, await collateralToken.decimals()));
     console.log("rolloverAmt", utils.formatUnits(totalRolloverAmt, await perp.decimals()));
 
