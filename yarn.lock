@@ -1352,17 +1352,20 @@ __metadata:
   linkType: hard
 
 "@openzeppelin/upgrades-core@npm:latest":
-  version: 1.23.0
-  resolution: "@openzeppelin/upgrades-core@npm:1.23.0"
+  version: 1.27.1
+  resolution: "@openzeppelin/upgrades-core@npm:1.27.1"
   dependencies:
     cbor: ^8.0.0
     chalk: ^4.1.0
     compare-versions: ^5.0.0
     debug: ^4.1.1
     ethereumjs-util: ^7.0.3
+    minimist: ^1.2.7
     proper-lockfile: ^4.1.1
     solidity-ast: ^0.4.15
-  checksum: 78bd12f96c1f77bdb51e6df3879cb8c882a03eea368d50ea54595850b712987f01d1bab90cc8dd9398c279e700088c94c38c0dbfcb27050bc8a79fd91bf9415d
+  bin:
+    openzeppelin-upgrades-core: dist/cli/cli.js
+  checksum: 144d871410e981af106b9f75cf4ff9ab45083b72084c312fcea4acfdd25f06a5ba5ab4709702cad00aa2008f6b1b00533726197c402f067819b8d81d81bb0e8e
   languageName: node
   linkType: hard
 
@@ -4330,9 +4333,9 @@ __metadata:
   linkType: hard
 
 "compare-versions@npm:^5.0.0":
-  version: 5.0.1
-  resolution: "compare-versions@npm:5.0.1"
-  checksum: 302a4e46224b47b9280cf894c6c87d8df912671fa391dcdbf0e63438d9b0a69fe20dd747fb439e8d54c43af016ff4eaaf0a4c9d8e7ca358bcd12dadf4ad2935e
+  version: 5.0.3
+  resolution: "compare-versions@npm:5.0.3"
+  checksum: f66a4bb6ef8ff32031cc92c04dea4bbead039e72a7f6c7df7ef05f5a42ddca9202f8875b7449add54181e73b89f039662a8760c8db0ab036c4e8f653a7cd29c1
   languageName: node
   linkType: hard
 
@@ -9658,6 +9661,13 @@ __metadata:
   version: 1.2.6
   resolution: "minimist@npm:1.2.6"
   checksum: d15428cd1e11eb14e1233bcfb88ae07ed7a147de251441d61158619dfb32c4d7e9061d09cab4825fdee18ecd6fce323228c8c47b5ba7cd20af378ca4048fb3fb
+  languageName: node
+  linkType: hard
+
+"minimist@npm:^1.2.7":
+  version: 1.2.8
+  resolution: "minimist@npm:1.2.8"
+  checksum: 75a6d645fb122dad29c06a7597bddea977258957ed88d7a6df59b5cd3fe4a527e253e9bbf2e783e4b73657f9098b96a5fe96ab8a113655d4109108577ecf85b0
   languageName: node
   linkType: hard
 
