@@ -91,6 +91,15 @@ error BelowMatureValueTargetPerc(uint256 matureValuePerc, uint256 matureValueTar
 /// @param token Address of the token transferred.
 error UnauthorizedTransferOut(IERC20Upgradeable token);
 
+/// @notice Expected asset to be a valid reserve asset.
+/// @param token Address of the token.
+error UnexpectedAsset(IERC20Upgradeable token);
+
+/// @notice Expected to despoit a different amount of tokens.
+/// @param tokenInAmt The amount of tokens deposited.
+/// @param expectedTokenInAmt The amount of tokens expected.
+error UnacceptableDepositAmt(uint256 tokenInAmt, uint256 expectedTokenInAmt);
+
 /**
  *  @title PerpetualTranche
  *
@@ -523,6 +532,51 @@ contract PerpetualTranche is
 
     //--------------------------------------------------------------------------
     // External methods
+
+    /// TODO, add to interface and comments
+    function mint(
+        uint256 perpAmtToMint,
+        IERC20Upgradeable[] memory tokensIn,
+        uint256[] memory maxAvailableTokenInAmts
+    ) external nonReentrant whenNotPaused afterStateUpdate {
+        if (perpAmtToMint == 0) {
+            revert UnacceptableMintAmt(0, perpAmtToMint);
+        }
+
+        // calculates the fees to mint `perpAmtToMint` of perp token
+        (int256 reserveFee, uint256 protocolFee) = feeStrategy.computeMintFees(perpAmtToMint);
+
+        // transfers reserve tokens in
+        uint256 totalSupply_ = totalSupply();
+        for (uint256 i = 0; i < _reserveCount(); i++) {
+            IERC20Upgradeable reserveToken = _reserveAt(i);
+
+            if (tokensIn[i] != reserveToken) {
+                revert UnexpectedAsset(reserveToken);
+            }
+
+            // calculate the amount of tokens to be transfered in
+            uint256 tokenInAmt = perpAmtToMint.mulDiv(_reserveBalance(reserveToken), totalSupply_);
+
+            if (maxAvailableTokenInAmts[i] < tokenInAmt) {
+                revert UnacceptableDepositAmt(maxAvailableTokenInAmts[i], tokenInAmt);
+            }
+
+            // transfers tranche tokens from the sender to the reserve
+            _transferIntoReserve(msg.sender, reserveToken, tokenInAmt);
+        }
+
+        // mints perp tokens to the sender
+        _mint(msg.sender, perpAmtToMint);
+
+        // settles fees
+        _settleFee(msg.sender, reserveFee, protocolFee);
+
+        // post-deposit checks
+        // NOTE: in the case of proportional minting, per tranche mint cap doesn't apply,
+        // As Proportional minting does not change the relative ratios of the reserve assets.
+        _enforceTotalSupplyCap();
+    }
 
     /// @inheritdoc IPerpetualTranche
     function deposit(ITranche trancheIn, uint256 trancheInAmt)
