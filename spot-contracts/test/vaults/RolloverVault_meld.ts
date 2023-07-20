@@ -327,7 +327,7 @@ describe("RolloverVault", function () {
       });
       it("should be reverted", async function () {
         await expect(vault.meld(currentBondIn.address, [toFixedPtAmt("10"), "0", "0"])).to.be.revertedWith(
-          "ERC20: transfer amount exceeds balance",
+          "ValuelessAssets",
         );
       });
     });
