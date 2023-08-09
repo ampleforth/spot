@@ -395,7 +395,7 @@ task("ops:preview_tx:trancheAndRollover")
         depositBond.address,
         collateralUsed.toString(),
         JSON.stringify(rolloverDataInput),
-        totalRolloverFee.toString(),
+        totalRolloverFee.gt("0") ? totalRolloverFee.toString() : "0",
       ],
     };
 
