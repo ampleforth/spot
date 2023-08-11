@@ -10,9 +10,10 @@ const TOKEN_DECIMALS = 18;
 const PRICE_DECIMALS = 8;
 const DISCOUNT_DECIMALS = 18;
 
-export const toFixedPtAmt = (a: string): BigNumber => utils.parseUnits(a, TOKEN_DECIMALS);
-export const toPriceFixedPtAmt = (a: string): BigNumber => utils.parseUnits(a, PRICE_DECIMALS);
-export const toDiscountFixedPtAmt = (a: string): BigNumber => utils.parseUnits(a, DISCOUNT_DECIMALS);
+const sciParseFloat = (a: string): BigNumber => (a.includes("e") ? parseFloat(a).toFixed(18) : a);
+export const toFixedPtAmt = (a: string): BigNumber => utils.parseUnits(sciParseFloat(a), TOKEN_DECIMALS);
+export const toPriceFixedPtAmt = (a: string): BigNumber => utils.parseUnits(sciParseFloat(a), PRICE_DECIMALS);
+export const toDiscountFixedPtAmt = (a: string): BigNumber => utils.parseUnits(sciParseFloat(a), DISCOUNT_DECIMALS);
 
 const ORACLE_BASE_PRICE = toPriceFixedPtAmt("1");
 

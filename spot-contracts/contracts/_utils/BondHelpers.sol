@@ -210,24 +210,35 @@ library BondHelpers {
         BondTranches memory bt = getTranches(b);
         uint256[] memory redeemableAmts = new uint256[](bt.tranches.length);
 
-        // Calculate how many underlying assets could be redeemed from each tranche balance,
+        // We Calculate how many underlying assets could be redeemed from each tranche balance,
         // assuming other tranches are not an issue, and record the smallest amount.
-        uint256 minUnderlyingOut = type(uint256).max;
+        //
+        // Usually one tranche balance is the limiting factor, we first loop through to identify
+        // it by figuring out the one which has the least `trancheBalance/trancheRatio`.
+        //
+        uint256 minBalanceToTrancheRatio = type(uint256).max;
         uint8 i;
         for (i = 0; i < bt.tranches.length; i++) {
-            uint256 d = bt.tranches[i].balanceOf(u).mulDiv(TRANCHE_RATIO_GRANULARITY, bt.trancheRatios[i]);
-            if (d < minUnderlyingOut) {
-                minUnderlyingOut = d;
+            // NOTE: We round the avaiable balance down to the nearest multiple of the
+            //       tranche ratio. This ensures that `minBalanceToTrancheRatio`
+            //       can be represented without loss as a fixedPt number.
+            uint256 bal = bt.tranches[i].balanceOf(u);
+            bal = bal - (bal % bt.trancheRatios[i]);
+
+            uint256 d = bal.mulDiv(TRANCHE_RATIO_GRANULARITY, bt.trancheRatios[i]);
+            if (d < minBalanceToTrancheRatio) {
+                minBalanceToTrancheRatio = d;
             }
 
             // if one of the balances is zero, we return
-            if (minUnderlyingOut == 0) {
+            if (minBalanceToTrancheRatio == 0) {
                 return (bt, redeemableAmts);
             }
         }
 
+        // Now that we have `minBalanceToTrancheRatio`, we compute the redeemable amounts.
         for (i = 0; i < bt.tranches.length; i++) {
-            redeemableAmts[i] = bt.trancheRatios[i].mulDiv(minUnderlyingOut, TRANCHE_RATIO_GRANULARITY);
+            redeemableAmts[i] = bt.trancheRatios[i].mulDiv(minBalanceToTrancheRatio, TRANCHE_RATIO_GRANULARITY);
         }
 
         return (bt, redeemableAmts);
