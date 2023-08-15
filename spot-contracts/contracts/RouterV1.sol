@@ -121,14 +121,11 @@ contract RouterV1 {
 
         for (uint8 i = 0; i < bt.tranches.length; i++) {
             uint256 trancheAmt = bt.tranches[i].balanceOf(address(this));
-            uint256 mintAmt = perp.computeMintAmt(bt.tranches[i], trancheAmt);
-            if (mintAmt > 0) {
-                // approves tranches to be spent
-                _checkAndApproveMax(bt.tranches[i], address(perp), trancheAmt);
-
-                // mints perp tokens using tranches
-                perp.deposit(bt.tranches[i], trancheAmt);
-            } else {
+            // approves tranches to be spent
+            _checkAndApproveMax(bt.tranches[i], address(perp), trancheAmt);
+            // mints perp tokens using tranches
+            uint256 mintAmt = perp.deposit(bt.tranches[i], trancheAmt);
+            if (mintAmt <= 0) {
                 // transfers unused tranches back
                 bt.tranches[i].safeTransfer(msg.sender, trancheAmt);
             }
@@ -200,12 +197,12 @@ contract RouterV1 {
         external
         afterPerpStateUpdate(perp)
         returns (
-            IPerpetualTranche.RolloverPreview memory,
+            IPerpetualTranche.RolloverData memory,
             IERC20Upgradeable,
             int256
         )
     {
-        IPerpetualTranche.RolloverPreview memory r;
+        IPerpetualTranche.RolloverData memory r;
         r.remainingTrancheInAmt = trancheInAmtRequested;
 
         IERC20Upgradeable feeToken = perp.feeToken();

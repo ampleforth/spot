@@ -531,6 +531,7 @@ contract PerpetualTranche is
         nonReentrant
         whenNotPaused
         afterStateUpdate
+        returns (uint256)
     {
         if (!_isDepositBondTranche(trancheIn)) {
             revert UnacceptableDepositTranche(trancheIn, _depositBond);
@@ -558,10 +559,19 @@ contract PerpetualTranche is
         mintedSupplyPerTranche[trancheIn] += perpAmtMint;
         _enforcePerTrancheSupplyCap(trancheIn);
         _enforceTotalSupplyCap();
+
+        return perpAmtMint;
     }
 
     /// @inheritdoc IPerpetualTranche
-    function redeem(uint256 perpAmtBurnt) external override nonReentrant whenNotPaused afterStateUpdate {
+    function redeem(uint256 perpAmtBurnt)
+        external
+        override
+        nonReentrant
+        whenNotPaused
+        afterStateUpdate
+        returns (IERC20Upgradeable[] memory, uint256[] memory)
+    {
         // gets the current perp supply
         uint256 perpSupply = totalSupply();
 
@@ -594,6 +604,8 @@ contract PerpetualTranche is
 
         // post-redeem checks
         _enforceSupplyReduction(perpSupply);
+
+        return (tokensOuts, tokenOutAmts);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -601,14 +613,14 @@ contract PerpetualTranche is
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable
-    ) external override onlyRollers nonReentrant whenNotPaused afterStateUpdate {
+    ) external override onlyRollers nonReentrant whenNotPaused afterStateUpdate returns (RolloverData memory) {
         // verifies if rollover is acceptable
         if (!_isAcceptableRollover(trancheIn, tokenOut)) {
             revert UnacceptableRollover(trancheIn, tokenOut);
         }
 
         // calculates the perp denominated amount rolled over and the tokenOutAmt
-        IPerpetualTranche.RolloverPreview memory r = _computeRolloverAmt(
+        IPerpetualTranche.RolloverData memory r = _computeRolloverAmt(
             trancheIn,
             tokenOut,
             trancheInAmtAvailable,
@@ -643,6 +655,8 @@ contract PerpetualTranche is
         // we still enforce the supply cap here as the -ve rollover fees
         // might mint more perp tokens which could increase the perp total supply.
         _enforceTotalSupplyCap();
+
+        return r;
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -764,7 +778,7 @@ contract PerpetualTranche is
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable,
         uint256 tokenOutAmtRequested
-    ) external override afterStateUpdate returns (IPerpetualTranche.RolloverPreview memory) {
+    ) external override afterStateUpdate returns (IPerpetualTranche.RolloverData memory) {
         return _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable, tokenOutAmtRequested);
     }
 
@@ -930,8 +944,8 @@ contract PerpetualTranche is
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable,
         uint256 tokenOutAmtRequested
-    ) private view returns (IPerpetualTranche.RolloverPreview memory) {
-        IPerpetualTranche.RolloverPreview memory r;
+    ) private view returns (IPerpetualTranche.RolloverData memory) {
+        IPerpetualTranche.RolloverData memory r;
 
         uint256 trancheInDiscount = computeDiscount(trancheIn);
         uint256 trancheOutDiscount = computeDiscount(tokenOut);
