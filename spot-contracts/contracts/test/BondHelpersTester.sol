@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.19;
 
-import { BondHelpers, BondTranches, BondTranchesHelpers } from "../_utils/BondHelpers.sol";
 import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
+
+import { BondTranches, BondTranchesHelpers } from "../_utils/BondTranchesHelpers.sol";
+import { BondHelpers } from "../_utils/BondHelpers.sol";
 
 contract BondHelpersTester {
     using BondHelpers for IBondController;
@@ -33,12 +35,16 @@ contract BondHelpersTester {
         public
         view
         returns (
-            BondTranches memory bt,
+            BondTranches memory,
             uint256[] memory,
             uint256[] memory
         )
     {
-        return b.getTrancheCollateralizations();
+        BondTranches memory bt = b.getTranches();
+        uint256[] memory collateralBalances;
+        uint256[] memory trancheSupplies;
+        (collateralBalances, trancheSupplies) = b.getTrancheCollateralizations(bt);
+        return (bt, collateralBalances, trancheSupplies);
     }
 
     function indexOf(IBondController b, ITranche t) public view returns (uint8) {
@@ -49,8 +55,18 @@ contract BondHelpersTester {
     function computeRedeemableTrancheAmounts(IBondController b, address u)
         public
         view
-        returns (BondTranches memory bt, uint256[] memory)
+        returns (BondTranches memory, uint256[] memory)
     {
-        return b.computeRedeemableTrancheAmounts(u);
+        BondTranches memory bt = b.getTranches();
+        return (bt, bt.computeRedeemableTrancheAmounts(u));
+    }
+
+    function computeRedeemableTrancheAmounts(IBondController b, uint256[] memory trancheBalsAvailable)
+        public
+        view
+        returns (BondTranches memory, uint256[] memory)
+    {
+        BondTranches memory bt = b.getTranches();
+        return (bt, bt.computeRedeemableTrancheAmounts(trancheBalsAvailable));
     }
 }
