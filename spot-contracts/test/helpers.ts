@@ -18,16 +18,14 @@ export const toDiscountFixedPtAmt = (a: string): BigNumber => utils.parseUnits(s
 const ORACLE_BASE_PRICE = toPriceFixedPtAmt("1");
 
 const EXTERNAL_ARTIFACTS_PATH = path.join(__dirname, "/../external-artifacts");
-async function getContractFactoryFromExternalArtifacts(name: string): Promise<ContractFactory> {
+export const getContractFactoryFromExternalArtifacts = (name: string): Promise<ContractFactory> => {
   const artifact = JSON.parse(fs.readFileSync(`${EXTERNAL_ARTIFACTS_PATH}/${name}.json`).toString());
   return ethers.getContractFactoryFromArtifact(artifact);
-}
+};
 
 export const TimeHelpers = {
   secondsFromNow: async (secondsFromNow: number): Promise<number> => {
-    const res = await hre.network.provider.send("eth_getBlockByNumber", ["latest", false]);
-    const timestamp = parseInt(res.timestamp, 16);
-    return timestamp + secondsFromNow;
+    return (await TimeHelpers.currentTime()) + secondsFromNow;
   },
 
   increaseTime: async (seconds: number): Promise<void> => {
@@ -38,6 +36,12 @@ export const TimeHelpers = {
   setNextBlockTimestamp: async (timestamp: number): Promise<void> => {
     await ethers.provider.send("evm_setNextBlockTimestamp", [timestamp]);
     await hre.network.provider.send("evm_mine");
+  },
+
+  currentTime: async (): Promise<number> => {
+    const res = await hre.network.provider.send("eth_getBlockByNumber", ["latest", false]);
+    const timestamp = parseInt(res.timestamp, 16);
+    return timestamp;
   },
 };
 
@@ -169,6 +173,10 @@ export const getTrancheBalances = async (bond: Contract, user: string): Promise<
     balances.push(await tranches[i].balanceOf(user));
   }
   return balances;
+};
+
+export const timeToMaturity = async (bond: Contract): Promise<number> => {
+  return (await bond.maturityDate()).toNumber() - (await TimeHelpers.currentTime());
 };
 
 export const getDepositBond = async (perp: Contract): Contract => {
