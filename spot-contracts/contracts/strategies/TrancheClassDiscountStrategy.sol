@@ -7,7 +7,8 @@ import { IDiscountStrategy } from "../_interfaces/IDiscountStrategy.sol";
 import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import { BondTranches, BondTranchesHelpers, BondHelpers } from "../_utils/BondHelpers.sol";
+import { BondTranches, BondTranchesHelpers } from "../_utils/BondTranchesHelpers.sol";
+import { BondHelpers } from "../_utils/BondHelpers.sol";
 
 /*
  *  @title TrancheClassDiscountStrategy
