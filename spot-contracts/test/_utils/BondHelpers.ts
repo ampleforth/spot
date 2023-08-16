@@ -428,39 +428,43 @@ describe("BondHelpers", function () {
 
   describe("#computeRedeemableTrancheAmounts", function () {
     describe("when the user has all the tranches in the right proportions", function () {
-      let bond: Contract, bondLength: number;
+      let bond: Contract;
+      async function checkRedeemableAmts(
+        trancheRatios: number[] = [],
+        amounts: string[] = [],
+        redemptionAmts: string[] = [],
+      ) {
+        const tranches = await getTranches(bond);
+        for (const a in amounts) {
+          await tranches[a].transfer(userAddress, toFixedPtAmt(amounts[a]));
+        }
+        const b = await bondHelpers["computeRedeemableTrancheAmounts(address,address)"](bond.address, userAddress);
+        if (b[1][0].gt("0")) {
+          await bond.connect(user).redeem(b[1]);
+        }
+        for (const a in redemptionAmts) {
+          expect(b[1][a]).to.eq(toFixedPtAmt(redemptionAmts[a]));
+        }
+      }
+
       beforeEach(async function () {
-        bondLength = 86400;
-        bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], bondLength);
+        bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 86400);
         await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
       });
 
       describe("when the user has the entire supply", function () {
-        it("should calculate the amounts", async function () {
-          const b = await bondHelpers.computeRedeemableTrancheAmounts(bond.address, deployerAddress);
-          expect(b[1][0]).to.eq(toFixedPtAmt("200"));
-          expect(b[1][1]).to.eq(toFixedPtAmt("300"));
-          expect(b[1][2]).to.eq(toFixedPtAmt("500"));
+        describe("[200,300,500]:[200, 300, 500]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts([200, 300, 500], ["200", "300", "500"], ["200", "300", "500"]);
+          });
         });
       });
 
       describe("when the user does not have the entire supply", function () {
-        beforeEach(async function () {
-          const tranches = await getTranches(bond);
-          await tranches[0].transfer(userAddress, toFixedPtAmt("10"));
-          await tranches[1].transfer(userAddress, toFixedPtAmt("15"));
-          await tranches[2].transfer(userAddress, toFixedPtAmt("25"));
-        });
-        it("should calculate the amounts", async function () {
-          const b1 = await bondHelpers.computeRedeemableTrancheAmounts(bond.address, userAddress);
-          expect(b1[1][0]).to.eq(toFixedPtAmt("10"));
-          expect(b1[1][1]).to.eq(toFixedPtAmt("15"));
-          expect(b1[1][2]).to.eq(toFixedPtAmt("25"));
-
-          const b2 = await bondHelpers.computeRedeemableTrancheAmounts(bond.address, deployerAddress);
-          expect(b2[1][0]).to.eq(toFixedPtAmt("190"));
-          expect(b2[1][1]).to.eq(toFixedPtAmt("285"));
-          expect(b2[1][2]).to.eq(toFixedPtAmt("475"));
+        describe("[200,300,500]:[10, 15, 25]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts([200, 300, 500], ["10", "15", "25"], ["10", "15", "25"]);
+          });
         });
       });
     });
@@ -481,7 +485,7 @@ describe("BondHelpers", function () {
         for (const a in amounts) {
           await tranches[a].transfer(userAddress, toFixedPtAmt(amounts[a]));
         }
-        const b = await bondHelpers.computeRedeemableTrancheAmounts(bond.address, userAddress);
+        const b = await bondHelpers["computeRedeemableTrancheAmounts(address,address)"](bond.address, userAddress);
         if (b[1][0].gt("0")) {
           await bond.connect(user).redeem(b[1]);
         }
@@ -529,6 +533,194 @@ describe("BondHelpers", function () {
       describe("[200,300,500]:[0, 15, 25]", async function () {
         it("should calculate the amounts", async function () {
           await checkRedeemableAmts([200, 300, 500], ["0", "15", "25"], ["0", "0", "0"]);
+        });
+      });
+
+      describe("imperfect rounding", function () {
+        describe("[200,300,500]:[10, 15, 7.461048491123254231]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts(
+              [200, 300, 500],
+              ["10", "15", "7.461048491123254230"],
+              ["2.984419396449301600", "4.476629094673952400", "7.461048491123254000"],
+            );
+          });
+        });
+
+        describe("[200,300,500]:[1000e-18,5001e-18,503e-18]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts(
+              [200, 300, 500],
+              ["1000e-18", "5001e-18", "503e-18"],
+              ["200e-18", "300e-18", "500e-18"],
+            );
+          });
+        });
+
+        describe("[200,300,500]:[1000e-18,5001e-18,506e-18]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts(
+              [200, 300, 500],
+              ["1000e-18", "5001e-18", "506e-18"],
+              ["200e-18", "300e-18", "500e-18"],
+            );
+          });
+        });
+
+        describe("[1,999]:[1000e-18,2001e-18]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts([1, 999], ["1000e-18", "2001e-18"], ["2e-18", "1998e-18"]);
+          });
+        });
+
+        describe("[1,999]:[5e-18,1]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts([1, 999], ["5e-18", "1"], ["5e-18", "4995e-18"]);
+          });
+        });
+
+        describe("[499,501]:[1232e-18,1]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts([499, 501], ["1232e-18", "1"], ["998e-18", "1002e-18"]);
+          });
+        });
+
+        describe("[499,501]:[1,499e-18]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts([499, 501], ["1", "499e-18"], ["0", "0"]);
+          });
+        });
+
+        describe("[499,501]:[13224e-18]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts([499, 501], ["1", "1322e-18"], ["998e-18", "1002e-18"]);
+          });
+        });
+      });
+    });
+  });
+
+  describe("#computeRedeemableTrancheAmounts", function () {
+    describe("when balances are in the right proportions", function () {
+      let bond: Contract;
+      async function checkRedeemableAmts(
+        trancheRatios: number[] = [],
+        amounts: string[] = [],
+        redemptionAmts: string[] = [],
+      ) {
+        const b = await bondHelpers["computeRedeemableTrancheAmounts(address,uint256[])"](
+          bond.address,
+          amounts.map(toFixedPtAmt),
+        );
+        for (const a in redemptionAmts) {
+          expect(b[1][a]).to.eq(toFixedPtAmt(redemptionAmts[a]));
+        }
+      }
+      beforeEach(async function () {
+        bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 86400);
+      });
+
+      describe("[200, 300, 500]:[200, 300, 500]", async function () {
+        it("should calculate the amounts", async function () {
+          await checkRedeemableAmts([200, 300, 500], ["200", "300", "500"], ["200", "300", "500"]);
+        });
+      });
+
+      describe("[200, 300, 500]:[6, 9, 15]", async function () {
+        it("should calculate the amounts", async function () {
+          await checkRedeemableAmts([200, 300, 500], ["6", "9", "15"], ["6", "9", "15"]);
+        });
+      });
+
+      describe("[200, 300, 500]:[202, 303, 505]", async function () {
+        it("should calculate the amounts", async function () {
+          await checkRedeemableAmts([200, 300, 500], ["202", "303", "505"], ["202", "303", "505"]);
+        });
+      });
+
+      describe("when the bond has a balance", async function () {
+        await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
+
+        describe("[200, 300, 500]:[202, 303, 505]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts([200, 300, 500], ["202", "303", "505"], ["202", "303", "505"]);
+          });
+        });
+      });
+    });
+
+    describe("when balances are not right proportions", function () {
+      async function checkRedeemableAmts(
+        trancheRatios: number[] = [],
+        amounts: string[] = [],
+        redemptionAmts: string[] = [],
+      ) {
+        const bond = await createBondWithFactory(bondFactory, collateralToken, trancheRatios, 86400);
+        const amt = amounts
+          .map((a, i) => toFixedPtAmt(a).mul("1000").div(trancheRatios[i]))
+          .reduce((m, a) => (m.gt(a) ? m : a), toFixedPtAmt("0"));
+        await depositIntoBond(bond, amt.add(toFixedPtAmt("1")), deployer);
+
+        const b = await bondHelpers["computeRedeemableTrancheAmounts(address,uint256[])"](
+          bond.address,
+          amounts.map(toFixedPtAmt),
+        );
+        for (const a in redemptionAmts) {
+          expect(b[1][a]).to.eq(toFixedPtAmt(redemptionAmts[a]));
+        }
+      }
+
+      describe("[200, 300, 500]:[9, 15, 25]", async function () {
+        it("should calculate the amounts", async function () {
+          await checkRedeemableAmts([200, 300, 500], ["9", "15", "25"], ["9", "13.5", "22.5"]);
+        });
+      });
+
+      describe("[200, 300, 500]:[10, 15, 250]", async function () {
+        it("should calculate the amounts", async function () {
+          await checkRedeemableAmts([200, 300, 500], ["10", "15", "250"], ["10", "15", "25"]);
+        });
+      });
+
+      describe("[200, 300, 500]:[10, 12, 250]", async function () {
+        it("should calculate the amounts", async function () {
+          await checkRedeemableAmts([200, 300, 500], ["10", "12", "250"], ["8", "12", "20"]);
+        });
+      });
+
+      describe("[200, 300, 500]:[10, 12, 5]", async function () {
+        it("should calculate the amounts", async function () {
+          await checkRedeemableAmts([200, 300, 500], ["10", "12", "5"], ["2", "3", "5"]);
+        });
+      });
+
+      describe("[200, 300, 500]:[10, 12, 0.5]", async function () {
+        it("should calculate the amounts", async function () {
+          await checkRedeemableAmts([200, 300, 500], ["10", "12", "0.5"], ["0.2", "0.3", "0.5"]);
+        });
+      });
+
+      describe("[200, 300, 500]:[10, 0, 25]", async function () {
+        it("should calculate the amounts", async function () {
+          await checkRedeemableAmts([200, 300, 500], ["10", "0", "25"], ["0", "0", "0"]);
+        });
+      });
+
+      describe("[200, 300, 500]:[0, 15, 25]", async function () {
+        it("should calculate the amounts", async function () {
+          await checkRedeemableAmts([200, 300, 500], ["0", "15", "25"], ["0", "0", "0"]);
+        });
+      });
+
+      describe("[200, 300, 500]:[10, 15, 0]", async function () {
+        it("should calculate the amounts", async function () {
+          await checkRedeemableAmts([200, 300, 500], ["10", "15", "0"], ["0", "0", "0"]);
+        });
+      });
+
+      describe("[200, 300, 500]:[200, 300, 505]", async function () {
+        it("should calculate the amounts", async function () {
+          await checkRedeemableAmts([200, 300, 500], ["200", "300", "505"], ["200", "300", "500"]);
         });
       });
 
