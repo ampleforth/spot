@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.19;
 
-import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import { IERC20Upgradeable } from "../oz/IERC20Upgradeable.sol";
 import { IFeeStrategy } from "../_interfaces/IFeeStrategy.sol";
 import { IPerpetualTranche } from "../_interfaces/IPerpetualTranche.sol";
 
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
-import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
+import { OwnableUpgradeable } from "../oz/OwnableUpgradeable.sol";
+import { SafeCastUpgradeable } from "../oz/SafeCastUpgradeable.sol";
+import { SignedMathUpgradeable } from "../oz/SignedMathUpgradeable.sol";
 import { SignedMathHelpers } from "../_utils/SignedMathHelpers.sol";
 
 /// @notice Expected perc value to be less than 100 with {PERC_DECIMALS}.

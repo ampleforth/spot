@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.19;
 
-import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import { ERC20Upgradeable } from "../../oz/ERC20Upgradeable.sol";
 
 contract MockERC20 is ERC20Upgradeable {
     function init(string memory name_, string memory symbol_) external initializer {

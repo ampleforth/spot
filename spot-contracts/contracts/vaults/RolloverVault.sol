@@ -4,13 +4,14 @@ pragma solidity ^0.8.19;
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche } from "../_interfaces/IPerpetualTranche.sol";
 import { IVault, UnexpectedAsset, UnauthorizedTransferOut, InsufficientDeployment, DeployedCountOverLimit } from "../_interfaces/IVault.sol";
 
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
-import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
-import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
-import { ERC20BurnableUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
-import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
-import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
+import { OwnableUpgradeable } from "../oz/OwnableUpgradeable.sol";
+import { PausableUpgradeable } from "../oz/PausableUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from "../oz/ReentrancyGuardUpgradeable.sol";
+import { MathUpgradeable } from "../oz/MathUpgradeable.sol";
+import { ERC20BurnableUpgradeable } from "../oz/ERC20BurnableUpgradeable.sol";
+import { EnumerableSetUpgradeable } from "../oz/EnumerableSetUpgradeable.sol";
+import { SafeERC20Upgradeable } from "../oz/SafeERC20Upgradeable.sol";
+
 import { BondTranches, TrancheHelpers, BondHelpers } from "../_utils/BondHelpers.sol";
 
 /// @notice Storage array access out of bounds.

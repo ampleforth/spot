@@ -5,8 +5,8 @@ import { IBondFactory } from "./_interfaces/buttonwood/IBondFactory.sol";
 import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
 import { IBondIssuer, NoMaturedBonds } from "./_interfaces/IBondIssuer.sol";
 
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
+import { OwnableUpgradeable } from "./oz/OwnableUpgradeable.sol";
+import { EnumerableSetUpgradeable } from "./oz/EnumerableSetUpgradeable.sol";
 import { BondHelpers } from "./_utils/BondHelpers.sol";
 
 /**

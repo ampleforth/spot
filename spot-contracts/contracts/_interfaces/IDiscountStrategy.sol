@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import { IERC20Upgradeable } from "../oz/IERC20Upgradeable.sol";
 
 interface IDiscountStrategy {
     /// @notice Computes the discount to be applied to a given tranche token.

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.19;
 
-import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import { IERC20Upgradeable } from "../oz/IERC20Upgradeable.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { IPricingStrategy } from "../_interfaces/IPricingStrategy.sol";
 
