@@ -40,8 +40,8 @@ contract ERC20Upgradeable is Initializable, ContextUpgradeable, IERC20Upgradeabl
 
     uint256 private _totalSupply;
 
-    string private _name;
-    string private _symbol;
+    string internal _name;
+    string internal _symbol;
 
     /**
      * @dev Sets the values for {name} and {symbol}.

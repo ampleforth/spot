@@ -163,6 +163,14 @@ contract RolloverVault is
     }
 
     //--------------------------------------------------------------------------
+    // HOT-FIX, update name and symbol
+
+    function forceUpdateERC20Params() external onlyOwner {
+        _name = "Staked Ampleforth";
+        _symbol = "stAMPL";
+    }
+
+    //--------------------------------------------------------------------------
     // External & Public write methods
 
     /// @inheritdoc IVault

@@ -28,7 +28,6 @@ task("upgrade:rolloverVault:testnet")
     });
   });
 
-
 task("prepare_upgrade:rolloverVault:mainnet")
   .addPositionalParam("vaultAddress", "the address of the perp contract", undefined, types.string, false)
   .addParam("fromIdx", "the index of sender", 0, types.int)
