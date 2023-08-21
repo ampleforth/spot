@@ -31,7 +31,7 @@ export default {
       chainId: 1337,
     },
     goerli: {
-      url: `https://eth-goerli.g.alchemy.com/v2/${process.env.ALCHEMY_SECRET}`,
+      url: `https://goerli.infura.io/v3/${process.env.INFURA_SECRET}`,
       accounts: {
         mnemonic: process.env.PROD_MNEMONIC || Wallet.createRandom().mnemonic.phrase,
       },
