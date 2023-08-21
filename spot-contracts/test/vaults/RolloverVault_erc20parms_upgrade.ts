@@ -1,30 +1,18 @@
 import { expect, use } from "chai";
 import { network, ethers, upgrades } from "hardhat";
-import { Contract, Transaction, Signer } from "ethers";
-import {
-  setupCollateralToken,
-  mintCollteralToken,
-  toFixedPtAmt,
-  setupBondFactory,
-  depositIntoBond,
-  getTranches,
-  toDiscountFixedPtAmt,
-  toPriceFixedPtAmt,
-  getDepositBond,
-  advancePerpQueueToBondMaturity,
-} from "../helpers";
+import { Contract, Signer } from "ethers";
+import { setupCollateralToken, mintCollteralToken, toFixedPtAmt } from "../helpers";
 import { smock, FakeContract } from "@defi-wonderland/smock";
 
 use(smock.matchers);
 
-let vault: Contract, perp: FakeContract, collateralToken: Contract, deployer: Signer, otherUser: Signer;
+let vault: Contract, perp: FakeContract, collateralToken: Contract, deployer: Signer;
 describe("RolloverVault_erc20params_upgrade", function () {
   beforeEach(async function () {
     await network.provider.send("hardhat_reset");
 
     const accounts = await ethers.getSigners();
     deployer = accounts[0];
-    otherUser = accounts[1];
 
     ({ collateralToken } = await setupCollateralToken("Bitcoin", "BTC"));
     await mintCollteralToken(collateralToken, toFixedPtAmt("1000"), deployer);
