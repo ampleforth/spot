@@ -1,0 +1,232 @@
+type BondFactory @entity {
+  " factory address "
+  id: ID!
+  
+  " number of bonds created by the factory "
+  bondCount: BigInt!
+
+  " list of bonds created by the factory "
+  bonds: [BondController!] @derivedFrom(field: "factory")
+}
+
+type BondController @entity {
+  " bond address "
+  id: ID!
+  
+  " factory used to create the bond "
+  factory: BondFactory
+
+  " bond issuer used to create the bond "
+  issuer: BondIssuer
+
+  " address of the owner "
+  owner: String!
+
+  " deposit limit of the bond "
+  depositLimit: BigInt!
+  
+  " fee percentage collected by bond owner "
+  feePerc: BigDecimal!
+
+  " reference to the collateral token "
+  collateral: Token!
+
+  " date of bond creation as a unix timestamp "
+  creationDate: BigInt!
+  
+  " date of maturity as a unix timestamp "
+  maturityDate: BigInt!
+
+  " date bond was matured as a unix timestamp "
+  maturedDate: BigInt
+
+  " true if this bond is mature, else false "
+  isMature: Boolean!
+
+  " total amount of debt distributed. Equal to the sum of tranche total supplies "
+  totalDebt: BigDecimal!
+
+  " Total amount of debt distributed at time bond matured. Equal to the sum of tranche total supplies "
+  totalDebtAtMaturity: BigDecimal
+
+  " amount of collateral locked in this bond "
+  totalCollateral: BigDecimal!
+
+  " The amount of collateral locked in this bond at time bond matured "
+  totalCollateralAtMaturity: BigDecimal
+  
+  " tranches and ratios in a list "
+  tranches: [Tranche!]!
+}
+
+type Tranche @entity {
+  " tranche token address "
+  id: ID!
+  
+  " reference to the bond in which this tranche belongs "
+  bond: BondController!
+  
+  " reference to the tranche token contract "
+  token: Token!
+  
+  " ratio of this tranche, all tranche ratios sum to 1000 "
+  ratio: BigInt!
+  
+  " index of this tranche, i.e. A-tranche is 0, B is 1 and so on "
+  index: BigInt!
+  
+  " The amount of collateral in this tranche for redemption "
+  totalCollateral: BigDecimal!
+
+  " The amount of collateral in this tranche for redemption at time bond matured "
+  totalCollateralAtMaturity: BigDecimal
+  
+  " token total supply at time bond matured "
+  totalSupplyAtMaturity: BigDecimal
+}
+
+type Token @entity {
+  " token address "
+  id: ID!
+  
+  " token symbol "
+  symbol: String!
+  
+  " token name "
+  name: String!
+  
+  " token decimals "
+  decimals: BigInt!
+  
+  " token total supply as floating point "
+  totalSupply: BigDecimal!
+
+  " Token balances of all accounts "
+  balances: [AccountBalance!]! @derivedFrom(field: "token")
+}
+
+type AccountBalance @entity {
+  " Equals to: <tokenAddress>-<accountAddress>"
+  id: ID!
+
+  " token reference "
+  token: Token!
+
+  " account address "
+  account: Account!
+
+  " current account balance as floating point"
+  amount: BigDecimal!
+
+  " Block number in which the balance was last modified "
+  block: BigInt
+
+  " Last modified timestamp in seconds "
+  modified: BigInt
+
+  " Hash of the last transaction that modified the balance "
+  transaction: Bytes
+}
+
+type Account @entity {
+  " Account address "
+  id: ID!
+
+  " Token balances that this account holds "
+  balances: [AccountBalance!]! @derivedFrom(field: "account")
+}
+
+
+type BondIssuer @entity {
+  " issuer address "
+  id: ID!
+  
+  " the minimum time between issues "
+  minIssueTimeIntervalSec: BigInt!
+  
+  " issue window offset time "
+  issueWindowOffsetSec: BigInt!
+
+  " maximum bond duration "
+  maxMaturityDuration: BigInt!
+
+  " timestamp of last issue "
+  lastIssueTimestamp: BigInt
+
+  " Block number of last issue "
+  lastIssueBlock: BigInt
+
+  " list of bonds issued by the issuer "
+  issuedBonds: [BondController!] @derivedFrom(field: "issuer")
+}
+
+
+type PerpetualTranche @entity {
+  " perp token address "
+  id: ID!
+
+  " reference to the ERC20 token attributes "
+  token: Token!
+
+  " reference to the collateral "
+  collateral: Token!
+  
+  " address of the owner "
+  owner: String!
+
+  " address of the keeper "
+  keeper: String!
+
+  " address of the bond issuer "
+  issuer: BondIssuer!
+
+  " address of the fee strategy "
+  feeStrategy: String!
+
+  " address of the pricing strategy "
+  pricingStrategy: String!
+
+  " address of the discount strategy "
+  discountStrategy: String!
+
+  " allowed time to maturity before tranche is moved to the holding pen "
+  minTrancheMaturitySec: BigInt!
+
+  " allowed time from maturity after which tranche can be accepted "
+  maxTrancheMaturitySec: BigInt!
+
+  " supply ceiling "
+  maxSupply: BigDecimal!
+
+  " maximum mint allowed per tranche "
+  maxMintAmtPerTranche: BigDecimal!
+
+  " percentage of reserve value allowed to be held in the holding pen "
+  matureValueTargetPerc: BigDecimal!
+
+  " reference to the current deposit bond "
+  depositBond: BondController
+
+  " the virtual holding pen tranche balance "
+  matureTrancheBalance: BigDecimal!
+
+  " reference to assets held in the reserve "
+  reserves: [PerpetualTrancheReserveAsset!]! @derivedFrom(field: "perp")
+}
+
+type PerpetualTrancheReserveAsset @entity {
+  " Equals to: <perpTokenAddress>-<reserveTokenAddress>"
+  id: ID!
+
+  " reference to the perpetual tranche token "
+  perp: PerpetualTranche!
+
+  " reference to the token "
+  token: Token!
+
+  " reference to the underlying tranche "
+  tranche: Tranche
+
+  " balance held by the reserve "
+  balance: BigDecimal!
+}
