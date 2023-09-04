@@ -90,6 +90,7 @@ export function fetchPerpetualTrancheReserveAsset(
     reserveToken.perp = perpId
     reserveToken.token = tokenId
     reserveToken.balance = BIGDECIMAL_ZERO
+    // if the reserve asset isn't the underlying collateral, we infer its a tranche
     if (tokenAddress != collateralAddress) {
       reserveToken.tranche = tokenId
     }

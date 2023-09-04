@@ -9,6 +9,10 @@ import {
   fetchPerpetualTranche,
   refreshPerpetualTrancheStore,
 } from '../data/perpetualTranche'
+import {
+  fetchRolloverVault,
+  refreshRolloverVaultStore,
+} from '../data/rolloverVault'
 import { stringToAddress } from '../utils'
 
 function _handleRebase(address: Address): void {
@@ -28,6 +32,13 @@ function _handleRebase(address: Address): void {
     log.debug('perpRefresh: {}', [perpId])
     let perp = fetchPerpetualTranche(stringToAddress(perpId))
     refreshPerpetualTrancheStore(perp)
+  }
+
+  if (context.get('vault') != null) {
+    let vaultId = context.getString('vault')
+    log.debug('vaultRefresh: {}', [vaultId])
+    let vault = fetchRolloverVault(stringToAddress(vaultId))
+    refreshRolloverVaultStore(vault)
   }
 }
 

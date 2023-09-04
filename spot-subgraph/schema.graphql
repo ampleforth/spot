@@ -230,3 +230,54 @@ type PerpetualTrancheReserveAsset @entity {
   " balance held by the reserve "
   balance: BigDecimal!
 }
+
+
+type RolloverVault @entity {
+  " vault token address "
+  id: ID!
+
+  " reference to the ERC20 token attributes "
+  token: Token!
+
+  " reference to the underlying collateral token"
+  underlying: Token!
+
+  " reference to the perp on which rollovers are performed"
+  perp: PerpetualTranche!
+
+  " address of the owner "
+  owner: String!
+
+  " reference to assets held in by the vault "
+  assets: [RolloverVaultAsset!]! @derivedFrom(field: "vault")
+
+  " the total fixed mc share of underlying tokens in the system "
+  totalUnderlyingScaledHeld: BigDecimal!
+
+  " the total fixed mc share of underlying tokens deposited by each user "
+  scaledUnderlyingBalances: [ScaledUnderlyingVaultBalance!]! @derivedFrom(field: "vault")
+}
+
+type ScaledUnderlyingVaultBalance @entity {
+  id: ID!
+  vault: RolloverVault!
+  account: Bytes!
+  value: BigDecimal!
+}
+
+type RolloverVaultAsset @entity {
+  " Equals to: <vaultTokenAddress>-<assetTokenAddress>"
+  id: ID!
+
+  " reference to the vault "
+  vault: RolloverVault!
+
+  " reference to the asset token "
+  token: Token!
+
+  " reference to the underlying tranche "
+  tranche: Tranche
+
+  " balance held by the vault "
+  balance: BigDecimal!
+}

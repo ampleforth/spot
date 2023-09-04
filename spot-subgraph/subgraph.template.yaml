@@ -10,7 +10,6 @@ dataSources:
     network: {{ network }}
     source:
       abi: BondFactory
-      address: "{{ bondFactory }}"
       startBlock: {{ startBlock }}
     mapping:
       kind: ethereum/events
@@ -35,7 +34,6 @@ dataSources:
     network: {{ network }}
     source:
       abi: BondIssuer
-      address: "{{ bondIssuer }}"
       startBlock: {{ startBlock }}
     mapping:
       kind: ethereum/events
@@ -54,7 +52,7 @@ dataSources:
       file: ./src/mappings/bondIssuer.ts
 
   - kind: ethereum/contract
-    name: Spot
+    name: PerpetualTranche
     network: {{ network }}
     source:
       abi: PerpetualTranche
@@ -87,29 +85,65 @@ dataSources:
           file: ../spot-contracts/external-artifacts/RebasingERC20ABI.json
       eventHandlers:
         - event: UpdatedKeeper(address,address)
-          handler: handleGenericStorageUpdate
+          handler: handleGenericStorageUpdateViaEvent
         - event: UpdatedBondIssuer(address)
-          handler: handleGenericStorageUpdate
+          handler: handleGenericStorageUpdateViaEvent
         - event: UpdatedFeeStrategy(address)
-          handler: handleGenericStorageUpdate
+          handler: handleGenericStorageUpdateViaEvent
         - event: UpdatedPricingStrategy(address)
-          handler: handleGenericStorageUpdate
+          handler: handleGenericStorageUpdateViaEvent
         - event: UpdatedDiscountStrategy(address)
-          handler: handleGenericStorageUpdate
+          handler: handleGenericStorageUpdateViaEvent
         - event: UpdatedTolerableTrancheMaturity(uint256,uint256)
-          handler: handleGenericStorageUpdate
+          handler: handleGenericStorageUpdateViaEvent
         - event: UpdatedMintingLimits(uint256,uint256)
-          handler: handleGenericStorageUpdate
+          handler: handleGenericStorageUpdateViaEvent
         - event: UpdatedMatureValueTargetPerc(uint256)
-          handler: handleGenericStorageUpdate
+          handler: handleGenericStorageUpdateViaEvent
         - event: ReserveSynced(address,uint256)
           handler: handleReserveSynced
         - event: UpdatedDepositBond(address)
           handler: handleUpdatedDepositBond
         - event: UpdatedMatureTrancheBalance(uint256)
           handler: handleUpdatedMatureTrancheBalance
+      callHandlers:
+        - function: init(string,string,address,address,address,address,address)
+          handler: handleGenericStorageUpdateViaCall
       file: ./src/mappings/perpetualTranche.ts
 
+  - kind: ethereum/contract
+    name: RolloverVault
+    network: {{ network }}
+    source:
+      abi: RolloverVault
+      address: "{{ rolloverVault }}"
+      startBlock: {{ startBlock }}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.4
+      language: wasm/assemblyscript
+      entities:
+        - AssetSynced
+      abis:
+        - name: RolloverVault
+          file: ../spot-contracts/exported-artifacts/RolloverVault.json
+        - name: ERC20
+          file: ../spot-contracts/external-artifacts/ERC20ABI.json
+        - name: RebasingERC20
+          file: ../spot-contracts/external-artifacts/RebasingERC20ABI.json
+      eventHandlers:
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleGenericStorageUpdateViaEvent
+        - event: AssetSynced(address,uint256)
+          handler: handleAssetSynced
+      callHandlers:
+        - function: init(string,string,address)
+          handler: handleGenericStorageUpdateViaCall
+        - function: deposit(uint256)
+          handler: handleDeposit
+        - function: redeem(uint256)
+          handler: handleRedeem
+      file: ./src/mappings/rolloverVault.ts
 templates:
   - kind: ethereum/contract
     name: BondController
@@ -181,6 +215,8 @@ templates:
       abis:
         - name: PerpetualTranche
           file: ../spot-contracts/exported-artifacts/PerpetualTranche.json
+        - name: RolloverVault
+          file: ../spot-contracts/exported-artifacts/RolloverVault.json
         - name: BondController
           file: ../spot-contracts/external-artifacts/BondController.json
         - name: ERC20

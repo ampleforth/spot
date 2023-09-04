@@ -17,6 +17,8 @@ cd graph-node/docker
 
 # update docker-compose.yaml with alchemy rpc endpoint
 docker-compose up
+
+# NOTE: Ensure that the docker container is able to access the internet
 ```
 
 Setup project:
