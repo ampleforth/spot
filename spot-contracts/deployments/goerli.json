@@ -1,4 +1,6 @@
 {
+  "network": "goerli",
+  "startBlock": 7476901,
   "ampl": "0x74567107828843070087F1c6ec8322A3e8450725",
   "bondFactory": "0xdDe914EfBF5C472a590e61658d8E342d17E3AAB7",
   "bondIssuer": "0xbC060a1EbEC5eC869C4D51d4563244d4a223D307",

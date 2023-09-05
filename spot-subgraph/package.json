@@ -1,0 +1,26 @@
+{
+  "name": "@ampleforthorg/spot-subgraph",
+  "version": "1.0.0",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "auth": "graph auth  --studio",
+    "codegen": "graph codegen --output-dir ./generated",
+    "build": "graph build",
+    "lint": "yarn prettier --config .prettierrc --write '**/*.ts'",
+    "create-local": "graph create --node http://localhost:8020/ ampleforth/spot",
+    "remove-local": "graph remove --node http://localhost:8020/ ampleforth/spot",
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 ampleforth/spot",
+    "test": "echo 'TO_BE_IMPL'"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli": "^0.21.1",
+    "@graphprotocol/graph-ts": "^0.20.0",
+    "@typescript-eslint/eslint-plugin": "^2.0.0",
+    "@typescript-eslint/parser": "^2.0.0",
+    "eslint": "^6.2.2",
+    "eslint-config-prettier": "^6.1.0",
+    "mustache": "^4.2.0",
+    "prettier": "^1.18.2",
+    "typescript": "^3.5.2"
+  }
+}
