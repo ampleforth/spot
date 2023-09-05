@@ -23,7 +23,6 @@ docker-compose up
 
 Setup project:
 ```
-yarn global add mustache
 yarn
 ```
 

@@ -32,9 +32,12 @@ export function handleDeposit(call: DepositCall): void {
   let underlyingToken = fetchToken(stringToAddress(vault.underlying))
   let tokenContract = RebasingERC20ABI.bind(stringToAddress(vault.underlying))
   let amountIn = formatBalance(call.inputs.amount, underlyingToken.decimals)
-  let scaledAmountIn = amountIn
-    .times(tokenContract.scaledTotalSupply().toBigDecimal())
-    .div(tokenContract.totalSupply().toBigDecimal())
+  let totalSupply = formatBalance(
+    tokenContract.totalSupply(),
+    underlyingToken.decimals,
+  )
+  let scaledTotalSupply = tokenContract.scaledTotalSupply().toBigDecimal()
+  let scaledAmountIn = amountIn.times(scaledTotalSupply).div(totalSupply)
   vault.totalUnderlyingScaledHeld = vault.totalUnderlyingScaledHeld.plus(
     scaledAmountIn,
   )

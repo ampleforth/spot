@@ -1,6 +1,6 @@
 specVersion: 0.0.2
 description: Perpetual Tranche is a protocol to create fungible tranches
-repository: https://github.com/buttonwood-protocol/subgraph
+repository: http://github.com/ampleforth/spot
 schema:
   file: ./schema.graphql
 
