@@ -879,7 +879,7 @@ contract PerpetualTranche is
 
     /// @inheritdoc IPerpetualTranche
     function feeToken() public view override returns (IERC20Upgradeable) {
-        return feeStrategy.feeToken();
+        return address(this);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -1075,36 +1075,25 @@ contract PerpetualTranche is
         address destination,
         uint256 feeAmt
     ) private {
-        IERC20Upgradeable feeToken_ = feeToken();
-        bool isNativeFeeToken = (feeToken_ == perpERC20());
         // Funds are coming in
-        if (isNativeFeeToken) {
-            // Handling a special case, when the fee is to be charged as the perp token itself
-            // In this case we don't need to make an external call to the token ERC-20 to "transferFrom"
-            // the payer, since this is still an internal call {msg.sender} will still point to the payer
-            // and we can just "transfer" from the payer's wallet.
-            transfer(destination, feeAmt);
-        } else {
-            feeToken_.safeTransferFrom(payer, destination, feeAmt);
-        }
+        // Handling a special case, when the fee is to be charged as the perp token itself
+        // In this case we don't need to make an external call to the token ERC-20 to "transferFrom"
+        // the payer, since this is still an internal call {msg.sender} will still point to the payer
+        // and we can just "transfer" from the payer's wallet.
+        transfer(destination, feeAmt);
     }
 
     /// @dev Transfers fee from the reserve to the destination.
     function _handleFeeTransferOut(address destination, uint256 feeAmt) private {
-        IERC20Upgradeable feeToken_ = feeToken();
-        bool isNativeFeeToken = (feeToken_ == perpERC20());
         // Funds are going out
-        if (isNativeFeeToken) {
-            uint256 balance = _reserveBalance(feeToken_);
-            feeToken_.safeTransfer(destination, MathUpgradeable.min(feeAmt, balance));
+        IERC20Upgradeable feeToken_ = IERC20Upgradeable(address(this));
+        uint256 balance = _reserveBalance(feeToken_);
+        feeToken_.safeTransfer(destination, MathUpgradeable.min(feeAmt, balance));
 
-            // In case that the reserve's balance doesn't cover the entire fee amount,
-            // we mint perps to cover the difference.
-            if (balance < feeAmt) {
-                _mint(destination, feeAmt - balance);
-            }
-        } else {
-            feeToken_.safeTransfer(destination, feeAmt);
+        // In case that the reserve's balance doesn't cover the entire fee amount,
+        // we mint perps to cover the difference.
+        if (balance < feeAmt) {
+            _mint(destination, feeAmt - balance);
         }
     }
 
