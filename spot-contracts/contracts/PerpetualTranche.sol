@@ -19,10 +19,6 @@ import { BondHelpers } from "./_utils/BondHelpers.sol";
 /// @param authorizedCaller The address which is authorized to trigger the call.
 error UnauthorizedCall(address caller, address authorizedCaller);
 
-/// @notice Expected a valid percentage value from 0-100 as a fixed point number with {PERC_DECIMALS}.
-/// @param value Invalid value.
-error InvalidPerc(uint256 value);
-
 /// @notice Expected contract reference to not be `address(0)`.
 error UnacceptableReference();
 
@@ -80,12 +76,6 @@ error ExceededMaxSupply(uint256 newSupply, uint256 currentMaxSupply);
 /// @param mintAmtForCurrentTranche The amount of perps that have been minted using the tranche.
 /// @param maxMintAmtPerTranche The amount of perps that can be minted per tranche.
 error ExceededMaxMintPerTranche(ITranche trancheIn, uint256 mintAmtForCurrentTranche, uint256 maxMintAmtPerTranche);
-
-/// @notice Expected the percentage of reserve value held as mature tranches to be at least
-///         as much as the target percentage.
-/// @param matureValuePerc The current percentage of reserve value held as mature tranches.
-/// @param matureValueTargetPerc The target percentage.
-error BelowMatureValueTargetPerc(uint256 matureValuePerc, uint256 matureValueTargetPerc);
 
 /// @notice Expected transfer out asset to not be a reserve asset.
 /// @param token Address of the token transferred.
@@ -174,10 +164,6 @@ contract PerpetualTranche is
     /// @param maxSupply The max total supply.
     /// @param maxMintAmtPerTranche The max mint amount per tranche.
     event UpdatedMintingLimits(uint256 maxSupply, uint256 maxMintAmtPerTranche);
-
-    /// @notice Event emitted when the mature value target percentage is updated.
-    /// @param matureValueTargetPerc The new target percentage.
-    event UpdatedMatureValueTargetPerc(uint256 matureValueTargetPerc);
 
     /// @notice Event emitted when the authorized rollers are updated.
     /// @param roller The address of the roller.
@@ -275,7 +261,10 @@ contract PerpetualTranche is
     ///         it can NOT get added into the reserve.
     uint256 public maxTrancheMaturitySec;
 
-    /// @notice The percentage of the reserve value to be held as mature tranches.
+    /// @notice DEPRECATED.
+    /// @dev This used to control the percentage of the reserve value to be held as mature tranches.
+    ///      With V2 perp cannot control this anymore, the rollover mechanics are dictated
+    //       by the amount of capital in the vault system.
     uint256 public matureValueTargetPerc;
 
     /// @notice The maximum supply of perps that can exist at any given time.
@@ -381,7 +370,6 @@ contract PerpetualTranche is
 
         updateTolerableTrancheMaturity(1, type(uint256).max);
         updateMintingLimits(type(uint256).max, type(uint256).max);
-        updateMatureValueTargetPerc(0);
     }
 
     //--------------------------------------------------------------------------
@@ -494,16 +482,6 @@ contract PerpetualTranche is
         maxSupply = maxSupply_;
         maxMintAmtPerTranche = maxMintAmtPerTranche_;
         emit UpdatedMintingLimits(maxSupply_, maxMintAmtPerTranche_);
-    }
-
-    /// @notice Update the mature value target percentage parameter.
-    /// @param matureValueTargetPerc_ The new target percentage.
-    function updateMatureValueTargetPerc(uint256 matureValueTargetPerc_) public onlyOwner {
-        if (matureValueTargetPerc_ > HUNDRED_PERC) {
-            revert InvalidPerc(matureValueTargetPerc_);
-        }
-        matureValueTargetPerc = matureValueTargetPerc_;
-        emit UpdatedMatureValueTargetPerc(matureValueTargetPerc);
     }
 
     /// @notice Allows the owner to transfer non-critical assets out of the system if required.
@@ -649,8 +627,6 @@ contract PerpetualTranche is
         // transfers tranche from the reserve to the sender
         _transferOutOfReserve(msg.sender, tokenOut, r.tokenOutAmt);
 
-        // post-rollover checks
-        _enforceMatureValueTarget();
         // NOTE: though the rollover operation does not change the perp token's total supply,
         // we still enforce the supply cap here as the -ve rollover fees
         // might mint more perp tokens which could increase the perp total supply.
@@ -1176,16 +1152,6 @@ contract PerpetualTranche is
         uint256 newSupply = totalSupply();
         if (newSupply >= prevSupply) {
             revert ExpectedSupplyReduction(newSupply, prevSupply);
-        }
-    }
-
-    /// @dev Enforces that the percentage of the reserve value is within the target percentage.
-    ///      To be invoked AFTER the rollover operation.
-    function _enforceMatureValueTarget() private view {
-        uint256 matureValue = (_matureTrancheBalance * computePrice(_reserveAt(0)));
-        uint256 matureValuePerc = matureValue.mulDiv(HUNDRED_PERC, _reserveValue());
-        if (matureValuePerc < matureValueTargetPerc) {
-            revert BelowMatureValueTargetPerc(matureValuePerc, matureValueTargetPerc);
         }
     }
 
