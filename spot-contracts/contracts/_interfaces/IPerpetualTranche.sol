@@ -152,6 +152,10 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @return The average price per perp token.
     function getAvgPrice() external returns (uint256);
 
+    /// @notice Computes the total value of assets currently held in the reserve.
+    /// @return The total value of the perp system.
+    function getTVL() external returns (uint256);
+
     /// @notice Fetches the list of reserve tokens which are up for rollover.
     /// @return The list of reserve tokens up for rollover.
     function getReserveTokensUpForRollover() external returns (IERC20Upgradeable[] memory);

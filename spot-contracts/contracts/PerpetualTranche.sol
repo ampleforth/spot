@@ -701,6 +701,12 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
+    /// @dev Returns a fixed point with {decimals()+PRICE_DECIMALS} decimals.
+    function getTVL() external override afterStateUpdate returns (uint256) {
+        return _reserveValue();
+    }
+
+    /// @inheritdoc IPerpetualTranche
     function computeMintAmt(ITranche trancheIn, uint256 trancheInAmt)
         external
         override
