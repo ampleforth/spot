@@ -42,4 +42,8 @@ interface IBondIssuer {
     /// @param index The index of the bond in the issued list.
     /// @return Address of the bond.
     function issuedBondAt(uint256 index) external view returns (IBondController);
+
+    /// @notice The maximum maturity duration for the issued bonds.
+    /// @return Duration in seconds.
+    function maxMaturityDuration() external view returns (uint256);
 }

@@ -79,9 +79,9 @@ contract RolloverVault is
 
     //-------------------------------------------------------------------------
     // Constants
-    uint8 public constant PERC_DECIMALS = 6;
-    uint256 public constant UNIT_PERC = 10**PERC_DECIMALS;
-    uint256 public constant HUNDRED_PERC = 100 * UNIT_PERC;
+    uint8 public constant PERC_DECIMALS = 8;
+    uint256 public constant UNIT_PERC = 10**(PERC_DECIMALS - 2);
+    uint256 public constant HUNDRED_PERC = 10**PERC_DECIMALS;
 
     /// @dev Initial exchange rate between the underlying asset and notes.
     uint256 private constant INITIAL_RATE = 10**6;

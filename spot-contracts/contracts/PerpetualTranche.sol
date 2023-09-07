@@ -247,7 +247,7 @@ contract PerpetualTranche is
     /// @notice External contract that stores a predefined bond config and frequency,
     ///         and issues new bonds when poked.
     /// @dev Only tranches of bonds issued by this whitelisted issuer are accepted into the reserve.
-    IBondIssuer public bondIssuer;
+    IBondIssuer public override bondIssuer;
 
     /// @notice The active deposit bond of whose tranches are currently being accepted to mint perps.
     IBondController private _depositBond;
@@ -900,7 +900,7 @@ contract PerpetualTranche is
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable,
         uint256 tokenOutAmtRequested
-    ) private view returns (IPerpetualTranche.RolloverData memory) {
+    ) private returns (IPerpetualTranche.RolloverData memory) {
         IPerpetualTranche.RolloverData memory r;
 
         uint256 trancheInDiscount = computeDiscount(trancheIn);

@@ -11,6 +11,7 @@ import {
   toFixedPtAmt,
   toDiscountFixedPtAmt,
   toPriceFixedPtAmt,
+  toTVLFixedPtAmt,
   advancePerpQueue,
   bondAt,
   checkReserveComposition,
@@ -43,10 +44,10 @@ describe("PerpetualTranche", function () {
     issuer = await smock.fake(BondIssuer);
     await issuer.collateral.returns(collateralToken.address);
 
-    const FeeStrategy = await ethers.getContractFactory("BasicFeeStrategy");
+    const FeeStrategy = await ethers.getContractFactory("FeeStrategy");
     feeStrategy = await smock.fake(FeeStrategy);
 
-    const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
+    const PricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
     pricingStrategy = await smock.fake(PricingStrategy);
     await pricingStrategy.decimals.returns(8);
     await pricingStrategy.computeMatureTranchePrice.returns(toPriceFixedPtAmt("1"));
@@ -408,7 +409,7 @@ describe("PerpetualTranche", function () {
 
     describe("when new strategy has different decimals", function () {
       beforeEach(async function () {
-        const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
+        const PricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
         newPricingStrategy = await smock.fake(PricingStrategy);
         await newPricingStrategy.decimals.returns(18);
       });
@@ -422,7 +423,7 @@ describe("PerpetualTranche", function () {
 
     describe("when set address is valid", function () {
       beforeEach(async function () {
-        const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
+        const PricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
         newPricingStrategy = await smock.fake(PricingStrategy);
         await newPricingStrategy.decimals.returns(8);
         tx = perp.updatePricingStrategy(newPricingStrategy.address);
@@ -758,6 +759,9 @@ describe("PerpetualTranche", function () {
       it("should calculate the avg. perp price", async function () {
         expect(await perp.callStatic.getAvgPrice()).to.eq(0);
       });
+      it("should calculate the tvl", async function () {
+        expect(await perp.callStatic.getTVL()).to.eq(0);
+      });
     });
 
     describe("when reserve has one tranche", function () {
@@ -776,6 +780,9 @@ describe("PerpetualTranche", function () {
       });
       it("should calculate the avg. perp price", async function () {
         expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1"));
+      });
+      it("should calculate the tvl", async function () {
+        expect(await perp.callStatic.getTVL()).to.eq(toTVLFixedPtAmt("200"));
       });
     });
 
@@ -814,6 +821,9 @@ describe("PerpetualTranche", function () {
       it("should calculate the avg. perp price", async function () {
         expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1"));
       });
+      it("should calculate the tvl", async function () {
+        expect(await perp.callStatic.getTVL()).to.eq(toTVLFixedPtAmt("225"));
+      });
     });
 
     describe("when reserve has only mature collateral", function () {
@@ -848,6 +858,9 @@ describe("PerpetualTranche", function () {
       });
       it("should calculate the avg. perp price", async function () {
         expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1"));
+      });
+      it("should calculate the tvl", async function () {
+        expect(await perp.callStatic.getTVL()).to.eq(toTVLFixedPtAmt("300"));
       });
     });
 
@@ -887,6 +900,9 @@ describe("PerpetualTranche", function () {
       });
       it("should calculate the avg. perp price", async function () {
         expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1"));
+      });
+      it("should calculate the tvl", async function () {
+        expect(await perp.callStatic.getTVL()).to.eq(toTVLFixedPtAmt("300"));
       });
     });
 
@@ -929,6 +945,9 @@ describe("PerpetualTranche", function () {
       it("should calculate the avg. perp price", async function () {
         expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1.06666666"));
       });
+      it("should calculate the tvl", async function () {
+        expect(await perp.callStatic.getTVL()).to.eq(toTVLFixedPtAmt("320"));
+      });
     });
 
     describe("when reserve has mature collateral which has rebased down and tranches", function () {
@@ -970,6 +989,9 @@ describe("PerpetualTranche", function () {
       });
       it("should calculate the avg. perp price", async function () {
         expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("0.93333333"));
+      });
+      it("should calculate the tvl", async function () {
+        expect(await perp.callStatic.getTVL()).to.eq(toTVLFixedPtAmt("280"));
       });
     });
   });

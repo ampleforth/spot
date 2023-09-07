@@ -35,7 +35,7 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     /// @dev In practice, bonds issued by this issuer won't have a constant duration as
     ///      block.timestamp when the issue function is invoked can vary.
     ///      Rather these bonds are designed to have a predictable maturity date.
-    uint256 public maxMaturityDuration;
+    uint256 public override maxMaturityDuration;
 
     /// @notice The tranche ratios.
     /// @dev Each tranche ratio is expressed as a fixed point number
