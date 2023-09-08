@@ -10,6 +10,8 @@ import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/m
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { Sigmoid } from "../_utils/Sigmoid.sol";
 import { BondHelpers } from "../_utils/BondHelpers.sol";
+import { PerpetualTrancheHelpers } from "../_utils/PerpetualTrancheHelpers.sol";
+
 import { BondTranches } from "../_utils/BondTranchesHelpers.sol";
 
 /**
@@ -23,6 +25,7 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     using MathUpgradeable for uint256;
     using SafeCastUpgradeable for uint256;
     using BondHelpers for IBondController;
+    using PerpetualTrancheHelpers for IPerpetualTranche;
 
     /// @dev The returned fee percentages are fixed point numbers with {PERC_DECIMALS} places.
     ///      This should line up with the consumer, i.e) perp.
@@ -69,19 +72,19 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     // TODO: add setter for sigmoid parameters.
 
     /// @inheritdoc IFeeStrategy
-    function rolloverFeePerc() external override returns (int256) {
+    function computeRolloverFeePerc() external override returns (int256) {
         // We calculate the rollover fee for the given cycle by dividing the annualized rate
         // by the number of cycles in any given year.
         IBondController referenceBond = perp.getDepositBond();
-        int256 rolloverAPR = computeRolloverAPR(getCurrentVaultTVL(), computeTargetVaultTVL(referenceBond));
-        return ((rolloverAPR * referenceBond.duration().toInt256()) / ONE_YEAR_SEC);
+        return ((computeRolloverAPR(getCurrentVaultTVL(), computeTargetVaultTVL(referenceBond)) *
+            referenceBond.duration().toInt256()) / ONE_YEAR_SEC);
     }
 
     /// @return The annualized rollover fee percentage.
-    function computeRolloverAPR(uint256 current, uint256 target) public returns (int256) {
+    function computeRolloverAPR(uint256 currentTVL, uint256 targetTVL) public view returns (int256) {
         return
             Sigmoid.compute(
-                current.mulDiv(HUNDRED_PERC, target).toInt256(),
+                currentTVL.mulDiv(HUNDRED_PERC, targetTVL).toInt256(),
                 _rolloverFeeAPR.lower,
                 _rolloverFeeAPR.upper,
                 _rolloverFeeAPR.growth,
@@ -97,7 +100,8 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
             IVault vault = IVault(perp.authorizedRollerAt(i));
             try vault.getTVL() returns (uint256 val) {
                 tvl += val;
-            } catch {
+            } catch // solhint-disable-next-line no-empty-blocks
+            {
                 // no-op, EOA doesn't count as on-chain capital
             }
         }
@@ -106,52 +110,36 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
 
     /// @return The expected TVL to support the perp supply.
     function computeTargetVaultTVL(IBondController referenceBond) public returns (uint256) {
-        BondTranches memory bt = referenceBond.getTranches();
-
-        // Put simply, vaultTVL is expected to be a `perpTVL` / `trancheRatio`
-        // For a 25/75 tranche ratio the expected vaultTVL = 4 * `perpTVL`.
-        //
-        // However in practice, perp might accept multiple tranche classes each with
-        // its associated discount factor. So we first compute the `effectiveTrancheRatio`.
-        //
-        // For example, for a 20A, 30B, 50Z bond and if perp accepts
-        //   - As at a discount of 1,
-        //   - Bs as a discount of 0.5, and
-        //   - Zs at a discount of 0.
-        //
-        // The effective tranche ratio accepted by perp is (1 * 20 + (0.5) * 30 + 0 * 50)/100 => 35/100
-        // And the vaultTVL = `perpTVL` * 35 / 100  => 2.85 * `perpTVL`.
-        //
-        uint256 effectiveTrancheRatio = 0;
-        for (uint8 i = 0; i < bt.tranches.length; i++) {
-            uint256 yield = perp.computeDiscount(bt.tranches[i]);
-            effectiveTrancheRatio += bt.trancheRatios[i] * yield;
-        }
-
-        // The expected `vaultTVL` is calculated as `perpTVL` / `effectiveTrancheRatio`
-        return (perp.getTVL() * TRANCHE_RATIO_GRANULARITY).mulDiv(UNIT_DISCOUNT, effectiveTrancheRatio);
+        (uint256 perpRatio, uint256 vaultRatio) = perp.computeEffectiveTrancheRatio(referenceBond);
+        return perp.getTVL().mulDiv(vaultRatio, perpRatio);
     }
 
     //-------------------------------------------------------------------------
     // Deprecated section, keeping for backward comparability with RouterV1.
 
     // @notice Deprecated.
-    function feeToken() external view override returns (IERC20Upgradeable) {
+    function feeToken() external pure override returns (IERC20Upgradeable) {
         return IERC20Upgradeable(address(0));
     }
 
     // @notice Deprecated.
-    function computeMintFees(uint256 mintAmt) external view override returns (int256, uint256) {
+    function computeMintFees(
+        uint256 /*mintAmt*/
+    ) external pure override returns (int256, uint256) {
         return (0, 0);
     }
 
     // @notice Deprecated.
-    function computeBurnFees(uint256 burnAmt) external view override returns (int256, uint256) {
+    function computeBurnFees(
+        uint256 /*burnAmt*/
+    ) external pure override returns (int256, uint256) {
         return (0, 0);
     }
 
     // @notice Deprecated.
-    function computeRolloverFees(uint256 rolloverAmt) external view override returns (int256, uint256) {
+    function computeRolloverFees(
+        uint256 /*rolloverAmt*/
+    ) external pure override returns (int256, uint256) {
         return (0, 0);
     }
 }

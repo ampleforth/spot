@@ -737,15 +737,9 @@ contract PerpetualTranche is
         return _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable, tokenOutAmtRequested);
     }
 
-    /// @return Returns the number of authorized rollers.
-    function authorizedRollersCount() external view returns (uint256) {
-        return _rollers.length();
-    }
-
-    /// @return Returns the roller address from the authorized set by index.
-    /// @param i The index of the address in the set.
-    function authorizedRollerAt(uint256 i) external view returns (address) {
-        return _rollers.at(i);
+    /// @inheritdoc IPerpetualTranche
+    function computeRolloverFee() external override afterStateUpdate returns (int256) {
+        return feeStrategy.computeRolloverFeePerc();
     }
 
     //--------------------------------------------------------------------------
@@ -812,6 +806,17 @@ contract PerpetualTranche is
     /// @inheritdoc IPerpetualTranche
     function collateral() external view override returns (IERC20Upgradeable) {
         return _reserveAt(0);
+    }
+
+    /// @return Returns the number of authorized rollers.
+    function authorizedRollersCount() external view returns (uint256) {
+        return _rollers.length();
+    }
+
+    /// @return Returns the roller address from the authorized set by index.
+    /// @param i The index of the address in the set.
+    function authorizedRollerAt(uint256 i) external view returns (address) {
+        return _rollers.at(i);
     }
 
     //--------------------------------------------------------------------------
@@ -943,19 +948,23 @@ contract PerpetualTranche is
             r.trancheInAmt = _fromStdTrancheAmt(stdTrancheInAmt, trancheInDiscount);
         }
 
-        // Note rollover fees are settled by adjusting the exchange rate between `trancheInAmt` and `tokenOutAmt`.
-        int256 feePerc = feeStrategy.rolloverFeePerc();
+        // Note the rollover fees are settled by,
+        // adjusting the exchange rate between `trancheInAmt` and `tokenOutAmt`.
+        int256 feePerc = feeStrategy.computeRolloverFeePerc();
+
         // A postive fee percentage implies that perp charges rotators by accepting tranchesIn at a discount.
         // ie) lesser tranches out
         if (feePerc > 0) {
             r.tokenOutAmt -= (r.tokenOutAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
             r.trancheOutAmt -= (r.trancheOutAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
+            stdTrancheOutAmt -= (stdTrancheOutAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
         }
         // A negative fee percentage (or a reward) implies that perp pays the rotators by
         // accepting tranchesIn at a premium.
         // ie) lesser tranches in
         else if (feePerc < 0) {
             r.trancheInAmt -= (r.trancheInAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
+            stdTrancheInAmt -= (stdTrancheInAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
         }
 
         r.perpRolloverAmt = (stdTrancheOutAmt * trancheOutPrice).mulDiv(totalSupply(), _reserveValue());

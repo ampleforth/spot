@@ -189,6 +189,9 @@ interface IPerpetualTranche is IERC20Upgradeable {
         uint256 tokenOutAmtRequested
     ) external returns (RolloverData memory r);
 
+    /// @return The applied exchange rate adjustment between tranchesIn and tokensOut during rollovers.
+    function computeRolloverFee() external returns (int256);
+
     /// @notice The discount to be applied given the reserve token.
     /// @param token The address of the reserve token.
     /// @return The discount applied.
