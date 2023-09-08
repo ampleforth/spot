@@ -61,9 +61,9 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
         __Ownable_init();
         perp = perp_;
 
-        _rolloverFeeAPR.lower = -1 * int256(UNIT_PERC); // -1%
+        _rolloverFeeAPR.lower = -2 * int256(UNIT_PERC); // -2%
         _rolloverFeeAPR.upper = 5 * int256(UNIT_PERC); // 5%
-        _rolloverFeeAPR.growth = 4 * int256(HUNDRED_PERC); // 4x
+        _rolloverFeeAPR.growth = 5 * int256(HUNDRED_PERC); // 5x
     }
 
     // TODO: add setter for sigmoid parameters.
@@ -136,6 +136,7 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     //-------------------------------------------------------------------------
     // Deprecated section, keeping for backward comparability with RouterV1.
 
+    // @notice Deprecated.
     function feeToken() external view override returns (IERC20Upgradeable) {
         return IERC20Upgradeable(address(0));
     }
