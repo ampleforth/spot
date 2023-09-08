@@ -32,6 +32,13 @@ library BondHelpers {
         return maturityDate > block.timestamp ? maturityDate - block.timestamp : 0;
     }
 
+    /// @notice Given a bond, calculates the duration.
+    /// @param b The address of the bond contract.
+    /// @return The total number of seconds between creation and maturity.
+    function duration(IBondController b) internal view returns (uint256) {
+        return b.maturityDate() - b.creationDate();
+    }
+
     /// @notice Given a bond, retrieves all of the bond's tranches.
     /// @param b The address of the bond contract.
     /// @return The tranche data.

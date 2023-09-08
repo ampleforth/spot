@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import { IFeeStrategy, IERC20Upgradeable } from "../_interfaces/IFeeStrategy.sol";
-import { IPerpetualTranche, IBondController, IBondIssuer } from "../_interfaces/IPerpetualTranche.sol";
+import { IPerpetualTranche, IBondController } from "../_interfaces/IPerpetualTranche.sol";
 import { IVault } from "../_interfaces/IVault.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
@@ -72,9 +72,9 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     function rolloverFeePerc() external override returns (int256) {
         // We calculate the rollover fee for the given cycle by dividing the annualized rate
         // by the number of cycles in any given year.
-        int256 rolloverAPR = computeRolloverAPR(getCurrentVaultTVL(), computeTargetVaultTVL());
-        int256 bondDuration = IBondIssuer(perp.bondIssuer()).maxMaturityDuration().toInt256();
-        return ((rolloverAPR * bondDuration) / ONE_YEAR_SEC);
+        IBondController referenceBond = perp.getDepositBond();
+        int256 rolloverAPR = computeRolloverAPR(getCurrentVaultTVL(), computeTargetVaultTVL(referenceBond));
+        return ((rolloverAPR * referenceBond.duration().toInt256()) / ONE_YEAR_SEC);
     }
 
     /// @return The annualized rollover fee percentage.
@@ -105,9 +105,8 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     }
 
     /// @return The expected TVL to support the perp supply.
-    function computeTargetVaultTVL() public returns (uint256) {
-        IBondController mintingBond = perp.getDepositBond();
-        BondTranches memory bt = mintingBond.getTranches();
+    function computeTargetVaultTVL(IBondController referenceBond) public returns (uint256) {
+        BondTranches memory bt = referenceBond.getTranches();
 
         // Put simply, vaultTVL is expected to be a `perpTVL` / `trancheRatio`
         // For a 25/75 tranche ratio the expected vaultTVL = 4 * `perpTVL`.

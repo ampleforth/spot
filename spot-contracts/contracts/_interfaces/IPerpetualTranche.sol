@@ -202,9 +202,6 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @notice Updates time dependent storage state.
     function updateState() external;
 
-    /// @return The bond issuer address.
-    function bondIssuer() external view returns (IBondIssuer);
-
     /// @return The number of whitelisted rollers.
     function authorizedRollersCount() external view returns (uint256);
 

@@ -247,7 +247,7 @@ contract PerpetualTranche is
     /// @notice External contract that stores a predefined bond config and frequency,
     ///         and issues new bonds when poked.
     /// @dev Only tranches of bonds issued by this whitelisted issuer are accepted into the reserve.
-    IBondIssuer public override bondIssuer;
+    IBondIssuer public bondIssuer;
 
     /// @notice The active deposit bond of whose tranches are currently being accepted to mint perps.
     IBondController private _depositBond;
