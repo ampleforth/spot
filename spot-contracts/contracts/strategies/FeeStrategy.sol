@@ -6,7 +6,7 @@ import { IPerpetualTranche, IBondController, IBondIssuer } from "../_interfaces/
 import { IVault } from "../_interfaces/IVault.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
-import {  SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
+import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { Sigmoid } from "../_utils/Sigmoid.sol";
 import { BondHelpers } from "../_utils/BondHelpers.sol";
@@ -63,7 +63,7 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
 
         _rolloverFeeAPR.lower = -1 * int256(UNIT_PERC); // -1%
         _rolloverFeeAPR.upper = 5 * int256(UNIT_PERC); // 5%
-        _rolloverFeeAPR.growth = 3 * int256(HUNDRED_PERC); // 3x
+        _rolloverFeeAPR.growth = 4 * int256(HUNDRED_PERC); // 4x
     }
 
     // TODO: add setter for sigmoid parameters.
@@ -72,10 +72,9 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     function rolloverFeePerc() external override returns (int256) {
         // We calculate the rollover fee for the given cycle by dividing the annualized rate
         // by the number of cycles in any given year.
-        // TODO: use muldiv?
         int256 rolloverAPR = computeRolloverAPR(getCurrentVaultTVL(), computeTargetVaultTVL());
         int256 bondDuration = IBondIssuer(perp.bondIssuer()).maxMaturityDuration().toInt256();
-        return (rolloverAPR * bondDuration / ONE_YEAR_SEC);
+        return ((rolloverAPR * bondDuration) / ONE_YEAR_SEC);
     }
 
     /// @return The annualized rollover fee percentage.

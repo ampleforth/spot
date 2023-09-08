@@ -27,7 +27,7 @@ library Sigmoid {
         int256 upper,
         int256 growth,
         uint8 decimals
-    ) public pure returns (int256) {
+    ) internal pure returns (int256) {
         int256 one = int256(10**decimals);
         int256 delta;
 

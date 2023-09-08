@@ -9,7 +9,7 @@ use(smock.matchers);
 const TOKEN_DECIMALS = 18;
 const PRICE_DECIMALS = 8;
 const DISCOUNT_DECIMALS = 18;
-const PERC_DECIMALS = 6;
+const PERC_DECIMALS = 8;
 
 const sciParseFloat = (a: string): BigNumber => (a.includes("e") ? parseFloat(a).toFixed(18) : a);
 export const toFixedPtAmt = (a: string): BigNumber => utils.parseUnits(sciParseFloat(a), TOKEN_DECIMALS);
