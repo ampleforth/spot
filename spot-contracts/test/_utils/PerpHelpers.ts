@@ -35,7 +35,7 @@ describe("PerpHelpers", function () {
     await network.provider.send("hardhat_reset");
   });
 
-  describe.only("#computeEffectiveTrancheRatio", function () {
+  describe("#computeEffectiveTrancheRatio", function () {
     async function computeRatioAndCheck(trancheRatios, discounts, expectedRatios) {
       const bond = await createBondWithFactory(bondFactory, collateralToken, trancheRatios, 86400);
       const tranches = await getTranches(bond);
