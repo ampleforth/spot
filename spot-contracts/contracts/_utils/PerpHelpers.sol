@@ -7,7 +7,7 @@ import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/
 import { BondHelpers } from "./BondHelpers.sol";
 import { BondTranches } from "./BondTranchesHelpers.sol";
 
-library PerpetualTrancheHelpers {
+library PerpHelpers {
     using MathUpgradeable for uint256;
 
     // Replicating value used in PerpetualTranche:

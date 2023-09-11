@@ -10,7 +10,7 @@ import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/m
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { Sigmoid } from "../_utils/Sigmoid.sol";
 import { BondHelpers } from "../_utils/BondHelpers.sol";
-import { PerpetualTrancheHelpers } from "../_utils/PerpetualTrancheHelpers.sol";
+import { PerpHelpers } from "../_utils/PerpHelpers.sol";
 
 import { BondTranches } from "../_utils/BondTranchesHelpers.sol";
 
@@ -25,7 +25,7 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     using MathUpgradeable for uint256;
     using SafeCastUpgradeable for uint256;
     using BondHelpers for IBondController;
-    using PerpetualTrancheHelpers for IPerpetualTranche;
+    using PerpHelpers for IPerpetualTranche;
 
     /// @dev The returned fee percentages are fixed point numbers with {PERC_DECIMALS} places.
     ///      This should line up with the consumer, i.e) perp.
