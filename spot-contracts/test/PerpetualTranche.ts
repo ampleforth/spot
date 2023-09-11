@@ -108,7 +108,6 @@ describe("PerpetualTranche", function () {
 
     it("should set fund pool references", async function () {
       expect(await perp.reserve()).to.eq(perp.address);
-      expect(await perp.protocolFeeCollector()).to.eq(await deployer.getAddress());
       expect(await perp.perpERC20()).to.eq(perp.address);
     });
 

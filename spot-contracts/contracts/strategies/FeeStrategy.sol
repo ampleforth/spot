@@ -75,6 +75,7 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     function computeRolloverFeePerc() external override returns (int256) {
         // We calculate the rollover fee for the given cycle by dividing the annualized rate
         // by the number of cycles in any given year.
+        // NOTE: Ensure that the perp's TVL and vault's TVL have the same base denomination.
         IBondController referenceBond = perp.getDepositBond();
         return ((computeRolloverAPR(getCurrentVaultTVL(), computeTargetVaultTVL(referenceBond)) *
             referenceBond.duration().toInt256()) / ONE_YEAR_SEC);

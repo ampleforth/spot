@@ -110,10 +110,6 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @return Address of the reserve.
     function reserve() external view returns (address);
 
-    /// @notice The address which holds any revenue extracted by protocol.
-    /// @return Address of the fee collector.
-    function protocolFeeCollector() external view returns (address);
-
     /// @notice The fee token currently used to receive fees in.
     /// @return Address of the fee token.
     function feeToken() external view returns (IERC20Upgradeable);
@@ -153,7 +149,7 @@ interface IPerpetualTranche is IERC20Upgradeable {
     function getAvgPrice() external returns (uint256);
 
     /// @notice Computes the total value of assets currently held in the reserve.
-    /// @return The total value of the perp system.
+    /// @return The total value of the perp system, in a standard denomination.
     function getTVL() external returns (uint256);
 
     /// @notice Fetches the list of reserve tokens which are up for rollover.

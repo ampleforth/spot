@@ -492,7 +492,7 @@ contract PerpetualTranche is
         address to,
         uint256 amount
     ) external afterStateUpdate onlyOwner {
-        if (_inReserve(token) || address(this) == address(token)) {
+        if (_inReserve(token)) {
             revert UnauthorizedTransferOut(token);
         }
         token.safeTransfer(to, amount);
@@ -701,9 +701,9 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    /// @dev Returns a fixed point with {decimals()+PRICE_DECIMALS} decimals.
+    /// @dev Returns a fixed point with the same decimals as the underlying collateral.
     function getTVL() external override afterStateUpdate returns (uint256) {
-        return _reserveValue();
+        return _reserveValue() / UNIT_PRICE;
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -833,11 +833,6 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    function protocolFeeCollector() public view override returns (address) {
-        return owner();
-    }
-
-    /// @inheritdoc IPerpetualTranche
     function feeToken() public view override returns (IERC20Upgradeable) {
         return IERC20Upgradeable(address(this));
     }
@@ -955,16 +950,16 @@ contract PerpetualTranche is
         // A postive fee percentage implies that perp charges rotators by accepting tranchesIn at a discount.
         // ie) lesser tranches out
         if (feePerc > 0) {
+            stdTrancheOutAmt -= (stdTrancheOutAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
             r.tokenOutAmt -= (r.tokenOutAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
             r.trancheOutAmt -= (r.trancheOutAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
-            stdTrancheOutAmt -= (stdTrancheOutAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
         }
         // A negative fee percentage (or a reward) implies that perp pays the rotators by
         // accepting tranchesIn at a premium.
         // ie) lesser tranches in
         else if (feePerc < 0) {
-            r.trancheInAmt -= (r.trancheInAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
             stdTrancheInAmt -= (stdTrancheInAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
+            r.trancheInAmt -= (r.trancheInAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
         }
 
         r.perpRolloverAmt = (stdTrancheOutAmt * trancheOutPrice).mulDiv(totalSupply(), _reserveValue());

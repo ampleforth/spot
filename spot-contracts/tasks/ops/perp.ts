@@ -69,7 +69,6 @@ task("ops:perp:info")
     console.log("owner:", await perp.owner());
     console.log("keeper:", await perp.keeper());
     console.log("reserve:", await perp.reserve());
-    console.log("protocolFeeCollector:", await perp.protocolFeeCollector());
     console.log("paused:", await perp.paused());
     console.log("collateralToken:", collateralToken.address);
     console.log("---------------------------------------------------------------");
