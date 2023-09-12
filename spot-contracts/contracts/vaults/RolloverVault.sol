@@ -93,6 +93,7 @@ contract RolloverVault is
     /// @dev The maximum number of deployed assets that can be held in this vault at any given time.
     uint256 public constant MAX_DEPLOYED_COUNT = 47;
 
+    /// TODO: Convert this to a owner updatable paramter.
     /// @dev The maximum percentage fee paid in the underlying assets by users who "meld".
     ///      The meld fee paid by the user in the underlying asset.
     uint256 public constant MAX_MELD_FEE_PERC = 5 * UNIT_PERC; // (5%)
@@ -460,6 +461,10 @@ contract RolloverVault is
         if (getTVL() < tvlBefore) {
             revert TVLDecreased();
         }
+
+        // TODO: assert that the percentage of raw ampl to the TVL is under
+        //       a onwer specified value. (ie) Limit the amount the meld opration
+        //       can de-lever the vault.
 
         return underlyingAmt;
     }
