@@ -7,6 +7,7 @@ import { IVault } from "../_interfaces/IVault.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
+import { AddressUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { Sigmoid } from "../_utils/Sigmoid.sol";
 import { BondHelpers } from "../_utils/BondHelpers.sol";
@@ -98,12 +99,19 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
         uint256 tvl = 0;
         uint256 numVaults = perp.authorizedRollersCount();
         for (uint256 i = 0; i < numVaults; i++) {
-            IVault vault = IVault(perp.authorizedRollerAt(i));
-            try vault.getTVL() returns (uint256 val) {
+            address authorizedRoller = perp.authorizedRollerAt(i);
+
+            // no-op, EOA doesn't count as on-chain capital
+            if (!AddressUpgradeable.isContract(authorizedRoller)) {
+                continue;
+            }
+
+            try IVault(authorizedRoller).getTVL() returns (uint256 val) {
                 tvl += val;
             } catch // solhint-disable-next-line no-empty-blocks
             {
-                // no-op, EOA doesn't count as on-chain capital
+                // no-op, if the vault doens't implement `getTVL`,
+                // we can't use it.
             }
         }
         return tvl;
