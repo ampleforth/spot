@@ -18,7 +18,14 @@ import { BondTranches } from "../_utils/BondTranchesHelpers.sol";
 /**
  *  @title FeeStrategy
  *
- *  @notice This contract computes perp's rollover fees & incentives.
+ *  @notice This contract computes perp's rollover fees & incentives using a sigmoid curve.
+ *
+ *          deviationFactor = currentTVL/expectedTVL
+ *          rotationsPerYear = mintingBondDuration / 1_year
+ *          rolloverFeePerc = sigmoid(deviationFactor) / rotationsPerYear
+ *
+ *          The slope and asymptotes of the sigmoid curve are controlled by the owner.
+ *
  *
  */
 contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
@@ -33,6 +40,7 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     uint8 public constant PERC_DECIMALS = 8;
     uint256 public constant UNIT_PERC = 10**(PERC_DECIMALS - 2);
     uint256 public constant HUNDRED_PERC = 10**PERC_DECIMALS;
+    int256 public constant MAX_PERC = 10 * int256(UNIT_PERC); // 10%
 
     /// @dev Number of seconds in one year.
     int256 public constant ONE_YEAR_SEC = 365 * 24 * 3600;
@@ -70,7 +78,20 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
         _rolloverFeeAPR.growth = 5 * int256(HUNDRED_PERC); // 5x
     }
 
-    // TODO: add setter for sigmoid parameters.
+    /// @return The sigmoid fee parameters.
+    function rolloverFeeAPR() external view returns (SigmoidParams memory) {
+        return _rolloverFeeAPR;
+    }
+
+    /// @notice Update the parameters determining the slope and asymptotes of the sigmoid fee curve.
+    /// @param p Lower, Upper and Growth sigmoid paramters are fixed point numbers with {PERC_DECIMALS} places.
+    function updateFeeParams(SigmoidParams memory p) external onlyOwner {
+        require(p.lower >= -MAX_PERC, "FeeStrategy: fee bound too low");
+        require(p.upper <= MAX_PERC, "FeeStrategy: fee bound too high");
+        _rolloverFeeAPR.lower = p.lower;
+        _rolloverFeeAPR.upper = p.upper;
+        _rolloverFeeAPR.growth = p.growth;
+    }
 
     /// @inheritdoc IFeeStrategy
     function computeRolloverFeePerc() external override returns (int256) {

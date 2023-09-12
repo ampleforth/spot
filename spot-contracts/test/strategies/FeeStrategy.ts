@@ -4,12 +4,13 @@ import { Contract, Transaction, Signer, constants } from "ethers";
 import { smock } from "@defi-wonderland/smock";
 
 import {
-  toFixedPtAmt,
   setupCollateralToken,
   setupBondFactory,
   createBondWithFactory,
   getTranches,
+  toFixedPtAmt,
   toDiscountFixedPtAmt,
+  toPercFixedPtAmt,
 } from "../helpers";
 use(smock.matchers);
 
@@ -44,7 +45,7 @@ describe("FeeStrategy", function () {
     await feeStrategy.init(perp.address);
   });
 
-  describe.only("#init", function () {
+  describe("#init", function () {
     it("should return the perp address", async function () {
       expect(await feeStrategy.perp()).to.eq(perp.address);
     });
@@ -53,7 +54,7 @@ describe("FeeStrategy", function () {
     });
   });
 
-  describe.only("#computeTargetVaultTVL", function () {
+  describe("#computeTargetVaultTVL", function () {
     it("should compute the target tvl", async function () {
       const bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 86400);
       const tranches = await getTranches(bond);
@@ -67,7 +68,7 @@ describe("FeeStrategy", function () {
     });
   });
 
-  describe.only("#getCurrentVaultTVL", function () {
+  describe("#getCurrentVaultTVL", function () {
     describe("when one vault is authorized", function () {
       it("should compute the tvl", async function () {
         await perp.authorizedRollersCount.returns(1);
@@ -109,31 +110,115 @@ describe("FeeStrategy", function () {
     });
   });
 
-  // describe("#updateMintFeePerc", function () {
-  //   let tx: Transaction;
-  //   beforeEach(async function () {
-  //     await feeStrategy.init("0", "0", "0");
-  //   });
+  describe("#computeRolloverAPR", function () {
+    it("should compute the apr", async function () {
+      expect(await feeStrategy.callStatic.computeRolloverAPR(toFixedPtAmt("100"), toFixedPtAmt("100"))).to.eq(
+        toPercFixedPtAmt("0"),
+      );
+      expect(await feeStrategy.callStatic.computeRolloverAPR(toFixedPtAmt("100"), toFixedPtAmt("200"))).to.eq(
+        toPercFixedPtAmt("-0.01537714"),
+      );
+      expect(await feeStrategy.callStatic.computeRolloverAPR(toFixedPtAmt("200"), toFixedPtAmt("100"))).to.eq(
+        toPercFixedPtAmt("0.04492753"),
+      );
+    });
+  });
 
-  //   describe("when triggered by non-owner", function () {
-  //     it("should revert", async function () {
-  //       await expect(feeStrategy.connect(otherUser).updateMintFeePerc("1")).to.be.revertedWith(
-  //         "Ownable: caller is not the owner",
-  //       );
-  //     });
-  //   });
+  describe("#computeRolloverFeePerc", function () {
+    describe("at equilibrium", function () {
+      it("should compute the fee perc", async function () {
+        await perp.authorizedRollersCount.returns(1);
+        await perp.authorizedRollerAt.whenCalledWith(0).returns(vault1.address);
+        await vault1.getTVL.returns(toFixedPtAmt("300"));
 
-  //   describe("when set mint fee perc is valid", function () {
-  //     beforeEach(async function () {
-  //       tx = feeStrategy.connect(deployer).updateMintFeePerc("50000000");
-  //       await tx;
-  //     });
-  //     it("should update reference", async function () {
-  //       expect(await feeStrategy.mintFeePerc()).to.eq("50000000");
-  //     });
-  //     it("should emit event", async function () {
-  //       await expect(tx).to.emit(feeStrategy, "UpdatedMintPerc").withArgs("50000000");
-  //     });
-  //   });
-  // });
+        const bond = await createBondWithFactory(bondFactory, collateralToken, [250, 750], 28 * 86400);
+        const tranches = await getTranches(bond);
+        await perp.getDepositBond.returns(bond.address);
+        await perp.computeDiscount.whenCalledWith(tranches[0].address).returns(toDiscountFixedPtAmt("1"));
+        await perp.computeDiscount.whenCalledWith(tranches[1].address).returns(toDiscountFixedPtAmt("0"));
+        await perp.getTVL.returns(toFixedPtAmt("100"));
+
+        expect(await feeStrategy.callStatic.computeRolloverFeePerc()).to.eq(toPercFixedPtAmt("0"));
+      });
+    });
+
+    describe("when vault tvl > target", function () {
+      it("should compute the fee perc", async function () {
+        await perp.authorizedRollersCount.returns(1);
+        await perp.authorizedRollerAt.whenCalledWith(0).returns(vault1.address);
+        await vault1.getTVL.returns(toFixedPtAmt("600"));
+
+        const bond = await createBondWithFactory(bondFactory, collateralToken, [250, 750], 28 * 86400);
+        const tranches = await getTranches(bond);
+        await perp.getDepositBond.returns(bond.address);
+        await perp.computeDiscount.whenCalledWith(tranches[0].address).returns(toDiscountFixedPtAmt("1"));
+        await perp.computeDiscount.whenCalledWith(tranches[1].address).returns(toDiscountFixedPtAmt("0"));
+        await perp.getTVL.returns(toFixedPtAmt("100"));
+
+        expect(await feeStrategy.callStatic.computeRolloverFeePerc()).to.eq(toPercFixedPtAmt("0.00344649"));
+      });
+    });
+
+    describe("when vault tvl < target", function () {
+      it("should compute the fee perc", async function () {
+        await perp.authorizedRollersCount.returns(1);
+        await perp.authorizedRollerAt.whenCalledWith(0).returns(vault1.address);
+        await vault1.getTVL.returns(toFixedPtAmt("200"));
+
+        const bond = await createBondWithFactory(bondFactory, collateralToken, [250, 750], 28 * 86400);
+        const tranches = await getTranches(bond);
+        await perp.getDepositBond.returns(bond.address);
+        await perp.computeDiscount.whenCalledWith(tranches[0].address).returns(toDiscountFixedPtAmt("1"));
+        await perp.computeDiscount.whenCalledWith(tranches[1].address).returns(toDiscountFixedPtAmt("0"));
+        await perp.getTVL.returns(toFixedPtAmt("100"));
+
+        expect(await feeStrategy.callStatic.computeRolloverFeePerc()).to.eq(toPercFixedPtAmt("-0.00092952"));
+      });
+    });
+  });
+
+  describe("#updateFeeParams", function () {
+    let tx: Transaction;
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(
+          feeStrategy
+            .connect(otherUser)
+            .updateFeeParams([toPercFixedPtAmt("-0.01"), toPercFixedPtAmt("0.01"), toPercFixedPtAmt("3")]),
+        ).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+    });
+    describe("when params are invalid", function () {
+      it("should revert", async function () {
+        await expect(
+          feeStrategy
+            .connect(deployer)
+            .updateFeeParams([toPercFixedPtAmt("-0.25"), toPercFixedPtAmt("0.01"), toPercFixedPtAmt("3")]),
+        ).to.be.revertedWith("FeeStrategy: fee bound too low");
+      });
+      it("should revert", async function () {
+        await expect(
+          feeStrategy
+            .connect(deployer)
+            .updateFeeParams([toPercFixedPtAmt("-0.01"), toPercFixedPtAmt("0.25"), toPercFixedPtAmt("3")]),
+        ).to.be.revertedWith("FeeStrategy: fee bound too high");
+      });
+    });
+
+    describe("when trigged by owner", function () {
+      beforeEach(async function () {
+        tx = feeStrategy
+          .connect(deployer)
+          .updateFeeParams([toPercFixedPtAmt("-0.01"), toPercFixedPtAmt("0.01"), toPercFixedPtAmt("3")]);
+        await tx;
+      });
+      it("should update paramters", async function () {
+        const p = await feeStrategy.rolloverFeeAPR();
+        expect(p[0]).to.eq(toPercFixedPtAmt("-0.01"));
+        expect(p[1]).to.eq(toPercFixedPtAmt("0.01"));
+        expect(p[2]).to.eq(toPercFixedPtAmt("3"));
+      });
+    });
+  });
 });
