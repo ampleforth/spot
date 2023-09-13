@@ -125,4 +125,9 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     function computeRolloverFeePerc() external pure override returns (int256) {
         revert("BasicFeeStrategy: TO_BE_IMPL");
     }
+
+    /// @inheritdoc IFeeStrategy
+    function decimals() external pure override returns (uint8) {
+        return PERC_DECIMALS;
+    }
 }

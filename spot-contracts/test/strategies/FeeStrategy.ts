@@ -1,6 +1,6 @@
 import { expect, use } from "chai";
 import { ethers } from "hardhat";
-import { Contract, Transaction, Signer, constants } from "ethers";
+import { Contract, Transaction, Signer } from "ethers";
 import { smock } from "@defi-wonderland/smock";
 
 import {
@@ -51,6 +51,9 @@ describe("FeeStrategy", function () {
     });
     it("should return owner", async function () {
       expect(await feeStrategy.owner()).to.eq(await deployer.getAddress());
+    });
+    it("should return decimals", async function () {
+      expect(await feeStrategy.decimals()).to.eq(8);
     });
   });
 

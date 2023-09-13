@@ -56,6 +56,7 @@ describe("PerpetualTranche", function () {
 
     const FeeStrategy = await ethers.getContractFactory("FeeStrategy");
     feeStrategy = await smock.fake(FeeStrategy);
+    await feeStrategy.decimals.returns(8);
 
     const PricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
     pricingStrategy = await smock.fake(PricingStrategy);
@@ -287,10 +288,13 @@ describe("PerpetualTranche", function () {
     });
 
     describe("when trancheInAmt is zero", function () {
-      it("should revert", async function () {
-        await expect(
-          perp.rollover(rolloverInTranche.address, reserveTranche1.address, toFixedPtAmt("0")),
-        ).to.revertedWithCustomError(perp, "UnacceptableRolloverAmt");
+      it("should return without rollover", async function () {
+        const r = await perp.callStatic.rollover(rolloverInTranche.address, reserveTranche1.address, toFixedPtAmt("0"));
+        expect(r.perpRolloverAmt).to.eq("0");
+        expect(r.tokenOutAmt).to.eq("0");
+        expect(r.trancheOutAmt).to.eq("0");
+        expect(r.trancheInAmt).to.eq("0");
+        expect(r.remainingTrancheInAmt).to.eq("0");
       });
     });
 
@@ -301,10 +305,17 @@ describe("PerpetualTranche", function () {
         newRotationInTranche = tranches[1];
       });
 
-      it("should be reverted", async function () {
-        await expect(
-          perp.rollover(newRotationInTranche.address, reserveTranche1.address, toFixedPtAmt("0")),
-        ).to.revertedWithCustomError(perp, "UnacceptableRolloverAmt");
+      it("should return without rollover", async function () {
+        const r = await perp.callStatic.rollover(
+          newRotationInTranche.address,
+          reserveTranche1.address,
+          toFixedPtAmt("0"),
+        );
+        expect(r.perpRolloverAmt).to.eq("0");
+        expect(r.tokenOutAmt).to.eq("0");
+        expect(r.trancheOutAmt).to.eq("0");
+        expect(r.trancheInAmt).to.eq("0");
+        expect(r.remainingTrancheInAmt).to.eq("0");
       });
     });
 
@@ -747,7 +758,7 @@ describe("PerpetualTranche", function () {
 
     describe("when fee is zero", function () {
       beforeEach(async function () {
-        await feeStrategy.rolloverFeePerc.returns([toPercFixedPtAmt("0")]);
+        await feeStrategy.computeRolloverFeePerc.returns([toPercFixedPtAmt("0")]);
       });
       it("should transfer the tranches in", async function () {
         await expect(() =>
@@ -781,7 +792,7 @@ describe("PerpetualTranche", function () {
 
     describe("when fee > 0", function () {
       beforeEach(async function () {
-        await feeStrategy.rolloverFeePerc.returns([toPercFixedPtAmt("1")]);
+        await feeStrategy.computeRolloverFeePerc.returns([toPercFixedPtAmt("0.01")]);
       });
       it("should transfer the tranches in", async function () {
         await expect(() =>
@@ -791,7 +802,11 @@ describe("PerpetualTranche", function () {
       it("should transfer the tranches out", async function () {
         await expect(() =>
           perp.rollover(rolloverInTranche.address, reserveTranche1.address, toFixedPtAmt("500")),
-        ).to.changeTokenBalances(reserveTranche1, [deployer, perp], [toFixedPtAmt("495"), toFixedPtAmt("-495")]);
+        ).to.changeTokenBalances(
+          reserveTranche1,
+          [deployer, perp],
+          [toFixedPtAmt("495.049504950495049504"), toFixedPtAmt("-495.049504950495049504")],
+        );
       });
       it("should calculate rollover amt", async function () {
         const r = await perp.callStatic.computeRolloverAmt(
@@ -800,9 +815,9 @@ describe("PerpetualTranche", function () {
           toFixedPtAmt("500"),
           constants.MaxUint256,
         );
-        expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("500"));
-        expect(r.tokenOutAmt).to.eq(toFixedPtAmt("495"));
-        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("495"));
+        expect(r.perpRolloverAmt).to.eq(toFixedPtAmt("495.049504950495049504"));
+        expect(r.tokenOutAmt).to.eq(toFixedPtAmt("495.049504950495049504"));
+        expect(r.trancheOutAmt).to.eq(toFixedPtAmt("495.049504950495049504"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
         expect(r.remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
       });
@@ -810,7 +825,7 @@ describe("PerpetualTranche", function () {
 
     describe("when fee < 0", function () {
       beforeEach(async function () {
-        await feeStrategy.rolloverFeePerc.returns([toPercFixedPtAmt("-1")]);
+        await feeStrategy.computeRolloverFeePerc.returns([toPercFixedPtAmt("-0.01")]);
       });
       it("should transfer the tranches in", async function () {
         await expect(() =>

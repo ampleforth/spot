@@ -15,6 +15,9 @@ interface IFeeStrategy {
     ///         example) 99 tranchesIn for 100 tranchesOut
     function computeRolloverFeePerc() external returns (int256);
 
+    /// @notice Number of decimals representing 100%.
+    function decimals() external view returns (uint8);
+
     /// @notice DEPRECATED.
     function feeToken() external view returns (IERC20Upgradeable);
 

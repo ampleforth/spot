@@ -57,9 +57,8 @@ describe("RolloverVault", function () {
 
     const FeeStrategy = await ethers.getContractFactory("BasicFeeStrategy");
     feeStrategy = await smock.fake(FeeStrategy);
-    await feeStrategy.computeMintFees.returns(["0", "0"]);
-    await feeStrategy.computeBurnFees.returns(["0", "0"]);
-    await feeStrategy.computeRolloverFees.returns(["0", "0"]);
+    await feeStrategy.decimals.returns(8);
+    await feeStrategy.computeRolloverFeePerc.returns("0");
 
     const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
     pricingStrategy = await smock.fake(PricingStrategy);

@@ -629,9 +629,8 @@ contract RolloverVault is
             }
 
             // Perform rollover
-            // TODO: we can remove this approval step here
             _checkAndApproveMax(trancheIntoPerp, address(perp_), trancheInAmtAvailable);
-            IPerpetualTranche.RolloverData memory rd = perp_.rollover(
+            IPerpetualTranche.RolloverData memory rd = perp.rollover(
                 trancheIntoPerp,
                 tokenOutOfPerp,
                 trancheInAmtAvailable

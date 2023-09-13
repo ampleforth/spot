@@ -103,6 +103,11 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
             referenceBond.duration().toInt256()) / ONE_YEAR_SEC);
     }
 
+    /// @inheritdoc IFeeStrategy
+    function decimals() external pure override returns (uint8) {
+        return PERC_DECIMALS;
+    }
+
     /// @return The annualized rollover fee percentage.
     function computeRolloverAPR(uint256 currentTVL, uint256 targetTVL) public view returns (int256) {
         return
@@ -148,8 +153,8 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     // Deprecated section, keeping for backward comparability with RouterV1.
 
     // @notice Deprecated.
-    function feeToken() external pure override returns (IERC20Upgradeable) {
-        return IERC20Upgradeable(address(0));
+    function feeToken() external view override returns (IERC20Upgradeable) {
+        return perp;
     }
 
     // @notice Deprecated.

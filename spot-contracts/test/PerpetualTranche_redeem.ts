@@ -1,6 +1,6 @@
 import { expect, use } from "chai";
 import { network, ethers, upgrades } from "hardhat";
-import { Contract, Transaction, Signer, constants } from "ethers";
+import { Contract, Transaction, Signer } from "ethers";
 import { smock } from "@defi-wonderland/smock";
 import {
   setupCollateralToken,
@@ -48,6 +48,7 @@ describe("PerpetualTranche", function () {
 
     const FeeStrategy = await ethers.getContractFactory("FeeStrategy");
     feeStrategy = await smock.fake(FeeStrategy);
+    await feeStrategy.decimals.returns(8);
 
     const PricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
     pricingStrategy = await smock.fake(PricingStrategy);

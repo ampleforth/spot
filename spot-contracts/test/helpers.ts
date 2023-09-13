@@ -16,8 +16,6 @@ export const toFixedPtAmt = (a: string): BigNumber => utils.parseUnits(sciParseF
 export const toPriceFixedPtAmt = (a: string): BigNumber => utils.parseUnits(sciParseFloat(a), PRICE_DECIMALS);
 export const toDiscountFixedPtAmt = (a: string): BigNumber => utils.parseUnits(sciParseFloat(a), DISCOUNT_DECIMALS);
 export const toPercFixedPtAmt = (a: string): BigNumber => utils.parseUnits(sciParseFloat(a), PERC_DECIMALS);
-export const toTVLFixedPtAmt = (a: string): BigNumber =>
-  utils.parseUnits(sciParseFloat(a), PRICE_DECIMALS + TOKEN_DECIMALS);
 
 const ORACLE_BASE_PRICE = toPriceFixedPtAmt("1");
 

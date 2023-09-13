@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { constants, Contract } from "ethers";
+import { Contract } from "ethers";
 
 import { toPercFixedPtAmt } from "../helpers";
 

@@ -1,6 +1,6 @@
 import { expect, use } from "chai";
 import { network, ethers, upgrades } from "hardhat";
-import { Contract, Transaction, Signer, constants } from "ethers";
+import { Contract, Transaction, Signer } from "ethers";
 import { smock } from "@defi-wonderland/smock";
 import {
   setupCollateralToken,
@@ -26,7 +26,6 @@ let perp: Contract,
   discountStrategy: Contract,
   deployer: Signer,
   deployerAddress: string,
-  otherUser: Signer,
   depositBond: Contract,
   depositTrancheA: Contract,
   depositTrancheZ: Contract;
@@ -36,7 +35,6 @@ describe("PerpetualTranche", function () {
 
     const accounts = await ethers.getSigners();
     deployer = accounts[0];
-    otherUser = accounts[1];
     deployerAddress = await deployer.getAddress();
 
     bondFactory = await setupBondFactory();
@@ -47,6 +45,7 @@ describe("PerpetualTranche", function () {
 
     const FeeStrategy = await ethers.getContractFactory("FeeStrategy");
     feeStrategy = await smock.fake(FeeStrategy);
+    await feeStrategy.decimals.returns(8);
 
     const PricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
     pricingStrategy = await smock.fake(PricingStrategy);
@@ -233,11 +232,8 @@ describe("PerpetualTranche", function () {
     });
 
     describe("when tranche amount is zero", function () {
-      it("should revert", async function () {
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("0"))).to.revertedWithCustomError(
-          perp,
-          "UnacceptableMintAmt",
-        );
+      it("should return without minting", async function () {
+        expect(await perp.callStatic.deposit(depositTrancheA.address, toFixedPtAmt("0"))).to.eq("0");
       });
     });
 
@@ -249,10 +245,7 @@ describe("PerpetualTranche", function () {
       });
 
       it("should revert", async function () {
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWithCustomError(
-          perp,
-          "UnacceptableMintAmt",
-        );
+        expect(await perp.callStatic.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.eq("0");
       });
     });
 

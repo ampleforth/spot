@@ -40,11 +40,6 @@ error InvalidTrancheMaturityBounds(uint256 minTrancheMaturitySec, uint256 maxTra
 /// @param depositBond Address of the currently accepted deposit bond.
 error UnacceptableDepositTranche(ITranche trancheIn, IBondController depositBond);
 
-/// @notice Expected to mint a non-zero amount of tokens.
-/// @param trancheInAmt The amount of tranche tokens deposited.
-/// @param perpAmtMint The amount of tranche tokens mint.
-error UnacceptableMintAmt(uint256 trancheInAmt, uint256 perpAmtMint);
-
 /// @notice Expected to burn a non-zero amount of tokens.
 /// @param requestedBurnAmt The amount of tranche tokens requested to be burnt.
 /// @param perpSupply The current supply of perp tokens.
@@ -59,12 +54,6 @@ error ExpectedSupplyReduction(uint256 newSupply, uint256 perpSupply);
 /// @param trancheIn Address of the tranche token transferred in.
 /// @param tokenOut Address of the reserve token transferred out.
 error UnacceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut);
-
-/// @notice Expected to rollover a non-zero amount of tokens.
-/// @param trancheInAmt The amount of tranche tokens deposited.
-/// @param trancheOutAmt The amount of tranche tokens withdrawn.
-/// @param rolloverAmt The perp denominated value of tokens rolled over.
-error UnacceptableRolloverAmt(uint256 trancheInAmt, uint256 trancheOutAmt, uint256 rolloverAmt);
 
 /// @notice Expected supply to be lower than the defined max supply.
 /// @param newSupply The new total supply after minting.
@@ -429,6 +418,9 @@ contract PerpetualTranche is
         if (address(feeStrategy_) == address(0)) {
             revert UnacceptableReference();
         }
+        if (feeStrategy_.decimals() != PERC_DECIMALS) {
+            revert InvalidStrategyDecimals(feeStrategy_.decimals(), PERC_DECIMALS);
+        }
         feeStrategy = feeStrategy_;
         emit UpdatedFeeStrategy(feeStrategy_);
     }
@@ -517,7 +509,7 @@ contract PerpetualTranche is
         // calculates the amount of perp tokens when depositing `trancheInAmt` of tranche tokens
         uint256 perpAmtMint = _computeMintAmt(trancheIn, trancheInAmt);
         if (trancheInAmt == 0 || perpAmtMint == 0) {
-            revert UnacceptableMintAmt(trancheInAmt, perpAmtMint);
+            return 0;
         }
 
         // transfers tranche tokens from the sender to the reserve
@@ -591,7 +583,7 @@ contract PerpetualTranche is
 
         // verifies if rollover amount is acceptable
         if (r.trancheInAmt == 0 || r.tokenOutAmt == 0 || r.perpRolloverAmt == 0) {
-            revert UnacceptableRolloverAmt(r.trancheInAmt, r.tokenOutAmt, r.perpRolloverAmt);
+            return r;
         }
 
         // transfers tranche tokens from the sender to the reserve
@@ -901,6 +893,10 @@ contract PerpetualTranche is
         uint256 trancheInAmtAvailable,
         uint256 tokenOutAmtRequested
     ) private returns (IPerpetualTranche.RolloverData memory) {
+        // Note the rollover fees are settled by,
+        // adjusting the exchange rate between `trancheInAmt` and `tokenOutAmt`.
+        int256 feePerc = feeStrategy.computeRolloverFeePerc();
+
         IPerpetualTranche.RolloverData memory r;
 
         uint256 trancheInDiscount = computeDiscount(trancheIn);
@@ -918,9 +914,25 @@ contract PerpetualTranche is
         r.trancheInAmt = trancheInAmtAvailable;
         uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmtAvailable, trancheInDiscount);
 
-        // Basic rollover:
-        // (stdTrancheInAmt . trancheInPrice) = (stdTrancheOutAmt . trancheOutPrice)
+        // Basic rollover with fees:
+        // (stdTrancheInAmt . trancheInPrice) = (1 +/- f) (stdTrancheOutAmt . trancheOutPrice)
+        // stdTrancheOutAmt => (stdTrancheInAmt . trancheInPrice) . trancheOutPrice / (1 +/- f)
+        // stdTrancheOutAmt => stdTrancheOutAmt' / (1 +/- f)
         uint256 stdTrancheOutAmt = stdTrancheInAmt.mulDiv(trancheInPrice, trancheOutPrice);
+        //-----------------------------------------------------------------------------
+        // Adjustring stdTrancheOutAmt based on fees
+        // A postive fee percentage implies that perp charges rotators by accepting tranchesIn at a discount.
+        // ie) lesser tranches out
+        if (feePerc > 0) {
+            stdTrancheOutAmt = stdTrancheOutAmt.mulDiv(HUNDRED_PERC, HUNDRED_PERC + feePerc.abs());
+        }
+        // A negative fee percentage (or a reward) implies that perp pays the rotators by
+        // accepting tranchesIn at a premium.
+        // ie) more tranches out
+        else if (feePerc < 0) {
+            stdTrancheOutAmt = stdTrancheOutAmt.mulDiv(HUNDRED_PERC, HUNDRED_PERC - feePerc.abs());
+        }
+        //-----------------------------------------------------------------------------
         r.trancheOutAmt = _fromStdTrancheAmt(stdTrancheOutAmt, trancheOutDiscount);
 
         // However, if the tokenOut is the mature tranche (held as naked collateral),
@@ -939,27 +951,19 @@ contract PerpetualTranche is
                 ? _matureTrancheBalance.mulDiv(r.tokenOutAmt, tokenOutBalance)
                 : r.tokenOutAmt;
             stdTrancheOutAmt = _toStdTrancheAmt(r.trancheOutAmt, trancheOutDiscount);
+
+            // stdTrancheInAmt => (stdTrancheOutAmt / (trancheInPrice . trancheOutPrice)) * (1 +/- f)
+            // stdTrancheInAmt => stdTrancheInAmt' * (1 +/- f)
             stdTrancheInAmt = stdTrancheOutAmt.mulDiv(trancheOutPrice, trancheInPrice, MathUpgradeable.Rounding.Up);
+            //-----------------------------------------------------------------------------
+            // Adjustring stdTrancheInAmt based on fees, inverse of the previous application
+            if (feePerc > 0) {
+                stdTrancheInAmt = stdTrancheInAmt.mulDiv(HUNDRED_PERC + feePerc.abs(), HUNDRED_PERC);
+            } else if (feePerc < 0) {
+                stdTrancheInAmt = stdTrancheInAmt.mulDiv(HUNDRED_PERC - feePerc.abs(), HUNDRED_PERC);
+            }
+            //-----------------------------------------------------------------------------
             r.trancheInAmt = _fromStdTrancheAmt(stdTrancheInAmt, trancheInDiscount);
-        }
-
-        // Note the rollover fees are settled by,
-        // adjusting the exchange rate between `trancheInAmt` and `tokenOutAmt`.
-        int256 feePerc = feeStrategy.computeRolloverFeePerc();
-
-        // A postive fee percentage implies that perp charges rotators by accepting tranchesIn at a discount.
-        // ie) lesser tranches out
-        if (feePerc > 0) {
-            stdTrancheOutAmt -= (stdTrancheOutAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
-            r.tokenOutAmt -= (r.tokenOutAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
-            r.trancheOutAmt -= (r.trancheOutAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
-        }
-        // A negative fee percentage (or a reward) implies that perp pays the rotators by
-        // accepting tranchesIn at a premium.
-        // ie) lesser tranches in
-        else if (feePerc < 0) {
-            stdTrancheInAmt -= (stdTrancheInAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
-            r.trancheInAmt -= (r.trancheInAmt.mulDiv(feePerc.abs(), HUNDRED_PERC));
         }
 
         r.perpRolloverAmt = (stdTrancheOutAmt * trancheOutPrice).mulDiv(totalSupply(), _reserveValue());
