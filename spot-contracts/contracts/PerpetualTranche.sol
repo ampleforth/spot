@@ -933,7 +933,7 @@ contract PerpetualTranche is
             stdTrancheOutAmt = stdTrancheOutAmt.mulDiv(HUNDRED_PERC, HUNDRED_PERC - feePerc.abs());
         }
         //-----------------------------------------------------------------------------
-        r.trancheOutAmt = _fromStdTrancheAmt(stdTrancheOutAmt, trancheOutDiscount, MathUpgradeable.Rounding.Down);
+        r.trancheOutAmt = _fromStdTrancheAmt(stdTrancheOutAmt, trancheOutDiscount);
 
         // However, if the tokenOut is the mature tranche (held as naked collateral),
         // we infer the tokenOut amount from the tranche denomination.
@@ -972,7 +972,7 @@ contract PerpetualTranche is
             }
 
             //-----------------------------------------------------------------------------
-            r.trancheInAmt = _fromStdTrancheAmt(stdTrancheInAmt, trancheInDiscount, MathUpgradeable.Rounding.Up);
+            r.trancheInAmt = _fromStdTrancheAmt(stdTrancheInAmt, trancheInDiscount);
         }
 
         r.perpRolloverAmt = (stdTrancheOutAmt * trancheOutPrice).mulDiv(totalSupply(), _reserveValue());
@@ -1164,9 +1164,8 @@ contract PerpetualTranche is
     ///      trancheAmt = stdTrancheAmt / discount.
     function _fromStdTrancheAmt(
         uint256 stdTrancheAmt,
-        uint256 discount,
-        MathUpgradeable.Rounding rounding
+        uint256 discount
     ) private pure returns (uint256) {
-        return stdTrancheAmt.mulDiv(UNIT_DISCOUNT, discount, rounding);
+        return stdTrancheAmt.mulDiv(UNIT_DISCOUNT, discount);
     }
 }

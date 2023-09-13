@@ -19,7 +19,7 @@ import {
   advancePerpQueueToBondMaturity,
   advancePerpQueueToRollover,
   checkReserveComposition,
-  checkVaultAssetComposition,
+  checkVaultAssetComposition
 } from "../helpers";
 use(smock.matchers);
 
@@ -1104,7 +1104,7 @@ describe("RolloverVault", function () {
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[1].address, toFixedPtAmt("0"));
         await expect(tx)
           .to.emit(vault, "AssetSynced")
-          .withArgs(reserveTranches[2].address, toFixedPtAmt("143.939393939393939393"));
+          .withArgs(reserveTranches[2].address, toFixedPtAmt("143.939393939393939392"));
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("500"));
       });
 
