@@ -250,11 +250,8 @@ describe("PerpetualTranche", function () {
     });
 
     describe("when tranche discount is zero", function () {
-      it("should revert", async function () {
-        await expect(perp.deposit(depositTrancheZ.address, toFixedPtAmt("500"))).to.revertedWithCustomError(
-          perp,
-          "UnacceptableMintAmt",
-        );
+      it("should return without minting", async function () {
+        expect(await perp.callStatic.deposit(depositTrancheZ.address, toFixedPtAmt("500"))).to.eq("0");
       });
     });
 

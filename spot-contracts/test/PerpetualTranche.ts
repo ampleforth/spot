@@ -370,10 +370,23 @@ describe("PerpetualTranche", function () {
       });
     });
 
+    describe("when set strategy decimals dont match", function () {
+      it("should revert", async function () {
+        const FeeStrategy = await ethers.getContractFactory("FeeStrategy");
+        newFeeStrategy = await smock.fake(FeeStrategy);
+        await newFeeStrategy.decimals.returns(7);
+        await expect(perp.updateFeeStrategy(newFeeStrategy.address)).to.be.revertedWithCustomError(
+          perp,
+          "InvalidStrategyDecimals",
+        );
+      });
+    });
+
     describe("when set address is valid", function () {
       beforeEach(async function () {
-        const FeeStrategy = await ethers.getContractFactory("BasicFeeStrategy");
+        const FeeStrategy = await ethers.getContractFactory("FeeStrategy");
         newFeeStrategy = await smock.fake(FeeStrategy);
+        await newFeeStrategy.decimals.returns(8);
         tx = perp.updateFeeStrategy(newFeeStrategy.address);
         await tx;
       });

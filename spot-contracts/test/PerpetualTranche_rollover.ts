@@ -758,7 +758,7 @@ describe("PerpetualTranche", function () {
 
     describe("when fee is zero", function () {
       beforeEach(async function () {
-        await feeStrategy.computeRolloverFeePerc.returns([toPercFixedPtAmt("0")]);
+        await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("0"));
       });
       it("should transfer the tranches in", async function () {
         await expect(() =>
@@ -792,7 +792,7 @@ describe("PerpetualTranche", function () {
 
     describe("when fee > 0", function () {
       beforeEach(async function () {
-        await feeStrategy.computeRolloverFeePerc.returns([toPercFixedPtAmt("0.01")]);
+        await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("0.01"));
       });
       it("should transfer the tranches in", async function () {
         await expect(() =>
@@ -825,7 +825,7 @@ describe("PerpetualTranche", function () {
 
     describe("when fee < 0", function () {
       beforeEach(async function () {
-        await feeStrategy.computeRolloverFeePerc.returns([toPercFixedPtAmt("-0.01")]);
+        await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("-0.01"));
       });
       it("should transfer the tranches in", async function () {
         await expect(() =>
