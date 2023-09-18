@@ -50,40 +50,11 @@ library BondTranchesHelpers {
         view
         returns (uint256[] memory)
     {
-        uint256[] memory redeemableAmts = new uint256[](bt.tranches.length);
-
-        // We Calculate how many underlying assets could be redeemed from each tranche balance,
-        // assuming other tranches are not an issue, and record the smallest amount.
-        //
-        // Usually one tranche balance is the limiting factor, we first loop through to identify
-        // it by figuring out the one which has the least `trancheBalance/trancheRatio`.
-        //
-        uint256 minBalanceToTrancheRatio = type(uint256).max;
-        uint8 i;
-        for (i = 0; i < bt.tranches.length; i++) {
-            // NOTE: We round the available balance down to the nearest multiple of the
-            //       tranche ratio. This ensures that `minBalanceToTrancheRatio`
-            //       can be represented without loss as a fixedPt number.
-            uint256 bal = bt.tranches[i].balanceOf(u);
-            bal = bal - (bal % bt.trancheRatios[i]);
-
-            uint256 d = bal.mulDiv(TRANCHE_RATIO_GRANULARITY, bt.trancheRatios[i]);
-            if (d < minBalanceToTrancheRatio) {
-                minBalanceToTrancheRatio = d;
-            }
-
-            // if one of the balances is zero, we return
-            if (minBalanceToTrancheRatio == 0) {
-                return (redeemableAmts);
-            }
+        uint256[] memory trancheBalsAvailable = new uint256[](bt.tranches.length);
+        for (uint8 i = 0; i < bt.tranches.length; i++) {
+            trancheBalsAvailable[i] = bt.tranches[i].balanceOf(u);
         }
-
-        // Now that we have `minBalanceToTrancheRatio`, we compute the redeemable amounts.
-        for (i = 0; i < bt.tranches.length; i++) {
-            redeemableAmts[i] = bt.trancheRatios[i].mulDiv(minBalanceToTrancheRatio, TRANCHE_RATIO_GRANULARITY);
-        }
-
-        return redeemableAmts;
+        return computeRedeemableTrancheAmounts(bt, trancheBalsAvailable);
     }
 
     /// @notice For a given bond's tranche data and tranche balances available, computes the maximum number of each of the bond's tranches
