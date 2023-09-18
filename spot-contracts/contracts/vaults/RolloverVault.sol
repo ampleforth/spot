@@ -403,8 +403,8 @@ contract RolloverVault is
         // track the vault's TVL before the match operation
         uint256 tvlBefore = getTVL();
 
-        // Fist we check if the vault has all the tranches for proportional redemption and if so recover the underlying.
-        // On successful redemption, The vault's individual tranche balances will decrease, and the underlying balances will increase.
+        // First we check if the vault has all the tranches for proportional redemption and if so recover the underlying.
+        // On successful redemption, The vault's individual tranche balances will decrease, and the underlying balance will increase.
         // If the vault tranches are not eligible for proportional redemption, its a no-op.
         // NOTE: We sync balances finally at the end of this function.
         _execImmatureTrancheRedemption(bond, bt);
@@ -426,7 +426,7 @@ contract RolloverVault is
         // the user's share of the underlying collateral to be returned
         uint256 underlyingAmt = 0;
         for (uint8 i = 0; i < bt.tranches.length; i++) {
-            // compute the user's tranche balance to be user
+            // compute the user's tranche balance to be used
             // transfer tranche balance out of the user's wallet to the vault
             trancheAmtsIn[i] = MathUpgradeable.min(trancheAmtsIn[i], trancheAmtsUsed[i]);
             IERC20Upgradeable(bt.tranches[i]).safeTransferFrom(_msgSender(), address(this), trancheAmtsIn[i]);
