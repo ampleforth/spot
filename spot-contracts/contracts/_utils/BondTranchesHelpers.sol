@@ -61,7 +61,7 @@ library BondTranchesHelpers {
         uint256 minBalanceToTrancheRatio = type(uint256).max;
         uint8 i;
         for (i = 0; i < bt.tranches.length; i++) {
-            // NOTE: We round the avaiable balance down to the nearest multiple of the
+            // NOTE: We round the available balance down to the nearest multiple of the
             //       tranche ratio. This ensures that `minBalanceToTrancheRatio`
             //       can be represented without loss as a fixedPt number.
             uint256 bal = bt.tranches[i].balanceOf(u);
