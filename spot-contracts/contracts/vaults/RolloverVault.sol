@@ -11,10 +11,22 @@ import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/
 import { ERC20BurnableUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
-import { BondTranches, TrancheHelpers, BondHelpers } from "../_utils/BondHelpers.sol";
+import { BondTranches, BondTranchesHelpers } from "../_utils/BondTranchesHelpers.sol";
+import { TrancheHelpers } from "../_utils/TrancheHelpers.sol";
+import { BondHelpers } from "../_utils/BondHelpers.sol";
 
 /// @notice Storage array access out of bounds.
 error OutOfBounds();
+
+/// @notice Expected bond to be valid.
+/// @param bond Address of the invalid bond.
+error InvalidBond(IBondController bond);
+
+/// @notice Expected the operation not to decrease the vault's tvl.
+error TVLDecreased();
+
+/// @notice Expected assets transferred into the vault to have non-zero value.
+error ValuelessAssets();
 
 /*
  *  @title RolloverVault
@@ -32,6 +44,11 @@ error OutOfBounds();
  *                 NOTE: It performs both mature and immature redemption. Read more: https://bit.ly/3tuN6OC
  *
  *
+ * @dev When new tranches are added into the system, always double check if they are not malicious.
+ *      This vault accepts new tranches into the system during the `deploy` operation, i.e) the `tranche` and `rollover` functions.
+ *      In the `tranche` function, it only accepts tranches from perp's deposit bond.
+ *      In the `rollover` function, it only accepts tranches returned by perp.
+ *
  */
 contract RolloverVault is
     ERC20BurnableUpgradeable,
@@ -44,6 +61,7 @@ contract RolloverVault is
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
     using BondHelpers for IBondController;
     using TrancheHelpers for ITranche;
+    using BondTranchesHelpers for BondTranches;
 
     // ERC20 operations
     using SafeERC20Upgradeable for IERC20Upgradeable;
@@ -74,6 +92,11 @@ contract RolloverVault is
 
     /// @dev The maximum number of deployed assets that can be held in this vault at any given time.
     uint256 public constant MAX_DEPLOYED_COUNT = 47;
+
+    /// TODO: Convert this to a owner updatable paramter.
+    /// @dev The maximum percentage fee paid in the underlying assets by users who "meld".
+    ///      The meld fee paid by the user in the underlying asset.
+    uint256 public constant MAX_MELD_FEE_PERC = 5 * UNIT_PERC; // (5%)
 
     //--------------------------------------------------------------------------
     // ASSETS
@@ -176,6 +199,7 @@ contract RolloverVault is
     /// @dev Its safer to call `recover` before `deploy` so the full available balance can be deployed.
     ///      Reverts if no funds are rolled over or if the minimum deployment threshold is not reached.
     function deploy() public override nonReentrant whenNotPaused {
+        // NOTE: we only trust and add tranches from perp's deposit bond, or tranches rolled out from perp.
         (uint256 deployedAmt, BondTranches memory bt) = _tranche(perp.getDepositBond());
         uint256 perpsRolledOver = _rollover(perp, bt);
         // NOTE: The following enforces that we only tranche the underlying if it can immediately be used for rotations.
@@ -210,7 +234,7 @@ contract RolloverVault is
         }
 
         // execute redemption on each deployed asset
-        for (uint256 i = 0; i < deployedCount_; i++) {
+        for (uint8 i = 0; i < deployedCount_; i++) {
             ITranche tranche = ITranche(_deployed.at(i));
             uint256 trancheBalance = tranche.balanceOf(address(this));
 
@@ -234,7 +258,7 @@ contract RolloverVault is
             // ie) when we encounter the most-senior tranche.
             else if (tranche == bond.trancheAt(0)) {
                 // execute redemption
-                _execImmatureTrancheRedemption(bond);
+                _execImmatureTrancheRedemption(bond, bond.getTranches());
             }
         }
 
@@ -283,7 +307,8 @@ contract RolloverVault is
         // redeems this tranche and it's siblings if the vault holds balances.
         else {
             // execute redemption
-            BondTranches memory bt = _execImmatureTrancheRedemption(bond);
+            BondTranches memory bt = bond.getTranches();
+            _execImmatureTrancheRedemption(bond, bt);
 
             // sync deployed asset, ie current tranche and all its siblings.
             for (uint8 j = 0; j < bt.tranches.length; j++) {
@@ -316,7 +341,7 @@ contract RolloverVault is
         // aggregating vault assets to be redeemed
         IVault.TokenAmount[] memory redemptions = new IVault.TokenAmount[](assetCount);
         redemptions[0].token = underlying;
-        for (uint256 i = 0; i < deployedCount_; i++) {
+        for (uint8 i = 0; i < deployedCount_; i++) {
             redemptions[i + 1].token = IERC20Upgradeable(_deployed.at(i));
         }
         redemptions[deployedCount_ + 1].token = IERC20Upgradeable(perp);
@@ -325,13 +350,123 @@ contract RolloverVault is
         _burn(_msgSender(), notes);
 
         // calculating amounts and transferring assets out proportionally
-        for (uint256 i = 0; i < assetCount; i++) {
+        for (uint8 i = 0; i < assetCount; i++) {
             redemptions[i].amount = redemptions[i].token.balanceOf(address(this)).mulDiv(notes, totalNotes);
             redemptions[i].token.safeTransfer(_msgSender(), redemptions[i].amount);
             _syncAsset(redemptions[i].token);
         }
 
         return redemptions;
+    }
+
+    /// @notice Swaps the bond tranche slices from the user into the underlying collateral for a fee,
+    ///         given that the vault has the remaining slices for immature redemption.
+    /// @dev When a user has some tranche slices from a given bond, and the vault has the remaining slices,
+    ///      this method allows the user and the vault to "meld" their assets together to redeem the underlying collateral
+    ///      from the bond. The user's share of the underlying is returned back and the vault charges
+    ///      the user a fee for providing liquidity.
+    /// @param bond The bond whose tranches are to be swapped.
+    /// @param trancheAmtsIn A list of amounts of each bond tranche the user is to deposit.
+    ///                      When the user does not have a particular slice, its amount in the list is to be set to zero.
+    /// @return The amount of underlying tokens returned.
+    function meld(IBondController bond, uint256[] memory trancheAmtsIn)
+        external
+        nonReentrant
+        whenNotPaused
+        returns (uint256)
+    {
+        // get bond tranches
+        BondTranches memory bt = bond.getTranches();
+
+        // * We check that the bond's underlying collateral token matches the vault's underlying.
+        // * We validate that the bond has at least 2 tranches to perform the meld operation.
+        // * We validate that the bond hasn't reached maturity as matching only works through immature redemption.
+        if (bond.collateralToken() != address(underlying) || bt.tranches.length <= 1 || bond.isMature()) {
+            revert InvalidBond(bond);
+        }
+
+        // We check if the given bond is NOT malicious by examining if:
+        // * The parent bond of all the children tranches is the given bond.
+        // * At least one of the bond's tranches is already in the vault from previous deployments.
+        bool isValidBond = false;
+        for (uint8 i = 0; i < bt.tranches.length; i++) {
+            if (bt.tranches[i].bond() != address(bond)) {
+                revert InvalidBond(bond);
+            }
+
+            isValidBond = isValidBond || _deployed.contains(address(bt.tranches[i]));
+        }
+        if (!isValidBond) {
+            revert InvalidBond(bond);
+        }
+
+        // track the vault's TVL before the match operation
+        uint256 tvlBefore = getTVL();
+
+        // First we check if the vault has all the tranches for proportional redemption and if so recover the underlying.
+        // On successful redemption, The vault's individual tranche balances will decrease, and the underlying balance will increase.
+        // If the vault tranches are not eligible for proportional redemption, its a no-op.
+        // NOTE: We sync balances finally at the end of this function.
+        _execImmatureTrancheRedemption(bond, bt);
+
+        // calculate total amount to be used by summing available amount from the user and the vault's balance
+        uint256[] memory trancheAmtsUsed = new uint256[](bt.tranches.length);
+        for (uint8 i = 0; i < bt.tranches.length; i++) {
+            trancheAmtsUsed[i] = trancheAmtsIn[i] + bt.tranches[i].balanceOf(address(this));
+        }
+
+        // compute proportional tranche amounts which can be redeemed for the underlying collateral
+        trancheAmtsUsed = bt.computeRedeemableTrancheAmounts(trancheAmtsUsed);
+
+        // computes the collateralizations for each tranche in the current immature bond
+        uint256[] memory trancheUnderlyingBalances;
+        uint256[] memory trancheSupplies;
+        (trancheUnderlyingBalances, trancheSupplies) = bond.getImmatureTrancheCollateralizations(bt);
+
+        // the user's share of the underlying collateral to be returned
+        uint256 underlyingAmt = 0;
+        for (uint8 i = 0; i < bt.tranches.length; i++) {
+            // compute the user's tranche balance to be used
+            // transfer tranche balance out of the user's wallet to the vault
+            trancheAmtsIn[i] = MathUpgradeable.min(trancheAmtsIn[i], trancheAmtsUsed[i]);
+            IERC20Upgradeable(bt.tranches[i]).safeTransferFrom(_msgSender(), address(this), trancheAmtsIn[i]);
+
+            // pre-calculate the user's share
+            underlyingAmt += trancheUnderlyingBalances[i].mulDiv(trancheAmtsIn[i], trancheSupplies[i]);
+        }
+
+        // ensure that the user is sending in tranches with some redeemable value.
+        if (underlyingAmt <= 0) {
+            revert ValuelessAssets();
+        }
+
+        // redeem the underlying using pooled balances
+        bond.redeem(trancheAmtsUsed);
+
+        // deduct fee before returning to the user
+        underlyingAmt -= _computeMeldFee(bond, underlyingAmt);
+
+        // transfer to the user
+        underlying.safeTransfer(_msgSender(), underlyingAmt);
+
+        // sync vault's tranche balances
+        for (uint8 i = 0; i < bt.tranches.length; i++) {
+            _syncAndRemoveDeployedAsset(bt.tranches[i]);
+        }
+
+        // sync underlying
+        _syncAsset(underlying);
+
+        // assert that the vault's TVL does not decrease after this operation
+        if (getTVL() < tvlBefore) {
+            revert TVLDecreased();
+        }
+
+        // TODO: assert that the percentage of raw ampl to the TVL is under
+        //       a onwer specified value. (ie) Limit the amount the meld opration
+        //       can de-lever the vault.
+
+        return underlyingAmt;
     }
 
     /// @inheritdoc IVault
@@ -343,7 +478,7 @@ contract RolloverVault is
         totalValue += underlying.balanceOf(address(this));
 
         // The deployed asset value denominated in the underlying
-        for (uint256 i = 0; i < _deployed.length(); i++) {
+        for (uint8 i = 0; i < _deployed.length(); i++) {
             ITranche tranche = ITranche(_deployed.at(i));
             uint256 trancheBalance = tranche.balanceOf(address(this));
             if (trancheBalance > 0) {
@@ -555,16 +690,13 @@ contract RolloverVault is
     ///      This function should NOT be called directly, use `recover()` or `recover(tranche)`
     ///      which wrap this function with the internal book-keeping necessary,
     ///      to keep track of the vault's assets.
-    function _execImmatureTrancheRedemption(IBondController bond) private returns (BondTranches memory bt) {
-        uint256[] memory trancheAmts;
-        (bt, trancheAmts) = bond.computeRedeemableTrancheAmounts(address(this));
+    function _execImmatureTrancheRedemption(IBondController bond, BondTranches memory bt) private {
+        uint256[] memory trancheAmts = bt.computeRedeemableTrancheAmounts(address(this));
 
         // NOTE: It is guaranteed that if one tranche amount is zero, all amounts are zeros.
         if (trancheAmts[0] > 0) {
             bond.redeem(trancheAmts);
         }
-
-        return bt;
     }
 
     /// @dev Syncs balance and adds the given asset into the deployed list if the vault has a balance.
@@ -609,5 +741,17 @@ contract RolloverVault is
             token.safeApprove(spender, 0);
             token.safeApprove(spender, type(uint256).max);
         }
+    }
+
+    /// @dev Computes the underlying amount to be returned after deducting the melding fee.
+    ///      The meld fee is applied based on linear function based on the bond's time remaining to maturity wrt is duration.
+    function _computeMeldFee(IBondController bond, uint256 underlyingAmt) private view returns (uint256) {
+        uint256 maturityTimestampSec = bond.maturityDate();
+        uint256 bondDurationSec = maturityTimestampSec - bond.creationDate();
+        uint256 secondsToMaturity = (
+            maturityTimestampSec > block.timestamp ? maturityTimestampSec - block.timestamp : 0
+        );
+        uint256 appliedFeePerc = MAX_MELD_FEE_PERC.mulDiv(secondsToMaturity, bondDurationSec);
+        return underlyingAmt.mulDiv(appliedFeePerc, HUNDRED_PERC);
     }
 }

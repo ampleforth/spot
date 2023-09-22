@@ -5,7 +5,7 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { IPricingStrategy } from "../_interfaces/IPricingStrategy.sol";
 
-import { TrancheHelpers } from "../_utils/BondHelpers.sol";
+import { TrancheHelpers } from "../_utils/TrancheHelpers.sol";
 
 /**
  *  @title CDRPricingStrategy (CDR -> collateral to debt ratio)
