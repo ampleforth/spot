@@ -3,7 +3,7 @@ pragma solidity ^0.8.19;
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { IFeeStrategy } from "../_interfaces/IFeeStrategy.sol";
-import { IPerpetualTranche } from "../_interfaces/IPerpetualTranche.sol";
+import { IPerpetualTranche, IBondController } from "../_interfaces/IPerpetualTranche.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
@@ -119,5 +119,25 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     function computeRolloverFees(uint256 rolloverAmt) external view override returns (int256, uint256) {
         uint256 absoluteFee = (rolloverFeePerc.abs() * rolloverAmt) / HUNDRED_PERC;
         return (rolloverFeePerc.sign() * absoluteFee.toInt256(), 0);
+    }
+
+    /// @inheritdoc IFeeStrategy
+    function computeMintFeePerc() external pure override returns (uint256) {
+        revert("BasicFeeStrategy: TO_BE_IMPL");
+    }
+
+    /// @inheritdoc IFeeStrategy
+    function computeBurnFeePerc() external pure override returns (uint256) {
+        revert("BasicFeeStrategy: TO_BE_IMPL");
+    }
+
+    /// @inheritdoc IFeeStrategy
+    function computeRolloverFeePerc() external pure override returns (int256) {
+        revert("BasicFeeStrategy: TO_BE_IMPL");
+    }
+
+    /// @inheritdoc IFeeStrategy
+    function decimals() external pure override returns (uint8) {
+        return PERC_DECIMALS;
     }
 }
