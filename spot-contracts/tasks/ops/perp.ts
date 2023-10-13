@@ -15,7 +15,7 @@ task("ops:perp:info")
     const latestBond = await hre.ethers.getContractAt("IBondController", await bondIssuer.callStatic.getLatestBond());
 
     const collateralToken = await hre.ethers.getContractAt("MockERC20", await perp.collateral());
-    const feeStrategy = await hre.ethers.getContractAt("BasicFeeStrategy", await perp.feeStrategy());
+    const feeStrategy = await hre.ethers.getContractAt("FeeStrategy", await perp.feeStrategy());
     const pricingStrategy = await hre.ethers.getContractAt("CDRPricingStrategy", await perp.pricingStrategy());
     const discountStrategy = await hre.ethers.getContractAt(
       "TrancheClassDiscountStrategy",
@@ -69,7 +69,6 @@ task("ops:perp:info")
     console.log("owner:", await perp.owner());
     console.log("keeper:", await perp.keeper());
     console.log("reserve:", await perp.reserve());
-    console.log("protocolFeeCollector:", await perp.protocolFeeCollector());
     console.log("paused:", await perp.paused());
     console.log("collateralToken:", collateralToken.address);
     console.log("---------------------------------------------------------------");

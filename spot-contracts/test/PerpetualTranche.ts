@@ -43,10 +43,11 @@ describe("PerpetualTranche", function () {
     issuer = await smock.fake(BondIssuer);
     await issuer.collateral.returns(collateralToken.address);
 
-    const FeeStrategy = await ethers.getContractFactory("BasicFeeStrategy");
+    const FeeStrategy = await ethers.getContractFactory("FeeStrategy");
     feeStrategy = await smock.fake(FeeStrategy);
+    await feeStrategy.decimals.returns(8);
 
-    const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
+    const PricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
     pricingStrategy = await smock.fake(PricingStrategy);
     await pricingStrategy.decimals.returns(8);
     await pricingStrategy.computeMatureTranchePrice.returns(toPriceFixedPtAmt("1"));
@@ -107,7 +108,6 @@ describe("PerpetualTranche", function () {
 
     it("should set fund pool references", async function () {
       expect(await perp.reserve()).to.eq(perp.address);
-      expect(await perp.protocolFeeCollector()).to.eq(await deployer.getAddress());
       expect(await perp.perpERC20()).to.eq(perp.address);
     });
 
@@ -370,10 +370,23 @@ describe("PerpetualTranche", function () {
       });
     });
 
+    describe("when set strategy decimals dont match", function () {
+      it("should revert", async function () {
+        const FeeStrategy = await ethers.getContractFactory("FeeStrategy");
+        newFeeStrategy = await smock.fake(FeeStrategy);
+        await newFeeStrategy.decimals.returns(7);
+        await expect(perp.updateFeeStrategy(newFeeStrategy.address)).to.be.revertedWithCustomError(
+          perp,
+          "InvalidStrategyDecimals",
+        );
+      });
+    });
+
     describe("when set address is valid", function () {
       beforeEach(async function () {
-        const FeeStrategy = await ethers.getContractFactory("BasicFeeStrategy");
+        const FeeStrategy = await ethers.getContractFactory("FeeStrategy");
         newFeeStrategy = await smock.fake(FeeStrategy);
+        await newFeeStrategy.decimals.returns(8);
         tx = perp.updateFeeStrategy(newFeeStrategy.address);
         await tx;
       });
@@ -408,7 +421,7 @@ describe("PerpetualTranche", function () {
 
     describe("when new strategy has different decimals", function () {
       beforeEach(async function () {
-        const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
+        const PricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
         newPricingStrategy = await smock.fake(PricingStrategy);
         await newPricingStrategy.decimals.returns(18);
       });
@@ -422,7 +435,7 @@ describe("PerpetualTranche", function () {
 
     describe("when set address is valid", function () {
       beforeEach(async function () {
-        const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
+        const PricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
         newPricingStrategy = await smock.fake(PricingStrategy);
         await newPricingStrategy.decimals.returns(8);
         tx = perp.updatePricingStrategy(newPricingStrategy.address);
@@ -549,37 +562,6 @@ describe("PerpetualTranche", function () {
     });
   });
 
-  describe("#updateMatureValueTargetPerc", function () {
-    let tx: Transaction;
-
-    describe("when triggered by non-owner", function () {
-      it("should revert", async function () {
-        await expect(perp.connect(otherUser).updateMatureValueTargetPerc("1000000")).to.be.revertedWith(
-          "Ownable: caller is not the owner",
-        );
-      });
-    });
-
-    describe("when NOT valid", function () {
-      it("should revert", async function () {
-        await expect(perp.updateMatureValueTargetPerc("100000001")).to.be.revertedWithCustomError(perp, "InvalidPerc");
-      });
-    });
-
-    describe("when triggered by owner", function () {
-      beforeEach(async function () {
-        tx = perp.updateMatureValueTargetPerc("1000000");
-        await tx;
-      });
-      it("should update reference", async function () {
-        expect(await perp.matureValueTargetPerc()).to.eq("1000000");
-      });
-      it("should emit event", async function () {
-        await expect(tx).to.emit(perp, "UpdatedMatureValueTargetPerc").withArgs("1000000");
-      });
-    });
-  });
-
   describe("#transferERC20", function () {
     let transferToken: Contract, toAddress: string;
 
@@ -618,11 +600,20 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when fee token", function () {
-      it("should revert", async function () {
-        await expect(
-          perp.transferERC20(await perp.feeToken(), toAddress, toFixedPtAmt("100")),
-        ).to.be.revertedWithCustomError(perp, "UnauthorizedTransferOut");
+    describe("when withdrawing perp", function () {
+      it("should NOT revert", async function () {
+        const bondFactory = await setupBondFactory();
+        const bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 3600);
+        const tranches = await getTranches(bond);
+        await issuer.getLatestBond.returns(bond.address);
+        await discountStrategy.computeTrancheDiscount
+          .whenCalledWith(tranches[0].address)
+          .returns(toDiscountFixedPtAmt("1"));
+        await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
+        await tranches[0].approve(perp.address, toFixedPtAmt("100"));
+        await perp.deposit(tranches[0].address, toFixedPtAmt("100"));
+        await perp.transfer(perp.address, toFixedPtAmt("100"));
+        await expect(perp.transferERC20(perp.address, toAddress, toFixedPtAmt("100"))).not.to.be.reverted;
       });
     });
   });
@@ -731,17 +722,8 @@ describe("PerpetualTranche", function () {
   });
 
   describe("#feeToken", function () {
-    let feeToken: Contract;
-    beforeEach(async function () {
-      const ERC20 = await ethers.getContractFactory("MockERC20");
-      feeToken = await ERC20.deploy();
-      await feeToken.init("Mock token", "MOCK");
-      expect(await perp.feeToken()).not.to.eq(feeToken.address);
-      await feeStrategy.feeToken.returns(feeToken.address);
-    });
-
-    it("should return the fee token from the strategy", async function () {
-      expect(await perp.feeToken()).to.eq(feeToken.address);
+    it("should point to itself", async function () {
+      expect(await perp.feeToken()).to.eq(perp.address);
     });
   });
 
@@ -757,6 +739,9 @@ describe("PerpetualTranche", function () {
       });
       it("should calculate the avg. perp price", async function () {
         expect(await perp.callStatic.getAvgPrice()).to.eq(0);
+      });
+      it("should calculate the tvl", async function () {
+        expect(await perp.callStatic.getTVL()).to.eq(0);
       });
     });
 
@@ -776,6 +761,9 @@ describe("PerpetualTranche", function () {
       });
       it("should calculate the avg. perp price", async function () {
         expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1"));
+      });
+      it("should calculate the tvl", async function () {
+        expect(await perp.callStatic.getTVL()).to.eq(toFixedPtAmt("200"));
       });
     });
 
@@ -814,6 +802,9 @@ describe("PerpetualTranche", function () {
       it("should calculate the avg. perp price", async function () {
         expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1"));
       });
+      it("should calculate the tvl", async function () {
+        expect(await perp.callStatic.getTVL()).to.eq(toFixedPtAmt("225"));
+      });
     });
 
     describe("when reserve has only mature collateral", function () {
@@ -848,6 +839,9 @@ describe("PerpetualTranche", function () {
       });
       it("should calculate the avg. perp price", async function () {
         expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1"));
+      });
+      it("should calculate the tvl", async function () {
+        expect(await perp.callStatic.getTVL()).to.eq(toFixedPtAmt("300"));
       });
     });
 
@@ -887,6 +881,9 @@ describe("PerpetualTranche", function () {
       });
       it("should calculate the avg. perp price", async function () {
         expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1"));
+      });
+      it("should calculate the tvl", async function () {
+        expect(await perp.callStatic.getTVL()).to.eq(toFixedPtAmt("300"));
       });
     });
 
@@ -929,6 +926,9 @@ describe("PerpetualTranche", function () {
       it("should calculate the avg. perp price", async function () {
         expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1.06666666"));
       });
+      it("should calculate the tvl", async function () {
+        expect(await perp.callStatic.getTVL()).to.eq(toFixedPtAmt("320"));
+      });
     });
 
     describe("when reserve has mature collateral which has rebased down and tranches", function () {
@@ -970,6 +970,9 @@ describe("PerpetualTranche", function () {
       });
       it("should calculate the avg. perp price", async function () {
         expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("0.93333333"));
+      });
+      it("should calculate the tvl", async function () {
+        expect(await perp.callStatic.getTVL()).to.eq(toFixedPtAmt("280"));
       });
     });
   });

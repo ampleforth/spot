@@ -9,11 +9,13 @@ use(smock.matchers);
 const TOKEN_DECIMALS = 18;
 const PRICE_DECIMALS = 8;
 const DISCOUNT_DECIMALS = 18;
+const PERC_DECIMALS = 8;
 
 const sciParseFloat = (a: string): BigNumber => (a.includes("e") ? parseFloat(a).toFixed(18) : a);
 export const toFixedPtAmt = (a: string): BigNumber => utils.parseUnits(sciParseFloat(a), TOKEN_DECIMALS);
 export const toPriceFixedPtAmt = (a: string): BigNumber => utils.parseUnits(sciParseFloat(a), PRICE_DECIMALS);
 export const toDiscountFixedPtAmt = (a: string): BigNumber => utils.parseUnits(sciParseFloat(a), DISCOUNT_DECIMALS);
+export const toPercFixedPtAmt = (a: string): BigNumber => utils.parseUnits(sciParseFloat(a), PERC_DECIMALS);
 
 const ORACLE_BASE_PRICE = toPriceFixedPtAmt("1");
 

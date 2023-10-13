@@ -208,11 +208,10 @@ describe("RolloverVault", function () {
         const issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
         await issuer.init(4800, [200, 300, 500], 1200, 0);
 
-        const FeeStrategy = await ethers.getContractFactory("BasicFeeStrategy");
+        const FeeStrategy = await ethers.getContractFactory("FeeStrategy");
         const feeStrategy = await smock.fake(FeeStrategy);
-        await feeStrategy.computeMintFees.returns(["0", "0"]);
-        await feeStrategy.computeBurnFees.returns(["0", "0"]);
-        await feeStrategy.computeRolloverFees.returns(["0", "0"]);
+        await feeStrategy.decimals.returns(8);
+        await feeStrategy.computeRolloverFeePerc.returns("0");
 
         const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
         const pricingStrategy = await smock.fake(PricingStrategy);
@@ -244,7 +243,6 @@ describe("RolloverVault", function () {
           },
         );
 
-        await feeStrategy.feeToken.returns(perp.address);
         await perp.updateTolerableTrancheMaturity(1200, 4800);
         await pricingStrategy.computeTranchePrice.returns(toPriceFixedPtAmt("1"));
         await discountStrategy.computeTrancheDiscount.returns(toDiscountFixedPtAmt("1"));
