@@ -56,13 +56,14 @@ describe("RolloverVault", function () {
     issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
     await issuer.init(4800, [200, 300, 500], 1200, 0);
 
-    const FeeStrategy = await ethers.getContractFactory("BasicFeeStrategy");
+    const FeeStrategy = await ethers.getContractFactory("FeeStrategy");
     feeStrategy = await smock.fake(FeeStrategy);
-    await feeStrategy.computeMintFees.returns(["0", "0"]);
-    await feeStrategy.computeBurnFees.returns(["0", "0"]);
-    await feeStrategy.computeRolloverFees.returns(["0", "0"]);
+    await feeStrategy.decimals.returns(8);
+    await feeStrategy.computeMintFeePerc.returns("0");
+    await feeStrategy.computeBurnFeePerc.returns("0");
+    await feeStrategy.computeRolloverFeePerc.returns("0");
 
-    const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
+    const PricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
     pricingStrategy = await smock.fake(PricingStrategy);
     await pricingStrategy.decimals.returns(8);
     await pricingStrategy.computeMatureTranchePrice.returns(toPriceFixedPtAmt("1"));
@@ -91,7 +92,6 @@ describe("RolloverVault", function () {
         initializer: "init(string,string,address,address,address,address,address)",
       },
     );
-
     await feeStrategy.feeToken.returns(perp.address);
 
     await perp.updateTolerableTrancheMaturity(1200, 4800);
