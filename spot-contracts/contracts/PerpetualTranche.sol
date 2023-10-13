@@ -19,10 +19,6 @@ import { BondHelpers } from "./_utils/BondHelpers.sol";
 /// @param authorizedCaller The address which is authorized to trigger the call.
 error UnauthorizedCall(address caller, address authorizedCaller);
 
-/// @notice Expected a valid percentage value from 0-100 as a fixed point number with {PERC_DECIMALS}.
-/// @param value Invalid value.
-error InvalidPerc(uint256 value);
-
 /// @notice Expected contract reference to not be `address(0)`.
 error UnacceptableReference();
 
@@ -64,12 +60,6 @@ error ExpectedSupplyReduction(uint256 newSupply, uint256 perpSupply);
 /// @param tokenOut Address of the reserve token transferred out.
 error UnacceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut);
 
-/// @notice Expected to rollover a non-zero amount of tokens.
-/// @param trancheInAmt The amount of tranche tokens deposited.
-/// @param trancheOutAmt The amount of tranche tokens withdrawn.
-/// @param rolloverAmt The perp denominated value of tokens rolled over.
-error UnacceptableRolloverAmt(uint256 trancheInAmt, uint256 trancheOutAmt, uint256 rolloverAmt);
-
 /// @notice Expected supply to be lower than the defined max supply.
 /// @param newSupply The new total supply after minting.
 /// @param currentMaxSupply The current max supply.
@@ -80,12 +70,6 @@ error ExceededMaxSupply(uint256 newSupply, uint256 currentMaxSupply);
 /// @param mintAmtForCurrentTranche The amount of perps that have been minted using the tranche.
 /// @param maxMintAmtPerTranche The amount of perps that can be minted per tranche.
 error ExceededMaxMintPerTranche(ITranche trancheIn, uint256 mintAmtForCurrentTranche, uint256 maxMintAmtPerTranche);
-
-/// @notice Expected the percentage of reserve value held as mature tranches to be at least
-///         as much as the target percentage.
-/// @param matureValuePerc The current percentage of reserve value held as mature tranches.
-/// @param matureValueTargetPerc The target percentage.
-error BelowMatureValueTargetPerc(uint256 matureValuePerc, uint256 matureValueTargetPerc);
 
 /// @notice Expected transfer out asset to not be a reserve asset.
 /// @param token Address of the token transferred.
@@ -118,6 +102,12 @@ error UnauthorizedTransferOut(IERC20Upgradeable token);
  *          from the outside world. Every external function that deals with the reserve
  *          invokes the `afterStateUpdate` modifier at the entry-point.
  *          This brings the system storage state up to date.
+ *
+ *          CRITICAL: On the 3 main system operations: deposit, redeem and rollover;
+ *          We first compute fees before executing any transfers in or out of the system.
+ *          The ordering of operations is very imporant as the fee computation logic,
+ *          requires the system TVL as an input and which should be recorded prior to any value
+ *          entering or leaving the system.
  *
  */
 contract PerpetualTranche is
@@ -175,10 +165,6 @@ contract PerpetualTranche is
     /// @param maxMintAmtPerTranche The max mint amount per tranche.
     event UpdatedMintingLimits(uint256 maxSupply, uint256 maxMintAmtPerTranche);
 
-    /// @notice Event emitted when the mature value target percentage is updated.
-    /// @param matureValueTargetPerc The new target percentage.
-    event UpdatedMatureValueTargetPerc(uint256 matureValueTargetPerc);
-
     /// @notice Event emitted when the authorized rollers are updated.
     /// @param roller The address of the roller.
     /// @param authorized If the roller is has been authorized or not.
@@ -228,9 +214,8 @@ contract PerpetualTranche is
     uint8 public constant PRICE_DECIMALS = 8;
     uint256 public constant UNIT_PRICE = (10**PRICE_DECIMALS);
 
-    uint8 public constant PERC_DECIMALS = 6;
-    uint256 public constant UNIT_PERC = 10**PERC_DECIMALS;
-    uint256 public constant HUNDRED_PERC = 100 * UNIT_PERC;
+    uint8 public constant PERC_DECIMALS = 8;
+    uint256 public constant HUNDRED_PERC = 10**PERC_DECIMALS;
 
     //-------------------------------------------------------------------------
     // Storage
@@ -244,7 +229,7 @@ contract PerpetualTranche is
     /// @inheritdoc IPerpetualTranche
     address public override keeper;
 
-    /// @notice External contract points controls fees & incentives.
+    /// @notice External contract points controls fees & incentives for rollovers.
     IFeeStrategy public override feeStrategy;
 
     /// @notice External contract that computes a given reserve token's price.
@@ -275,7 +260,10 @@ contract PerpetualTranche is
     ///         it can NOT get added into the reserve.
     uint256 public maxTrancheMaturitySec;
 
-    /// @notice The percentage of the reserve value to be held as mature tranches.
+    /// @notice DEPRECATED.
+    /// @dev This used to control the percentage of the reserve value to be held as mature tranches.
+    ///      With V2 perp cannot control this anymore, the rollover mechanics are dictated
+    //       by the amount of capital in the vault system.
     uint256 public matureValueTargetPerc;
 
     /// @notice The maximum supply of perps that can exist at any given time.
@@ -381,7 +369,6 @@ contract PerpetualTranche is
 
         updateTolerableTrancheMaturity(1, type(uint256).max);
         updateMintingLimits(type(uint256).max, type(uint256).max);
-        updateMatureValueTargetPerc(0);
     }
 
     //--------------------------------------------------------------------------
@@ -442,6 +429,9 @@ contract PerpetualTranche is
         if (address(feeStrategy_) == address(0)) {
             revert UnacceptableReference();
         }
+        if (feeStrategy_.decimals() != PERC_DECIMALS) {
+            revert InvalidStrategyDecimals(feeStrategy_.decimals(), PERC_DECIMALS);
+        }
         feeStrategy = feeStrategy_;
         emit UpdatedFeeStrategy(feeStrategy_);
     }
@@ -496,16 +486,6 @@ contract PerpetualTranche is
         emit UpdatedMintingLimits(maxSupply_, maxMintAmtPerTranche_);
     }
 
-    /// @notice Update the mature value target percentage parameter.
-    /// @param matureValueTargetPerc_ The new target percentage.
-    function updateMatureValueTargetPerc(uint256 matureValueTargetPerc_) public onlyOwner {
-        if (matureValueTargetPerc_ > HUNDRED_PERC) {
-            revert InvalidPerc(matureValueTargetPerc_);
-        }
-        matureValueTargetPerc = matureValueTargetPerc_;
-        emit UpdatedMatureValueTargetPerc(matureValueTargetPerc);
-    }
-
     /// @notice Allows the owner to transfer non-critical assets out of the system if required.
     /// @param token The token address.
     /// @param to The destination address.
@@ -515,7 +495,7 @@ contract PerpetualTranche is
         address to,
         uint256 amount
     ) external afterStateUpdate onlyOwner {
-        if (_inReserve(token) || feeToken() == token) {
+        if (_inReserve(token)) {
             revert UnauthorizedTransferOut(token);
         }
         token.safeTransfer(to, amount);
@@ -543,17 +523,11 @@ contract PerpetualTranche is
             revert UnacceptableMintAmt(trancheInAmt, perpAmtMint);
         }
 
-        // calculates the fees to mint `perpAmtMint` of perp token
-        (int256 reserveFee, uint256 protocolFee) = feeStrategy.computeMintFees(perpAmtMint);
-
         // transfers tranche tokens from the sender to the reserve
         _transferIntoReserve(msg.sender, trancheIn, trancheInAmt);
 
         // mints perp tokens to the sender
         _mint(msg.sender, perpAmtMint);
-
-        // settles fees
-        _settleFee(msg.sender, reserveFee, protocolFee);
 
         // post-deposit checks
         mintedSupplyPerTranche[trancheIn] += perpAmtMint;
@@ -583,14 +557,8 @@ contract PerpetualTranche is
         // calculates share of reserve tokens to be redeemed
         (IERC20Upgradeable[] memory tokensOuts, uint256[] memory tokenOutAmts) = _computeRedemptionAmts(perpAmtBurnt);
 
-        // calculates the fees to burn `perpAmtBurnt` of perp token
-        (int256 reserveFee, uint256 protocolFee) = feeStrategy.computeBurnFees(perpAmtBurnt);
-
         // updates the mature tranche balance
         _updateMatureTrancheBalance(_matureTrancheBalance.mulDiv((perpSupply - perpAmtBurnt), perpSupply));
-
-        // settles fees
-        _settleFee(msg.sender, reserveFee, protocolFee);
 
         // burns perp tokens from the sender
         _burn(msg.sender, perpAmtBurnt);
@@ -601,9 +569,6 @@ contract PerpetualTranche is
                 _transferOutOfReserve(msg.sender, tokensOuts[i], tokenOutAmts[i]);
             }
         }
-
-        // post-redeem checks
-        _enforceSupplyReduction(perpSupply);
 
         return (tokensOuts, tokenOutAmts);
     }
@@ -629,17 +594,11 @@ contract PerpetualTranche is
 
         // verifies if rollover amount is acceptable
         if (r.trancheInAmt == 0 || r.tokenOutAmt == 0 || r.perpRolloverAmt == 0) {
-            revert UnacceptableRolloverAmt(r.trancheInAmt, r.tokenOutAmt, r.perpRolloverAmt);
+            return r;
         }
-
-        // calculates the fees to rollover `r.perpRolloverAmt` of perp token
-        (int256 reserveFee, uint256 protocolFee) = feeStrategy.computeRolloverFees(r.perpRolloverAmt);
 
         // transfers tranche tokens from the sender to the reserve
         _transferIntoReserve(msg.sender, trancheIn, r.trancheInAmt);
-
-        // settles fees
-        _settleFee(msg.sender, reserveFee, protocolFee);
 
         // updates the mature tranche balance
         if (_isMatureTranche(tokenOut)) {
@@ -648,13 +607,6 @@ contract PerpetualTranche is
 
         // transfers tranche from the reserve to the sender
         _transferOutOfReserve(msg.sender, tokenOut, r.tokenOutAmt);
-
-        // post-rollover checks
-        _enforceMatureValueTarget();
-        // NOTE: though the rollover operation does not change the perp token's total supply,
-        // we still enforce the supply cap here as the -ve rollover fees
-        // might mint more perp tokens which could increase the perp total supply.
-        _enforceTotalSupplyCap();
 
         return r;
     }
@@ -749,6 +701,12 @@ contract PerpetualTranche is
     function getAvgPrice() external override afterStateUpdate returns (uint256) {
         uint256 totalSupply_ = totalSupply();
         return totalSupply_ > 0 ? _reserveValue() / totalSupply_ : 0;
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    /// @dev Returns a fixed point with the same decimals as the underlying collateral.
+    function getTVL() external override afterStateUpdate returns (uint256) {
+        return _reserveValue() / UNIT_PRICE;
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -873,13 +831,8 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    function protocolFeeCollector() public view override returns (address) {
-        return owner();
-    }
-
-    /// @inheritdoc IPerpetualTranche
     function feeToken() public view override returns (IERC20Upgradeable) {
-        return feeStrategy.feeToken();
+        return IERC20Upgradeable(address(this));
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -909,22 +862,25 @@ contract PerpetualTranche is
     // Private methods
 
     /// @dev Computes the perp mint amount for given amount of tranche tokens deposited into the reserve.
-    function _computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) private view returns (uint256) {
+    function _computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) private returns (uint256) {
+        uint256 feePerc = feeStrategy.computeMintFeePerc();
         uint256 totalSupply_ = totalSupply();
         uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmt, computeDiscount(trancheIn));
         uint256 trancheInPrice = computePrice(trancheIn);
         uint256 perpAmtMint = (totalSupply_ > 0)
             ? (stdTrancheInAmt * trancheInPrice).mulDiv(totalSupply_, _reserveValue())
             : stdTrancheInAmt.mulDiv(trancheInPrice, UNIT_PRICE);
-        return (perpAmtMint);
+        // NOTE: The mint fees are settled by simply minting lesser perps.
+        perpAmtMint -= perpAmtMint.mulDiv(feePerc, HUNDRED_PERC);
+        return perpAmtMint;
     }
 
     /// @dev Computes the reserve token amounts redeemed when a given number of perps are burnt.
     function _computeRedemptionAmts(uint256 perpAmtBurnt)
         private
-        view
         returns (IERC20Upgradeable[] memory, uint256[] memory)
     {
+        uint256 feePerc = feeStrategy.computeBurnFeePerc();
         uint256 totalSupply_ = totalSupply();
         uint256 reserveCount = _reserveCount();
         IERC20Upgradeable[] memory reserveTokens = new IERC20Upgradeable[](reserveCount);
@@ -934,17 +890,24 @@ contract PerpetualTranche is
             redemptionAmts[i] = (totalSupply_ > 0)
                 ? _reserveBalance(reserveTokens[i]).mulDiv(perpAmtBurnt, totalSupply_)
                 : 0;
+            // NOTE: The burn fees are settled by simply redeeming lesser tranches.
+            redemptionAmts[i] -= redemptionAmts[i].mulDiv(feePerc, HUNDRED_PERC);
         }
         return (reserveTokens, redemptionAmts);
     }
 
     /// @dev Computes the amount of reserve tokens that can be rolled out for the given amount of tranches deposited.
+    ///      The relative ratios of tokens In/Out are adjusted based on the current rollver fee perc.
     function _computeRolloverAmt(
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable,
         uint256 tokenOutAmtRequested
-    ) private view returns (IPerpetualTranche.RolloverData memory) {
+    ) private returns (IPerpetualTranche.RolloverData memory) {
+        // NOTE: The rollover fees are settled by,
+        // adjusting the exchange rate between `trancheInAmt` and `tokenOutAmt`.
+        int256 feePerc = feeStrategy.computeRolloverFeePerc();
+
         IPerpetualTranche.RolloverData memory r;
 
         uint256 trancheInDiscount = computeDiscount(trancheIn);
@@ -959,13 +922,28 @@ contract PerpetualTranche is
             return r;
         }
 
+        //-----------------------------------------------------------------------------
+        // Basic rollover with fees:
+        // (1 +/- f) . (stdTrancheInAmt . trancheInPrice) = (stdTrancheOutAmt . trancheOutPrice)
+        //-----------------------------------------------------------------------------
+
+        // Given the amount of tranches In, we compute the amount of tranches out
         r.trancheInAmt = trancheInAmtAvailable;
         uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmtAvailable, trancheInDiscount);
-
-        // Basic rollover:
-        // (stdTrancheInAmt . trancheInPrice) = (stdTrancheOutAmt . trancheOutPrice)
         uint256 stdTrancheOutAmt = stdTrancheInAmt.mulDiv(trancheInPrice, trancheOutPrice);
-        r.trancheOutAmt = _fromStdTrancheAmt(stdTrancheOutAmt, trancheOutDiscount);
+
+        // A postive fee percentage implies that perp charges rotators by
+        // accepting tranchesIn at a discount, ie) lesser tranches out.
+        if (feePerc > 0) {
+            stdTrancheOutAmt = stdTrancheOutAmt.mulDiv(HUNDRED_PERC - feePerc.abs(), HUNDRED_PERC);
+        }
+        // A negative fee percentage (or a reward) implies that perp pays the rotators by
+        // accepting tranchesIn at a premium, ie) more tranches out.
+        else if (feePerc < 0) {
+            stdTrancheOutAmt = stdTrancheOutAmt.mulDiv(HUNDRED_PERC + feePerc.abs(), HUNDRED_PERC);
+        }
+        r.trancheOutAmt = _fromStdTrancheAmt(stdTrancheOutAmt, trancheOutDiscount, MathUpgradeable.Rounding.Down);
+        //-----------------------------------------------------------------------------
 
         // However, if the tokenOut is the mature tranche (held as naked collateral),
         // we infer the tokenOut amount from the tranche denomination.
@@ -975,20 +953,40 @@ contract PerpetualTranche is
             ? tokenOutBalance.mulDiv(r.trancheOutAmt, _matureTrancheBalance)
             : r.trancheOutAmt;
 
-        // When the token out balance is NOT covered:
-        // we fix tokenOutAmt = tokenOutAmtRequested and back calculate other values
+        // When the tokenOut balance is NOT covered:
+        // we fix tokenOutAmt = tokenOutAmtRequested and re-calculate other values
         if (r.tokenOutAmt > tokenOutAmtRequested) {
+            // Given the amount of tranches out, we compute the amount of tranches in
             r.tokenOutAmt = tokenOutAmtRequested;
             r.trancheOutAmt = isMatureTrancheOut
                 ? _matureTrancheBalance.mulDiv(r.tokenOutAmt, tokenOutBalance)
                 : r.tokenOutAmt;
             stdTrancheOutAmt = _toStdTrancheAmt(r.trancheOutAmt, trancheOutDiscount);
             stdTrancheInAmt = stdTrancheOutAmt.mulDiv(trancheOutPrice, trancheInPrice, MathUpgradeable.Rounding.Up);
-            r.trancheInAmt = _fromStdTrancheAmt(stdTrancheInAmt, trancheInDiscount);
+            // A postive fee percentage implies that perp charges rotators by
+            // offering tranchesOut for a premium, ie) more tranches in.
+            if (feePerc > 0) {
+                stdTrancheInAmt = stdTrancheInAmt.mulDiv(
+                    HUNDRED_PERC,
+                    HUNDRED_PERC - feePerc.abs(),
+                    MathUpgradeable.Rounding.Up
+                );
+            }
+            // A negative fee percentage (or a reward) implies that perp pays the rotators by
+            // offering tranchesOut at a discount, ie) lesser tranches in.
+            else if (feePerc < 0) {
+                stdTrancheInAmt = stdTrancheInAmt.mulDiv(
+                    HUNDRED_PERC,
+                    HUNDRED_PERC + feePerc.abs(),
+                    MathUpgradeable.Rounding.Up
+                );
+            }
+            r.trancheInAmt = _fromStdTrancheAmt(stdTrancheInAmt, trancheInDiscount, MathUpgradeable.Rounding.Up);
         }
 
         r.perpRolloverAmt = (stdTrancheOutAmt * trancheOutPrice).mulDiv(totalSupply(), _reserveValue());
         r.remainingTrancheInAmt = trancheInAmtAvailable - r.trancheInAmt;
+
         return r;
     }
 
@@ -1048,64 +1046,6 @@ contract PerpetualTranche is
         }
 
         return balance;
-    }
-
-    /// @dev Handles fee transfer between the payer, the reserve and the protocol fee collector.
-    function _settleFee(
-        address payer,
-        int256 reserveFee,
-        uint256 protocolFee
-    ) private {
-        // Handling reserve fees
-        uint256 reserveFeeAbs = reserveFee.abs();
-        if (reserveFee > 0) {
-            _handleFeeTransferIn(payer, reserve(), reserveFeeAbs);
-        } else if (reserveFee < 0) {
-            _handleFeeTransferOut(payer, reserveFeeAbs);
-        }
-        // Handling protocol fees
-        if (protocolFee > 0) {
-            _handleFeeTransferIn(payer, protocolFeeCollector(), protocolFee);
-        }
-    }
-
-    /// @dev Transfers fee tokens from the payer to the destination.
-    function _handleFeeTransferIn(
-        address payer,
-        address destination,
-        uint256 feeAmt
-    ) private {
-        IERC20Upgradeable feeToken_ = feeToken();
-        bool isNativeFeeToken = (feeToken_ == perpERC20());
-        // Funds are coming in
-        if (isNativeFeeToken) {
-            // Handling a special case, when the fee is to be charged as the perp token itself
-            // In this case we don't need to make an external call to the token ERC-20 to "transferFrom"
-            // the payer, since this is still an internal call {msg.sender} will still point to the payer
-            // and we can just "transfer" from the payer's wallet.
-            transfer(destination, feeAmt);
-        } else {
-            feeToken_.safeTransferFrom(payer, destination, feeAmt);
-        }
-    }
-
-    /// @dev Transfers fee from the reserve to the destination.
-    function _handleFeeTransferOut(address destination, uint256 feeAmt) private {
-        IERC20Upgradeable feeToken_ = feeToken();
-        bool isNativeFeeToken = (feeToken_ == perpERC20());
-        // Funds are going out
-        if (isNativeFeeToken) {
-            uint256 balance = _reserveBalance(feeToken_);
-            feeToken_.safeTransfer(destination, MathUpgradeable.min(feeAmt, balance));
-
-            // In case that the reserve's balance doesn't cover the entire fee amount,
-            // we mint perps to cover the difference.
-            if (balance < feeAmt) {
-                _mint(destination, feeAmt - balance);
-            }
-        } else {
-            feeToken_.safeTransfer(destination, feeAmt);
-        }
     }
 
     /// @dev Updates contract store with provided discount.
@@ -1182,24 +1122,6 @@ contract PerpetualTranche is
         }
     }
 
-    /// @dev Enforces that supply strictly reduces after the redemption.
-    function _enforceSupplyReduction(uint256 prevSupply) private view {
-        uint256 newSupply = totalSupply();
-        if (newSupply >= prevSupply) {
-            revert ExpectedSupplyReduction(newSupply, prevSupply);
-        }
-    }
-
-    /// @dev Enforces that the percentage of the reserve value is within the target percentage.
-    ///      To be invoked AFTER the rollover operation.
-    function _enforceMatureValueTarget() private view {
-        uint256 matureValue = (_matureTrancheBalance * computePrice(_reserveAt(0)));
-        uint256 matureValuePerc = matureValue.mulDiv(HUNDRED_PERC, _reserveValue());
-        if (matureValuePerc < matureValueTargetPerc) {
-            revert BelowMatureValueTargetPerc(matureValuePerc, matureValueTargetPerc);
-        }
-    }
-
     /// @dev Counts the number of tokens currently in the reserve.
     function _reserveCount() private view returns (uint256) {
         return _reserves.length();
@@ -1249,7 +1171,11 @@ contract PerpetualTranche is
 
     /// @dev Calculates the external tranche amount from the internal standardized tranche amount.
     ///      trancheAmt = stdTrancheAmt / discount.
-    function _fromStdTrancheAmt(uint256 stdTrancheAmt, uint256 discount) private pure returns (uint256) {
-        return stdTrancheAmt.mulDiv(UNIT_DISCOUNT, discount);
+    function _fromStdTrancheAmt(
+        uint256 stdTrancheAmt,
+        uint256 discount,
+        MathUpgradeable.Rounding rounding
+    ) private pure returns (uint256) {
+        return stdTrancheAmt.mulDiv(UNIT_DISCOUNT, discount, rounding);
     }
 }
