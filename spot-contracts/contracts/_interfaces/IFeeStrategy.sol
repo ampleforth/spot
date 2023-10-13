@@ -2,38 +2,40 @@
 pragma solidity ^0.8.0;
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import { IBondController } from "./buttonwood/IBondController.sol";
 
 interface IFeeStrategy {
-    /// @notice Address of the fee token.
+    /// @notice The percentage of the mint perp amount to be witheld as fees.
+    /// @dev Represented as a fixed-point number with {PRICE_DECIMAL} decimal places.
+    function computeMintFeePerc() external returns (uint256);
+
+    /// @notice The percentage of the burn pepr amount to be witheld as fees.
+    /// @dev Represented as a fixed-point number with {PRICE_DECIMAL} decimal places.
+    function computeBurnFeePerc() external returns (uint256);
+
+    /// @notice The applied exchange rate adjustment between tranches into perp and
+    ///         tokens out of perp during a rollover.
+    /// @dev Represented as a fixed-point number with {PRICE_DECIMAL} decimal places.
+    ///      - A fee of 0%, implies the rollover exchange rate is unaltered.
+    ///         example) 100 tranchesIn for 100 tranchesOut
+    ///      - A fee of 1%, implies the exchange rate is adjusted in favor of tranchesIn.
+    ///         example) 100 tranchesIn for 99 tranchesOut
+    ///      - A fee of -1%, implies the exchange rate is adjusted in favor of tranchesOut.
+    ///         example) 99 tranchesIn for 100 tranchesOut
+    function computeRolloverFeePerc() external returns (int256);
+
+    /// @notice Number of decimals representing 1.0 or 100%.
+    function decimals() external view returns (uint8);
+
+    /// @notice DEPRECATED.
     function feeToken() external view returns (IERC20Upgradeable);
 
-    /// @notice Computes the fees while minting given amount of perp tokens.
-    /// @dev The mint fee can be either positive or negative. When positive it's paid by the minting users to the reserve.
-    ///      When negative its paid to the minting users by the reserve.
-    ///      The protocol fee is always non-negative and is paid by the users minting to the
-    ///      perp contract's fee collector.
-    /// @param amount The amount of perp tokens to be minted.
-    /// @return reserveFee The fee paid to the reserve to mint perp tokens.
-    /// @return protocolFee The fee paid to the protocol to mint perp tokens.
+    /// @notice DEPRECATED.
     function computeMintFees(uint256 amount) external view returns (int256 reserveFee, uint256 protocolFee);
 
-    /// @notice Computes the fees while burning given amount of perp tokens.
-    /// @dev The burn fee can be either positive or negative. When positive it's paid by the burning users to the reserve.
-    ///      When negative its paid to the burning users by the reserve.
-    ///      The protocol fee is always non-negative and is paid by the users burning to the
-    ///      perp contract's fee collector.
-    /// @param amount The amount of perp tokens to be burnt.
-    /// @return reserveFee The fee paid to the reserve to burn perp tokens.
-    /// @return protocolFee The fee paid to the protocol to burn perp tokens.
+    /// @notice DEPRECATED.
     function computeBurnFees(uint256 amount) external view returns (int256 reserveFee, uint256 protocolFee);
 
-    /// @notice Computes the fees while rolling over given amount of perp tokens.
-    /// @dev The rollover fee can be either positive or negative. When positive it's paid by the users rolling over to the reserve.
-    ///      When negative its paid to the users rolling over by the reserve.
-    ///      The protocol fee is always positive and is paid by the users rolling over to the
-    ///      perp contract's fee collector.
-    /// @param amount The Perp-denominated value of the tranches being rolled over.
-    /// @return reserveFee The fee paid to the reserve to rollover tokens.
-    /// @return protocolFee The fee paid to the protocol to rollover tokens.
+    /// @notice DEPRECATED.
     function computeRolloverFees(uint256 amount) external view returns (int256 reserveFee, uint256 protocolFee);
 }
