@@ -11,6 +11,7 @@ import {
   toFixedPtAmt,
   toDiscountFixedPtAmt,
   toPriceFixedPtAmt,
+  toPercFixedPtAmt,
   advancePerpQueue,
   mintCollteralToken,
   advancePerpQueueToRollover,
@@ -45,11 +46,10 @@ describe("RouterV1", function () {
     issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
     await issuer.init(3600, [200, 300, 500], 1200, 0);
 
-    const FeeStrategy = await ethers.getContractFactory("BasicFeeStrategy");
+    const FeeStrategy = await ethers.getContractFactory("FeeStrategy");
     feeStrategy = await smock.fake(FeeStrategy);
-    await feeStrategy.computeMintFees.returns(["0", "0"]);
-    await feeStrategy.computeBurnFees.returns(["0", "0"]);
-    await feeStrategy.computeRolloverFees.returns(["0", "0"]);
+    await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("0"));
+    await feeStrategy.decimals.returns(8);
 
     const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
     pricingStrategy = await smock.fake(PricingStrategy);
@@ -100,10 +100,6 @@ describe("RouterV1", function () {
       .whenCalledWith(depositTranches[1].address)
       .returns(toDiscountFixedPtAmt("0.75"));
 
-    await feeStrategy.feeToken.returns(perp.address);
-    await feeStrategy.computeMintFees.returns([toFixedPtAmt("0"), "0"]);
-    await feeStrategy.computeBurnFees.returns([toFixedPtAmt("0"), "0"]);
-
     const Router = await ethers.getContractFactory("RouterV1");
     router = await Router.deploy();
   });
@@ -126,42 +122,17 @@ describe("RouterV1", function () {
   });
 
   describe("#previewDeposit", function () {
-    beforeEach(async function () {
-      await feeStrategy.computeMintFees.returns([toFixedPtAmt("10"), "0"]);
-    });
-
-    describe("when fee token is the native token", async function () {
-      it("should compute the mint amount and fee", async function () {
-        const r = await router.callStatic.previewDeposit(perp.address, depositTranches[1].address, toFixedPtAmt("300"));
-        expect(r[0]).to.eq(toFixedPtAmt("225"));
-        expect(r[1]).to.eq(perp.address);
-        expect(r[2]).to.eq(toFixedPtAmt("10"));
-      });
-    });
-
-    describe("when fee token is the non-native token", async function () {
-      let feeToken: Contract;
-      beforeEach(async function () {
-        const ERC20 = await ethers.getContractFactory("MockERC20");
-        feeToken = await ERC20.deploy();
-        await feeToken.init("Mock token", "MOCK");
-        await feeStrategy.feeToken.returns(feeToken.address);
-      });
-
-      it("should compute the mint amount and fee", async function () {
-        const r = await router.callStatic.previewDeposit(perp.address, depositTranches[0].address, toFixedPtAmt("200"));
-        expect(r[0]).to.eq(toFixedPtAmt("200"));
-        expect(r[1]).to.eq(feeToken.address);
-        expect(r[2]).to.eq(toFixedPtAmt("10"));
-      });
+    it("should compute the mint amount and zero fee", async function () {
+      const r = await router.callStatic.previewDeposit(perp.address, depositTranches[1].address, toFixedPtAmt("300"));
+      expect(r[0]).to.eq(toFixedPtAmt("225"));
+      expect(r[1]).to.eq(perp.address);
+      expect(r[2]).to.eq(toFixedPtAmt("0"));
     });
   });
 
   describe("#previewRedeem", function () {
     let depositTranches1: Contract[], depositTranches2: Contract[], depositTranches3: Contract[];
     beforeEach(async function () {
-      await feeStrategy.computeBurnFees.returns([toFixedPtAmt("12.75"), "0"]);
-
       const depositBond1 = await bondAt(await perp.callStatic.getDepositBond());
       depositTranches1 = await getTranches(depositBond1);
       await depositIntoBond(depositBond1, toFixedPtAmt("1000"), deployer);
@@ -234,7 +205,7 @@ describe("RouterV1", function () {
     });
 
     describe("full redemption", function () {
-      it("should compute the burn amount and fee", async function () {
+      it("should compute the burn amount and zero fee", async function () {
         const r = await router.callStatic.previewRedeem(perp.address, toFixedPtAmt("1275"));
 
         expect(r[0][0]).to.eq(collateralToken.address);
@@ -254,12 +225,12 @@ describe("RouterV1", function () {
         expect(r[1][6]).to.eq(toFixedPtAmt("300"));
 
         expect(r[2]).to.eq(perp.address);
-        expect(r[3]).to.eq(toFixedPtAmt("12.75"));
+        expect(r[3]).to.eq(toFixedPtAmt("0"));
       });
     });
 
     describe("partial redemption", async function () {
-      it("should compute the burn amount and fee", async function () {
+      it("should compute the burn amount and zero fee", async function () {
         const r = await router.callStatic.previewRedeem(perp.address, toFixedPtAmt("637.5"));
 
         expect(r[0][0]).to.eq(collateralToken.address);
@@ -279,40 +250,7 @@ describe("RouterV1", function () {
         expect(r[1][6]).to.eq(toFixedPtAmt("150"));
 
         expect(r[2]).to.eq(perp.address);
-        expect(r[3]).to.eq(toFixedPtAmt("12.75"));
-      });
-    });
-
-    describe("when fee is in non native token", async function () {
-      let feeToken: Contract;
-      beforeEach(async function () {
-        const ERC20 = await ethers.getContractFactory("MockERC20");
-        feeToken = await ERC20.deploy();
-        await feeToken.init("Mock token", "MOCK");
-        await feeStrategy.feeToken.returns(feeToken.address);
-      });
-
-      it("should compute the burn amount and fee", async function () {
-        const r = await router.callStatic.previewRedeem(perp.address, toFixedPtAmt("637.5"));
-
-        expect(r[0][0]).to.eq(collateralToken.address);
-        expect(r[0][1]).to.eq(depositTranches1[0].address);
-        expect(r[0][2]).to.eq(depositTranches1[1].address);
-        expect(r[0][3]).to.eq(depositTranches2[0].address);
-        expect(r[0][4]).to.eq(depositTranches2[1].address);
-        expect(r[0][5]).to.eq(depositTranches3[0].address);
-        expect(r[0][6]).to.eq(depositTranches3[1].address);
-
-        expect(r[1][0]).to.eq(toFixedPtAmt("0"));
-        expect(r[1][1]).to.eq(toFixedPtAmt("100"));
-        expect(r[1][2]).to.eq(toFixedPtAmt("150"));
-        expect(r[1][3]).to.eq(toFixedPtAmt("100"));
-        expect(r[1][4]).to.eq(toFixedPtAmt("150"));
-        expect(r[1][5]).to.eq(toFixedPtAmt("100"));
-        expect(r[1][6]).to.eq(toFixedPtAmt("150"));
-
-        expect(r[2]).to.eq(feeToken.address);
-        expect(r[3]).to.eq(toFixedPtAmt("12.75"));
+        expect(r[3]).to.eq(toFixedPtAmt("0"));
       });
     });
   });
@@ -320,8 +258,6 @@ describe("RouterV1", function () {
   describe("#previewRollover", function () {
     let holdingPenTranches: Contract[], reserveTranches: Contract[], depositTranches: Contract[];
     beforeEach(async function () {
-      await feeStrategy.computeBurnFees.returns([toFixedPtAmt("10"), "0"]);
-
       const holdingPenBond = await bondAt(await perp.callStatic.getDepositBond());
       holdingPenTranches = await getTranches(holdingPenBond);
       await depositIntoBond(holdingPenBond, toFixedPtAmt("1000"), deployer);
@@ -395,7 +331,7 @@ describe("RouterV1", function () {
 
     describe("when rollover is not acceptable", function () {
       beforeEach(async function () {
-        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
+        await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("-0.01"));
       });
       it("should return 0", async function () {
         const r = await router.callStatic.previewRollover(
@@ -416,7 +352,7 @@ describe("RouterV1", function () {
 
     describe("when tranche out balance is NOT covered", function () {
       beforeEach(async function () {
-        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
+        await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("-0.01"));
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -428,16 +364,16 @@ describe("RouterV1", function () {
         );
         expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("200"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("200"));
-        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("200"));
-        expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("50"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("198.019801980198019802"));
+        expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("51.980198019801980198"));
         expect(r[1]).to.eq(perp.address);
-        expect(r[2]).to.eq(toFixedPtAmt("1"));
+        expect(r[2]).to.eq("0");
       });
     });
 
     describe("when tranche in has different rate", function () {
       beforeEach(async function () {
-        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
+        await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("-0.01"));
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -447,18 +383,18 @@ describe("RouterV1", function () {
           toFixedPtAmt("250"),
           constants.MaxUint256,
         );
-        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("187.5"));
-        expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("187.5"));
+        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("189.375000000000000000"));
+        expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("189.375000000000000000"));
         expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("250"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         expect(r[1]).to.eq(perp.address);
-        expect(r[2]).to.eq(toFixedPtAmt("1"));
+        expect(r[2]).to.eq("0");
       });
     });
 
     describe("when tranche out has different rate", function () {
       beforeEach(async function () {
-        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
+        await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("-0.01"));
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -470,16 +406,37 @@ describe("RouterV1", function () {
         );
         expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("225"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("300"));
-        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("225"));
-        expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("25"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("222.772277227722772278"));
+        expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("27.227722772277227722"));
         expect(r[1]).to.eq(perp.address);
-        expect(r[2]).to.eq(toFixedPtAmt("1"));
+        expect(r[2]).to.eq("0");
       });
     });
 
     describe("when tranche out balance is covered exactly", function () {
       beforeEach(async function () {
-        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
+        await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("-0.01"));
+      });
+      it("should compute the rollover fees and amounts", async function () {
+        const r = await router.callStatic.previewRollover(
+          perp.address,
+          depositTranches[0].address,
+          reserveTranches[0].address,
+          toFixedPtAmt("200"),
+          constants.MaxUint256,
+        );
+        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("200"));
+        expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("200"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("198.019801980198019802"));
+        expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("1.980198019801980198"));
+        expect(r[1]).to.eq(perp.address);
+        expect(r[2]).to.eq("0");
+      });
+    });
+
+    describe("when tranche out balance is covered exactly", function () {
+      beforeEach(async function () {
+        await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("0"));
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -494,13 +451,34 @@ describe("RouterV1", function () {
         expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("200"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         expect(r[1]).to.eq(perp.address);
-        expect(r[2]).to.eq(toFixedPtAmt("1"));
+        expect(r[2]).to.eq("0");
       });
     });
 
     describe("when tranche out used is less than the balance", function () {
       beforeEach(async function () {
-        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
+        await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("0.01"));
+      });
+      it("should compute the rollover fees and amounts", async function () {
+        const r = await router.callStatic.previewRollover(
+          perp.address,
+          depositTranches[0].address,
+          reserveTranches[0].address,
+          toFixedPtAmt("200"),
+          constants.MaxUint256,
+        );
+        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("198"));
+        expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("198"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("200"));
+        expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
+        expect(r[1]).to.eq(perp.address);
+        expect(r[2]).to.eq("0");
+      });
+    });
+
+    describe("when tranche out used is less than the balance", function () {
+      beforeEach(async function () {
+        await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("-0.01"));
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -512,16 +490,16 @@ describe("RouterV1", function () {
         );
         expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("190"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("190"));
-        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("190"));
-        expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("10"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("188.118811881188118812"));
+        expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("11.881188118811881188"));
         expect(r[1]).to.eq(perp.address);
-        expect(r[2]).to.eq(toFixedPtAmt("1"));
+        expect(r[2]).to.eq("0");
       });
     });
 
     describe("when tranche out balance is covered", function () {
       beforeEach(async function () {
-        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
+        await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("-0.01"));
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -531,18 +509,18 @@ describe("RouterV1", function () {
           toFixedPtAmt("190"),
           constants.MaxUint256,
         );
-        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("190"));
-        expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("190"));
+        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("191.900000000000000000"));
+        expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("191.900000000000000000"));
         expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("190"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         expect(r[1]).to.eq(perp.address);
-        expect(r[2]).to.eq(toFixedPtAmt("1"));
+        expect(r[2]).to.eq("0");
       });
     });
 
     describe("when collateral token is transferred out", function () {
       beforeEach(async function () {
-        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
+        await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("-0.01"));
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -552,18 +530,39 @@ describe("RouterV1", function () {
           toFixedPtAmt("250"),
           constants.MaxUint256,
         );
-        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("250"));
-        expect(r[0].tokenOutAmt).to.eq("294117647058823529411");
+        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("252.5"));
+        expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("297.058823529411764705"));
         expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("250"));
         expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
         expect(r[1]).to.eq(perp.address);
-        expect(r[2]).to.eq(toFixedPtAmt("1"));
+        expect(r[2]).to.eq("0");
+      });
+    });
+
+    describe("when fee is +ve", function () {
+      beforeEach(async function () {
+        await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("0.01"));
+      });
+      it("should compute the rollover fees and amounts", async function () {
+        const r = await router.callStatic.previewRollover(
+          perp.address,
+          depositTranches[0].address,
+          reserveTranches[0].address,
+          toFixedPtAmt("200"),
+          constants.MaxUint256,
+        );
+        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("198"));
+        expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("198"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("200"));
+        expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
+        expect(r[1]).to.eq(perp.address);
+        expect(r[2]).to.eq("0");
       });
     });
 
     describe("when fee is -ve", function () {
       beforeEach(async function () {
-        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("-1"), "0"]);
+        await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("-0.01"));
       });
       it("should compute the rollover fees and amounts", async function () {
         const r = await router.callStatic.previewRollover(
@@ -575,36 +574,10 @@ describe("RouterV1", function () {
         );
         expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("200"));
         expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("200"));
-        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("200"));
-        expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
+        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("198.019801980198019802"));
+        expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("1.980198019801980198"));
         expect(r[1]).to.eq(perp.address);
-        expect(r[2]).to.eq(toFixedPtAmt("-1"));
-      });
-    });
-
-    describe("when fee is in non native token", function () {
-      let feeToken: Contract;
-      beforeEach(async function () {
-        const ERC20 = await ethers.getContractFactory("MockERC20");
-        feeToken = await ERC20.deploy();
-        await feeToken.init("Mock token", "MOCK");
-        await feeStrategy.feeToken.returns(feeToken.address);
-        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
-      });
-      it("should compute the rollover fees and amounts", async function () {
-        const r = await router.callStatic.previewRollover(
-          perp.address,
-          depositTranches[0].address,
-          reserveTranches[0].address,
-          toFixedPtAmt("200"),
-          constants.MaxUint256,
-        );
-        expect(r[0].perpRolloverAmt).to.eq(toFixedPtAmt("200"));
-        expect(r[0].tokenOutAmt).to.eq(toFixedPtAmt("200"));
-        expect(r[0].trancheInAmt).to.eq(toFixedPtAmt("200"));
-        expect(r[0].remainingTrancheInAmt).to.eq(toFixedPtAmt("0"));
-        expect(r[1]).to.eq(feeToken.address);
-        expect(r[2]).to.eq(toFixedPtAmt("1"));
+        expect(r[2]).to.eq("0");
       });
     });
   });
@@ -612,7 +585,6 @@ describe("RouterV1", function () {
   describe("#trancheAndDeposit", function () {
     beforeEach(async function () {
       await mintCollteralToken(collateralToken, toFixedPtAmt("2000"), deployer);
-      await feeStrategy.computeMintFees.returns([toFixedPtAmt("5"), "0"]);
     });
 
     describe("when deposit bond is incorrect", function () {
@@ -627,49 +599,16 @@ describe("RouterV1", function () {
       });
     });
 
-    describe("when fee is in native token", function () {
+    describe("when deposit bond is correct", function () {
       beforeEach(async function () {
         await collateralToken.approve(router.address, constants.MaxUint256);
         await router.trancheAndDeposit(perp.address, depositBond.address, toFixedPtAmt("1000"), 0);
       });
 
       it("should mint tranches", async function () {
-        expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("415"));
-      });
-
-      it("should transfer unused tranches back", async function () {
-        expect(await depositTranches[2].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("500"));
-      });
-
-      it("should leave no dust", async function () {
-        expect(await depositTranches[0].balanceOf(router.address)).to.eq("0");
-        expect(await depositTranches[1].balanceOf(router.address)).to.eq("0");
-        expect(await perp.balanceOf(router.address)).to.eq("0");
-      });
-    });
-
-    describe("when fee is in non-native token", function () {
-      let feeToken: Contract;
-      beforeEach(async function () {
-        const ERC20 = await ethers.getContractFactory("MockERC20");
-        feeToken = await ERC20.deploy();
-        await feeToken.init("Mock token", "MOCK");
-        await feeStrategy.feeToken.returns(feeToken.address);
-        await feeToken.mint(deployerAddress, toFixedPtAmt("10"));
-
-        await feeToken.approve(router.address, constants.MaxUint256);
-        await collateralToken.approve(router.address, constants.MaxUint256);
-        await router.trancheAndDeposit(perp.address, depositBond.address, toFixedPtAmt("1000"), toFixedPtAmt("10"));
-      });
-
-      it("should mint tranches", async function () {
         expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("425"));
       });
 
-      it("should transfer fee", async function () {
-        expect(await feeToken.balanceOf(perp.address)).to.eq(toFixedPtAmt("10"));
-      });
-
       it("should transfer unused tranches back", async function () {
         expect(await depositTranches[2].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("500"));
       });
@@ -678,48 +617,6 @@ describe("RouterV1", function () {
         expect(await depositTranches[0].balanceOf(router.address)).to.eq("0");
         expect(await depositTranches[1].balanceOf(router.address)).to.eq("0");
         expect(await perp.balanceOf(router.address)).to.eq("0");
-        expect(await feeToken.balanceOf(router.address)).to.eq("0");
-      });
-    });
-
-    describe("when fee is overpaid", function () {
-      let feeToken: Contract;
-      beforeEach(async function () {
-        const ERC20 = await ethers.getContractFactory("MockERC20");
-        feeToken = await ERC20.deploy();
-        await feeToken.init("Mock token", "MOCK");
-        await feeStrategy.feeToken.returns(feeToken.address);
-        await feeToken.mint(deployerAddress, toFixedPtAmt("25"));
-
-        await feeToken.approve(router.address, constants.MaxUint256);
-        await collateralToken.approve(router.address, constants.MaxUint256);
-        await mintCollteralToken(collateralToken, toFixedPtAmt("1"), deployer);
-        await collateralToken.transfer(router.address, toFixedPtAmt("1"));
-        await router.trancheAndDeposit(perp.address, depositBond.address, toFixedPtAmt("1000"), toFixedPtAmt("25"));
-      });
-
-      it("should mint tranches", async function () {
-        expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("425"));
-      });
-
-      it("should transfer fee", async function () {
-        expect(await feeToken.balanceOf(perp.address)).to.eq(toFixedPtAmt("10"));
-      });
-
-      it("should remaining fee back", async function () {
-        expect(await feeToken.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("15"));
-      });
-
-      it("should transfer unused tranches back", async function () {
-        expect(await depositTranches[2].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("500"));
-      });
-
-      it("should leave no dust", async function () {
-        expect(await collateralToken.balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
-        expect(await depositTranches[0].balanceOf(router.address)).to.eq("0");
-        expect(await depositTranches[1].balanceOf(router.address)).to.eq("0");
-        expect(await perp.balanceOf(router.address)).to.eq("0");
-        expect(await feeToken.balanceOf(router.address)).to.eq("0");
       });
     });
   });
@@ -727,8 +624,6 @@ describe("RouterV1", function () {
   describe("#trancheAndRollover", function () {
     let holdingPenTranches: Contract[], reserveTranches: Contract[], depositBond: Contract, depositTranches: Contract[];
     beforeEach(async function () {
-      await feeStrategy.computeBurnFees.returns([toFixedPtAmt("10"), "0"]);
-
       const holdingPenBond = await bondAt(await perp.callStatic.getDepositBond());
       holdingPenTranches = await getTranches(holdingPenBond);
       await depositIntoBond(holdingPenBond, toFixedPtAmt("1000"), deployer);
@@ -796,7 +691,7 @@ describe("RouterV1", function () {
 
     describe("successful tranche & rollover and return the remainder", function () {
       beforeEach(async function () {
-        await feeStrategy.computeRolloverFees.returns([toFixedPtAmt("1"), "0"]);
+        await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("-0.01"), "0");
         await perp.approve(router.address, toFixedPtAmt("15"));
 
         await mintCollteralToken(collateralToken, toFixedPtAmt("2000"), deployer);
@@ -829,19 +724,19 @@ describe("RouterV1", function () {
       });
 
       it("should transfer tranches out", async function () {
-        expect(await collateralToken.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("301"));
+        expect(await collateralToken.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("304"));
         expect(await holdingPenTranches[0].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("0"));
         expect(await holdingPenTranches[1].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("0"));
         expect(await reserveTranches[0].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("200"));
-        expect(await reserveTranches[1].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("100"));
+        expect(await reserveTranches[1].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("101"));
         expect(await depositTranches[0].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("0"));
-        expect(await depositTranches[1].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("400"));
+        expect(await depositTranches[1].balanceOf(deployerAddress)).to.eq(toFixedPtAmt("401.980198019801980198"));
         expect(await depositTranches[0].balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
         expect(await depositTranches[1].balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
       });
 
-      it("should transfer excess fees back", async function () {
-        expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("996"));
+      it("should not change the perp balance", async function () {
+        expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("1000"));
       });
 
       it("should leave no dust", async function () {
@@ -852,7 +747,7 @@ describe("RouterV1", function () {
 
     describe("successful tranche & rollover and return the remainder (with no fees)", function () {
       beforeEach(async function () {
-        await feeStrategy.computeRolloverFees.returns(["0", "0"]);
+        await feeStrategy.computeRolloverFeePerc.returns("0", "0");
 
         await mintCollteralToken(collateralToken, toFixedPtAmt("2000"), deployer);
         await collateralToken.approve(router.address, toFixedPtAmt("2000"));
