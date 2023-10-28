@@ -30,7 +30,6 @@ let collateralToken: Contract;
 let issuer: Contract;
 let feeStrategy: Contract;
 let pricingStrategy: Contract;
-let discountStrategy: Contract;
 let deployer: Signer;
 let reserveTranches: Contract[][] = [];
 let rolloverInBond: Contract;
@@ -57,15 +56,7 @@ describe("RolloverVault", function () {
     const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
     pricingStrategy = await smock.fake(PricingStrategy);
     await pricingStrategy.decimals.returns(8);
-    await pricingStrategy.computeMatureTranchePrice.returns(toPriceFixedPtAmt("1"));
     await pricingStrategy.computeTranchePrice.returns(toPriceFixedPtAmt("1"));
-
-    const DiscountStrategy = await ethers.getContractFactory("TrancheClassDiscountStrategy");
-    discountStrategy = await smock.fake(DiscountStrategy);
-    await discountStrategy.decimals.returns(18);
-    await discountStrategy.computeTrancheDiscount
-      .whenCalledWith(collateralToken.address)
-      .returns(toDiscountFixedPtAmt("1"));
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -77,10 +68,9 @@ describe("RolloverVault", function () {
         issuer.address,
         feeStrategy.address,
         pricingStrategy.address,
-        discountStrategy.address,
       ],
       {
-        initializer: "init(string,string,address,address,address,address,address)",
+        initializer: "init(string,string,address,address,address,address)",
       },
     );
 
@@ -93,59 +83,21 @@ describe("RolloverVault", function () {
       const tranches = await getTranches(bond);
       await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
 
-      await pricingStrategy.computeTranchePrice.whenCalledWith(tranches[0].address).returns(toPriceFixedPtAmt("1"));
-      await discountStrategy.computeTrancheDiscount
-        .whenCalledWith(tranches[0].address)
-        .returns(toDiscountFixedPtAmt("1"));
       await tranches[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(tranches[0].address, toFixedPtAmt("200"));
 
-      await pricingStrategy.computeTranchePrice.whenCalledWith(tranches[1].address).returns(toPriceFixedPtAmt("1"));
-      await discountStrategy.computeTrancheDiscount
-        .whenCalledWith(tranches[1].address)
-        .returns(toDiscountFixedPtAmt("1"));
-      await tranches[1].approve(perp.address, toFixedPtAmt("300"));
-      await perp.deposit(tranches[1].address, toFixedPtAmt("300"));
-
       reserveTranches.push(tranches[0]);
-      reserveTranches.push(tranches[1]);
       await advancePerpQueue(perp, 1200);
     }
 
     await checkReserveComposition(
       perp,
-      [collateralToken, ...reserveTranches.slice(-6)],
-      [
-        toFixedPtAmt("500"),
-        toFixedPtAmt("200"),
-        toFixedPtAmt("300"),
-        toFixedPtAmt("200"),
-        toFixedPtAmt("300"),
-        toFixedPtAmt("200"),
-        toFixedPtAmt("300"),
-      ],
+      [collateralToken, ...reserveTranches.slice(-3)],
+      [toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
     );
 
     rolloverInBond = await bondAt(await perp.callStatic.getDepositBond());
     rolloverInTranches = await getTranches(rolloverInBond);
-    await pricingStrategy.computeTranchePrice
-      .whenCalledWith(rolloverInTranches[0].address)
-      .returns(toPriceFixedPtAmt("1"));
-    await discountStrategy.computeTrancheDiscount
-      .whenCalledWith(rolloverInTranches[0].address)
-      .returns(toDiscountFixedPtAmt("1"));
-    await pricingStrategy.computeTranchePrice
-      .whenCalledWith(rolloverInTranches[1].address)
-      .returns(toPriceFixedPtAmt("1"));
-    await discountStrategy.computeTrancheDiscount
-      .whenCalledWith(rolloverInTranches[1].address)
-      .returns(toDiscountFixedPtAmt("0"));
-    await pricingStrategy.computeTranchePrice
-      .whenCalledWith(rolloverInTranches[2].address)
-      .returns(toPriceFixedPtAmt("1"));
-    await discountStrategy.computeTrancheDiscount
-      .whenCalledWith(rolloverInTranches[2].address)
-      .returns(toDiscountFixedPtAmt("0"));
 
     await mintCollteralToken(collateralToken, toFixedPtAmt("100000"), deployer);
     const RolloverVault = await ethers.getContractFactory("RolloverVault");
@@ -187,12 +139,9 @@ describe("RolloverVault", function () {
       });
     });
 
-    describe("when no trancheIn", function () {
+    describe("when trancheIn price is zero", function () {
       beforeEach(async function () {
         await pricingStrategy.computeTranchePrice
-          .whenCalledWith(rolloverInTranches[0].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
           .whenCalledWith(rolloverInTranches[0].address)
           .returns(toDiscountFixedPtAmt("0"));
         await collateralToken.transfer(vault.address, toFixedPtAmt("10"));
@@ -208,13 +157,7 @@ describe("RolloverVault", function () {
         await advancePerpQueueToBondMaturity(perp, rolloverInBond);
         const newBondIn = await bondAt(await perp.callStatic.getDepositBond());
         newTranchesIn = await getTranches(newBondIn);
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(newTranchesIn[0].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(newTranchesIn[0].address)
-          .returns(toDiscountFixedPtAmt("1"));
-        await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("2000")]);
+        await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("800")]);
       });
 
       describe("when balance covers just 1 token", function () {
@@ -231,7 +174,7 @@ describe("RolloverVault", function () {
           await checkReserveComposition(
             perp,
             [collateralToken, newTranchesIn[0]],
-            [toFixedPtAmt("1998"), toFixedPtAmt("2")],
+            [toFixedPtAmt("798"), toFixedPtAmt("2")],
           );
         });
       });
@@ -244,73 +187,13 @@ describe("RolloverVault", function () {
           await expect(vault.deploy()).not.to.be.reverted;
           await checkVaultAssetComposition(
             vault,
-            [collateralToken, newTranchesIn[1], newTranchesIn[2], perp],
-            [toFixedPtAmt("2000"), toFixedPtAmt("3000"), toFixedPtAmt("5000"), toFixedPtAmt("0")],
+            [collateralToken, newTranchesIn[0], newTranchesIn[1], newTranchesIn[2], perp],
+            [toFixedPtAmt("800"), toFixedPtAmt("1200"), toFixedPtAmt("3000"), toFixedPtAmt("5000"), toFixedPtAmt("0")],
           );
           await checkReserveComposition(
             perp,
             [collateralToken, newTranchesIn[0]],
-            [toFixedPtAmt("0"), toFixedPtAmt("2000")],
-          );
-        });
-      });
-    });
-
-    describe("when many trancheIn one tokenOut (mature tranche)", function () {
-      let newTranchesIn;
-      beforeEach(async function () {
-        await advancePerpQueueToBondMaturity(perp, rolloverInBond);
-        const newBondIn = await bondAt(await perp.callStatic.getDepositBond());
-        newTranchesIn = await getTranches(newBondIn);
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(newTranchesIn[0].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(newTranchesIn[0].address)
-          .returns(toDiscountFixedPtAmt("1"));
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(newTranchesIn[1].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(newTranchesIn[1].address)
-          .returns(toDiscountFixedPtAmt("1"));
-        await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("2000")]);
-      });
-
-      describe("when balance covers just 1 token", function () {
-        beforeEach(async function () {
-          await collateralToken.transfer(vault.address, toFixedPtAmt("10"));
-        });
-        it("should rollover", async function () {
-          await expect(vault.deploy()).not.to.be.reverted;
-          await checkVaultAssetComposition(
-            vault,
-            [collateralToken, newTranchesIn[2], perp],
-            [toFixedPtAmt("5"), toFixedPtAmt("5"), toFixedPtAmt("0")],
-          );
-          await checkReserveComposition(
-            perp,
-            [collateralToken, newTranchesIn[0], newTranchesIn[1]],
-            [toFixedPtAmt("1995"), toFixedPtAmt("2"), toFixedPtAmt("3")],
-          );
-        });
-      });
-
-      describe("when balance covers just 1 token exactly", function () {
-        beforeEach(async function () {
-          await collateralToken.transfer(vault.address, toFixedPtAmt("4000"));
-        });
-        it("should rollover", async function () {
-          await expect(vault.deploy()).not.to.be.reverted;
-          await checkVaultAssetComposition(
-            vault,
-            [collateralToken, newTranchesIn[2], perp],
-            [toFixedPtAmt("2000"), toFixedPtAmt("2000"), toFixedPtAmt("0")],
-          );
-          await checkReserveComposition(
-            perp,
-            [collateralToken, newTranchesIn[0], newTranchesIn[1]],
-            [toFixedPtAmt("0"), toFixedPtAmt("800"), toFixedPtAmt("1200")],
+            [toFixedPtAmt("0"), toFixedPtAmt("800")],
           );
         });
       });
@@ -319,16 +202,9 @@ describe("RolloverVault", function () {
     describe("when one trancheIn one tokenOut (near mature tranche)", function () {
       let curTranchesIn, newTranchesIn;
       beforeEach(async function () {
-        await advancePerpQueueToBondMaturity(perp, await bondAt(reserveTranches[4].bond()));
+        await advancePerpQueueToBondMaturity(perp, await bondAt(reserveTranches[2].bond()));
         const curBondIn = await bondAt(await perp.callStatic.getDepositBond());
         curTranchesIn = await getTranches(curBondIn);
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(curTranchesIn[0].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(curTranchesIn[0].address)
-          .returns(toDiscountFixedPtAmt("1"));
-
         await collateralToken.transfer(vault.address, toFixedPtAmt("10000"));
         await vault.deploy();
 
@@ -336,20 +212,13 @@ describe("RolloverVault", function () {
         const newBondIn = await bondAt(await perp.callStatic.getDepositBond());
 
         newTranchesIn = await getTranches(newBondIn);
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(newTranchesIn[0].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(newTranchesIn[0].address)
-          .returns(toDiscountFixedPtAmt("1"));
-
         await checkVaultAssetComposition(
           vault,
-          [collateralToken, reserveTranches[6], reserveTranches[7], curTranchesIn[1], curTranchesIn[2], perp],
+          [collateralToken, reserveTranches[3], curTranchesIn[0], curTranchesIn[1], curTranchesIn[2], perp],
           [
-            toFixedPtAmt("1500"),
+            toFixedPtAmt("600"),
             toFixedPtAmt("200"),
-            toFixedPtAmt("300"),
+            toFixedPtAmt("1200"),
             toFixedPtAmt("3000"),
             toFixedPtAmt("5000"),
             toFixedPtAmt("0"),
@@ -358,7 +227,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, curTranchesIn[0]],
-          [toFixedPtAmt("0"), toFixedPtAmt("2000")],
+          [toFixedPtAmt("0"), toFixedPtAmt("800")],
         );
       });
 
@@ -369,31 +238,29 @@ describe("RolloverVault", function () {
             vault,
             [
               collateralToken,
-              reserveTranches[6],
-              reserveTranches[7],
+              newTranchesIn[0],
+              newTranchesIn[1],
+              newTranchesIn[2],
               curTranchesIn[0],
               curTranchesIn[1],
               curTranchesIn[2],
-              newTranchesIn[1],
-              newTranchesIn[2],
               perp,
             ],
             [
               toFixedPtAmt("0"),
-              toFixedPtAmt("200"),
+              toFixedPtAmt("0"),
+              toFixedPtAmt("180"),
               toFixedPtAmt("300"),
-              toFixedPtAmt("300"),
+              toFixedPtAmt("1320"),
               toFixedPtAmt("3000"),
               toFixedPtAmt("5000"),
-              toFixedPtAmt("450"),
-              toFixedPtAmt("750"),
               toFixedPtAmt("0"),
             ],
           );
           await checkReserveComposition(
             perp,
             [collateralToken, curTranchesIn[0], newTranchesIn[0]],
-            [toFixedPtAmt("0"), toFixedPtAmt("1700"), toFixedPtAmt("300")],
+            [toFixedPtAmt("0"), toFixedPtAmt("680"), toFixedPtAmt("120")],
           );
         });
       });
@@ -408,22 +275,22 @@ describe("RolloverVault", function () {
             vault,
             [
               collateralToken,
-              reserveTranches[6],
-              reserveTranches[7],
+              reserveTranches[3],
+              newTranchesIn[0],
+              newTranchesIn[1],
+              newTranchesIn[2],
               curTranchesIn[0],
               curTranchesIn[1],
               curTranchesIn[2],
-              newTranchesIn[1],
-              newTranchesIn[2],
               perp,
             ],
             [
               toFixedPtAmt("0"),
               toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
+              toFixedPtAmt("1020"),
+              toFixedPtAmt("2730"),
+              toFixedPtAmt("4550"),
               toFixedPtAmt("2000"),
-              toFixedPtAmt("3000"),
-              toFixedPtAmt("5000"),
               toFixedPtAmt("3000"),
               toFixedPtAmt("5000"),
               toFixedPtAmt("0"),
@@ -432,131 +299,7 @@ describe("RolloverVault", function () {
           await checkReserveComposition(
             perp,
             [collateralToken, newTranchesIn[0]],
-            [toFixedPtAmt("0"), toFixedPtAmt("2000")],
-          );
-        });
-      });
-    });
-
-    describe("when many trancheIn one tokenOut (near mature tranche)", function () {
-      let curTranchesIn, newTranchesIn;
-      beforeEach(async function () {
-        await advancePerpQueueToBondMaturity(perp, await bondAt(reserveTranches[4].bond()));
-        const curBondIn = await bondAt(await perp.callStatic.getDepositBond());
-        curTranchesIn = await getTranches(curBondIn);
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(curTranchesIn[0].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(curTranchesIn[0].address)
-          .returns(toDiscountFixedPtAmt("1"));
-
-        await collateralToken.transfer(vault.address, toFixedPtAmt("10000"));
-        await vault.deploy();
-
-        await advancePerpQueueToRollover(perp, curBondIn);
-        const newBondIn = await bondAt(await perp.callStatic.getDepositBond());
-
-        newTranchesIn = await getTranches(newBondIn);
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(newTranchesIn[0].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(newTranchesIn[0].address)
-          .returns(toDiscountFixedPtAmt("1"));
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(newTranchesIn[1].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(newTranchesIn[1].address)
-          .returns(toDiscountFixedPtAmt("1"));
-
-        await checkVaultAssetComposition(
-          vault,
-          [collateralToken, reserveTranches[6], reserveTranches[7], curTranchesIn[1], curTranchesIn[2], perp],
-          [
-            toFixedPtAmt("1500"),
-            toFixedPtAmt("200"),
-            toFixedPtAmt("300"),
-            toFixedPtAmt("3000"),
-            toFixedPtAmt("5000"),
-            toFixedPtAmt("0"),
-          ],
-        );
-        await checkReserveComposition(
-          perp,
-          [collateralToken, curTranchesIn[0]],
-          [toFixedPtAmt("0"), toFixedPtAmt("2000")],
-        );
-      });
-
-      describe("when balance covers just 1 token", function () {
-        it("should rollover", async function () {
-          await expect(vault.deploy()).not.to.be.reverted;
-          await checkVaultAssetComposition(
-            vault,
-            [
-              collateralToken,
-              reserveTranches[6],
-              reserveTranches[7],
-              curTranchesIn[0],
-              curTranchesIn[1],
-              curTranchesIn[2],
-              newTranchesIn[2],
-              perp,
-            ],
-            [
-              toFixedPtAmt("0"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("750"),
-              toFixedPtAmt("3000"),
-              toFixedPtAmt("5000"),
-              toFixedPtAmt("750"),
-              toFixedPtAmt("0"),
-            ],
-          );
-          await checkReserveComposition(
-            perp,
-            [collateralToken, curTranchesIn[0], newTranchesIn[0], newTranchesIn[1]],
-            [toFixedPtAmt("0"), toFixedPtAmt("1250"), toFixedPtAmt("300"), toFixedPtAmt("450")],
-          );
-        });
-      });
-
-      describe("when balance covers just 1 token exactly", function () {
-        beforeEach(async function () {
-          await collateralToken.transfer(vault.address, toFixedPtAmt("2500"));
-        });
-        it("should rollover", async function () {
-          await expect(vault.deploy()).not.to.be.reverted;
-          await checkVaultAssetComposition(
-            vault,
-            [
-              collateralToken,
-              reserveTranches[6],
-              reserveTranches[7],
-              curTranchesIn[0],
-              curTranchesIn[1],
-              curTranchesIn[2],
-              newTranchesIn[2],
-              perp,
-            ],
-            [
-              toFixedPtAmt("0"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("2000"),
-              toFixedPtAmt("3000"),
-              toFixedPtAmt("5000"),
-              toFixedPtAmt("2000"),
-              toFixedPtAmt("0"),
-            ],
-          );
-          await checkReserveComposition(
-            perp,
-            [collateralToken, newTranchesIn[0], newTranchesIn[1]],
-            [toFixedPtAmt("0"), toFixedPtAmt("800"), toFixedPtAmt("1200")],
+            [toFixedPtAmt("0"), toFixedPtAmt("800")],
           );
         });
       });
@@ -576,45 +319,27 @@ describe("RolloverVault", function () {
           );
           await checkReserveComposition(
             perp,
-            [collateralToken, ...reserveTranches.slice(-6), rolloverInTranches[0]],
-            [
-              toFixedPtAmt("498"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("2"),
-            ],
+            [collateralToken, ...reserveTranches.slice(-3), rolloverInTranches[0]],
+            [toFixedPtAmt("198"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("2")],
           );
         });
       });
 
       describe("when balance covers just 1 token exactly", function () {
         beforeEach(async function () {
-          await collateralToken.transfer(vault.address, toFixedPtAmt("2500"));
+          await collateralToken.transfer(vault.address, toFixedPtAmt("1000"));
         });
         it("should rollover", async function () {
           await expect(vault.deploy()).not.to.be.reverted;
           await checkVaultAssetComposition(
             vault,
             [collateralToken, rolloverInTranches[1], rolloverInTranches[2], perp],
-            [toFixedPtAmt("500"), toFixedPtAmt("750"), toFixedPtAmt("1250"), toFixedPtAmt("0")],
+            [toFixedPtAmt("200"), toFixedPtAmt("300"), toFixedPtAmt("500"), toFixedPtAmt("0")],
           );
           await checkReserveComposition(
             perp,
-            [collateralToken, ...reserveTranches.slice(-6), rolloverInTranches[0]],
-            [
-              toFixedPtAmt("0"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("500"),
-            ],
+            [collateralToken, ...reserveTranches.slice(-3), rolloverInTranches[0]],
+            [toFixedPtAmt("0"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
           );
         });
       });
@@ -629,16 +354,16 @@ describe("RolloverVault", function () {
             vault,
             [
               collateralToken,
-              reserveTranches[2],
-              reserveTranches[3],
+              reserveTranches[1],
+              rolloverInTranches[0],
               rolloverInTranches[1],
               rolloverInTranches[2],
               perp,
             ],
             [
-              toFixedPtAmt("500"),
               toFixedPtAmt("200"),
-              toFixedPtAmt("100"),
+              toFixedPtAmt("200"),
+              toFixedPtAmt("400"),
               toFixedPtAmt("1200"),
               toFixedPtAmt("2000"),
               toFixedPtAmt("0"),
@@ -646,345 +371,33 @@ describe("RolloverVault", function () {
           );
           await checkReserveComposition(
             perp,
-            [collateralToken, ...reserveTranches.slice(-5), rolloverInTranches[0]],
-            [
-              toFixedPtAmt("0"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("800"),
-            ],
-          );
-        });
-      });
-
-      describe("when balance covers all tokens", function () {
-        beforeEach(async function () {
-          await collateralToken.transfer(vault.address, toFixedPtAmt("5000"));
-        });
-        it("should rollover", async function () {
-          await expect(vault.deploy()).not.to.be.reverted;
-          await checkVaultAssetComposition(
-            vault,
-            [
-              collateralToken,
-              reserveTranches[2],
-              reserveTranches[3],
-              rolloverInTranches[1],
-              rolloverInTranches[2],
-              perp,
-            ],
-            [
-              toFixedPtAmt("500"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("1500"),
-              toFixedPtAmt("2500"),
-              toFixedPtAmt("0"),
-            ],
-          );
-          await checkReserveComposition(
-            perp,
-            [collateralToken, ...reserveTranches.slice(-4), rolloverInTranches[0]],
-            [
-              toFixedPtAmt("0"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("1000"),
-            ],
-          );
-        });
-      });
-
-      describe("when balance exceeds all tokens", function () {
-        beforeEach(async function () {
-          await collateralToken.transfer(vault.address, toFixedPtAmt("6000"));
-        });
-        it("should rollover", async function () {
-          await expect(vault.deploy()).not.to.be.reverted;
-          await checkVaultAssetComposition(
-            vault,
-            [
-              collateralToken,
-              reserveTranches[2],
-              reserveTranches[3],
-              rolloverInTranches[0],
-              rolloverInTranches[1],
-              rolloverInTranches[2],
-              perp,
-            ],
-            [
-              toFixedPtAmt("500"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("1800"),
-              toFixedPtAmt("3000"),
-              toFixedPtAmt("0"),
-            ],
-          );
-          await checkReserveComposition(
-            perp,
-            [collateralToken, ...reserveTranches.slice(-4), rolloverInTranches[0]],
-            [
-              toFixedPtAmt("0"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("1000"),
-            ],
+            [collateralToken, ...reserveTranches.slice(-2), rolloverInTranches[0]],
+            [toFixedPtAmt("0"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("400")],
           );
         });
       });
     });
 
-    describe("when many trancheIn many tokenOut", function () {
-      beforeEach(async function () {
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(rolloverInTranches[1].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(rolloverInTranches[1].address)
-          .returns(toDiscountFixedPtAmt("1"));
-      });
-
-      describe("when balance covers just 1 token", async function () {
-        beforeEach(async function () {
-          await collateralToken.transfer(vault.address, toFixedPtAmt("10"));
-        });
-        it("should rollover", async function () {
-          await expect(vault.deploy()).not.to.be.reverted;
-          await checkVaultAssetComposition(
-            vault,
-            [collateralToken, rolloverInTranches[2], perp],
-            [toFixedPtAmt("5"), toFixedPtAmt("5"), toFixedPtAmt("0")],
-          );
-          await checkReserveComposition(
-            perp,
-            [collateralToken, ...reserveTranches.slice(-6), rolloverInTranches[0], rolloverInTranches[1]],
-            [
-              toFixedPtAmt("495"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("2"),
-              toFixedPtAmt("3"),
-            ],
-          );
-        });
-      });
-
-      describe("when balance covers just 1 token exactly", async function () {
-        beforeEach(async function () {
-          await collateralToken.transfer(vault.address, toFixedPtAmt("1000"));
-        });
-        it("should rollover", async function () {
-          await expect(vault.deploy()).not.to.be.reverted;
-          await checkVaultAssetComposition(
-            vault,
-            [collateralToken, rolloverInTranches[2], perp],
-            [toFixedPtAmt("500"), toFixedPtAmt("500"), toFixedPtAmt("0")],
-          );
-          await checkReserveComposition(
-            perp,
-            [collateralToken, ...reserveTranches.slice(-6), rolloverInTranches[0], rolloverInTranches[1]],
-            [
-              toFixedPtAmt("0"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-            ],
-          );
-        });
-      });
-
+    describe("when one trancheIn many tokenOut with different prices", function () {
       describe("when balance covers many tokens", async function () {
         beforeEach(async function () {
-          await collateralToken.transfer(vault.address, toFixedPtAmt("1500"));
+          await pricingStrategy.computeTranchePrice
+            .whenCalledWith(rolloverInTranches[0].address)
+            .returns(toPriceFixedPtAmt("0.5"));
+
+          await collateralToken.transfer(vault.address, toFixedPtAmt("4000"));
         });
         it("should rollover", async function () {
           await expect(vault.deploy()).not.to.be.reverted;
           await checkVaultAssetComposition(
             vault,
-            [collateralToken, reserveTranches[2], reserveTranches[3], rolloverInTranches[2], perp],
-            [toFixedPtAmt("500"), toFixedPtAmt("200"), toFixedPtAmt("50"), toFixedPtAmt("750"), toFixedPtAmt("0")],
+            [collateralToken, reserveTranches[1], rolloverInTranches[1], rolloverInTranches[2], perp],
+            [toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("1200"), toFixedPtAmt("2000"), toFixedPtAmt("0")],
           );
           await checkReserveComposition(
             perp,
-            [collateralToken, ...reserveTranches.slice(-5), rolloverInTranches[0], rolloverInTranches[1]],
-            [
-              toFixedPtAmt("0"),
-              toFixedPtAmt("250"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("450"),
-            ],
-          );
-        });
-      });
-
-      describe("when balance covers all tokens", async function () {
-        beforeEach(async function () {
-          await collateralToken.transfer(vault.address, toFixedPtAmt("2000"));
-        });
-        it("should rollover", async function () {
-          await expect(vault.deploy()).not.to.be.reverted;
-          await checkVaultAssetComposition(
-            vault,
-            [collateralToken, reserveTranches[2], reserveTranches[3], rolloverInTranches[2], perp],
-            [toFixedPtAmt("500"), toFixedPtAmt("200"), toFixedPtAmt("300"), toFixedPtAmt("1000"), toFixedPtAmt("0")],
-          );
-          await checkReserveComposition(
-            perp,
-            [collateralToken, ...reserveTranches.slice(-4), rolloverInTranches[0], rolloverInTranches[1]],
-            [
-              toFixedPtAmt("0"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("400"),
-              toFixedPtAmt("600"),
-            ],
-          );
-        });
-      });
-
-      describe("when balance exceeds all tokens", async function () {
-        beforeEach(async function () {
-          await collateralToken.transfer(vault.address, toFixedPtAmt("6000"));
-        });
-        it("should rollover", async function () {
-          await expect(vault.deploy()).not.to.be.reverted;
-          await checkVaultAssetComposition(
-            vault,
-            [
-              collateralToken,
-              reserveTranches[2],
-              reserveTranches[3],
-              rolloverInTranches[0],
-              rolloverInTranches[1],
-              rolloverInTranches[2],
-              perp,
-            ],
-            [
-              toFixedPtAmt("500"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("1800"),
-              toFixedPtAmt("3000"),
-              toFixedPtAmt("0"),
-            ],
-          );
-          await checkReserveComposition(
-            perp,
-            [collateralToken, ...reserveTranches.slice(-4), rolloverInTranches[0]],
-            [
-              toFixedPtAmt("0"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("1000"),
-            ],
-          );
-        });
-      });
-    });
-
-    describe("when many trancheIn many tokenOut with different yields", function () {
-      beforeEach(async function () {
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(rolloverInTranches[1].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(rolloverInTranches[1].address)
-          .returns(toDiscountFixedPtAmt("0.75"));
-      });
-
-      describe("when balance covers many tokens", async function () {
-        beforeEach(async function () {
-          await collateralToken.transfer(vault.address, toFixedPtAmt("1500"));
-        });
-        it("should rollover", async function () {
-          await expect(vault.deploy()).not.to.be.reverted;
-          await checkVaultAssetComposition(
-            vault,
-            [collateralToken, reserveTranches[2], rolloverInTranches[2], perp],
-            [toFixedPtAmt("500"), toFixedPtAmt("137.499999999999999999"), toFixedPtAmt("750"), toFixedPtAmt("0")],
-          );
-          await checkReserveComposition(
-            perp,
-            [collateralToken, ...reserveTranches.slice(-6), rolloverInTranches[0], rolloverInTranches[1]],
-            [
-              toFixedPtAmt("0"),
-              toFixedPtAmt("62.500000000000000001"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("450"),
-            ],
-          );
-        });
-      });
-
-      describe("when balance covers all tokens", async function () {
-        beforeEach(async function () {
-          await collateralToken.transfer(vault.address, toFixedPtAmt("3500"));
-        });
-        it("should rollover", async function () {
-          await expect(vault.deploy()).not.to.be.reverted;
-          await checkVaultAssetComposition(
-            vault,
-            [
-              collateralToken,
-              reserveTranches[2],
-              reserveTranches[3],
-              rolloverInTranches[1],
-              rolloverInTranches[2],
-              perp,
-            ],
-            [
-              toFixedPtAmt("500"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("650"),
-              toFixedPtAmt("1750"),
-              toFixedPtAmt("0"),
-            ],
-          );
-          await checkReserveComposition(
-            perp,
-            [collateralToken, ...reserveTranches.slice(-4), rolloverInTranches[0], rolloverInTranches[1]],
-            [
-              toFixedPtAmt("0"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("300"),
-              toFixedPtAmt("700"),
-              toFixedPtAmt("400"),
-            ],
+            [collateralToken, ...reserveTranches.slice(-2), rolloverInTranches[0]],
+            [toFixedPtAmt("0"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("800")],
           );
         });
       });
@@ -992,13 +405,6 @@ describe("RolloverVault", function () {
 
     describe("when rollover fee is +ve", function () {
       beforeEach(async function () {
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(rolloverInTranches[1].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(rolloverInTranches[1].address)
-          .returns(toDiscountFixedPtAmt("1"));
-
         await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("0.01"));
         await collateralToken.transfer(vault.address, toFixedPtAmt("1500"));
       });
@@ -1007,27 +413,24 @@ describe("RolloverVault", function () {
         await expect(vault.deploy()).not.to.be.reverted;
         await checkVaultAssetComposition(
           vault,
-          [collateralToken, reserveTranches[2], reserveTranches[3], rolloverInTranches[2], perp],
+          [collateralToken, reserveTranches[1], rolloverInTranches[1], rolloverInTranches[2], perp],
           [
-            toFixedPtAmt("500"),
             toFixedPtAmt("200"),
-            toFixedPtAmt("42.499999999999999998"),
+            toFixedPtAmt("96.999999999999999999"),
+            toFixedPtAmt("450"),
             toFixedPtAmt("750"),
             toFixedPtAmt("0"),
           ],
         );
         await checkReserveComposition(
           perp,
-          [collateralToken, ...reserveTranches.slice(-5), rolloverInTranches[0], rolloverInTranches[1]],
+          [collateralToken, reserveTranches[1], reserveTranches[2], reserveTranches[3], rolloverInTranches[0]],
           [
             toFixedPtAmt("0"),
-            toFixedPtAmt("257.500000000000000002"),
+            toFixedPtAmt("103.000000000000000001"),
+            toFixedPtAmt("200"),
             toFixedPtAmt("200"),
             toFixedPtAmt("300"),
-            toFixedPtAmt("200"),
-            toFixedPtAmt("300"),
-            toFixedPtAmt("300"),
-            toFixedPtAmt("450"),
           ],
         );
       });
@@ -1035,13 +438,6 @@ describe("RolloverVault", function () {
 
     describe("when rollover fee is -ve", function () {
       beforeEach(async function () {
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(rolloverInTranches[1].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(rolloverInTranches[1].address)
-          .returns(toDiscountFixedPtAmt("1"));
-
         await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("-0.01"));
         await collateralToken.transfer(vault.address, toFixedPtAmt("1500"));
       });
@@ -1050,21 +446,24 @@ describe("RolloverVault", function () {
         await expect(vault.deploy()).not.to.be.reverted;
         await checkVaultAssetComposition(
           vault,
-          [collateralToken, reserveTranches[2], reserveTranches[3], rolloverInTranches[2], perp],
-          [toFixedPtAmt("500"), toFixedPtAmt("200"), toFixedPtAmt("57.5"), toFixedPtAmt("750"), toFixedPtAmt("0")],
+          [collateralToken, reserveTranches[1], rolloverInTranches[1], rolloverInTranches[2], perp],
+          [
+            toFixedPtAmt("200"),
+            toFixedPtAmt("102.999999999999999999"),
+            toFixedPtAmt("450"),
+            toFixedPtAmt("750"),
+            toFixedPtAmt("0"),
+          ],
         );
         await checkReserveComposition(
           perp,
-          [collateralToken, ...reserveTranches.slice(-5), rolloverInTranches[0], rolloverInTranches[1]],
+          [collateralToken, reserveTranches[1], reserveTranches[2], reserveTranches[3], rolloverInTranches[0]],
           [
             toFixedPtAmt("0"),
-            toFixedPtAmt("242.5"),
+            toFixedPtAmt("97.000000000000000001"),
+            toFixedPtAmt("200"),
             toFixedPtAmt("200"),
             toFixedPtAmt("300"),
-            toFixedPtAmt("200"),
-            toFixedPtAmt("300"),
-            toFixedPtAmt("300"),
-            toFixedPtAmt("450"),
           ],
         );
       });
@@ -1074,38 +473,55 @@ describe("RolloverVault", function () {
       let tx: Transaction;
       beforeEach(async function () {
         await pricingStrategy.computeTranchePrice
-          .whenCalledWith(rolloverInTranches[1].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(rolloverInTranches[1].address)
-          .returns(toDiscountFixedPtAmt("0.75"));
-
+          .whenCalledWith(reserveTranches[1].address)
+          .returns(toPriceFixedPtAmt("0.75"));
         await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("-0.01"));
-        await collateralToken.transfer(vault.address, toFixedPtAmt("1500"));
+        await collateralToken.transfer(vault.address, toFixedPtAmt("3000"));
         tx = vault.deploy();
         await tx;
       });
 
       it("should tranche and rollover", async function () {
         // Tranche
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[0].address, toFixedPtAmt("300"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[1].address, toFixedPtAmt("450"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[2].address, toFixedPtAmt("750"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[0].address, toFixedPtAmt("600"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[1].address, toFixedPtAmt("900"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[2].address, toFixedPtAmt("1500"));
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("0"));
 
         // Rollover
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[0].address, toFixedPtAmt("0"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[1].address, toFixedPtAmt("0"));
         await expect(tx)
           .to.emit(vault, "AssetSynced")
-          .withArgs(reserveTranches[2].address, toFixedPtAmt("143.874999999999999999"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("500"));
+          .withArgs(rolloverInTranches[0].address, toFixedPtAmt("253.465346534653465346"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(reserveTranches[1].address, toFixedPtAmt("200"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("200"));
       });
 
       it("should update the list of deployed assets", async function () {
-        expect(await vault.deployedCount()).to.eq(2);
-        expect(await vault.deployedAt(0)).to.eq(rolloverInTranches[2].address);
-        expect(await vault.deployedAt(1)).to.eq(reserveTranches[2].address);
+        await checkVaultAssetComposition(
+          vault,
+          [
+            collateralToken,
+            reserveTranches[1],
+            rolloverInTranches[0],
+            rolloverInTranches[1],
+            rolloverInTranches[2],
+            perp,
+          ],
+          [
+            toFixedPtAmt("200"),
+            toFixedPtAmt("200"),
+            toFixedPtAmt("253.465346534653465346"),
+            toFixedPtAmt("900.0"),
+            toFixedPtAmt("1500"),
+            toFixedPtAmt("0"),
+          ],
+        );
+
+        await checkReserveComposition(
+          perp,
+          [collateralToken, reserveTranches[2], reserveTranches[3], rolloverInTranches[0]],
+          [toFixedPtAmt("0"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("346.534653465346534654")],
+        );
       });
     });
   });
@@ -1114,14 +530,6 @@ describe("RolloverVault", function () {
     async function setupDeployment() {
       const curBondIn = await bondAt(await perp.callStatic.getDepositBond());
       await advancePerpQueueToRollover(perp, curBondIn);
-      const newBondIn = await bondAt(await perp.callStatic.getDepositBond());
-      const newTranchesIn = await getTranches(newBondIn);
-      await pricingStrategy.computeTranchePrice
-        .whenCalledWith(newTranchesIn[0].address)
-        .returns(toPriceFixedPtAmt("1"));
-      await discountStrategy.computeTrancheDiscount
-        .whenCalledWith(newTranchesIn[0].address)
-        .returns(toDiscountFixedPtAmt("1"));
       await collateralToken.transfer(vault.address, toFixedPtAmt("10"));
     }
 

@@ -222,8 +222,7 @@ export const logReserveComposition = async (perp: Contract) => {
       i,
       token.address,
       utils.formatUnits(await token.balanceOf(await perp.reserve()), await perp.decimals()),
-      utils.formatUnits(await perp.callStatic.getReserveTrancheBalance(token.address), await perp.decimals()),
-      utils.formatUnits(await perp.computeDiscount(token.address), await perp.DISCOUNT_DECIMALS()),
+      utils.formatUnits(await perp.callStatic.getReserveTokenBalance(token.address), await perp.decimals()),
       utils.formatUnits(await perp.computePrice(token.address), await perp.PRICE_DECIMALS()),
     );
   }
