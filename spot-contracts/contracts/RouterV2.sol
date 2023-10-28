@@ -12,12 +12,12 @@ import { BondTranches, BondTranchesHelpers } from "./_utils/BondTranchesHelpers.
 import { BondHelpers } from "./_utils/BondHelpers.sol";
 
 /**
- *  @title RouterV1
+ *  @title RouterV2
  *
  *  @notice Contract to dry-run and batch multiple operations.
  *
  */
-contract RouterV1 {
+contract RouterV2 {
     // math
     using SafeCastUpgradeable for uint256;
 
@@ -59,57 +59,22 @@ contract RouterV1 {
         return (bond, bt.tranches, trancheAmts);
     }
 
-    /// @notice Calculates the amount of perp tokens minted and fees for the operation.
-    /// @dev Used by off-chain services to preview a deposit operation.
-    /// @param perp Address of the perp contract.
-    /// @param trancheIn The address of the tranche token to be deposited.
-    /// @param trancheInAmt The amount of tranche tokens deposited.
-    /// @return mintAmt The amount of perp tokens minted.
-    /// @return feeToken The address of the fee token.
-    /// @return mintFee The fee charged for minting.
-    function previewDeposit(
-        IPerpetualTranche perp,
-        ITranche trancheIn,
-        uint256 trancheInAmt
-    )
-        external
-        afterPerpStateUpdate(perp)
-        returns (
-            uint256,
-            IERC20Upgradeable,
-            int256
-        )
-    {
-        uint256 mintAmt = perp.computeMintAmt(trancheIn, trancheInAmt);
-        IERC20Upgradeable feeToken = perp.feeToken();
-        (int256 reserveFee, uint256 protocolFee) = perp.feeStrategy().computeMintFees(mintAmt);
-        int256 mintFee = reserveFee + protocolFee.toInt256();
-        return (mintAmt, feeToken, mintFee);
-    }
-
     /// @notice Tranches the collateral using the current deposit bond and then deposits individual tranches
     ///         to mint perp tokens. It transfers the perp tokens back to the
     ///         transaction sender along with any unused tranches and fees.
     /// @param perp Address of the perp contract.
     /// @param bond Address of the deposit bond.
     /// @param collateralAmount The amount of collateral the user wants to tranche.
-    /// @param feePaid The fee paid to the perp contract to mint perp when the fee token is not the perp token itself, otherwise 0.
-    /// @dev Fee to be paid should be pre-computed off-chain using the preview function.
     function trancheAndDeposit(
         IPerpetualTranche perp,
         IBondController bond,
-        uint256 collateralAmount,
-        uint256 feePaid
+        uint256 collateralAmount
     ) external afterPerpStateUpdate(perp) {
         BondTranches memory bt = bond.getTranches();
         IERC20Upgradeable collateralToken = IERC20Upgradeable(bond.collateralToken());
-        IERC20Upgradeable feeToken = perp.feeToken();
 
         // transfers collateral & fees to router
         collateralToken.safeTransferFrom(msg.sender, address(this), collateralAmount);
-        if (feePaid > 0) {
-            feeToken.safeTransferFrom(msg.sender, address(this), feePaid);
-        }
 
         // approves collateral to be tranched
         _checkAndApproveMax(collateralToken, address(bond), collateralAmount);
@@ -117,19 +82,14 @@ contract RouterV1 {
         // tranches collateral
         bond.deposit(collateralAmount);
 
-        // approves fee to be spent to mint perp tokens
-        _checkAndApproveMax(feeToken, address(perp), feePaid);
+        // uses senior tranches to mint perps
+        uint256 trancheAmt = bt.tranches[0].balanceOf(address(this));
+        _checkAndApproveMax(bt.tranches[0], address(perp), trancheAmt);
+        perp.deposit(bt.tranches[0], trancheAmt);
 
-        for (uint8 i = 0; i < bt.tranches.length; i++) {
-            uint256 trancheAmt = bt.tranches[i].balanceOf(address(this));
-            // approves tranches to be spent
-            _checkAndApproveMax(bt.tranches[i], address(perp), trancheAmt);
-            // mints perp tokens using tranches
-            uint256 mintAmt = perp.deposit(bt.tranches[i], trancheAmt);
-            if (mintAmt <= 0) {
-                // transfers unused tranches back
-                bt.tranches[i].safeTransfer(msg.sender, trancheAmt);
-            }
+        // transfers remaining tranches back
+        for (uint8 i = 1; i < bt.tranches.length; i++) {
+            bt.tranches[i].safeTransfer(msg.sender, bt.tranches[i].balanceOf(address(this)));
         }
 
         // transfers any remaining collateral tokens back
@@ -138,83 +98,8 @@ contract RouterV1 {
             collateralToken.safeTransfer(msg.sender, collateralBalance);
         }
 
-        // transfers remaining fee back if overpaid or reward
-        uint256 feeBalance = feeToken.balanceOf(address(this));
-        if (feeBalance > 0) {
-            feeToken.safeTransfer(msg.sender, feeBalance);
-        }
-
         // transfers perp tokens back
         perp.safeTransfer(msg.sender, perp.balanceOf(address(this)));
-    }
-
-    /// @notice Calculates the reserve tokens that can be redeemed from the queue
-    ///         for burning up to the requested amount of perp tokens.
-    /// @dev Used by off-chain services to preview a redeem operation.
-    /// @param perp Address of the perp contract.
-    /// @param perpAmtBurnt The amount of perp tokens requested to be burnt.
-    /// @return reserveTokens The list of reserve tokens redeemed.
-    /// @return redemptionAmts The list of reserve token amounts redeemed.
-    /// @return feeToken The address of the fee token.
-    /// @return burnFee The fee charged for burning.
-    function previewRedeem(IPerpetualTranche perp, uint256 perpAmtBurnt)
-        external
-        afterPerpStateUpdate(perp)
-        returns (
-            IERC20Upgradeable[] memory,
-            uint256[] memory,
-            IERC20Upgradeable,
-            int256
-        )
-    {
-        (IERC20Upgradeable[] memory reserveTokens, uint256[] memory redemptionAmts) = perp.computeRedemptionAmts(
-            perpAmtBurnt
-        );
-        (int256 reserveFee, uint256 protocolFee) = perp.feeStrategy().computeBurnFees(perpAmtBurnt);
-        int256 burnFee = reserveFee + protocolFee.toInt256();
-        IERC20Upgradeable feeToken = perp.feeToken();
-        return (reserveTokens, redemptionAmts, feeToken, burnFee);
-    }
-
-    /// @notice Calculates the amount tranche tokens that can be rolled out, remainders and fees,
-    ///         with a given tranche token rolled in and amount.
-    /// @dev Used by off-chain services to preview a rollover operation.
-    /// @param perp Address of the perp contract.
-    /// @param trancheIn The tranche token deposited.
-    /// @param tokenOut The reserve token requested to be withdrawn.
-    /// @param trancheInAmtRequested The amount of trancheIn tokens available to deposit.
-    /// @param maxTokenOutAmtUsed The token balance to be used for rollover.
-    /// @dev Set maxTokenOutAmtUsed to max(uint256) to use the entire balance.
-    /// @return r The amounts rolled over and remaining.
-    /// @return feeToken The address of the fee token.
-    /// @return rolloverFee The fee paid by the caller.
-    function previewRollover(
-        IPerpetualTranche perp,
-        ITranche trancheIn,
-        IERC20Upgradeable tokenOut,
-        uint256 trancheInAmtRequested,
-        uint256 maxTokenOutAmtUsed
-    )
-        external
-        afterPerpStateUpdate(perp)
-        returns (
-            IPerpetualTranche.RolloverData memory,
-            IERC20Upgradeable,
-            int256
-        )
-    {
-        IPerpetualTranche.RolloverData memory r;
-        r.remainingTrancheInAmt = trancheInAmtRequested;
-
-        IERC20Upgradeable feeToken = perp.feeToken();
-        int256 reserveFee = 0;
-        uint256 protocolFee = 0;
-        if (perp.isAcceptableRollover(trancheIn, tokenOut)) {
-            r = perp.computeRolloverAmt(trancheIn, tokenOut, trancheInAmtRequested, maxTokenOutAmtUsed);
-            (reserveFee, protocolFee) = perp.feeStrategy().computeRolloverFees(r.perpRolloverAmt);
-        }
-        int256 rolloverFee = reserveFee + protocolFee.toInt256();
-        return (r, feeToken, rolloverFee);
     }
 
     struct RolloverBatch {
@@ -228,34 +113,23 @@ contract RouterV1 {
     /// @param bond Address of the deposit bond.
     /// @param collateralAmount The amount of collateral the user wants to tranche.
     /// @param rollovers List of batch rollover operations pre-computed off-chain.
-    /// @param feePaid The fee paid by the user performing rollover (fee could be negative).
     function trancheAndRollover(
         IPerpetualTranche perp,
         IBondController bond,
         uint256 collateralAmount,
-        RolloverBatch[] calldata rollovers,
-        uint256 feePaid
+        RolloverBatch[] calldata rollovers
     ) external afterPerpStateUpdate(perp) {
         BondTranches memory bt = bond.getTranches();
         IERC20Upgradeable collateralToken = IERC20Upgradeable(bond.collateralToken());
-        IERC20Upgradeable feeToken = perp.feeToken();
 
         // transfers collateral & fees to router
         collateralToken.safeTransferFrom(msg.sender, address(this), collateralAmount);
-        if (feePaid > 0) {
-            feeToken.safeTransferFrom(msg.sender, address(this), feePaid);
-        }
 
         // approves collateral to be tranched
         _checkAndApproveMax(collateralToken, address(bond), collateralAmount);
 
         // tranches collateral
         bond.deposit(collateralAmount);
-
-        // approves fee to be spent to rollover
-        if (feePaid > 0) {
-            _checkAndApproveMax(feeToken, address(perp), feePaid);
-        }
 
         for (uint256 i = 0; i < rollovers.length; i++) {
             // approve trancheIn to be spent by perp
@@ -285,12 +159,6 @@ contract RouterV1 {
         uint256 collateralBalance = collateralToken.balanceOf(address(this));
         if (collateralBalance > 0) {
             collateralToken.safeTransfer(msg.sender, collateralBalance);
-        }
-
-        // transfers remaining fee back if overpaid or reward
-        uint256 feeBalance = feeToken.balanceOf(address(this));
-        if (feeBalance > 0) {
-            feeToken.safeTransfer(msg.sender, feeBalance);
         }
     }
 
