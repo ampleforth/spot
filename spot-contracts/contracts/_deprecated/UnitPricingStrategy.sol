@@ -23,15 +23,6 @@ contract UnitPricingStrategy is IPricingStrategy {
     }
 
     /// @inheritdoc IPricingStrategy
-    function computeMatureTranchePrice(
-        IERC20Upgradeable, /* collateralToken */
-        uint256, /* collateralBalance */
-        uint256 /* debt */
-    ) external pure override returns (uint256) {
-        return UNIT_PRICE;
-    }
-
-    /// @inheritdoc IPricingStrategy
     function decimals() external pure override returns (uint8) {
         return DECIMALS;
     }
