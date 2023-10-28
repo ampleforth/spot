@@ -21,61 +21,38 @@ import { TrancheHelpers } from "./_utils/TrancheHelpers.sol";
 /// @param authorizedCaller The address which is authorized to trigger the call.
 error UnauthorizedCall(address caller, address authorizedCaller);
 
+/// @notice Expected transfer out asset to not be a reserve asset.
+error UnauthorizedTransferOut();
+
 /// @notice Expected contract reference to not be `address(0)`.
 error UnacceptableReference();
 
 /// @notice Expected strategy to return a fixed point with exactly expected decimals.
-error InvalidStrategyDecimals(uint256 decimals, uint256 expectDecimals);
+error InvalidStrategyDecimals();
 
 /// @notice Expected bond issuer's collateral token to match underlying collateral token.
-/// @param  invalidCollateral Address of the input bond issuer's collateral token.
-/// @param underlyingCollateral Address of underlying system collateral token.
-error InvalidCollateral(address invalidCollateral, address underlyingCollateral);
+error InvalidCollateral();
 
 /// @notice Expected minTrancheMaturity be less than or equal to maxTrancheMaturity.
-/// @param minTrancheMaturitySec Minimum tranche maturity time in seconds.
-/// @param minTrancheMaturitySec Maximum tranche maturity time in seconds.
-error InvalidTrancheMaturityBounds(uint256 minTrancheMaturitySec, uint256 maxTrancheMaturitySec);
+error InvalidTrancheMaturityBounds();
 
 /// @notice Expected deposited tranche to be of current deposit bond.
-/// @param trancheIn Address of the deposit tranche.
-/// @param depositBond Address of the currently accepted deposit bond.
-error UnacceptableDepositTranche(ITranche trancheIn, IBondController depositBond);
+error UnacceptableDepositTranche();
 
 /// @notice Expected to mint a non-zero amount of tokens.
-/// @param trancheInAmt The amount of tranche tokens deposited.
-/// @param perpAmtMint The amount of tranche tokens mint.
-error UnacceptableMintAmt(uint256 trancheInAmt, uint256 perpAmtMint);
+error UnacceptableMintAmt();
 
 /// @notice Expected to burn a non-zero amount of tokens.
-/// @param requestedBurnAmt The amount of tranche tokens requested to be burnt.
-/// @param perpSupply The current supply of perp tokens.
-error UnacceptableBurnAmt(uint256 requestedBurnAmt, uint256 perpSupply);
-
-/// @notice Expected redemption to result in supply reduction.
-/// @param newSupply The new total supply after redemption.
-/// @param perpSupply The current supply of perp tokens.
-error ExpectedSupplyReduction(uint256 newSupply, uint256 perpSupply);
+error UnacceptableBurnAmt();
 
 /// @notice Expected rollover to be acceptable.
-/// @param trancheIn Address of the tranche token transferred in.
-/// @param tokenOut Address of the reserve token transferred out.
-error UnacceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut);
+error UnacceptableRollover();
 
 /// @notice Expected supply to be lower than the defined max supply.
-/// @param newSupply The new total supply after minting.
-/// @param currentMaxSupply The current max supply.
-error ExceededMaxSupply(uint256 newSupply, uint256 currentMaxSupply);
+error ExceededMaxSupply();
 
 /// @notice Expected the total mint amount per tranche to be lower than the limit.
-/// @param trancheIn Address of the deposit tranche.
-/// @param mintAmtForCurrentTranche The amount of perps that have been minted using the tranche.
-/// @param maxMintAmtPerTranche The amount of perps that can be minted per tranche.
-error ExceededMaxMintPerTranche(ITranche trancheIn, uint256 mintAmtForCurrentTranche, uint256 maxMintAmtPerTranche);
-
-/// @notice Expected transfer out asset to not be a reserve asset.
-/// @param token Address of the token transferred.
-error UnauthorizedTransferOut(IERC20Upgradeable token);
+error ExceededMaxMintPerTranche();
 
 /**
  *  @title PerpetualTranche
@@ -370,7 +347,7 @@ contract PerpetualTranche is
 
     /// @notice Updates the reference to the keeper.
     /// @param newKeeper The address of the new keeper.
-    function updateKeeper(address newKeeper) public virtual onlyOwner {
+    function updateKeeper(address newKeeper) public onlyOwner {
         address prevKeeper = keeper;
         keeper = newKeeper;
         emit UpdatedKeeper(prevKeeper, newKeeper);
@@ -399,7 +376,7 @@ contract PerpetualTranche is
             revert UnacceptableReference();
         }
         if (address(_reserveAt(0)) != bondIssuer_.collateral()) {
-            revert InvalidCollateral(bondIssuer_.collateral(), address(_reserveAt(0)));
+            revert InvalidCollateral();
         }
         bondIssuer = bondIssuer_;
         emit UpdatedBondIssuer(bondIssuer_);
@@ -412,7 +389,7 @@ contract PerpetualTranche is
             revert UnacceptableReference();
         }
         if (feeStrategy_.decimals() != PERC_DECIMALS) {
-            revert InvalidStrategyDecimals(feeStrategy_.decimals(), PERC_DECIMALS);
+            revert InvalidStrategyDecimals();
         }
         feeStrategy = feeStrategy_;
         emit UpdatedFeeStrategy(feeStrategy_);
@@ -425,7 +402,7 @@ contract PerpetualTranche is
             revert UnacceptableReference();
         }
         if (pricingStrategy_.decimals() != PRICE_DECIMALS) {
-            revert InvalidStrategyDecimals(pricingStrategy_.decimals(), PRICE_DECIMALS);
+            revert InvalidStrategyDecimals();
         }
         pricingStrategy = pricingStrategy_;
         emit UpdatedPricingStrategy(pricingStrategy_);
@@ -439,7 +416,7 @@ contract PerpetualTranche is
         onlyOwner
     {
         if (minTrancheMaturitySec_ > maxTrancheMaturitySec_) {
-            revert InvalidTrancheMaturityBounds(minTrancheMaturitySec_, maxTrancheMaturitySec_);
+            revert InvalidTrancheMaturityBounds();
         }
         minTrancheMaturitySec = minTrancheMaturitySec_;
         maxTrancheMaturitySec = maxTrancheMaturitySec_;
@@ -465,7 +442,7 @@ contract PerpetualTranche is
         uint256 amount
     ) external afterStateUpdate onlyOwner {
         if (_inReserve(token)) {
-            revert UnauthorizedTransferOut(token);
+            revert UnauthorizedTransferOut();
         }
         token.safeTransfer(to, amount);
     }
@@ -482,14 +459,14 @@ contract PerpetualTranche is
         afterStateUpdate
         returns (uint256)
     {
-        if (!_isDepositBondTranche(trancheIn)) {
-            revert UnacceptableDepositTranche(trancheIn, _depositBond);
+        if (!_isAcceptableTranche(trancheIn)) {
+            revert UnacceptableDepositTranche();
         }
 
-        // calculates the amount of perp tokens when depositing `trancheInAmt` of tranche tokens
+        // calculates the amount of perp tokens minted when depositing `trancheInAmt` of tranche tokens
         uint256 perpAmtMint = _computeMintAmt(trancheIn, trancheInAmt);
         if (trancheInAmt == 0 || perpAmtMint == 0) {
-            revert UnacceptableMintAmt(trancheInAmt, perpAmtMint);
+            revert UnacceptableMintAmt();
         }
 
         // transfers tranche tokens from the sender to the reserve
@@ -500,8 +477,7 @@ contract PerpetualTranche is
 
         // post-deposit checks
         mintedSupplyPerTranche[trancheIn] += perpAmtMint;
-        _enforcePerTrancheSupplyCap(trancheIn);
-        _enforceTotalSupplyCap();
+        _enforceMintCaps(trancheIn);
 
         return perpAmtMint;
     }
@@ -520,7 +496,7 @@ contract PerpetualTranche is
 
         // verifies if burn amount is acceptable
         if (perpAmtBurnt == 0 || perpAmtBurnt > perpSupply) {
-            revert UnacceptableBurnAmt(perpAmtBurnt, perpSupply);
+            revert UnacceptableBurnAmt();
         }
 
         // calculates share of reserve tokens to be redeemed
@@ -547,7 +523,7 @@ contract PerpetualTranche is
     ) external override onlyRollers nonReentrant whenNotPaused afterStateUpdate returns (RolloverData memory) {
         // verifies if rollover is acceptable
         if (!_isAcceptableRollover(trancheIn, tokenOut)) {
-            revert UnacceptableRollover(trancheIn, tokenOut);
+            revert UnacceptableRollover();
         }
 
         // calculates the perp denominated amount rolled over and the tokenOutAmt
@@ -1010,20 +986,17 @@ contract PerpetualTranche is
         return (isDepositBondTranche && (_depositBond.trancheAt(0) == tranche));
     }
 
-    /// @dev Enforces the total supply cap. To be invoked AFTER the mint operation.
-    function _enforceTotalSupplyCap() private view {
+    /// @dev Enforces the total supply and per tranche mint cap. To be invoked AFTER the mint operation.
+    function _enforceMintCaps(ITranche trancheIn) private view {
+        // checks if supply minted using the given tranche is within the cap
+        if (mintedSupplyPerTranche[trancheIn] > maxMintAmtPerTranche) {
+            revert ExceededMaxMintPerTranche();
+        }
+
         // checks if new total supply is within the max supply cap
         uint256 newSupply = totalSupply();
         if (newSupply > maxSupply) {
-            revert ExceededMaxSupply(newSupply, maxSupply);
-        }
-    }
-
-    /// @dev Enforces the per tranche supply cap. To be invoked AFTER the mint operation.
-    function _enforcePerTrancheSupplyCap(ITranche trancheIn) private view {
-        // checks if supply minted using the given tranche is within the cap
-        if (mintedSupplyPerTranche[trancheIn] > maxMintAmtPerTranche) {
-            revert ExceededMaxMintPerTranche(trancheIn, mintedSupplyPerTranche[trancheIn], maxMintAmtPerTranche);
+            revert ExceededMaxSupply();
         }
     }
 
