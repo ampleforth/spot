@@ -12,7 +12,6 @@ import {
   bondAt,
   getTranches,
   toFixedPtAmt,
-  toDiscountFixedPtAmt,
   toPriceFixedPtAmt,
   getDepositBond,
   advancePerpQueue,
@@ -31,11 +30,9 @@ let collateralToken: Contract;
 let issuer: Contract;
 let feeStrategy: Contract;
 let pricingStrategy: Contract;
-let discountStrategy: Contract;
 let deployer: Signer;
 let reserveTranches: Contract[][] = [];
 let rolloverInBond: Contract;
-let rolloverInTranches: Contract;
 
 describe("RolloverVault", function () {
   beforeEach(async function () {
@@ -58,15 +55,7 @@ describe("RolloverVault", function () {
     const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
     pricingStrategy = await smock.fake(PricingStrategy);
     await pricingStrategy.decimals.returns(8);
-    await pricingStrategy.computeMatureTranchePrice.returns(toPriceFixedPtAmt("1"));
     await pricingStrategy.computeTranchePrice.returns(toPriceFixedPtAmt("1"));
-
-    const DiscountStrategy = await ethers.getContractFactory("TrancheClassDiscountStrategy");
-    discountStrategy = await smock.fake(DiscountStrategy);
-    await discountStrategy.decimals.returns(18);
-    await discountStrategy.computeTrancheDiscount
-      .whenCalledWith(collateralToken.address)
-      .returns(toDiscountFixedPtAmt("1"));
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -78,10 +67,9 @@ describe("RolloverVault", function () {
         issuer.address,
         feeStrategy.address,
         pricingStrategy.address,
-        discountStrategy.address,
       ],
       {
-        initializer: "init(string,string,address,address,address,address,address)",
+        initializer: "init(string,string,address,address,address,address)",
       },
     );
 
@@ -96,59 +84,20 @@ describe("RolloverVault", function () {
       const tranches = await getTranches(bond);
       await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
 
-      await pricingStrategy.computeTranchePrice.whenCalledWith(tranches[0].address).returns(toPriceFixedPtAmt("1"));
-      await discountStrategy.computeTrancheDiscount
-        .whenCalledWith(tranches[0].address)
-        .returns(toDiscountFixedPtAmt("1"));
       await tranches[0].approve(perp.address, toFixedPtAmt("200"));
       await perp.deposit(tranches[0].address, toFixedPtAmt("200"));
 
-      await pricingStrategy.computeTranchePrice.whenCalledWith(tranches[1].address).returns(toPriceFixedPtAmt("1"));
-      await discountStrategy.computeTrancheDiscount
-        .whenCalledWith(tranches[1].address)
-        .returns(toDiscountFixedPtAmt("1"));
-      await tranches[1].approve(perp.address, toFixedPtAmt("300"));
-      await perp.deposit(tranches[1].address, toFixedPtAmt("300"));
-
       reserveTranches.push(tranches[0]);
-      reserveTranches.push(tranches[1]);
       await advancePerpQueue(perp, 1200);
     }
 
     await checkReserveComposition(
       perp,
-      [collateralToken, ...reserveTranches.slice(-6)],
-      [
-        toFixedPtAmt("500"),
-        toFixedPtAmt("200"),
-        toFixedPtAmt("300"),
-        toFixedPtAmt("200"),
-        toFixedPtAmt("300"),
-        toFixedPtAmt("200"),
-        toFixedPtAmt("300"),
-      ],
+      [collateralToken, ...reserveTranches.slice(-3)],
+      [toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
     );
 
     rolloverInBond = await bondAt(await perp.callStatic.getDepositBond());
-    rolloverInTranches = await getTranches(rolloverInBond);
-    await pricingStrategy.computeTranchePrice
-      .whenCalledWith(rolloverInTranches[0].address)
-      .returns(toPriceFixedPtAmt("1"));
-    await discountStrategy.computeTrancheDiscount
-      .whenCalledWith(rolloverInTranches[0].address)
-      .returns(toDiscountFixedPtAmt("1"));
-    await pricingStrategy.computeTranchePrice
-      .whenCalledWith(rolloverInTranches[1].address)
-      .returns(toPriceFixedPtAmt("1"));
-    await discountStrategy.computeTrancheDiscount
-      .whenCalledWith(rolloverInTranches[1].address)
-      .returns(toDiscountFixedPtAmt("0"));
-    await pricingStrategy.computeTranchePrice
-      .whenCalledWith(rolloverInTranches[2].address)
-      .returns(toPriceFixedPtAmt("1"));
-    await discountStrategy.computeTrancheDiscount
-      .whenCalledWith(rolloverInTranches[2].address)
-      .returns(toDiscountFixedPtAmt("0"));
 
     await mintCollteralToken(collateralToken, toFixedPtAmt("100000"), deployer);
     const RolloverVault = await ethers.getContractFactory("RolloverVault");
@@ -179,41 +128,25 @@ describe("RolloverVault", function () {
         currentBondIn = await bondAt(await perp.callStatic.getDepositBond());
         currentTranchesIn = await getTranches(currentBondIn);
 
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(currentTranchesIn[0].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(currentTranchesIn[0].address)
-          .returns(toDiscountFixedPtAmt("1"));
-
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(currentTranchesIn[1].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(currentTranchesIn[1].address)
-          .returns(toDiscountFixedPtAmt("1"));
-
         await collateralToken.transfer(vault.address, toFixedPtAmt("10"));
 
         await vault.deploy();
         await checkVaultAssetComposition(
           vault,
-          [collateralToken, currentTranchesIn[2], perp],
-          [toFixedPtAmt("5"), toFixedPtAmt("5"), toFixedPtAmt("0")],
+          [collateralToken, currentTranchesIn[1], currentTranchesIn[2], perp],
+          [toFixedPtAmt("2"), toFixedPtAmt("3"), toFixedPtAmt("5"), toFixedPtAmt("0")],
         );
-        expect(await vault.deployedCount()).to.eq(1);
-        expect(await vault.deployedAt(0)).to.eq(currentTranchesIn[2].address);
+        expect(await vault.deployedCount()).to.eq(2);
       });
       describe("when its not mature", function () {
         it("should be a no-op", async function () {
           await expect(vault["recover()"]()).not.to.be.reverted;
           await checkVaultAssetComposition(
             vault,
-            [collateralToken, currentTranchesIn[2], perp],
-            [toFixedPtAmt("5"), toFixedPtAmt("5"), toFixedPtAmt("0")],
+            [collateralToken, currentTranchesIn[1], currentTranchesIn[2], perp],
+            [toFixedPtAmt("2"), toFixedPtAmt("3"), toFixedPtAmt("5"), toFixedPtAmt("0")],
           );
-          expect(await vault.deployedCount()).to.eq(1);
-          expect(await vault.deployedAt(0)).to.eq(currentTranchesIn[2].address);
+          expect(await vault.deployedCount()).to.eq(2);
         });
       });
       describe("when its mature", function () {
@@ -240,13 +173,6 @@ describe("RolloverVault", function () {
         currentBondIn = await bondAt(await perp.callStatic.getDepositBond());
         currentTranchesIn = await getTranches(currentBondIn);
 
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(currentTranchesIn[0].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(currentTranchesIn[0].address)
-          .returns(toDiscountFixedPtAmt("1"));
-
         await collateralToken.transfer(vault.address, toFixedPtAmt("10"));
         await vault.deploy();
 
@@ -256,8 +182,6 @@ describe("RolloverVault", function () {
           [toFixedPtAmt("2"), toFixedPtAmt("3"), toFixedPtAmt("5"), toFixedPtAmt("0")],
         );
         expect(await vault.deployedCount()).to.eq(2);
-        expect(await vault.deployedAt(0)).to.eq(currentTranchesIn[2].address);
-        expect(await vault.deployedAt(1)).to.eq(currentTranchesIn[1].address);
       });
 
       describe("when no redemption", function () {
@@ -269,8 +193,6 @@ describe("RolloverVault", function () {
             [toFixedPtAmt("2"), toFixedPtAmt("3"), toFixedPtAmt("5"), toFixedPtAmt("0")],
           );
           expect(await vault.deployedCount()).to.eq(2);
-          expect(await vault.deployedAt(0)).to.eq(currentTranchesIn[2].address);
-          expect(await vault.deployedAt(1)).to.eq(currentTranchesIn[1].address);
         });
       });
 
@@ -298,17 +220,10 @@ describe("RolloverVault", function () {
           newBondIn = await bondAt(await perp.callStatic.getDepositBond());
           newTranchesIn = await getTranches(newBondIn);
 
-          await pricingStrategy.computeTranchePrice
-            .whenCalledWith(newTranchesIn[0].address)
-            .returns(toPriceFixedPtAmt("1"));
-          await discountStrategy.computeTrancheDiscount
-            .whenCalledWith(newTranchesIn[0].address)
-            .returns(toDiscountFixedPtAmt("1"));
-
           await collateralToken.transfer(vault.address, toFixedPtAmt("9998"));
           await vault.deploy();
 
-          expect(await vault.deployedCount()).to.eq(5);
+          expect(await vault.deployedCount()).to.eq(6);
           await checkVaultAssetComposition(
             vault,
             [
@@ -316,15 +231,17 @@ describe("RolloverVault", function () {
               currentTranchesIn[0],
               currentTranchesIn[1],
               currentTranchesIn[2],
+              newTranchesIn[0],
               newTranchesIn[1],
               newTranchesIn[2],
               perp,
             ],
             [
-              toFixedPtAmt("1998"),
+              toFixedPtAmt("798"),
               toFixedPtAmt("2"),
               toFixedPtAmt("3"),
               toFixedPtAmt("5"),
+              toFixedPtAmt("1200"),
               toFixedPtAmt("3000"),
               toFixedPtAmt("5000"),
               toFixedPtAmt("0"),
@@ -339,17 +256,17 @@ describe("RolloverVault", function () {
             await checkVaultAssetComposition(
               vault,
               [collateralToken, newTranchesIn[1], newTranchesIn[2], perp],
-              [toFixedPtAmt("2008"), toFixedPtAmt("3000"), toFixedPtAmt("5000"), toFixedPtAmt("0")],
+              [toFixedPtAmt("6808"), toFixedPtAmt("1200"), toFixedPtAmt("2000"), toFixedPtAmt("0")],
             );
           });
           it("should sync assets", async function () {
             const tx = vault["recover()"]();
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("2008"));
+            await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("6808"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[0].address, toFixedPtAmt("0"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[1].address, toFixedPtAmt("0"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[2].address, toFixedPtAmt("0"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[1].address, toFixedPtAmt("3000"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[2].address, toFixedPtAmt("5000"));
+            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[1].address, toFixedPtAmt("1200"));
+            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[2].address, toFixedPtAmt("2000"));
           });
         });
 
@@ -357,7 +274,7 @@ describe("RolloverVault", function () {
           beforeEach(async function () {
             await depositIntoBond(currentBondIn, toFixedPtAmt("1000"), deployer);
             await currentTranchesIn[2].transfer(vault.address, toFixedPtAmt("1"));
-            expect(await vault.deployedCount()).to.eq(5);
+            expect(await vault.deployedCount()).to.eq(6);
             await checkVaultAssetComposition(
               vault,
               [
@@ -365,15 +282,17 @@ describe("RolloverVault", function () {
                 currentTranchesIn[0],
                 currentTranchesIn[1],
                 currentTranchesIn[2],
+                newTranchesIn[0],
                 newTranchesIn[1],
                 newTranchesIn[2],
                 perp,
               ],
               [
-                toFixedPtAmt("1998"),
+                toFixedPtAmt("798"),
                 toFixedPtAmt("2"),
                 toFixedPtAmt("3"),
                 toFixedPtAmt("6"),
+                toFixedPtAmt("1200"),
                 toFixedPtAmt("3000"),
                 toFixedPtAmt("5000"),
                 toFixedPtAmt("0"),
@@ -386,17 +305,17 @@ describe("RolloverVault", function () {
             await checkVaultAssetComposition(
               vault,
               [collateralToken, currentTranchesIn[2], newTranchesIn[1], newTranchesIn[2], perp],
-              [toFixedPtAmt("2008"), toFixedPtAmt("1"), toFixedPtAmt("3000"), toFixedPtAmt("5000"), toFixedPtAmt("0")],
+              [toFixedPtAmt("6808"), toFixedPtAmt("1"), toFixedPtAmt("1200"), toFixedPtAmt("2000"), toFixedPtAmt("0")],
             );
           });
           it("should sync assets", async function () {
             const tx = vault["recover()"]();
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("2008"));
+            await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("6808"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[0].address, toFixedPtAmt("0"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[1].address, toFixedPtAmt("0"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[2].address, toFixedPtAmt("1"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[1].address, toFixedPtAmt("3000"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[2].address, toFixedPtAmt("5000"));
+            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[1].address, toFixedPtAmt("1200"));
+            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[2].address, toFixedPtAmt("2000"));
           });
         });
       });
@@ -409,30 +328,14 @@ describe("RolloverVault", function () {
         currentBondIn = await bondAt(await perp.callStatic.getDepositBond());
         currentTranchesIn = await getTranches(currentBondIn);
 
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(currentTranchesIn[0].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(currentTranchesIn[0].address)
-          .returns(toDiscountFixedPtAmt("1"));
-
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(currentTranchesIn[1].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(currentTranchesIn[1].address)
-          .returns(toDiscountFixedPtAmt("1"));
-
         await collateralToken.transfer(vault.address, toFixedPtAmt("10"));
-
         await vault.deploy();
         await checkVaultAssetComposition(
           vault,
-          [collateralToken, currentTranchesIn[2], perp],
-          [toFixedPtAmt("5"), toFixedPtAmt("5"), toFixedPtAmt("0")],
+          [collateralToken, currentTranchesIn[1], currentTranchesIn[2], perp],
+          [toFixedPtAmt("2"), toFixedPtAmt("3"), toFixedPtAmt("5"), toFixedPtAmt("0")],
         );
-        expect(await vault.deployedCount()).to.eq(1);
-        expect(await vault.deployedAt(0)).to.eq(currentTranchesIn[2].address);
+        expect(await vault.deployedCount()).to.eq(2);
         await perp.transfer(vault.address, toFixedPtAmt("10"));
       });
       describe("when deployed asset is not mature", function () {
@@ -440,11 +343,10 @@ describe("RolloverVault", function () {
           await expect(vault["recover()"]()).not.to.be.reverted;
           await checkVaultAssetComposition(
             vault,
-            [collateralToken, currentTranchesIn[2], perp],
-            [toFixedPtAmt("15.025"), toFixedPtAmt("4.975"), toFixedPtAmt("0")],
+            [collateralToken, currentTranchesIn[1], currentTranchesIn[2], perp],
+            [toFixedPtAmt("12.1"), toFixedPtAmt("2.9625"), toFixedPtAmt("4.9375"), toFixedPtAmt("0")],
           );
-          expect(await vault.deployedCount()).to.eq(1);
-          expect(await vault.deployedAt(0)).to.eq(currentTranchesIn[2].address);
+          expect(await vault.deployedCount()).to.eq(2);
         });
       });
       describe("when deployed asset is mature", function () {
@@ -472,13 +374,6 @@ describe("RolloverVault", function () {
         currentBondIn = await bondAt(await perp.callStatic.getDepositBond());
         currentTranchesIn = await getTranches(currentBondIn);
 
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(currentTranchesIn[0].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(currentTranchesIn[0].address)
-          .returns(toDiscountFixedPtAmt("1"));
-
         await collateralToken.transfer(vault.address, toFixedPtAmt("10"));
         await vault.deploy();
 
@@ -488,8 +383,6 @@ describe("RolloverVault", function () {
           [toFixedPtAmt("2"), toFixedPtAmt("3"), toFixedPtAmt("5"), toFixedPtAmt("0")],
         );
         expect(await vault.deployedCount()).to.eq(2);
-        expect(await vault.deployedAt(0)).to.eq(currentTranchesIn[2].address);
-        expect(await vault.deployedAt(1)).to.eq(currentTranchesIn[1].address);
         await perp.transfer(vault.address, toFixedPtAmt("10"));
       });
 
@@ -499,11 +392,9 @@ describe("RolloverVault", function () {
           await checkVaultAssetComposition(
             vault,
             [collateralToken, currentTranchesIn[1], currentTranchesIn[2], perp],
-            [toFixedPtAmt("12.04"), toFixedPtAmt("2.985"), toFixedPtAmt("4.975"), toFixedPtAmt("0")],
+            [toFixedPtAmt("12.1"), toFixedPtAmt("2.9625"), toFixedPtAmt("4.9375"), toFixedPtAmt("0")],
           );
           expect(await vault.deployedCount()).to.eq(2);
-          expect(await vault.deployedAt(0)).to.eq(currentTranchesIn[2].address);
-          expect(await vault.deployedAt(1)).to.eq(currentTranchesIn[1].address);
         });
       });
 
@@ -531,17 +422,10 @@ describe("RolloverVault", function () {
           newBondIn = await bondAt(await perp.callStatic.getDepositBond());
           newTranchesIn = await getTranches(newBondIn);
 
-          await pricingStrategy.computeTranchePrice
-            .whenCalledWith(newTranchesIn[0].address)
-            .returns(toPriceFixedPtAmt("1"));
-          await discountStrategy.computeTrancheDiscount
-            .whenCalledWith(newTranchesIn[0].address)
-            .returns(toDiscountFixedPtAmt("1"));
-
           await collateralToken.transfer(vault.address, toFixedPtAmt("9998"));
           await vault.deploy();
 
-          expect(await vault.deployedCount()).to.eq(5);
+          expect(await vault.deployedCount()).to.eq(6);
           await checkVaultAssetComposition(
             vault,
             [
@@ -549,15 +433,17 @@ describe("RolloverVault", function () {
               currentTranchesIn[0],
               currentTranchesIn[1],
               currentTranchesIn[2],
+              newTranchesIn[0],
               newTranchesIn[1],
               newTranchesIn[2],
               perp,
             ],
             [
-              toFixedPtAmt("1998"),
+              toFixedPtAmt("798"),
               toFixedPtAmt("2"),
               toFixedPtAmt("3"),
               toFixedPtAmt("5"),
+              toFixedPtAmt("1200"),
               toFixedPtAmt("3000"),
               toFixedPtAmt("5000"),
               toFixedPtAmt("10"),
@@ -572,17 +458,17 @@ describe("RolloverVault", function () {
             await checkVaultAssetComposition(
               vault,
               [collateralToken, newTranchesIn[1], newTranchesIn[2], perp],
-              [toFixedPtAmt("2058"), toFixedPtAmt("2985"), toFixedPtAmt("4975"), toFixedPtAmt("0")],
+              [toFixedPtAmt("6858"), toFixedPtAmt("1185"), toFixedPtAmt("1975"), toFixedPtAmt("0")],
             );
           });
           it("should sync assets", async function () {
             const tx = vault["recover()"]();
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("2058"));
+            await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("6858"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[0].address, toFixedPtAmt("0"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[1].address, toFixedPtAmt("0"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[2].address, toFixedPtAmt("0"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[1].address, toFixedPtAmt("2985"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[2].address, toFixedPtAmt("4975"));
+            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[1].address, toFixedPtAmt("1185"));
+            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[2].address, toFixedPtAmt("1975"));
           });
         });
 
@@ -590,7 +476,7 @@ describe("RolloverVault", function () {
           beforeEach(async function () {
             await depositIntoBond(currentBondIn, toFixedPtAmt("1000"), deployer);
             await currentTranchesIn[2].transfer(vault.address, toFixedPtAmt("1"));
-            expect(await vault.deployedCount()).to.eq(5);
+            expect(await vault.deployedCount()).to.eq(6);
             await checkVaultAssetComposition(
               vault,
               [
@@ -598,15 +484,17 @@ describe("RolloverVault", function () {
                 currentTranchesIn[0],
                 currentTranchesIn[1],
                 currentTranchesIn[2],
+                newTranchesIn[0],
                 newTranchesIn[1],
                 newTranchesIn[2],
                 perp,
               ],
               [
-                toFixedPtAmt("1998"),
+                toFixedPtAmt("798"),
                 toFixedPtAmt("2"),
                 toFixedPtAmt("3"),
                 toFixedPtAmt("6"),
+                toFixedPtAmt("1200"),
                 toFixedPtAmt("3000"),
                 toFixedPtAmt("5000"),
                 toFixedPtAmt("10"),
@@ -619,17 +507,17 @@ describe("RolloverVault", function () {
             await checkVaultAssetComposition(
               vault,
               [collateralToken, currentTranchesIn[2], newTranchesIn[1], newTranchesIn[2], perp],
-              [toFixedPtAmt("2058"), toFixedPtAmt("1"), toFixedPtAmt("2985"), toFixedPtAmt("4975"), toFixedPtAmt("0")],
+              [toFixedPtAmt("6858"), toFixedPtAmt("1"), toFixedPtAmt("1185"), toFixedPtAmt("1975"), toFixedPtAmt("0")],
             );
           });
           it("should sync assets", async function () {
             const tx = vault["recover()"]();
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("2058"));
+            await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("6858"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[0].address, toFixedPtAmt("0"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[1].address, toFixedPtAmt("0"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[2].address, toFixedPtAmt("1"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[1].address, toFixedPtAmt("2985"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[2].address, toFixedPtAmt("4975"));
+            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[1].address, toFixedPtAmt("1185"));
+            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[2].address, toFixedPtAmt("1975"));
           });
         });
       });
@@ -652,30 +540,15 @@ describe("RolloverVault", function () {
         currentBondIn = await bondAt(await perp.callStatic.getDepositBond());
         currentTranchesIn = await getTranches(currentBondIn);
 
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(currentTranchesIn[0].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(currentTranchesIn[0].address)
-          .returns(toDiscountFixedPtAmt("1"));
-
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(currentTranchesIn[1].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(currentTranchesIn[1].address)
-          .returns(toDiscountFixedPtAmt("1"));
-
         await collateralToken.transfer(vault.address, toFixedPtAmt("10"));
 
         await vault.deploy();
         await checkVaultAssetComposition(
           vault,
-          [collateralToken, currentTranchesIn[2], perp],
-          [toFixedPtAmt("5"), toFixedPtAmt("5"), toFixedPtAmt("0")],
+          [collateralToken, currentTranchesIn[1], currentTranchesIn[2], perp],
+          [toFixedPtAmt("2"), toFixedPtAmt("3"), toFixedPtAmt("5"), toFixedPtAmt("0")],
         );
-        expect(await vault.deployedCount()).to.eq(1);
-        expect(await vault.deployedAt(0)).to.eq(currentTranchesIn[2].address);
+        expect(await vault.deployedCount()).to.eq(2);
       });
       describe("when address is not valid", function () {
         it("should be reverted", async function () {
@@ -700,11 +573,10 @@ describe("RolloverVault", function () {
           await expect(vault["recover(address)"](currentTranchesIn[2].address)).not.to.be.reverted;
           await checkVaultAssetComposition(
             vault,
-            [collateralToken, currentTranchesIn[2], perp],
-            [toFixedPtAmt("5"), toFixedPtAmt("5"), toFixedPtAmt("0")],
+            [collateralToken, currentTranchesIn[1], currentTranchesIn[2], perp],
+            [toFixedPtAmt("2"), toFixedPtAmt("3"), toFixedPtAmt("5"), toFixedPtAmt("0")],
           );
-          expect(await vault.deployedCount()).to.eq(1);
-          expect(await vault.deployedAt(0)).to.eq(currentTranchesIn[2].address);
+          expect(await vault.deployedCount()).to.eq(2);
         });
       });
       describe("when its mature", function () {
@@ -713,12 +585,16 @@ describe("RolloverVault", function () {
         });
         it("should recover", async function () {
           await expect(vault["recover(address)"](currentTranchesIn[2].address)).not.to.be.reverted;
-          expect(await vault.deployedCount()).to.eq(0);
-          await checkVaultAssetComposition(vault, [collateralToken, perp], [toFixedPtAmt("10"), toFixedPtAmt("0")]);
+          expect(await vault.deployedCount()).to.eq(1);
+          await checkVaultAssetComposition(
+            vault,
+            [collateralToken, currentTranchesIn[1], perp],
+            [toFixedPtAmt("7"), toFixedPtAmt("3"), toFixedPtAmt("0")],
+          );
         });
         it("should sync assets", async function () {
-          const tx = vault["recover()"]();
-          await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("10"));
+          const tx = vault["recover(address)"](currentTranchesIn[2].address);
+          await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("7"));
           await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[2].address, toFixedPtAmt("0"));
         });
       });
@@ -731,13 +607,6 @@ describe("RolloverVault", function () {
         currentBondIn = await bondAt(await perp.callStatic.getDepositBond());
         currentTranchesIn = await getTranches(currentBondIn);
 
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(currentTranchesIn[0].address)
-          .returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(currentTranchesIn[0].address)
-          .returns(toDiscountFixedPtAmt("1"));
-
         await collateralToken.transfer(vault.address, toFixedPtAmt("10"));
         await vault.deploy();
 
@@ -747,8 +616,6 @@ describe("RolloverVault", function () {
           [toFixedPtAmt("2"), toFixedPtAmt("3"), toFixedPtAmt("5"), toFixedPtAmt("0")],
         );
         expect(await vault.deployedCount()).to.eq(2);
-        expect(await vault.deployedAt(0)).to.eq(currentTranchesIn[2].address);
-        expect(await vault.deployedAt(1)).to.eq(currentTranchesIn[1].address);
       });
 
       describe("when no redemption", function () {
@@ -760,8 +627,6 @@ describe("RolloverVault", function () {
             [toFixedPtAmt("2"), toFixedPtAmt("3"), toFixedPtAmt("5"), toFixedPtAmt("0")],
           );
           expect(await vault.deployedCount()).to.eq(2);
-          expect(await vault.deployedAt(0)).to.eq(currentTranchesIn[2].address);
-          expect(await vault.deployedAt(1)).to.eq(currentTranchesIn[1].address);
         });
       });
 
@@ -777,7 +642,6 @@ describe("RolloverVault", function () {
             [toFixedPtAmt("5"), toFixedPtAmt("5"), toFixedPtAmt("0")],
           );
           expect(await vault.deployedCount()).to.eq(1);
-          expect(await vault.deployedAt(0)).to.eq(currentTranchesIn[2].address);
         });
         it("should sync assets", async function () {
           const tx = vault["recover(address)"](currentTranchesIn[1].address);
@@ -793,17 +657,10 @@ describe("RolloverVault", function () {
           newBondIn = await bondAt(await perp.callStatic.getDepositBond());
           newTranchesIn = await getTranches(newBondIn);
 
-          await pricingStrategy.computeTranchePrice
-            .whenCalledWith(newTranchesIn[0].address)
-            .returns(toPriceFixedPtAmt("1"));
-          await discountStrategy.computeTrancheDiscount
-            .whenCalledWith(newTranchesIn[0].address)
-            .returns(toDiscountFixedPtAmt("1"));
-
           await collateralToken.transfer(vault.address, toFixedPtAmt("9998"));
           await vault.deploy();
 
-          expect(await vault.deployedCount()).to.eq(5);
+          expect(await vault.deployedCount()).to.eq(6);
           await checkVaultAssetComposition(
             vault,
             [
@@ -811,15 +668,17 @@ describe("RolloverVault", function () {
               currentTranchesIn[0],
               currentTranchesIn[1],
               currentTranchesIn[2],
+              newTranchesIn[0],
               newTranchesIn[1],
               newTranchesIn[2],
               perp,
             ],
             [
-              toFixedPtAmt("1998"),
+              toFixedPtAmt("798"),
               toFixedPtAmt("2"),
               toFixedPtAmt("3"),
               toFixedPtAmt("5"),
+              toFixedPtAmt("1200"),
               toFixedPtAmt("3000"),
               toFixedPtAmt("5000"),
               toFixedPtAmt("0"),
@@ -830,21 +689,23 @@ describe("RolloverVault", function () {
         describe("without reminder", function () {
           it("should recover", async function () {
             await expect(vault["recover(address)"](currentTranchesIn[1].address)).not.to.be.reverted;
-            expect(await vault.deployedCount()).to.eq(2);
+            expect(await vault.deployedCount()).to.eq(3);
             await checkVaultAssetComposition(
               vault,
-              [collateralToken, newTranchesIn[1], newTranchesIn[2], perp],
-              [toFixedPtAmt("2008"), toFixedPtAmt("3000"), toFixedPtAmt("5000"), toFixedPtAmt("0")],
+              [collateralToken, newTranchesIn[0], newTranchesIn[1], newTranchesIn[2], perp],
+              [
+                toFixedPtAmt("808"),
+                toFixedPtAmt("1200"),
+                toFixedPtAmt("3000"),
+                toFixedPtAmt("5000"),
+                toFixedPtAmt("0"),
+              ],
             );
           });
           it("should sync assets", async function () {
-            const tx = vault["recover()"]();
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("2008"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[0].address, toFixedPtAmt("0"));
+            const tx = vault["recover(address)"](currentTranchesIn[1].address);
+            await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("808"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[1].address, toFixedPtAmt("0"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[2].address, toFixedPtAmt("0"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[1].address, toFixedPtAmt("3000"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[2].address, toFixedPtAmt("5000"));
           });
         });
 
@@ -852,7 +713,7 @@ describe("RolloverVault", function () {
           beforeEach(async function () {
             await depositIntoBond(currentBondIn, toFixedPtAmt("1000"), deployer);
             await currentTranchesIn[2].transfer(vault.address, toFixedPtAmt("1"));
-            expect(await vault.deployedCount()).to.eq(5);
+            expect(await vault.deployedCount()).to.eq(6);
             await checkVaultAssetComposition(
               vault,
               [
@@ -860,15 +721,17 @@ describe("RolloverVault", function () {
                 currentTranchesIn[0],
                 currentTranchesIn[1],
                 currentTranchesIn[2],
+                newTranchesIn[0],
                 newTranchesIn[1],
                 newTranchesIn[2],
                 perp,
               ],
               [
-                toFixedPtAmt("1998"),
+                toFixedPtAmt("798"),
                 toFixedPtAmt("2"),
                 toFixedPtAmt("3"),
                 toFixedPtAmt("6"),
+                toFixedPtAmt("1200"),
                 toFixedPtAmt("3000"),
                 toFixedPtAmt("5000"),
                 toFixedPtAmt("0"),
@@ -877,21 +740,24 @@ describe("RolloverVault", function () {
           });
           it("should recover", async function () {
             await expect(vault["recover(address)"](currentTranchesIn[0].address)).not.to.be.reverted;
-            expect(await vault.deployedCount()).to.eq(3);
+            expect(await vault.deployedCount()).to.eq(4);
             await checkVaultAssetComposition(
               vault,
-              [collateralToken, currentTranchesIn[2], newTranchesIn[1], newTranchesIn[2], perp],
-              [toFixedPtAmt("2008"), toFixedPtAmt("1"), toFixedPtAmt("3000"), toFixedPtAmt("5000"), toFixedPtAmt("0")],
+              [collateralToken, currentTranchesIn[2], newTranchesIn[0], newTranchesIn[1], newTranchesIn[2], perp],
+              [
+                toFixedPtAmt("808"),
+                toFixedPtAmt("1"),
+                toFixedPtAmt("1200"),
+                toFixedPtAmt("3000"),
+                toFixedPtAmt("5000"),
+                toFixedPtAmt("0"),
+              ],
             );
           });
           it("should sync assets", async function () {
-            const tx = vault["recover()"]();
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("2008"));
+            const tx = vault["recover(address)"](currentTranchesIn[0].address);
+            await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("808"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[0].address, toFixedPtAmt("0"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[1].address, toFixedPtAmt("0"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[2].address, toFixedPtAmt("1"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[1].address, toFixedPtAmt("3000"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[2].address, toFixedPtAmt("5000"));
           });
         });
       });
@@ -905,13 +771,6 @@ describe("RolloverVault", function () {
       currentBondIn = await bondAt(await perp.callStatic.getDepositBond());
       currentTranchesIn = await getTranches(currentBondIn);
 
-      await pricingStrategy.computeTranchePrice
-        .whenCalledWith(currentTranchesIn[0].address)
-        .returns(toPriceFixedPtAmt("1"));
-      await discountStrategy.computeTrancheDiscount
-        .whenCalledWith(currentTranchesIn[0].address)
-        .returns(toDiscountFixedPtAmt("1"));
-
       await collateralToken.transfer(vault.address, toFixedPtAmt("10"));
       await vault.deploy();
 
@@ -921,20 +780,11 @@ describe("RolloverVault", function () {
         [toFixedPtAmt("2"), toFixedPtAmt("3"), toFixedPtAmt("5"), toFixedPtAmt("0")],
       );
       expect(await vault.deployedCount()).to.eq(2);
-      expect(await vault.deployedAt(0)).to.eq(currentTranchesIn[2].address);
-      expect(await vault.deployedAt(1)).to.eq(currentTranchesIn[1].address);
 
       await advancePerpQueueToBondMaturity(perp, currentBondIn);
 
       newBondIn = await bondAt(await perp.callStatic.getDepositBond());
       newTranchesIn = await getTranches(newBondIn);
-
-      await pricingStrategy.computeTranchePrice
-        .whenCalledWith(newTranchesIn[0].address)
-        .returns(toPriceFixedPtAmt("1"));
-      await discountStrategy.computeTrancheDiscount
-        .whenCalledWith(newTranchesIn[0].address)
-        .returns(toDiscountFixedPtAmt("1"));
     });
 
     it("should recover", async function () {

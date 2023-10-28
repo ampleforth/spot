@@ -428,12 +428,14 @@ describe("BondHelpers", function () {
 
   describe("#computeRedeemableTrancheAmounts", function () {
     describe("when the user has all the tranches in the right proportions", function () {
-      let bond: Contract;
       async function checkRedeemableAmts(
         trancheRatios: number[] = [],
         amounts: string[] = [],
         redemptionAmts: string[] = [],
       ) {
+        const bond = await createBondWithFactory(bondFactory, collateralToken, trancheRatios, 86400);
+        await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
+
         const tranches = await getTranches(bond);
         for (const a in amounts) {
           await tranches[a].transfer(userAddress, toFixedPtAmt(amounts[a]));
@@ -446,11 +448,6 @@ describe("BondHelpers", function () {
           expect(b[1][a]).to.eq(toFixedPtAmt(redemptionAmts[a]));
         }
       }
-
-      beforeEach(async function () {
-        bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 86400);
-        await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
-      });
 
       describe("when the user has the entire supply", function () {
         describe("[200,300,500]:[200, 300, 500]", async function () {
@@ -601,13 +598,14 @@ describe("BondHelpers", function () {
   });
 
   describe("#computeRedeemableTrancheAmounts", function () {
+    let bond: Contract;
     describe("when balances are in the right proportions", function () {
-      let bond: Contract;
       async function checkRedeemableAmts(
         trancheRatios: number[] = [],
         amounts: string[] = [],
         redemptionAmts: string[] = [],
       ) {
+        bond = await createBondWithFactory(bondFactory, collateralToken, trancheRatios, 86400);
         const b = await bondHelpers["computeRedeemableTrancheAmounts(address,uint256[])"](
           bond.address,
           amounts.map(toFixedPtAmt),
@@ -616,9 +614,6 @@ describe("BondHelpers", function () {
           expect(b[1][a]).to.eq(toFixedPtAmt(redemptionAmts[a]));
         }
       }
-      beforeEach(async function () {
-        bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 86400);
-      });
 
       describe("[200, 300, 500]:[200, 300, 500]", async function () {
         it("should calculate the amounts", async function () {

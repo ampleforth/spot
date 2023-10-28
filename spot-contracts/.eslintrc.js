@@ -5,7 +5,7 @@ module.exports = {
     mocha: true,
     node: true,
   },
-  plugins: ["@typescript-eslint", "no-only-tests"],
+  plugins: ["@typescript-eslint", "no-only-tests", "unused-imports"],
   extends: ["standard", "plugin:prettier/recommended", "plugin:node/recommended"],
   parser: "@typescript-eslint/parser",
   parserOptions: {
@@ -27,5 +27,7 @@ module.exports = {
       },
     ],
     "no-only-tests/no-only-tests": "error",
+    "unused-imports/no-unused-imports": "error",
+    "unused-imports/no-unused-vars": ["warn", { vars: "all" }],
   },
 };

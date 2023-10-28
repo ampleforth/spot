@@ -8,7 +8,6 @@ import {
   setupBondFactory,
   depositIntoBond,
   getTranches,
-  toDiscountFixedPtAmt,
   toPriceFixedPtAmt,
   getDepositBond,
   advancePerpQueueToBondMaturity,
@@ -216,15 +215,7 @@ describe("RolloverVault", function () {
         const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
         const pricingStrategy = await smock.fake(PricingStrategy);
         await pricingStrategy.decimals.returns(8);
-        await pricingStrategy.computeMatureTranchePrice.returns(toPriceFixedPtAmt("1"));
         await pricingStrategy.computeTranchePrice.returns(toPriceFixedPtAmt("1"));
-
-        const DiscountStrategy = await ethers.getContractFactory("TrancheClassDiscountStrategy");
-        const discountStrategy = await smock.fake(DiscountStrategy);
-        await discountStrategy.decimals.returns(18);
-        await discountStrategy.computeTrancheDiscount
-          .whenCalledWith(collateralToken.address)
-          .returns(toDiscountFixedPtAmt("1"));
 
         const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
         perp = await upgrades.deployProxy(
@@ -236,16 +227,13 @@ describe("RolloverVault", function () {
             issuer.address,
             feeStrategy.address,
             pricingStrategy.address,
-            discountStrategy.address,
           ],
           {
-            initializer: "init(string,string,address,address,address,address,address)",
+            initializer: "init(string,string,address,address,address,address)",
           },
         );
 
         await perp.updateTolerableTrancheMaturity(1200, 4800);
-        await pricingStrategy.computeTranchePrice.returns(toPriceFixedPtAmt("1"));
-        await discountStrategy.computeTrancheDiscount.returns(toDiscountFixedPtAmt("1"));
         await advancePerpQueueToBondMaturity(perp, await getDepositBond(perp));
 
         const bond = await getDepositBond(perp);
