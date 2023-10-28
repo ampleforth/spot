@@ -26,16 +26,6 @@ contract CDRPricingStrategy is IPricingStrategy {
     }
 
     /// @inheritdoc IPricingStrategy
-    /// @dev Selective handling for collateral for mature tranches are held by the perp reserve.
-    function computeMatureTranchePrice(
-        IERC20Upgradeable, /* collateralToken */
-        uint256 collateralBalance,
-        uint256 debt
-    ) external pure override returns (uint256) {
-        return (debt > 0) ? ((collateralBalance * UNIT_PRICE) / debt) : UNIT_PRICE;
-    }
-
-    /// @inheritdoc IPricingStrategy
     function decimals() external pure override returns (uint8) {
         return DECIMALS;
     }
