@@ -65,6 +65,15 @@ library BondHelpers {
         return t;
     }
 
+    /// @notice Given a bond, returns the tranche ratio of the senior most tranche w,r.t all the remaining tranches.
+    /// @param b The address of the bond contract.
+    /// @return seniorRatio The tranche ratio of the senior most tranche.
+    /// @return remRatio The tranche ratio of every other tranche.
+    function getSeniorTrancheRatio(IBondController b) internal view returns (uint256, uint256) {
+        (, uint256 r) = b.tranches(0);
+        return (r, TRANCHE_RATIO_GRANULARITY - r);
+    }
+
     /// @notice Helper function to estimate the amount of tranches minted when a given amount of collateral
     ///         is deposited into the bond.
     /// @dev This function is used off-chain services (using callStatic) to preview tranches minted after
