@@ -9,6 +9,7 @@ import { SafeMathInt } from "ampleforth-contracts/contracts/lib/SafeMathInt.sol"
  *
  *  @notice Library with helper functions to compute y = sigmoid(x).
  *
+ *  TODO: port over 2-pow and use plain math instead of the "safe math" lib.
  */
 library Sigmoid {
     using SafeMathInt for int256;

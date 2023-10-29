@@ -22,7 +22,7 @@ library PerpHelpers {
     ///         of classes accepted into the system, wrt the remainder of tranches
     ///         which exist outside the system.
     ///
-    /// @dev Here we approxiamte assume there exists just one class of bonds in the perp system with the same tranche ratios and durations.
+    /// @dev Here we assume there exists just one class of bonds in the perp system with the same tranche ratios and durations.
     ///      In practice this is true at almost all times, until when the BondIssuer's configuration
     ///      is changed and thus for a period of time tranches from mutiple bond classes exist in perp.
     ///      Eventually the tranches with the old configuration will get rolled out but
