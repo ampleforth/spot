@@ -17,6 +17,12 @@ error InsufficientDeployment();
 /// @notice Expected the number of vault assets deployed to be under the limit.
 error DeployedCountOverLimit();
 
+/// @notice Expected to mint a non-zero amount of notes.
+error UnacceptableDeposit();
+
+/// @notice Expected to redeem a non-zero amount of notes.
+error UnacceptableRedemption();
+
 /*
  *  @title IVault
  *

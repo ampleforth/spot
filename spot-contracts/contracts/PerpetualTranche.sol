@@ -783,7 +783,7 @@ contract PerpetualTranche is
         if (totalSupply_ > 0) {
             perpAmtMint = perpAmtMint.mulDiv(totalSupply_, _reserveValue());
         }
-        // NOTE: The mint fees are settled by simply minting lesser perps.
+        // NOTE: The mint fees are settled by simply minting fewer perps.
         perpAmtMint = perpAmtMint.mulDiv(HUNDRED_PERC - feePerc, HUNDRED_PERC);
         return perpAmtMint;
     }
