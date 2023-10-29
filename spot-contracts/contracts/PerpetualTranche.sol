@@ -263,8 +263,9 @@ contract PerpetualTranche is
     /// @notice DEPRECATED.
     /// @dev This used to control the percentage of the reserve value to be held as mature tranches.
     ///      With V2 perp cannot control this anymore, the rollover mechanics are dictated
-    //       by the amount of capital in the vault system.
-    uint256 public matureValueTargetPerc;
+    ///      by the amount of capital in the vault system.
+    // solhint-disable-next-line var-name-mixedcase
+    uint256 private _matureValueTargetPerc_DEPRECATED;
 
     /// @notice The maximum supply of perps that can exist at any given time.
     uint256 public maxSupply;
@@ -870,8 +871,8 @@ contract PerpetualTranche is
         uint256 perpAmtMint = (totalSupply_ > 0)
             ? (stdTrancheInAmt * trancheInPrice).mulDiv(totalSupply_, _reserveValue())
             : stdTrancheInAmt.mulDiv(trancheInPrice, UNIT_PRICE);
-        // NOTE: The mint fees are settled by simply minting lesser perps.
-        perpAmtMint -= perpAmtMint.mulDiv(feePerc, HUNDRED_PERC);
+        // NOTE: The mint fees are settled by simply minting fewer perps.
+        perpAmtMint = perpAmtMint.mulDiv(HUNDRED_PERC - feePerc, HUNDRED_PERC);
         return perpAmtMint;
     }
 
@@ -890,8 +891,8 @@ contract PerpetualTranche is
             redemptionAmts[i] = (totalSupply_ > 0)
                 ? _reserveBalance(reserveTokens[i]).mulDiv(perpAmtBurnt, totalSupply_)
                 : 0;
-            // NOTE: The burn fees are settled by simply redeeming lesser tranches.
-            redemptionAmts[i] -= redemptionAmts[i].mulDiv(feePerc, HUNDRED_PERC);
+            // NOTE: The burn fees are settled by simply redeeming fewer tranches.
+            redemptionAmts[i] = redemptionAmts[i].mulDiv(HUNDRED_PERC - feePerc, HUNDRED_PERC);
         }
         return (reserveTokens, redemptionAmts);
     }
@@ -932,8 +933,8 @@ contract PerpetualTranche is
         uint256 stdTrancheInAmt = _toStdTrancheAmt(trancheInAmtAvailable, trancheInDiscount);
         uint256 stdTrancheOutAmt = stdTrancheInAmt.mulDiv(trancheInPrice, trancheOutPrice);
 
-        // A postive fee percentage implies that perp charges rotators by
-        // accepting tranchesIn at a discount, ie) lesser tranches out.
+        // A positive fee percentage implies that perp charges rotators by
+        // accepting tranchesIn at a discount, ie) fewer tranches out.
         if (feePerc > 0) {
             stdTrancheOutAmt = stdTrancheOutAmt.mulDiv(HUNDRED_PERC - feePerc.abs(), HUNDRED_PERC);
         }
@@ -973,7 +974,7 @@ contract PerpetualTranche is
                 );
             }
             // A negative fee percentage (or a reward) implies that perp pays the rotators by
-            // offering tranchesOut at a discount, ie) lesser tranches in.
+            // offering tranchesOut at a discount, ie) fewer tranches in.
             else if (feePerc < 0) {
                 stdTrancheInAmt = stdTrancheInAmt.mulDiv(
                     HUNDRED_PERC,
