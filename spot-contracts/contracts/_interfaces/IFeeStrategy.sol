@@ -5,11 +5,11 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { IBondController } from "./buttonwood/IBondController.sol";
 
 interface IFeeStrategy {
-    /// @notice The percentage of the mint perp amount to be witheld as fees.
+    /// @notice The percentage of the mint perp amount to be withheld as fees.
     /// @dev Represented as a fixed-point number with {PRICE_DECIMAL} decimal places.
     function computeMintFeePerc() external returns (uint256);
 
-    /// @notice The percentage of the burn pepr amount to be witheld as fees.
+    /// @notice The percentage of the burn perp amount to be withheld as fees.
     /// @dev Represented as a fixed-point number with {PRICE_DECIMAL} decimal places.
     function computeBurnFeePerc() external returns (uint256);
 
