@@ -66,7 +66,7 @@ describe("FeeStrategy", function () {
       expect(r[0]).to.eq(toPercFixedPtAmt("-0.02"));
       expect(r[1]).to.eq(toPercFixedPtAmt("0.05"));
       expect(r[2]).to.eq(toPercFixedPtAmt("5"));
-      expect(await feeStrategy.deviationTresholdPerc()).to.eq(toPercFixedPtAmt("0.05"));
+      expect(await feeStrategy.deviationThresholdPerc()).to.eq(toPercFixedPtAmt("0.05"));
     });
     it("should return owner", async function () {
       expect(await feeStrategy.owner()).to.eq(await deployer.getAddress());
@@ -189,21 +189,21 @@ describe("FeeStrategy", function () {
     describe("when deviation > 1", function () {
       it("should compute the fee perc", async function () {
         await mockDeviation("600", "100", "0");
-        expect(await feeStrategy.callStatic.computeRolloverFeePerc()).to.eq(toPercFixedPtAmt("0.00218980"));
+        expect(await feeStrategy.callStatic.computeRolloverFeePerc()).to.eq(toPercFixedPtAmt("0.00218830"));
       });
     });
 
     describe("when deviation > 1 and treshold set", function () {
       it("should compute the fee perc", async function () {
         await mockDeviation("600", "100", "0.1");
-        expect(await feeStrategy.callStatic.computeRolloverFeePerc()).to.eq(toPercFixedPtAmt("0.00177028"));
+        expect(await feeStrategy.callStatic.computeRolloverFeePerc()).to.eq(toPercFixedPtAmt("0.00176907"));
       });
     });
 
     describe("when deviation < 1", function () {
       it("should compute the fee perc", async function () {
         await mockDeviation("200", "100", "0");
-        expect(await feeStrategy.callStatic.computeRolloverFeePerc()).to.eq(toPercFixedPtAmt("-0.00117961"));
+        expect(await feeStrategy.callStatic.computeRolloverFeePerc()).to.eq(toPercFixedPtAmt("-0.00117880"));
       });
     });
   });
@@ -292,6 +292,14 @@ describe("FeeStrategy", function () {
             .connect(deployer)
             .updateRolloverFees([toPercFixedPtAmt("-0.01"), toPercFixedPtAmt("0.25"), toPercFixedPtAmt("3")]),
         ).to.be.revertedWith("FeeStrategy: fee bound too high");
+      });
+
+      it("should revert", async function () {
+        await expect(
+          feeStrategy
+            .connect(deployer)
+            .updateRolloverFees([toPercFixedPtAmt("0.2"), toPercFixedPtAmt("0.1"), toPercFixedPtAmt("3")]),
+        ).to.be.revertedWith("FeeStrategy: paramters invalid");
       });
     });
 
