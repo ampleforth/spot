@@ -766,11 +766,6 @@ contract PerpetualTranche is
         return address(this);
     }
 
-    /// @inheritdoc IPerpetualTranche
-    function feeToken() public view override returns (IERC20Upgradeable) {
-        return IERC20Upgradeable(address(this));
-    }
-
     /// @notice Returns the number of decimals used to get its user representation.
     /// @dev For example, if `decimals` equals `2`, a balance of `505` tokens should
     ///      be displayed to a user as `5.05` (`505 / 10 ** 2`).

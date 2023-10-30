@@ -26,16 +26,4 @@ interface IFeeStrategy {
 
     /// @notice Number of decimals representing 1.0 or 100%.
     function decimals() external view returns (uint8);
-
-    /// @notice DEPRECATED.
-    function feeToken() external view returns (IERC20Upgradeable);
-
-    /// @notice DEPRECATED.
-    function computeMintFees(uint256 amount) external view returns (int256 reserveFee, uint256 protocolFee);
-
-    /// @notice DEPRECATED.
-    function computeBurnFees(uint256 amount) external view returns (int256 reserveFee, uint256 protocolFee);
-
-    /// @notice DEPRECATED.
-    function computeRolloverFees(uint256 amount) external view returns (int256 reserveFee, uint256 protocolFee);
 }
