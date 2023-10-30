@@ -193,33 +193,4 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
             return (deviationFactor - deviationThresholdPerc);
         }
     }
-
-    //-------------------------------------------------------------------------
-    // Deprecated section, keeping for backward comparability with RouterV1.
-
-    // @notice Deprecated.
-    function feeToken() external view override returns (IERC20Upgradeable) {
-        return perp;
-    }
-
-    // @notice Deprecated.
-    function computeMintFees(
-        uint256 /*mintAmt*/
-    ) external pure override returns (int256, uint256) {
-        return (0, 0);
-    }
-
-    // @notice Deprecated.
-    function computeBurnFees(
-        uint256 /*burnAmt*/
-    ) external pure override returns (int256, uint256) {
-        return (0, 0);
-    }
-
-    // @notice Deprecated.
-    function computeRolloverFees(
-        uint256 /*rolloverAmt*/
-    ) external pure override returns (int256, uint256) {
-        return (0, 0);
-    }
 }

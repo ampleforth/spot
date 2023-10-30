@@ -34,9 +34,8 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
     uint256 public constant UNIT_PERC = 10**PERC_DECIMALS;
     uint256 public constant HUNDRED_PERC = 100 * UNIT_PERC;
 
-    /// @inheritdoc IFeeStrategy
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
-    IERC20Upgradeable public immutable override feeToken;
+    IERC20Upgradeable public immutable feeToken;
 
     /// @notice Fixed percentage of the mint amount to be used as fee.
     int256 public mintFeePerc;
@@ -103,20 +102,20 @@ contract BasicFeeStrategy is IFeeStrategy, OwnableUpgradeable {
         emit UpdatedRolloverPerc(rolloverFeePerc_);
     }
 
-    /// @inheritdoc IFeeStrategy
-    function computeMintFees(uint256 mintAmt) external view override returns (int256, uint256) {
+    /// @notice DEPRECATED.
+    function computeMintFees(uint256 mintAmt) external view returns (int256, uint256) {
         uint256 absoluteFee = (mintFeePerc.abs() * mintAmt) / HUNDRED_PERC;
         return (mintFeePerc.sign() * absoluteFee.toInt256(), 0);
     }
 
-    /// @inheritdoc IFeeStrategy
-    function computeBurnFees(uint256 burnAmt) external view override returns (int256, uint256) {
+    /// @notice DEPRECATED.
+    function computeBurnFees(uint256 burnAmt) external view returns (int256, uint256) {
         uint256 absoluteFee = (burnFeePerc.abs() * burnAmt) / HUNDRED_PERC;
         return (burnFeePerc.sign() * absoluteFee.toInt256(), 0);
     }
 
-    /// @inheritdoc IFeeStrategy
-    function computeRolloverFees(uint256 rolloverAmt) external view override returns (int256, uint256) {
+    /// @notice DEPRECATED.
+    function computeRolloverFees(uint256 rolloverAmt) external view returns (int256, uint256) {
         uint256 absoluteFee = (rolloverFeePerc.abs() * rolloverAmt) / HUNDRED_PERC;
         return (rolloverFeePerc.sign() * absoluteFee.toInt256(), 0);
     }

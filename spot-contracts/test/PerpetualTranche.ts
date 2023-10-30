@@ -589,12 +589,6 @@ describe("PerpetualTranche", function () {
     });
   });
 
-  describe("#feeToken", function () {
-    it("should point to itself", async function () {
-      expect(await perp.feeToken()).to.eq(perp.address);
-    });
-  });
-
   describe("#reserve", function () {
     let bondFactory: Contract, bond: Contract, tranches: Contract[], bondNext: Contract, tranchesNext: Contract[];
     beforeEach(async function () {

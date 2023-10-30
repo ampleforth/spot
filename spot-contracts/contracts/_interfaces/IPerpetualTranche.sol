@@ -92,10 +92,6 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @return Address of the reserve.
     function reserve() external view returns (address);
 
-    /// @notice The fee token currently used to receive fees in.
-    /// @return Address of the fee token.
-    function feeToken() external view returns (IERC20Upgradeable);
-
     /// @notice Total count of tokens held in the reserve.
     /// @return The reserve token count.
     function getReserveCount() external returns (uint256);
