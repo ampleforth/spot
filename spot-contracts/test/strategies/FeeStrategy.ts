@@ -9,7 +9,6 @@ import {
   createBondWithFactory,
   getTranches,
   toFixedPtAmt,
-  toDiscountFixedPtAmt,
   toPercFixedPtAmt,
 } from "../helpers";
 use(smock.matchers);
