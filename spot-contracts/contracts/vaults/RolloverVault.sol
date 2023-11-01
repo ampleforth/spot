@@ -408,7 +408,13 @@ contract RolloverVault is
 
         // calculating amounts and transferring assets out proportionally
         for (uint8 i = 0; i < assetCount; i++) {
+            // computing users share
             redemptions[i].amount = redemptions[i].token.balanceOf(address(this)).mulDiv(notes, totalNotes);
+
+            // deduct redemption fees
+            redemptions[i].amount = redemptions[i].amount.mulDiv(HUNDRED_PERC - fees.redemptionFeePerc, HUNDRED_PERC);
+
+            // transfering assets out
             redemptions[i].token.safeTransfer(_msgSender(), redemptions[i].amount);
             _syncAsset(redemptions[i].token);
         }
