@@ -520,16 +520,61 @@ contract RolloverVault is
         // sync underlying
         _syncAsset(underlying);
 
-        // assert that the vault's TVL does not decrease after this operation
-        if (getTVL() < tvlBefore) {
-            revert TVLDecreased();
-        }
-
-        // TODO: assert that the percentage of raw ampl to the TVL is under
-        //       a onwer specified value. (ie) Limit the amount the meld opration
-        //       can de-lever the vault.
+        // enforce vault composition
+        _enforceVaultComposition(tvlBefore);
 
         return underlyingAmt;
+    }
+
+    /// @notice Swaps the given tranche held by the reserve for underlying collateral from the user for a fee.
+    /// @param trancheOut The tranche token to be swapped out.
+    /// @param underlyingAmtIn The amount of underlying tokens the user is willing to swap.
+    /// @return The amount of tranche tokens returned to the user.
+    function swap(ITranche trancheOut, uint256 underlyingAmtIn) external nonReentrant whenNotPaused returns (uint256) {
+        // validate that the requested tranche is NOT malicious and is already in the vault.
+        if (!_deployed.contains(address(trancheOut))) {
+            revert UnexpectedAsset(trancheOut);
+        }
+
+        // track the vault's TVL before the swap operation
+        uint256 tvlBefore = getTVL();
+
+        // Fist we check if this tranche can be recovered into the underlying, if so we execute the recovery.
+        // On successful redemption, The vault's individual tranche balances will decrease, and the underlying balances will increase.
+        // If the vault tranches are not eligible for redemption, its a no-op.
+        _redeemTranche(trancheOut);
+
+        // Compute the amount of tranche tokens to be swapped out,
+        // based on the number of underlying tokens sent in and the value of the tranche sent out.
+        uint256 trancheOutBalance = trancheOut.balanceOf(address(this));
+        uint256 trancheOutValue = _computeVaultTrancheValue(trancheOut, trancheOutBalance);
+        uint256 trancheOutAmt = trancheOutBalance > 0 ? trancheOutBalance.mulDiv(underlyingAmtIn, trancheOutValue) : 0;
+        if (trancheOutAmt <= 0) {
+            revert ValuelessAssets();
+        }
+
+        // deduct a portion of the trancheOut as fees
+        uint256 feePerc = _computeFeePerc(IBondController(trancheOut.bond()), fees.swapFeePerc);
+        trancheOutAmt = trancheOutAmt.mulDiv(HUNDRED_PERC - feePerc, HUNDRED_PERC);
+
+        // If trancheOutAmt exceeds the balance, we transfer as much as possible
+        if (trancheOutAmt > trancheOutBalance) {
+            trancheOutAmt = trancheOutBalance;
+            underlyingAmtIn = trancheOutValue.mulDiv(HUNDRED_PERC, HUNDRED_PERC - feePerc, MathUpgradeable.Rounding.Up);
+        }
+
+        // transfer underlying tokens from the user
+        underlying.safeTransferFrom(_msgSender(), address(this), underlyingAmtIn);
+        _syncAsset(underlying);
+
+        // transfer tranches out to the user
+        IERC20Upgradeable(trancheOut).safeTransfer(_msgSender(), trancheOutAmt);
+        _syncAndRemoveDeployedAsset(trancheOut);
+
+        // enforce vault composition
+        _enforceVaultComposition(tvlBefore);
+
+        return trancheOutAmt;
     }
 
     /// @inheritdoc IVault
@@ -808,6 +853,20 @@ contract RolloverVault is
         underlying.safeTransfer(owner(), fees.protocolFee);
     }
 
+    // @dev Enforces vault composition after swap and meld operations.
+    function _enforceVaultComposition(uint256 tvlBefore) private {
+        // Assert that the vault's TVL does not decrease after this operation
+        uint256 tvlAfter = getTVL();
+        if (tvlAfter < tvlBefore) {
+            revert TVLDecreased();
+        }
+
+        // compute the percentage of vault tvl held as underlying tokens
+        uint256 underlyingPerc = underlying.balanceOf(address(this)).mulDiv(HUNDRED_PERC, tvlAfter);
+        if (underlyingPerc >= maxUndeployedPerc) {
+            revert UndeployedPercOverLimit();
+        }
+    }
 
     /// @dev Syncs balance and adds the given asset into the deployed list if the vault has a balance.
     function _syncAndAddDeployedAsset(IERC20Upgradeable token) private {
