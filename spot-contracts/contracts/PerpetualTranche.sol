@@ -463,7 +463,7 @@ contract PerpetualTranche is
 
         // calculates the amount of perp tokens minted when depositing `trancheInAmt` of tranche tokens
         uint256 perpAmtMint = _computeMintAmt(trancheIn, trancheInAmt);
-        if (trancheInAmt == 0 || perpAmtMint == 0) {
+        if (trancheInAmt <= 0 || perpAmtMint <= 0) {
             revert UnacceptableMintAmt();
         }
 
@@ -493,7 +493,7 @@ contract PerpetualTranche is
         uint256 perpSupply = totalSupply();
 
         // verifies if burn amount is acceptable
-        if (perpAmtBurnt == 0 || perpAmtBurnt > perpSupply) {
+        if (perpAmtBurnt <= 0 || perpAmtBurnt > perpSupply) {
             revert UnacceptableBurnAmt();
         }
 
@@ -533,7 +533,7 @@ contract PerpetualTranche is
         );
 
         // Verifies if rollover amount is acceptable
-        if (r.trancheInAmt == 0) {
+        if (r.trancheInAmt <= 0) {
             return r;
         }
 
@@ -828,7 +828,7 @@ contract PerpetualTranche is
         uint256 tokenOutBalance = tokenOut.balanceOf(address(this));
         tokenOutAmtRequested = MathUpgradeable.min(tokenOutAmtRequested, tokenOutBalance);
 
-        if (trancheInAmtAvailable == 0 || trancheInPrice == 0 || tokenOutPrice == 0 || tokenOutAmtRequested == 0) {
+        if (trancheInAmtAvailable <= 0 || trancheInPrice <= 0 || tokenOutPrice <= 0 || tokenOutAmtRequested <= 0) {
             return r;
         }
 
@@ -923,7 +923,7 @@ contract PerpetualTranche is
             _reserves.add(address(token));
         }
 
-        if (balance == 0 && inReserve_) {
+        if (balance <= 0 && inReserve_) {
             // Removes tranche from reserve set.
             _reserves.remove(address(token));
 

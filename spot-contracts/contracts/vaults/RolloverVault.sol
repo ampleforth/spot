@@ -375,7 +375,7 @@ contract RolloverVault is
     function deposit(uint256 amount) external override nonReentrant whenNotPaused returns (uint256) {
         uint256 totalSupply_ = totalSupply();
         uint256 notes = (totalSupply_ > 0) ? totalSupply_.mulDiv(amount, getTVL()) : (amount * INITIAL_RATE);
-        if (amount == 0 || notes == 0) {
+        if (amount <= 0 || notes <= 0) {
             revert UnacceptableDeposit();
         }
 
@@ -391,7 +391,7 @@ contract RolloverVault is
     /// @param amount The amount tokens to be deposited into the vault.
     /// @return The amount of perps and vault notes minted.
     function deposit2(uint256 amount) external nonReentrant whenNotPaused returns (uint256, uint256) {
-        if (amount == 0) {
+        if (amount <= 0) {
             revert UnacceptableDeposit();
         }
 
@@ -425,7 +425,7 @@ contract RolloverVault is
         // mint vault notes using remaning junior tranches
         uint256 valueIn = getTVL() - tvlBefore;
         uint256 notesMinted = (totalSupply_ > 0) ? totalSupply_.mulDiv(valueIn, tvlBefore) : (valueIn * INITIAL_RATE);
-        if (notesMinted == 0) {
+        if (notesMinted <= 0) {
             revert UnacceptableDeposit();
         }
         _mint(_msgSender(), notesMinted);
@@ -435,7 +435,7 @@ contract RolloverVault is
 
     /// @inheritdoc IVault
     function redeem(uint256 notes) external override nonReentrant whenNotPaused returns (IVault.TokenAmount[] memory) {
-        if (notes == 0) {
+        if (notes <= 0) {
             revert UnacceptableRedemption();
         }
         uint256 totalNotes = totalSupply();
