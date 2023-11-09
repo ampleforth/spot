@@ -11,6 +11,10 @@ import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/m
 import { BondTranches, BondTranchesHelpers } from "./_utils/BondTranchesHelpers.sol";
 import { BondHelpers } from "./_utils/BondHelpers.sol";
 
+interface IRolloverVault {
+    function meld(IBondController bond, uint256[] memory trancheAmtsIn) external returns (uint256);
+}
+
 /**
  *  @title RouterV2
  *
@@ -160,6 +164,46 @@ contract RouterV2 {
         if (collateralBalance > 0) {
             collateralToken.safeTransfer(msg.sender, collateralBalance);
         }
+    }
+
+    /// @notice Redeems perps directly for the underlying asset if available.
+    /// @dev It first redeems provided perps for senior tranches,
+    ///      It then tries to meld each senior tranche with
+    ///      the vault's junior tranches and recoup the underlying token.
+    ///      However, if the meld fails it simply returns the seniors back to the user.
+    function redeemForUnderlying(
+        IPerpetualTranche perp,
+        IRolloverVault vault,
+        uint256 perpAmt
+    ) external afterPerpStateUpdate(perp) {
+        // transfer perps from the user to the router
+        perp.safeTransferFrom(msg.sender, address(this), perpAmt);
+
+        // redeem perps for tranches
+        (IERC20Upgradeable[] memory redeemedTokens, uint256[] memory redeemedTokenAmts) = perp.redeem(perpAmt);
+
+        for (uint256 i = 1; i < redeemedTokens.length; i++) {
+            ITranche tranche = ITranche(address(redeemedTokens[i]));
+            IBondController bond = IBondController(tranche.bond());
+            BondTranches memory bt = bond.getTranches();
+
+            uint256[] memory trancheAmtsToMeld = new uint256[](bt.tranches.length);
+            trancheAmtsToMeld[0] = redeemedTokenAmts[i];
+
+            // Try to melding tranches for underlying
+            // On unsuccessful meld, transfer tranches back to the user
+            _checkAndApproveMax(tranche, address(vault), redeemedTokenAmts[i]);
+
+            // solhint-disable-next-line no-empty-blocks
+            try vault.meld(bond, trancheAmtsToMeld) {} catch {}
+
+            // transfer any remaining tranches back if melding did not succeed
+            tranche.transfer(msg.sender, tranche.balanceOf(address(this)));
+        }
+
+        // transfer all underlying back to the user
+        IERC20Upgradeable underlying = redeemedTokens[0];
+        underlying.transfer(msg.sender, underlying.balanceOf(address(this)));
     }
 
     /// @dev Checks if the spender has sufficient allowance. If not, approves the maximum possible amount.
