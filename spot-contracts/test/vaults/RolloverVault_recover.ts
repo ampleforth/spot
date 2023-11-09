@@ -52,7 +52,7 @@ describe("RolloverVault", function () {
     await feeStrategy.computeRolloverFeePerc.returns("0");
     await feeStrategy.decimals.returns(8);
 
-    const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
+    const PricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
     pricingStrategy = await smock.fake(PricingStrategy);
     await pricingStrategy.decimals.returns(8);
     await pricingStrategy.computeTranchePrice.returns(toPriceFixedPtAmt("1"));
@@ -72,9 +72,6 @@ describe("RolloverVault", function () {
         initializer: "init(string,string,address,address,address,address)",
       },
     );
-
-    await feeStrategy.feeToken.returns(perp.address);
-
     await perp.updateTolerableTrancheMaturity(1200, 4800);
     await advancePerpQueueToBondMaturity(perp, await getDepositBond(perp));
 

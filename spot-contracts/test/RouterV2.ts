@@ -1,13 +1,12 @@
 import { expect, use } from "chai";
 import { network, ethers, upgrades } from "hardhat";
-import { constants, Contract, Signer } from "ethers";
+import { constants, Contract, Signer, Transaction } from "ethers";
 import { smock } from "@defi-wonderland/smock";
 import {
   setupCollateralToken,
   setupBondFactory,
   depositIntoBond,
   bondAt,
-  getTranches,
   toFixedPtAmt,
   toPriceFixedPtAmt,
   toPercFixedPtAmt,
@@ -15,6 +14,9 @@ import {
   mintCollteralToken,
   advancePerpQueueToRollover,
   checkReserveComposition,
+  getDepositBond,
+  getTranches,
+  checkVaultAssetComposition,
 } from "./helpers";
 use(smock.matchers);
 
@@ -26,6 +28,7 @@ let perp: Contract,
   pricingStrategy: Contract,
   deployer: Signer,
   deployerAddress: string,
+  vault: Contract,
   router: Contract,
   depositBond: Contract,
   depositTranches: Contract[];
@@ -50,7 +53,7 @@ describe("RouterV2", function () {
     await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("0"));
     await feeStrategy.decimals.returns(8);
 
-    const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
+    const PricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
     pricingStrategy = await smock.fake(PricingStrategy);
     await pricingStrategy.decimals.returns(8);
     await pricingStrategy.computeTranchePrice.returns(toPriceFixedPtAmt("1"));
@@ -75,6 +78,11 @@ describe("RouterV2", function () {
 
     depositBond = await bondAt(await perp.callStatic.getDepositBond());
     depositTranches = await getTranches(depositBond);
+
+    const RolloverVault = await ethers.getContractFactory("RolloverVault");
+    vault = await upgrades.deployProxy(RolloverVault.connect(deployer));
+    await collateralToken.approve(vault.address, toFixedPtAmt("1"));
+    await vault.init("RolloverVault", "VSHARE", perp.address);
 
     const Router = await ethers.getContractFactory("RouterV2");
     router = await Router.deploy();
@@ -231,6 +239,195 @@ describe("RouterV2", function () {
       it("should leave no dust", async function () {
         expect(await collateralToken.balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
         expect(await perp.balanceOf(router.address)).to.eq(toFixedPtAmt("0"));
+      });
+    });
+  });
+
+  describe("#redeemForUnderlying", function () {
+    let txFn: () => Promise<Transaction>, reserveTranches: Contract[];
+    describe("when meld is not available", function () {
+      beforeEach(async function () {
+        await mintCollteralToken(collateralToken, toFixedPtAmt("1000"), deployer);
+        await collateralToken.approve(router.address, toFixedPtAmt("1000"));
+        await router.trancheAndDeposit(perp.address, await perp.callStatic.getDepositBond(), toFixedPtAmt("1000"));
+        await perp.approve(router.address, toFixedPtAmt("200"));
+        txFn = () => router.redeemForUnderlying(perp.address, vault.address, toFixedPtAmt("200"));
+      });
+      it("should transfer perps out", async function () {
+        await expect(txFn).to.changeTokenBalances(perp, [deployer], [toFixedPtAmt("-200")]);
+      });
+
+      it("should transfer tranches back", async function () {
+        await expect(txFn).to.changeTokenBalances(depositTranches[0], [deployer], [toFixedPtAmt("200")]);
+      });
+    });
+
+    describe("when meld is partially available", function () {
+      beforeEach(async function () {
+        reserveTranches = [];
+        for (let i = 0; i < 3; i++) {
+          const bond = await getDepositBond(perp);
+          const tranches = await getTranches(bond);
+          await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
+
+          await tranches[0].approve(perp.address, toFixedPtAmt("200"));
+          await perp.deposit(tranches[0].address, toFixedPtAmt("200"));
+
+          reserveTranches.push(tranches[0]);
+          await advancePerpQueue(perp, 1200);
+        }
+
+        await vault.updateMaxUndeployedPerc(toPercFixedPtAmt("1"));
+        await vault.updateFees([toPercFixedPtAmt("0"), toPercFixedPtAmt("0"), toPercFixedPtAmt("0"), "0"]);
+
+        await mintCollteralToken(collateralToken, toFixedPtAmt("1000"), deployer);
+        await collateralToken.transfer(vault.address, toFixedPtAmt("1000"));
+        await vault.deploy();
+
+        depositTranches = await getTranches(await getDepositBond(perp));
+
+        await checkVaultAssetComposition(
+          vault,
+          [collateralToken, depositTranches[1], depositTranches[2], perp],
+          [toFixedPtAmt("200"), toFixedPtAmt("300"), toFixedPtAmt("500"), toFixedPtAmt("0")],
+        );
+
+        await checkReserveComposition(
+          perp,
+          [collateralToken, depositTranches[0], reserveTranches[1], reserveTranches[2]],
+          [toFixedPtAmt("0"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
+        );
+
+        await perp.approve(router.address, toFixedPtAmt("300"));
+        txFn = () => router.redeemForUnderlying(perp.address, vault.address, toFixedPtAmt("300"));
+      });
+
+      it("should transfer perps out", async function () {
+        await expect(txFn).to.changeTokenBalances(perp, [deployer], [toFixedPtAmt("-300")]);
+      });
+
+      it("should transfer underlying tokens back", async function () {
+        await expect(txFn).to.changeTokenBalances(collateralToken, [deployer], [toFixedPtAmt("100")]);
+      });
+
+      it("should transfer tranches back", async function () {
+        await expect(txFn).to.changeTokenBalances(reserveTranches[0], [deployer], [toFixedPtAmt("0")]);
+      });
+
+      it("should transfer tranches back", async function () {
+        await expect(txFn).to.changeTokenBalances(depositTranches[0], [deployer], [toFixedPtAmt("0")]);
+      });
+
+      it("should transfer tranches back", async function () {
+        await expect(txFn).to.changeTokenBalances(reserveTranches[1], [deployer], [toFixedPtAmt("100")]);
+      });
+
+      it("should transfer tranches back", async function () {
+        await expect(txFn).to.changeTokenBalances(reserveTranches[2], [deployer], [toFixedPtAmt("100")]);
+      });
+
+      it("should update reserves", async function () {
+        await txFn();
+        await checkVaultAssetComposition(
+          vault,
+          [collateralToken, depositTranches[1], depositTranches[2], perp],
+          [toFixedPtAmt("600"), toFixedPtAmt("150"), toFixedPtAmt("250"), toFixedPtAmt("0")],
+        );
+        await checkReserveComposition(
+          perp,
+          [collateralToken, depositTranches[0], reserveTranches[1], reserveTranches[2]],
+          [toFixedPtAmt("0"), toFixedPtAmt("100"), toFixedPtAmt("100"), toFixedPtAmt("100")],
+        );
+      });
+    });
+
+    describe("when meld is fully available", function () {
+      let rolledInTranches: Contract[];
+      beforeEach(async function () {
+        reserveTranches = [];
+        for (let i = 0; i < 3; i++) {
+          const bond = await getDepositBond(perp);
+          const tranches = await getTranches(bond);
+          await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
+
+          await tranches[0].approve(perp.address, toFixedPtAmt("200"));
+          await perp.deposit(tranches[0].address, toFixedPtAmt("200"));
+
+          reserveTranches.push(tranches[0]);
+          await advancePerpQueue(perp, 1200);
+        }
+
+        await vault.updateMaxUndeployedPerc(toPercFixedPtAmt("1"));
+        await vault.updateFees([toPercFixedPtAmt("0"), toPercFixedPtAmt("0"), toPercFixedPtAmt("0"), "0"]);
+
+        rolledInTranches = [];
+        for (let i = 0; i < 3; i++) {
+          await mintCollteralToken(collateralToken, toFixedPtAmt("1000"), deployer);
+          await collateralToken.transfer(vault.address, toFixedPtAmt("1000"));
+          await vault.recoverAndRedeploy();
+
+          const bond = await getDepositBond(perp);
+          const tranches = await getTranches(bond);
+          reserveTranches.push(tranches[0]);
+          rolledInTranches.push(tranches[1], tranches[2]);
+
+          await advancePerpQueue(perp, 1200);
+        }
+
+        await vault["recover()"]();
+
+        await checkVaultAssetComposition(
+          vault,
+          [collateralToken, rolledInTranches[2], rolledInTranches[3], rolledInTranches[4], rolledInTranches[5], perp],
+          [
+            toFixedPtAmt("1048"),
+            toFixedPtAmt("360"),
+            toFixedPtAmt("600"),
+            toFixedPtAmt("372"),
+            toFixedPtAmt("620"),
+            toFixedPtAmt("0"),
+          ],
+        );
+
+        await checkReserveComposition(
+          perp,
+          [collateralToken, reserveTranches[4], reserveTranches[5]],
+          [toFixedPtAmt("112"), toFixedPtAmt("240"), toFixedPtAmt("248")],
+        );
+
+        await perp.approve(router.address, toFixedPtAmt("300"));
+        txFn = () => router.redeemForUnderlying(perp.address, vault.address, toFixedPtAmt("300"));
+      });
+
+      it("should transfer perps out", async function () {
+        await expect(txFn).to.changeTokenBalances(perp, [deployer], [toFixedPtAmt("-300")]);
+      });
+
+      it("should transfer underlying tokens back", async function () {
+        await expect(txFn).to.changeTokenBalances(collateralToken, [deployer], [toFixedPtAmt("300")]);
+      });
+
+      it("should update reserves", async function () {
+        await txFn();
+
+        await checkVaultAssetComposition(
+          vault,
+          [collateralToken, rolledInTranches[2], rolledInTranches[3], rolledInTranches[4], rolledInTranches[5], perp],
+          [
+            toFixedPtAmt("2024"),
+            toFixedPtAmt("180"),
+            toFixedPtAmt("300"),
+            toFixedPtAmt("186"),
+            toFixedPtAmt("310"),
+            toFixedPtAmt("0"),
+          ],
+        );
+
+        await checkReserveComposition(
+          perp,
+          [collateralToken, reserveTranches[4], reserveTranches[5]],
+          [toFixedPtAmt("56"), toFixedPtAmt("120"), toFixedPtAmt("124")],
+        );
       });
     });
   });
