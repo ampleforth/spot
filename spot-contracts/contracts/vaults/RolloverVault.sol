@@ -824,10 +824,7 @@ contract RolloverVault is
         for (uint256 i = 0; (i < rolloverTokens.length && trancheInAmtAvailable > 0); i++) {
             // tokenOutOfPerp is the reserve token coming out of perp into the vault
             IERC20Upgradeable tokenOutOfPerp = rolloverTokens[i];
-            uint256 tokenOutAmtAvailable = address(tokenOutOfPerp) != address(0)
-                ? tokenOutOfPerp.balanceOf(address(perp_))
-                : 0;
-            if (tokenOutAmtAvailable <= 0) {
+            if (address(tokenOutOfPerp) == address(0)) {
                 continue;
             }
 
@@ -843,7 +840,9 @@ contract RolloverVault is
             _syncAndRemoveDeployedAsset(trancheIntoPerp);
 
             // skip insertion into the deployed list the case of the mature tranche, ie underlying
-            if (tokenOutOfPerp != underlying) {
+            // NOTE: we know that `rolloverTokens[0]` points to the underlying asset so every other
+            // token in the list is a tranche which the vault needs to keep track of.
+            if (i > 0) {
                 // sync deployed asset retrieved from perp
                 _syncAndAddDeployedAsset(tokenOutOfPerp);
             }
@@ -852,7 +851,7 @@ contract RolloverVault is
             trancheInAmtAvailable = trancheIntoPerp.balanceOf(address(this));
 
             // keep track if "at least" one rolled over operation occurred
-            rollover = rollover || (r.tokenOutAmt > 0);
+            rollover = true;
         }
 
         // sync underlying and earned (ie perp)
