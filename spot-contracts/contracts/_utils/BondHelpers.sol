@@ -74,45 +74,6 @@ library BondHelpers {
         return (r, TRANCHE_RATIO_GRANULARITY - r);
     }
 
-    /// @notice Helper function to estimate the amount of tranches minted when a given amount of collateral
-    ///         is deposited into the bond.
-    /// @dev This function is used off-chain services (using callStatic) to preview tranches minted after
-    /// @param b The address of the bond contract.
-    /// @return The tranche data, an array of tranche amounts and fees.
-    function previewDeposit(IBondController b, uint256 collateralAmount)
-        internal
-        view
-        returns (
-            BondTranches memory,
-            uint256[] memory,
-            uint256[] memory
-        )
-    {
-        BondTranches memory bt = getTranches(b);
-        uint256[] memory trancheAmts = new uint256[](bt.tranches.length);
-        uint256[] memory fees = new uint256[](bt.tranches.length);
-
-        uint256 totalDebt = b.totalDebt();
-        uint256 collateralBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(address(b));
-        uint256 feeBps = b.feeBps();
-
-        for (uint8 i = 0; i < bt.tranches.length; i++) {
-            trancheAmts[i] = collateralAmount.mulDiv(bt.trancheRatios[i], TRANCHE_RATIO_GRANULARITY);
-            if (collateralBalance > 0) {
-                trancheAmts[i] = trancheAmts[i].mulDiv(totalDebt, collateralBalance);
-            }
-        }
-
-        if (feeBps > 0) {
-            for (uint8 i = 0; i < bt.tranches.length; i++) {
-                fees[i] = trancheAmts[i].mulDiv(feeBps, BPS);
-                trancheAmts[i] -= fees[i];
-            }
-        }
-
-        return (bt, trancheAmts, fees);
-    }
-
     /// @notice Given a bond and its tranche data, for each tranche token,
     ///         retrieves the total collateral redeemable for the entire supply of the tranche token (aka debt issued).
     /// @dev The cdr can be computed for each tranche by dividing the

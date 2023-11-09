@@ -5,15 +5,12 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { ITranche } from "./_interfaces/buttonwood/ITranche.sol";
 import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
 import { IPerpetualTranche } from "./_interfaces/IPerpetualTranche.sol";
+import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
 
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { BondTranches, BondTranchesHelpers } from "./_utils/BondTranchesHelpers.sol";
 import { BondHelpers } from "./_utils/BondHelpers.sol";
-
-interface IRolloverVault {
-    function meld(IBondController bond, uint256[] memory trancheAmtsIn) external returns (uint256);
-}
 
 /**
  *  @title RouterV2
@@ -34,33 +31,14 @@ contract RouterV2 {
     using SafeERC20Upgradeable for ITranche;
     using SafeERC20Upgradeable for IPerpetualTranche;
 
+    // constants
+    // Values copied over from the perp contract
+    uint8 private constant PERP_PRICE_DECIMALS = 8;
+    uint256 private constant PERP_UNIT_PRICE = (10**PERP_PRICE_DECIMALS);
+
     modifier afterPerpStateUpdate(IPerpetualTranche perp) {
         perp.updateState();
         _;
-    }
-
-    /// @notice Calculates the amount of tranche tokens minted after depositing into the deposit bond.
-    /// @dev Used by off-chain services to preview a tranche operation.
-    /// @param perp Address of the perp contract.
-    /// @param collateralAmount The amount of collateral the user wants to tranche.
-    /// @return bond The address of the current deposit bond.
-    /// @return trancheAmts The tranche token amounts minted.
-    function previewTranche(IPerpetualTranche perp, uint256 collateralAmount)
-        external
-        afterPerpStateUpdate(perp)
-        returns (
-            IBondController,
-            ITranche[] memory,
-            uint256[] memory
-        )
-    {
-        IBondController bond = perp.getDepositBond();
-
-        BondTranches memory bt;
-        uint256[] memory trancheAmts;
-        (bt, trancheAmts, ) = bond.previewDeposit(collateralAmount);
-
-        return (bond, bt.tranches, trancheAmts);
     }
 
     /// @notice Tranches the collateral using the current deposit bond and then deposits individual tranches

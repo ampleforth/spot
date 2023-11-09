@@ -84,19 +84,6 @@ describe("RouterV2", function () {
     await network.provider.send("hardhat_reset");
   });
 
-  describe("#previewTranche", function () {
-    it("should compute the tranche amounts", async function () {
-      const r = await router.callStatic.previewTranche(perp.address, toFixedPtAmt("1000"));
-      expect(r[0]).to.eq(await perp.callStatic.getDepositBond());
-      expect(r[1][0]).to.eq(depositTranches[0].address);
-      expect(r[1][1]).to.eq(depositTranches[1].address);
-      expect(r[1][2]).to.eq(depositTranches[2].address);
-      expect(r[2][0]).to.eq(toFixedPtAmt("200"));
-      expect(r[2][1]).to.eq(toFixedPtAmt("300"));
-      expect(r[2][2]).to.eq(toFixedPtAmt("500"));
-    });
-  });
-
   describe("#trancheAndDeposit", function () {
     beforeEach(async function () {
       await mintCollteralToken(collateralToken, toFixedPtAmt("2000"), deployer);

@@ -19,18 +19,6 @@ contract BondHelpersTester {
         return b.getTranches();
     }
 
-    function previewDeposit(IBondController b, uint256 collateralAmount)
-        public
-        view
-        returns (
-            BondTranches memory,
-            uint256[] memory,
-            uint256[] memory
-        )
-    {
-        return b.previewDeposit(collateralAmount);
-    }
-
     function getTrancheCollateralizations(IBondController b)
         public
         view
