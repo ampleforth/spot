@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.19;
 
-import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche } from "../_interfaces/IPerpetualTranche.sol";
+import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche, RolloverData } from "../_interfaces/IPerpetualTranche.sol";
 import { IVault, UnexpectedAsset, UnauthorizedTransferOut, InsufficientDeployment, DeployedCountOverLimit, UnacceptableDeposit, UnacceptableRedemption } from "../_interfaces/IVault.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -832,12 +832,10 @@ contract RolloverVault is
             }
 
             // Perform rollover
-            IPerpetualTranche.RolloverData memory r = perp_.rollover(
-                trancheIntoPerp,
-                tokenOutOfPerp,
-                trancheInAmtAvailable
-            );
-            if (r.tokenOutAmt == 0) {
+            RolloverData memory r = perp_.rollover(trancheIntoPerp, tokenOutOfPerp, trancheInAmtAvailable);
+
+            // no rollover occured, skip updating balances
+            if (r.tokenOutAmt <= 0) {
                 continue;
             }
 

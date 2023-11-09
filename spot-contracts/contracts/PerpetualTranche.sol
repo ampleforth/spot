@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
-import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeeStrategy, IPricingStrategy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
+import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeeStrategy, IPricingStrategy, IBondController, ITranche, RolloverData } from "./_interfaces/IPerpetualTranche.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -525,12 +525,7 @@ contract PerpetualTranche is
         }
 
         // calculates the perp denominated amount rolled over and the tokenOutAmt
-        IPerpetualTranche.RolloverData memory r = _computeRolloverAmt(
-            trancheIn,
-            tokenOut,
-            trancheInAmtAvailable,
-            type(uint256).max
-        );
+        RolloverData memory r = _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable, type(uint256).max);
 
         // Verifies if rollover amount is acceptable
         if (r.trancheInAmt <= 0) {
@@ -659,7 +654,7 @@ contract PerpetualTranche is
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable,
         uint256 tokenOutAmtRequested
-    ) external override afterStateUpdate returns (IPerpetualTranche.RolloverData memory) {
+    ) external override afterStateUpdate returns (RolloverData memory) {
         return _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable, tokenOutAmtRequested);
     }
 
@@ -816,12 +811,12 @@ contract PerpetualTranche is
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable,
         uint256 tokenOutAmtRequested
-    ) private returns (IPerpetualTranche.RolloverData memory) {
+    ) private returns (RolloverData memory) {
         // NOTE: The rollover fees are settled by,
         // adjusting the exchange rate between `trancheInAmt` and `tokenOutAmt`.
         int256 feePerc = feeStrategy.computeRolloverFeePerc();
 
-        IPerpetualTranche.RolloverData memory r;
+        RolloverData memory r;
 
         uint256 trancheInPrice = _tranchePrice(trancheIn);
         uint256 tokenOutPrice = _isUnderlying(tokenOut) ? UNIT_PRICE : _tranchePrice(ITranche(address(tokenOut)));

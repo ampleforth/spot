@@ -10,6 +10,13 @@ import { IDiscountStrategy } from "./IDiscountStrategy.sol";
 import { IBondController } from "./buttonwood/IBondController.sol";
 import { ITranche } from "./buttonwood/ITranche.sol";
 
+struct RolloverData {
+    /// @notice The amount of tokens rolled out.
+    uint256 tokenOutAmt;
+    /// @notice The amount of trancheIn tokens rolled in.
+    uint256 trancheInAmt;
+}
+
 interface IPerpetualTranche is IERC20Upgradeable {
     //--------------------------------------------------------------------------
     // Events
@@ -39,13 +46,6 @@ interface IPerpetualTranche is IERC20Upgradeable {
     function redeem(uint256 perpAmtBurnt)
         external
         returns (IERC20Upgradeable[] memory tokensOut, uint256[] memory tokenOutAmts);
-
-    struct RolloverData {
-        /// @notice The amount of tokens rolled out.
-        uint256 tokenOutAmt;
-        /// @notice The amount of trancheIn tokens rolled in.
-        uint256 trancheInAmt;
-    }
 
     /// @notice Rotates newer tranches in for reserve tokens.
     /// @param trancheIn The tranche token deposited.
