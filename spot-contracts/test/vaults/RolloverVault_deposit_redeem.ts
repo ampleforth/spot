@@ -19,7 +19,6 @@ import {
   checkReserveComposition,
   checkVaultAssetComposition,
   rebase,
-  logVaultAssets,
 } from "../helpers";
 use(smock.matchers);
 
@@ -709,9 +708,7 @@ describe("RolloverVault", function () {
       });
       it("should update vault", async function () {
         await checkVaultAssetComposition(vault, [collateralToken, perp], [toFixedPtAmt("0"), toFixedPtAmt("0")]);
-        await logVaultAssets(vault);
         await vault.deposit2(toFixedPtAmt("100"));
-        await logVaultAssets(vault);
         await checkVaultAssetComposition(
           vault,
           [collateralToken, rolloverInTranches[1], rolloverInTranches[2], perp],
@@ -829,7 +826,7 @@ describe("RolloverVault", function () {
         await expect(() => vault.redeem(bal)).to.changeTokenBalances(
           collateralToken,
           [deployer, vault],
-          [toFixedPtAmt("10"), toFixedPtAmt("-10")],
+          [toFixedPtAmt("0"), toFixedPtAmt("0")],
         );
       });
 
@@ -861,7 +858,7 @@ describe("RolloverVault", function () {
         await expect(() => vault.redeem(bal)).to.changeTokenBalances(
           perp,
           [deployer, vault],
-          [toFixedPtAmt("10"), toFixedPtAmt("-10")],
+          [toFixedPtAmt("0"), toFixedPtAmt("0")],
         );
       });
 

@@ -294,7 +294,7 @@ describe("RolloverVault", function () {
 
     describe("when fee is zero", async function () {
       beforeEach(async function () {
-        await vault.updateFees([toPercFixedPtAmt("0"), toPercFixedPtAmt("0"), "0"]);
+        await vault.updateFees([toPercFixedPtAmt("0"), toPercFixedPtAmt("0"), toPercFixedPtAmt("0"), "0"]);
       });
 
       describe("when the user sends only A tranches", function () {
@@ -693,7 +693,7 @@ describe("RolloverVault", function () {
     describe("with a fee", async function () {
       let txFn: () => Promise<Transaction>, underlyingReturned: BigNumber;
       beforeEach(async function () {
-        await vault.updateFees([toPercFixedPtAmt("0.05"), toPercFixedPtAmt("0"), "0"]);
+        await vault.updateFees([toPercFixedPtAmt("0"), toPercFixedPtAmt("0.05"), toPercFixedPtAmt("0"), "0"]);
         await TimeHelpers.increaseTime(parseInt((await timeToMaturity(currentBondIn)) / 2));
         currentTranchesIn[0].approve(vault.address, toFixedPtAmt("10"));
         underlyingReturned = await vault.callStatic.meld(currentBondIn.address, [

@@ -42,7 +42,7 @@ describe("FeeStrategy", function () {
   });
 
   async function mockDeviation(vaultTVL, perpTVL, treshold) {
-    await feeStrategy.updateDeviationTreshold(toPercFixedPtAmt(treshold));
+    await feeStrategy.updateDeviationThreshold(toPercFixedPtAmt(treshold));
     await vault.getTVL.returns(toFixedPtAmt(vaultTVL));
     currentBond = await createBondWithFactory(bondFactory, collateralToken, [250, 750], 28 * 86400);
     await perp.getDepositBond.returns(currentBond.address);
@@ -279,14 +279,14 @@ describe("FeeStrategy", function () {
           feeStrategy
             .connect(deployer)
             .updateRolloverFees([toPercFixedPtAmt("-0.25"), toPercFixedPtAmt("0.01"), toPercFixedPtAmt("3")]),
-        ).to.be.revertedWith("FeeStrategy: fee bound too low");
+        ).to.be.revertedWith("FeeStrategy: fee lower bound too low");
       });
       it("should revert", async function () {
         await expect(
           feeStrategy
             .connect(deployer)
             .updateRolloverFees([toPercFixedPtAmt("-0.01"), toPercFixedPtAmt("0.25"), toPercFixedPtAmt("3")]),
-        ).to.be.revertedWith("FeeStrategy: fee bound too high");
+        ).to.be.revertedWith("FeeStrategy: fee upper bound too high");
       });
 
       it("should revert", async function () {

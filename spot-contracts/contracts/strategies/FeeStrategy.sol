@@ -128,7 +128,7 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     /// @notice Update the parameters determining the slope and asymptotes of the sigmoid fee curve.
     /// @param p Lower, Upper and Growth sigmoid paramters are fixed point numbers with {PERC_DECIMALS} places.
     function updateRolloverFees(SigmoidParams calldata p) external onlyOwner {
-        require(p.lower >= -int256(SIGMOID_BOUND_PERC), "FeeStrategy: fee bound too low");
+        require(p.lower >= -int256(SIGMOID_BOUND_PERC), "FeeStrategy: fee lower bound too low");
         require(p.upper <= int256(SIGMOID_BOUND_PERC), "FeeStrategy: fee upper bound too high");
         require(p.lower <= p.upper, "FeeStrategy: paramters invalid");
         rolloverFeeAPR.lower = p.lower;

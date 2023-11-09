@@ -9,6 +9,10 @@ const mockTime = (x: number) => START_TIME + x;
 
 let bondFactory: Contract, token: Contract, issuer: Contract, deployer: Signer, otherUser: Signer;
 describe("BondIssuer", function () {
+  before(async function () {
+    await network.provider.send("hardhat_reset");
+  });
+
   beforeEach(async function () {
     const accounts = await ethers.getSigners();
     deployer = accounts[0];

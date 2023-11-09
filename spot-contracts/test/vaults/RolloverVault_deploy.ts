@@ -478,7 +478,8 @@ describe("RolloverVault", function () {
         await feeStrategy.computeRolloverFeePerc.returns(toPercFixedPtAmt("-0.01"));
         await collateralToken.transfer(vault.address, toFixedPtAmt("1500"));
 
-        await vault.updateFees(["0", "0", toFixedPtAmt("10")]);
+        await vault.updateFees(["0", "0", "0", toFixedPtAmt("10")]);
+
         txFn = () => vault.deploy();
         tx = await txFn();
       });
@@ -497,39 +498,36 @@ describe("RolloverVault", function () {
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("0"));
 
         // Rollover
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[0].address, toFixedPtAmt("0"));
         await expect(tx)
           .to.emit(vault, "AssetSynced")
-          .withArgs(rolloverInTranches[1].address, toFixedPtAmt("177.666666666666666667"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[1].address, toFixedPtAmt("0"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(reserveTranches[2].address, toFixedPtAmt("133.25"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("500"));
+          .withArgs(reserveTranches[1].address, toFixedPtAmt("134.639999999999999999"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("200"));
       });
 
       it("should update the list of deployed assets", async function () {
         await checkVaultAssetComposition(
           vault,
-          [
-            collateralToken,
-            reserveTranches[1],
-            rolloverInTranches[0],
-            rolloverInTranches[1],
-            rolloverInTranches[2],
-            perp,
-          ],
+          [collateralToken, reserveTranches[1], rolloverInTranches[1], rolloverInTranches[2], perp],
           [
             toFixedPtAmt("200"),
-            toFixedPtAmt("200"),
-            toFixedPtAmt("253.465346534653465346"),
-            toFixedPtAmt("900.0"),
-            toFixedPtAmt("1500"),
+            toFixedPtAmt("134.639999999999999999"),
+            toFixedPtAmt("447"),
+            toFixedPtAmt("745"),
             toFixedPtAmt("0"),
           ],
         );
 
         await checkReserveComposition(
           perp,
-          [collateralToken, reserveTranches[2], reserveTranches[3], rolloverInTranches[0]],
-          [toFixedPtAmt("0"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("346.534653465346534654")],
+          [collateralToken, reserveTranches[3], reserveTranches[1], reserveTranches[2], rolloverInTranches[0]],
+          [
+            toFixedPtAmt("0"),
+            toFixedPtAmt("200"),
+            toFixedPtAmt("65.360000000000000001"),
+            toFixedPtAmt("200"),
+            toFixedPtAmt("298"),
+          ],
         );
       });
     });

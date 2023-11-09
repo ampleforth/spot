@@ -380,11 +380,11 @@ describe("RouterV2", function () {
           vault,
           [collateralToken, rolledInTranches[2], rolledInTranches[3], rolledInTranches[4], rolledInTranches[5], perp],
           [
-            toFixedPtAmt("1048"),
-            toFixedPtAmt("360"),
-            toFixedPtAmt("600"),
-            toFixedPtAmt("372"),
-            toFixedPtAmt("620"),
+            toFixedPtAmt("1400"),
+            toFixedPtAmt("300"),
+            toFixedPtAmt("500"),
+            toFixedPtAmt("300"),
+            toFixedPtAmt("500"),
             toFixedPtAmt("0"),
           ],
         );
@@ -392,7 +392,7 @@ describe("RouterV2", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, reserveTranches[4], reserveTranches[5]],
-          [toFixedPtAmt("112"), toFixedPtAmt("240"), toFixedPtAmt("248")],
+          [toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
         );
 
         await perp.approve(router.address, toFixedPtAmt("300"));
@@ -414,11 +414,11 @@ describe("RouterV2", function () {
           vault,
           [collateralToken, rolledInTranches[2], rolledInTranches[3], rolledInTranches[4], rolledInTranches[5], perp],
           [
-            toFixedPtAmt("2024"),
-            toFixedPtAmt("180"),
-            toFixedPtAmt("300"),
-            toFixedPtAmt("186"),
-            toFixedPtAmt("310"),
+            toFixedPtAmt("2200"),
+            toFixedPtAmt("150"),
+            toFixedPtAmt("250"),
+            toFixedPtAmt("150"),
+            toFixedPtAmt("250"),
             toFixedPtAmt("0"),
           ],
         );
@@ -426,7 +426,7 @@ describe("RouterV2", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, reserveTranches[4], reserveTranches[5]],
-          [toFixedPtAmt("56"), toFixedPtAmt("120"), toFixedPtAmt("124")],
+          [toFixedPtAmt("100"), toFixedPtAmt("100"), toFixedPtAmt("100")],
         );
       });
     });
