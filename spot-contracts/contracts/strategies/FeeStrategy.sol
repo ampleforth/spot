@@ -18,18 +18,18 @@ import { PerpHelpers } from "../_utils/PerpHelpers.sol";
  *
  *  @notice This contract determines perp's mint, burn and rollover fees.
  *
- *          Fees are computed based on the deviationFactor, ie the ratio between
+ *          Fees are computed based on the deviationRatio, ie the ratio between
  *          the current TVL to the expcted TVL in the vault system.
  *
- *          A `deviationFactor` of 1.0, means that the system is in balance.
+ *          A `deviationRatio` of 1.0, means that the system is in balance.
  *
  *              expectedTVL = perpTVL / trancheRatio
- *              deviationFactor = currentTVL/expectedTVL
+ *              deviationRatio = currentTVL/expectedTVL
  *
- *          1) Perp mint fees are turned on when deviationFactor < 1,
+ *          1) Perp mint fees are turned on when deviationRatio < 1,
  *             and is a fixed percentage fee set by the owner.
  *
- *          2) Perp burn fees are turned on when deviationFactor > 1,
+ *          2) Perp burn fees are turned on when deviationRatio > 1,
  *             and is a fixed percentage fee set by the owner.
  *
  *          3) The rollover fees are signed and can flow in either direction.
@@ -37,7 +37,7 @@ import { PerpHelpers } from "../_utils/PerpHelpers.sol";
  *             through a sigmoid function. The slope and asymptotes are set by the owner.
  *
  *              rotationsPerYear = 1_year / mintingBondDuration
- *              rolloverFeePerc = sigmoid(deviationFactor) / rotationsPerYear
+ *              rolloverFeePerc = sigmoid(deviationRatio) / rotationsPerYear
  *
  */
 contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
@@ -47,11 +47,12 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     using BondHelpers for IBondController;
     using PerpHelpers for IPerpetualTranche;
 
-    /// @dev The returned fee percentages are fixed point numbers with {PERC_DECIMALS} places.
+    /// @dev The returned fee percentages are fixed point numbers with {DECIMALS} places.
     ///      The decimals should line up with value expected by consumer (perp).
-    uint8 public constant PERC_DECIMALS = 8;
-    uint256 public constant HUNDRED_PERC = 1 * 10**PERC_DECIMALS; // 100%, or 1.00
-    uint256 public constant SIGMOID_BOUND_PERC = HUNDRED_PERC / 10; // 10%, or 0.10
+    ///      NOTE: 10**DECIMALS => 100% or 1.0
+    uint8 public constant DECIMALS = 8;
+    uint256 public constant ONE = (1 * 10**DECIMALS); // 1.0 or 100%
+    uint256 public constant SIGMOID_BOUND = ONE / 10; // 0.10 or 10%
 
     /// @dev Number of seconds in one year. (365.25 * 24 * 3600)
     int256 public constant ONE_YEAR_SEC = 31557600;
@@ -66,9 +67,9 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     /// @notice Reference to the rollover vault.
     IVault public immutable vault;
 
-    /// @notice Defines the neutral range inside which we ignore any deviation between
-    ///         the expected and current TVLs.
-    uint256 public deviationThresholdPerc;
+    /// @notice Defines the target deviation ratio between the expected and current TVLs,
+    ///         at which the system is considered to be in balance.
+    uint256 public targetDeviationRatio;
 
     /// @notice The perp token's mint fee percentage celing.
     uint256 public maxMintFeePerc;
@@ -99,43 +100,43 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     /// @notice Contract initializer.
     function init() public initializer {
         __Ownable_init();
-        maxMintFeePerc = HUNDRED_PERC / 40; // 2.5%
-        maxBurnFeePerc = HUNDRED_PERC / 40; // 2.5%
-        rolloverFeeAPR.lower = -int256(HUNDRED_PERC) / 50; // -2%
-        rolloverFeeAPR.upper = int256(HUNDRED_PERC) / 20; // 5%
-        rolloverFeeAPR.growth = 5 * int256(HUNDRED_PERC); // 5x
-        deviationThresholdPerc = HUNDRED_PERC / 20; // 5%
+        maxMintFeePerc = ONE / 40; // 0.025
+        maxBurnFeePerc = ONE / 40; // 0.025
+        rolloverFeeAPR.lower = -int256(ONE) / 50; // -0.02
+        rolloverFeeAPR.upper = int256(ONE) / 20; // 0.05
+        rolloverFeeAPR.growth = 5 * int256(ONE); // 5.0
+        targetDeviationRatio = ONE; // 1.0
     }
 
-    /// @notice Updates the deviation threshold percentage.
-    /// @param deviationThresholdPerc_ The new deviation threshold percentage
-    ///        as a fixed point number with {PERC_DECIMALS} places.
-    function updateDeviationThreshold(uint256 deviationThresholdPerc_) external onlyOwner {
-        require(deviationThresholdPerc_ <= HUNDRED_PERC, "FeeStrategy: deviation threshold too high");
-        deviationThresholdPerc = deviationThresholdPerc_;
+    /// @notice Updates the target deviation ratio.
+    /// @param targetDeviationRatio_ The new target deviation ratio
+    ///        as a fixed point number with {DECIMALS} places.
+    function updateDeviationTarget(uint256 targetDeviationRatio_) external onlyOwner {
+        require(targetDeviationRatio_ > 0, "FeeStrategy: target deviation ratio too low");
+        targetDeviationRatio = targetDeviationRatio_;
     }
 
     /// @notice Updates the mint fee parameters.
     /// @param maxMintFeePerc_ The new mint fee ceiling percentage
-    ///        as a fixed point number with {PERC_DECIMALS} places.
+    ///        as a fixed point number with {DECIMALS} places.
     function updateMintFees(uint256 maxMintFeePerc_) external onlyOwner {
-        require(maxMintFeePerc_ <= HUNDRED_PERC, "FeeStrategy: mint fee too high");
+        require(maxMintFeePerc_ <= ONE, "FeeStrategy: mint fee too high");
         maxMintFeePerc = maxMintFeePerc_;
     }
 
     /// @notice Updates the burn fee parameters.
     /// @param maxBurnFeePerc_ The new burn fee ceiling percentage
-    ///        as a fixed point number with {PERC_DECIMALS} places.
+    ///        as a fixed point number with {DECIMALS} places.
     function updateBurnFees(uint256 maxBurnFeePerc_) external onlyOwner {
-        require(maxBurnFeePerc_ <= HUNDRED_PERC, "FeeStrategy: burn fee too high");
+        require(maxBurnFeePerc_ <= ONE, "FeeStrategy: burn fee too high");
         maxBurnFeePerc = maxBurnFeePerc_;
     }
 
     /// @notice Update the parameters determining the slope and asymptotes of the sigmoid fee curve.
-    /// @param p Lower, Upper and Growth sigmoid paramters are fixed point numbers with {PERC_DECIMALS} places.
+    /// @param p Lower, Upper and Growth sigmoid paramters are fixed point numbers with {DECIMALS} places.
     function updateRolloverFees(SigmoidParams calldata p) external onlyOwner {
-        require(p.lower >= -int256(SIGMOID_BOUND_PERC), "FeeStrategy: fee bound too low");
-        require(p.upper <= int256(SIGMOID_BOUND_PERC), "FeeStrategy: fee upper bound too high");
+        require(p.lower >= -int256(SIGMOID_BOUND), "FeeStrategy: fee lower bound too low");
+        require(p.upper <= int256(SIGMOID_BOUND), "FeeStrategy: fee upper bound too high");
         require(p.lower <= p.upper, "FeeStrategy: paramters invalid");
         rolloverFeeAPR.lower = p.lower;
         rolloverFeeAPR.upper = p.upper;
@@ -145,13 +146,13 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     /// @inheritdoc IFeeStrategy
     function computeMintFeePerc() external override returns (uint256) {
         // when vault tvl > target, we encourage supply growth by dropping mint fees to 0
-        return (computeDeviationRatio(perp.getDepositBond()) > HUNDRED_PERC) ? 0 : maxMintFeePerc;
+        return (computeDeviationRatio(perp.getDepositBond()) > ONE) ? 0 : maxMintFeePerc;
     }
 
     /// @inheritdoc IFeeStrategy
     function computeBurnFeePerc() external override returns (uint256) {
         // when vault tvl < target, we encorage supply reduction by dropping burn fees to 0
-        return (computeDeviationRatio(perp.getDepositBond()) < HUNDRED_PERC) ? 0 : maxBurnFeePerc;
+        return (computeDeviationRatio(perp.getDepositBond()) < ONE) ? 0 : maxBurnFeePerc;
     }
 
     /// @inheritdoc IFeeStrategy
@@ -162,7 +163,7 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
             rolloverFeeAPR.lower,
             rolloverFeeAPR.upper,
             rolloverFeeAPR.growth,
-            PERC_DECIMALS
+            int256(targetDeviationRatio)
         );
 
         // We calculate the rollover fee for the given cycle by dividing the annualized rate
@@ -172,30 +173,17 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
 
     /// @inheritdoc IFeeStrategy
     function decimals() external pure override returns (uint8) {
-        return PERC_DECIMALS;
+        return DECIMALS;
     }
 
-    /// @notice Computes the ratio between the vault's TVL and the target TVL.
-    /// @dev Adjusts the computed result based on the `deviationThresholdPerc`.
-    /// @return The ratio as a fixed point number with {PERC_DECIMALS} places.
+    /// @notice Computes the deviation ratio, ie) the ratio between the vault's TVL and the target TVL.
+    /// @return The deviation ratio as a fixed point number with {DECIMALS} places.
     function computeDeviationRatio(IBondController referenceBond) public returns (uint256) {
         // NOTE: Ensure that the perp's TVL and vault's TVL have the same base denomination.
         (uint256 perpRatio, ) = perp.computeEffectiveTrancheRatio(referenceBond);
         uint256 targetTVL = perp.getTVL().mulDiv(TRANCHE_RATIO_GRANULARITY, perpRatio);
-        uint256 deviationFactor = vault.getTVL().mulDiv(HUNDRED_PERC, targetTVL);
-
-        // Additional smoothening is applied to arrive at the deviationFactor.
-        // For example, the threshold is set to 5%.
-        // When the computed ratio is below 1, we leave it unchanged.
-        // When the computed ratio is between [1, 1.05], we adjust it down to 1.
-        // When the computed ratio is more than 1.05, we subract 5% ie) 1.07 becomes 1.02.
-        if (deviationFactor < HUNDRED_PERC) {
-            return deviationFactor;
-        } else if (deviationFactor <= (HUNDRED_PERC + deviationThresholdPerc)) {
-            return HUNDRED_PERC;
-        } else {
-            return (deviationFactor - deviationThresholdPerc);
-        }
+        uint256 currentDeviationRatio = vault.getTVL().mulDiv(ONE, targetTVL);
+        return currentDeviationRatio;
     }
 
     //-------------------------------------------------------------------------

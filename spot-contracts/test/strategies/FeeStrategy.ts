@@ -43,8 +43,8 @@ describe("FeeStrategy", function () {
     await feeStrategy.init();
   });
 
-  async function mockDeviation(vaultTVL, perpTVL, treshold) {
-    await feeStrategy.updateDeviationTreshold(toPercFixedPtAmt(treshold));
+  async function mockDeviation(vaultTVL, perpTVL, target) {
+    await feeStrategy.updateDeviationTarget(toPercFixedPtAmt(target));
     await vault.getTVL.returns(toFixedPtAmt(vaultTVL));
     currentBond = await createBondWithFactory(bondFactory, collateralToken, [250, 750], 28 * 86400);
     const tranches = await getTranches(currentBond);
@@ -66,7 +66,7 @@ describe("FeeStrategy", function () {
       expect(r[0]).to.eq(toPercFixedPtAmt("-0.02"));
       expect(r[1]).to.eq(toPercFixedPtAmt("0.05"));
       expect(r[2]).to.eq(toPercFixedPtAmt("5"));
-      expect(await feeStrategy.deviationThresholdPerc()).to.eq(toPercFixedPtAmt("0.05"));
+      expect(await feeStrategy.targetDeviationRatio()).to.eq(toPercFixedPtAmt("1"));
     });
     it("should return owner", async function () {
       expect(await feeStrategy.owner()).to.eq(await deployer.getAddress());
@@ -77,57 +77,24 @@ describe("FeeStrategy", function () {
   });
 
   describe("#computeDeviationRatio", function () {
-    describe("when deviation is exactly 1.0, when deviation treshold is not set", function () {
+    describe("when deviation = 1.0", function () {
       it("should return 1", async function () {
-        await mockDeviation("400", "100", "0");
+        await mockDeviation("400", "100", "1");
         expect(await feeStrategy.callStatic.computeDeviationRatio(currentBond.address)).to.eq(toPercFixedPtAmt("1"));
       });
     });
 
-    describe("when deviation is 1.0, when deviation treshold is set", function () {
+    describe("when deviation < 1.0", function () {
       it("should return 1", async function () {
-        await mockDeviation("399", "100", "0.1");
-        expect(await feeStrategy.callStatic.computeDeviationRatio(currentBond.address)).to.lt(toPercFixedPtAmt("1"));
-
-        await mockDeviation("400", "100", "0.1");
-        expect(await feeStrategy.callStatic.computeDeviationRatio(currentBond.address)).to.eq(toPercFixedPtAmt("1"));
-
-        await mockDeviation("420", "100", "0.1");
-        expect(await feeStrategy.callStatic.computeDeviationRatio(currentBond.address)).to.eq(toPercFixedPtAmt("1"));
-
-        await mockDeviation("440", "100", "0.1");
-        expect(await feeStrategy.callStatic.computeDeviationRatio(currentBond.address)).to.eq(toPercFixedPtAmt("1"));
-
-        await mockDeviation("441", "100", "0.1");
-        expect(await feeStrategy.callStatic.computeDeviationRatio(currentBond.address)).to.gt(toPercFixedPtAmt("1"));
+        await mockDeviation("300", "100", "1");
+        expect(await feeStrategy.callStatic.computeDeviationRatio(currentBond.address)).to.eq(toPercFixedPtAmt("0.75"));
       });
     });
 
-    describe("when deviation is > 1.0, when deviation treshold is not set", function () {
-      it("should return 1.5", async function () {
-        await mockDeviation("600", "100", "0");
+    describe("when deviation > 1.0", function () {
+      it("should return 1", async function () {
+        await mockDeviation("600", "100", "1");
         expect(await feeStrategy.callStatic.computeDeviationRatio(currentBond.address)).to.eq(toPercFixedPtAmt("1.5"));
-      });
-    });
-
-    describe("when deviation is > 1.0, when deviation treshold is set", function () {
-      it("should return 1.45", async function () {
-        await mockDeviation("600", "100", "0.05");
-        expect(await feeStrategy.callStatic.computeDeviationRatio(currentBond.address)).to.eq(toPercFixedPtAmt("1.45"));
-      });
-    });
-
-    describe("when deviation is < 1.0", function () {
-      it("should return 0.75", async function () {
-        await mockDeviation("300", "100", "0");
-        expect(await feeStrategy.callStatic.computeDeviationRatio(currentBond.address)).to.eq(toPercFixedPtAmt("0.75"));
-      });
-    });
-
-    describe("when deviation is < 1.0, when deviation treshold is set", function () {
-      it("should return 0.75", async function () {
-        await mockDeviation("300", "100", "0.1");
-        expect(await feeStrategy.callStatic.computeDeviationRatio(currentBond.address)).to.eq(toPercFixedPtAmt("0.75"));
       });
     });
   });
@@ -135,21 +102,21 @@ describe("FeeStrategy", function () {
   describe("#computeMintFeePerc", function () {
     describe("when deviation = 1", function () {
       it("should compute the fee perc", async function () {
-        await mockDeviation("400", "100", "0");
+        await mockDeviation("400", "100", "1");
         expect(await feeStrategy.callStatic.computeMintFeePerc()).to.eq(toPercFixedPtAmt("0.025"));
       });
     });
 
     describe("when deviation > 1", function () {
       it("should compute the fee perc", async function () {
-        await mockDeviation("600", "100", "0");
+        await mockDeviation("600", "100", "1");
         expect(await feeStrategy.callStatic.computeMintFeePerc()).to.eq(toPercFixedPtAmt("0"));
       });
     });
 
     describe("when deviation < 1", function () {
       it("should compute the fee perc", async function () {
-        await mockDeviation("200", "100", "0");
+        await mockDeviation("200", "100", "1");
         expect(await feeStrategy.callStatic.computeMintFeePerc()).to.eq(toPercFixedPtAmt("0.025"));
       });
     });
@@ -158,21 +125,21 @@ describe("FeeStrategy", function () {
   describe("#computeBurnFeePerc", function () {
     describe("when deviation = 1", function () {
       it("should compute the fee perc", async function () {
-        await mockDeviation("400", "100", "0");
+        await mockDeviation("400", "100", "1");
         expect(await feeStrategy.callStatic.computeBurnFeePerc()).to.eq(toPercFixedPtAmt("0.025"));
       });
     });
 
     describe("when deviation > 1", function () {
       it("should compute the fee perc", async function () {
-        await mockDeviation("600", "100", "0");
+        await mockDeviation("600", "100", "1");
         expect(await feeStrategy.callStatic.computeBurnFeePerc()).to.eq(toPercFixedPtAmt("0.025"));
       });
     });
 
     describe("when deviation < 1", function () {
       it("should compute the fee perc", async function () {
-        await mockDeviation("200", "100", "0");
+        await mockDeviation("200", "100", "1");
         expect(await feeStrategy.callStatic.computeBurnFeePerc()).to.eq(toPercFixedPtAmt("0"));
       });
     });
@@ -181,29 +148,45 @@ describe("FeeStrategy", function () {
   describe("#computeRolloverFeePerc", function () {
     describe("when deviation = 1", function () {
       it("should compute the fee perc", async function () {
-        await mockDeviation("400", "100", "0");
+        await mockDeviation("400", "100", "1");
         expect(await feeStrategy.callStatic.computeRolloverFeePerc()).to.eq(toPercFixedPtAmt("0"));
       });
     });
 
     describe("when deviation > 1", function () {
       it("should compute the fee perc", async function () {
-        await mockDeviation("600", "100", "0");
+        await mockDeviation("600", "100", "1");
         expect(await feeStrategy.callStatic.computeRolloverFeePerc()).to.eq(toPercFixedPtAmt("0.00218830"));
-      });
-    });
-
-    describe("when deviation > 1 and treshold set", function () {
-      it("should compute the fee perc", async function () {
-        await mockDeviation("600", "100", "0.1");
-        expect(await feeStrategy.callStatic.computeRolloverFeePerc()).to.eq(toPercFixedPtAmt("0.00176907"));
       });
     });
 
     describe("when deviation < 1", function () {
       it("should compute the fee perc", async function () {
-        await mockDeviation("200", "100", "0");
+        await mockDeviation("200", "100", "1");
         expect(await feeStrategy.callStatic.computeRolloverFeePerc()).to.eq(toPercFixedPtAmt("-0.00117880"));
+      });
+    });
+
+    describe("when target is set", function () {
+      describe("when deviation = 1", function () {
+        it("should compute the fee perc", async function () {
+          await mockDeviation("440", "100", "1.1");
+          expect(await feeStrategy.callStatic.computeRolloverFeePerc()).to.eq(toPercFixedPtAmt("0"));
+        });
+      });
+
+      describe("when deviation > 1", function () {
+        it("should compute the fee perc", async function () {
+          await mockDeviation("600", "100", "1.1");
+          expect(await feeStrategy.callStatic.computeRolloverFeePerc()).to.eq(toPercFixedPtAmt("0.00143068"));
+        });
+      });
+
+      describe("when deviation < 1", function () {
+        it("should compute the fee perc", async function () {
+          await mockDeviation("300", "100", "1.1");
+          expect(await feeStrategy.callStatic.computeRolloverFeePerc()).to.eq(toPercFixedPtAmt("-0.00084268"));
+        });
       });
     });
   });
@@ -284,14 +267,14 @@ describe("FeeStrategy", function () {
           feeStrategy
             .connect(deployer)
             .updateRolloverFees([toPercFixedPtAmt("-0.25"), toPercFixedPtAmt("0.01"), toPercFixedPtAmt("3")]),
-        ).to.be.revertedWith("FeeStrategy: fee bound too low");
+        ).to.be.revertedWith("FeeStrategy: fee lower bound too low");
       });
       it("should revert", async function () {
         await expect(
           feeStrategy
             .connect(deployer)
             .updateRolloverFees([toPercFixedPtAmt("-0.01"), toPercFixedPtAmt("0.25"), toPercFixedPtAmt("3")]),
-        ).to.be.revertedWith("FeeStrategy: fee bound too high");
+        ).to.be.revertedWith("FeeStrategy: fee upper bound too high");
       });
 
       it("should revert", async function () {
@@ -315,6 +298,35 @@ describe("FeeStrategy", function () {
         expect(p[0]).to.eq(toPercFixedPtAmt("-0.01"));
         expect(p[1]).to.eq(toPercFixedPtAmt("0.01"));
         expect(p[2]).to.eq(toPercFixedPtAmt("3"));
+      });
+    });
+  });
+
+  describe("#updateDeviationTarget", function () {
+    let tx: Transaction;
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(feeStrategy.connect(otherUser).updateDeviationTarget(toPercFixedPtAmt("0.01"))).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+    describe("when params are invalid", function () {
+      it("should revert", async function () {
+        await expect(feeStrategy.connect(deployer).updateDeviationTarget(toPercFixedPtAmt("0"))).to.be.revertedWith(
+          "FeeStrategy: target deviation ratio too low",
+        );
+      });
+    });
+
+    describe("when trigged by owner", function () {
+      beforeEach(async function () {
+        tx = feeStrategy.connect(deployer).updateDeviationTarget(toPercFixedPtAmt("1.01"));
+        await tx;
+      });
+      it("should update the mint fees", async function () {
+        expect(await feeStrategy.targetDeviationRatio()).to.eq(toPercFixedPtAmt("1.01"));
       });
     });
   });

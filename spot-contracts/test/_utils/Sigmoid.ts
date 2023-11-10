@@ -6,14 +6,14 @@ import { toPercFixedPtAmt } from "../helpers";
 
 describe("Sigmoid", function () {
   let math: Contract;
-  async function cmp(x, y, lower, upper, growth) {
+  async function cmp(x, y, lower, upper, growth, target = 1) {
     expect(
       await math.compute(
         toPercFixedPtAmt(`${x}`),
         toPercFixedPtAmt(`${lower}`),
         toPercFixedPtAmt(`${upper}`),
         toPercFixedPtAmt(`${growth}`),
-        8,
+        toPercFixedPtAmt(`${target}`),
       ),
     ).to.eq(toPercFixedPtAmt(`${y}`));
   }
@@ -47,6 +47,28 @@ describe("Sigmoid", function () {
       await cmp(3, 0.04885057, -0.01, 0.05, 4);
       await cmp(4, 0.04992684, -0.01, 0.05, 4);
       await cmp(10, 0.05, -0.01, 0.05, 4);
+    });
+    describe("when target is < 1", async function () {
+      it("should return sigmoid(x)", async function () {
+        await cmp(0, -0.00934856, -0.01, 0.05, 4, 0.95);
+        await cmp(0.5, -0.00708334, -0.01, 0.05, 4, 0.95);
+        await cmp(0.95, 0, -0.01, 0.05, 4, 0.95);
+        await cmp(1, 0.00132813, -0.01, 0.05, 4, 0.95);
+        await cmp(1.5, 0.02120098, -0.01, 0.05, 4, 0.95);
+        await cmp(2, 0.0398906, -0.01, 0.05, 4, 0.95);
+        await cmp(10, 0.05, -0.01, 0.05, 4, 0.95);
+      });
+    });
+    describe("when target is > 1", async function () {
+      it("should return sigmoid(x)", async function () {
+        await cmp(0, -0.00913973, -0.01, 0.05, 4, 1.05);
+        await cmp(0.5, -0.00708334, -0.01, 0.05, 4, 1.05);
+        await cmp(1, -0.00087027, -0.01, 0.05, 4, 1.05);
+        await cmp(1.05, 0, -0.01, 0.05, 4, 1.05);
+        await cmp(1.5, 0.01289159, -0.01, 0.05, 4, 1.05);
+        await cmp(2, 0.03105348, -0.01, 0.05, 4, 1.05);
+        await cmp(10, 0.05, -0.01, 0.05, 4, 1.05);
+      });
     });
   });
 });
