@@ -20,41 +20,40 @@ library Sigmoid {
     /// @param lower The lower asymptote.
     /// @param upper The upper asymptote.
     /// @param growth The growth parameter.
-    /// @param decimals The number of decimals places.
-    /// @return The computed value of sigmoid(x) as fixed-point number with the provided number of decimal places.
+    /// @param target The target value of "x" for which sigmoid(target) returns zero 0.
+    /// @return The computed value of sigmoid(x).
     function compute(
         int256 x,
         int256 lower,
         int256 upper,
         int256 growth,
-        uint8 decimals
+        int256 target
     ) internal pure returns (int256) {
-        int256 one = int256(10**decimals);
         int256 delta;
 
-        delta = (x.sub(one));
+        delta = (x.sub(target));
 
         // Compute: (Upper-Lower)/(1-(Upper/Lower)/2^(Growth*delta))) + Lower
 
-        int256 exponent = growth.mul(delta).div(one);
+        int256 exponent = growth.mul(delta).div(target);
         // Cap exponent to guarantee it is not too big for twoPower
-        if (exponent > one.mul(100)) {
-            exponent = one.mul(100);
+        if (exponent > target.mul(100)) {
+            exponent = target.mul(100);
         }
-        if (exponent < one.mul(-100)) {
-            exponent = one.mul(-100);
+        if (exponent < target.mul(-100)) {
+            exponent = target.mul(-100);
         }
 
-        int256 pow = SafeMathInt.twoPower(exponent, one); // 2^(Growth*Delta)
+        int256 pow = SafeMathInt.twoPower(exponent, target); // 2^(Growth*Delta)
         if (pow == 0) {
             return lower;
         }
         int256 numerator = upper.sub(lower); //(Upper-Lower)
-        int256 intermediate = upper.mul(one).div(lower);
-        intermediate = intermediate.mul(one).div(pow);
-        int256 denominator = one.sub(intermediate); // (1-(Upper/Lower)/2^(Growth*delta)))
+        int256 intermediate = upper.mul(target).div(lower);
+        intermediate = intermediate.mul(target).div(pow);
+        int256 denominator = target.sub(intermediate); // (1-(Upper/Lower)/2^(Growth*delta)))
 
-        int256 y = (numerator.mul(one).div(denominator)).add(lower);
+        int256 y = (numerator.mul(target).div(denominator)).add(lower);
         return y;
     }
 }
