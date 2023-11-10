@@ -16,8 +16,8 @@ contract MathTester {
         int256 lower,
         int256 upper,
         int256 growth,
-        uint8 decimals
+        int256 target
     ) public pure returns (int256) {
-        return Sigmoid.compute(x, lower, upper, growth, decimals);
+        return Sigmoid.compute(x, lower, upper, growth, target);
     }
 }
