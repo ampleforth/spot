@@ -843,7 +843,7 @@ contract PerpetualTranche is
         r.trancheInAmt = trancheInAmtAvailable;
         r.tokenOutAmt = r.trancheInAmt.mulDiv(trancheInPrice, tokenOutPrice);
 
-        // A postive fee percentage implies that perp charges rotators by
+        // A positive fee percentage implies that perp charges rotators by
         // accepting tranchesIn at a discount, ie) fewer tokens out.
         if (feePerc > 0) {
             r.tokenOutAmt = r.tokenOutAmt.mulDiv(HUNDRED_PERC - feePerc.abs(), HUNDRED_PERC);
