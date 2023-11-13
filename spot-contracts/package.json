@@ -16,8 +16,7 @@
     "test": "yarn hardhat test test/*.ts test/**/*.ts"
   },
   "dependencies": {
-    "@openzeppelin/contracts-upgradeable": "^4.7.3",
-    "ampleforth-contracts": "https://github.com/ampleforth/ampleforth-contracts.git#master"
+    "@openzeppelin/contracts-upgradeable": "^4.7.3"
   },
   "devDependencies": {
     "@defi-wonderland/smock": "^2.3.4",
