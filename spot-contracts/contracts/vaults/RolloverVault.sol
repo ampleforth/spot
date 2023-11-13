@@ -590,7 +590,7 @@ contract RolloverVault is
 
     /// @dev Rolls over freshly tranched tokens from the given bond for older tranches (close to maturity) from perp.
     ///      And performs some book-keeping to keep track of the vault's assets.
-    /// @return Flag indiciating if any tokens were rolled over.
+    /// @return Flag indicating if any tokens were rolled over.
     function _rollover(IPerpetualTranche perp_, BondTranches memory bt) private returns (bool) {
         // NOTE: The first element of the list is the mature tranche,
         //       there after the list is NOT ordered by maturity.
@@ -610,9 +610,9 @@ contract RolloverVault is
         _checkAndApproveMax(trancheIntoPerp, address(perp_), trancheInAmtAvailable);
 
         // We pair the senior tranche token held by the vault (from the deposit bond)
-        // with each of the perp's tokens avaiable for rollovers and execute a rollover.
+        // with each of the perp's tokens available for rollovers and execute a rollover.
         // We continue to rollover till either the vault's senior tranche balance is exhausted or
-        // there are no more tokens in perp avaialble to be rolled-over.
+        // there are no more tokens in perp available to be rolled-over.
         for (uint256 i = 0; (i < rolloverTokens.length && trancheInAmtAvailable > 0); i++) {
             // tokenOutOfPerp is the reserve token coming out of perp into the vault
             IERC20Upgradeable tokenOutOfPerp = rolloverTokens[i];
