@@ -535,7 +535,7 @@ contract PerpetualTranche is
         );
 
         // Verifies if rollover amount is acceptable
-        if (r.trancheInAmt == 0) {
+        if (r.trancheInAmt == 0 || r.tokenOutAmt == 0) {
             return r;
         }
 
@@ -857,7 +857,7 @@ contract PerpetualTranche is
 
         // When the tokenOut balance is NOT covered:
         // we fix tokenOutAmt = tokenOutAmtRequested and re-calculate other values
-        if (r.tokenOutAmt >= tokenOutAmtRequested) {
+        if (r.tokenOutAmt > tokenOutAmtRequested) {
             // Given the amount of tokens out, we compute the amount of tranches in
             r.tokenOutAmt = tokenOutAmtRequested;
             r.trancheInAmt = r.tokenOutAmt.mulDiv(tokenOutPrice, trancheInPrice, MathUpgradeable.Rounding.Up);
