@@ -34,7 +34,7 @@ error TVLDecreased();
 error ValuelessAssets();
 
 /// @notice Expected percentage of vault's tvl held as underlying tokens to be lower.
-error UndeployedPercOverLimit();
+error UnderlyingPercOverLimit();
 
 /// @notice Percentage value must be lower than 100%.
 error InvalidPerc();
@@ -138,11 +138,15 @@ contract RolloverVault is
     /// @return The address of the keeper.
     address public keeper;
 
+    /// @notice The enforced minimum balance of underlying tokens to be held by the vault at all times.
+    /// @dev On deployment only the delta greater than this balance is deployed.
+    uint256 public minUnderlyingBal;
+
     /// @notice The enforced maximum percentage of the vault's TVL that can be held as underlying tokens.
     /// @dev When the users meld or swap assets with the vault, the vault effectively exchanges tranches
     ///      for more liquidity that can be used for future deployments. This parameter acts controls
     ///      the extent to which the vault can allow melding or swapping.
-    uint256 public maxUndeployedPerc;
+    uint256 public maxUnderlyingPerc;
 
     struct FeeData {
         // @notice The percentage of vault notes withheld as fees on redemption.
@@ -208,25 +212,32 @@ contract RolloverVault is
 
         // setting initial parameter values
         minDeploymentAmt = 0;
-        maxUndeployedPerc = 0;
+        minUnderlyingBal = 0;
+        maxUnderlyingPerc = 0;
     }
 
     //--------------------------------------------------------------------------
     // ADMIN only methods
 
-    /// @notice Updates the minimum deployment amount.
+    /// @notice Updates the minimum deployment amount requirement.
     /// @param minDeploymentAmt_ The new minimum deployment amount, denominated in underlying tokens.
     function updateMinDeploymentAmt(uint256 minDeploymentAmt_) external onlyOwner {
         minDeploymentAmt = minDeploymentAmt_;
     }
 
-    /// @notice Updates the maximum undeployed precentage.
-    /// @param maxUndeployedPerc_ The new maximum undeployed precentage.
-    function updateMaxUndeployedPerc(uint256 maxUndeployedPerc_) external onlyOwner {
-        if (maxUndeployedPerc_ > HUNDRED_PERC) {
+    /// @notice Updates the minimum underlying balance requirement.
+    /// @param minUnderlyingBal_ The new minimum underlying balance.
+    function updateMinUnderlyingBal(uint256 minUnderlyingBal_) external onlyOwner {
+        minUnderlyingBal = minUnderlyingBal_;
+    }
+
+    /// @notice Updates the maximum underlying percentage requirement.
+    /// @param maxUnderlyingPerc_ The new maximum underlying percentage.
+    function updateMaxUnderlyingPerc(uint256 maxUnderlyingPerc_) external onlyOwner {
+        if (maxUnderlyingPerc_ > HUNDRED_PERC) {
             revert InvalidPerc();
         }
-        maxUndeployedPerc = maxUndeployedPerc_;
+        maxUnderlyingPerc = maxUnderlyingPerc_;
     }
 
     /// @notice Updates all the fee parameters.
@@ -907,8 +918,8 @@ contract RolloverVault is
 
         // compute the percentage of vault tvl held as underlying tokens
         uint256 underlyingPerc = underlying.balanceOf(address(this)).mulDiv(HUNDRED_PERC, tvlAfter);
-        if (underlyingPerc >= maxUndeployedPerc) {
-            revert UndeployedPercOverLimit();
+        if (underlyingPerc >= maxUnderlyingPerc) {
+            revert UnderlyingPercOverLimit();
         }
     }
 
