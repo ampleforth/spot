@@ -18,18 +18,20 @@ import { PerpHelpers } from "../_utils/PerpHelpers.sol";
  *
  *  @notice This contract determines perp's mint, burn and rollover fees.
  *
- *          Fees are computed based on the deviationRatio, ie the ratio between
- *          the current TVL to the expcted TVL in the vault system.
+ *          Fees are computed based on the `normalizedDeviation` i.e) the ratio
+ *          between the currentTVL and targetTVL of the vault,
+ *          normalized by the `targetDeviation` factor.
  *
- *          A `deviationRatio` of 1.0, means that the system is in balance.
+ *          A `normalizedDeviation` of 1.0, means that the system is in balance.
  *
  *              expectedTVL = perpTVL / trancheRatio
- *              deviationRatio = currentTVL/expectedTVL
+ *              currentDeviation = vaultTVL / expectedTVL
+ *              normalizedDeviation = currentDeviation / targetDeviation
  *
- *          1) Perp mint fees are turned on when deviationRatio < 1,
+ *          1) Perp mint fees are turned on when normalizedDeviation < 1,
  *             and is a fixed percentage fee set by the owner.
  *
- *          2) Perp burn fees are turned on when deviationRatio > 1,
+ *          2) Perp burn fees are turned on when normalizedDeviation > 1,
  *             and is a fixed percentage fee set by the owner.
  *
  *          3) The rollover fees are signed and can flow in either direction.
@@ -37,7 +39,7 @@ import { PerpHelpers } from "../_utils/PerpHelpers.sol";
  *             through a sigmoid function. The slope and asymptotes are set by the owner.
  *
  *              rotationsPerYear = 1_year / mintingBondDuration
- *              rolloverFeePerc = sigmoid(deviationRatio) / rotationsPerYear
+ *              rolloverFeePerc = sigmoid(normalizedDeviation) / rotationsPerYear
  *
  */
 contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
@@ -67,14 +69,13 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     /// @notice Reference to the rollover vault.
     IVault public immutable vault;
 
-    /// @notice Defines the target deviation ratio between the expected and current TVLs,
-    ///         at which the system is considered to be in balance.
-    uint256 public targetDeviationRatio;
+    /// @notice The target deviation i.e) the normalization factor.
+    uint256 public targetDeviation;
 
-    /// @notice The perp token's mint fee percentage celing.
+    /// @notice The perp token's mint fee percentage ceiling.
     uint256 public maxMintFeePerc;
 
-    /// @notice The perp token's burn fee percentage celing.
+    /// @notice The perp token's burn fee percentage ceiling.
     uint256 public maxBurnFeePerc;
 
     struct SigmoidParams {
@@ -82,7 +83,7 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
         int256 lower;
         /// @notice Upper asymptote
         int256 upper;
-        /// @notice Sigmoid slope
+        /// @notice sigmoid slope
         int256 growth;
     }
 
@@ -105,15 +106,15 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
         rolloverFeeAPR.lower = -int256(ONE) / 50; // -0.02
         rolloverFeeAPR.upper = int256(ONE) / 20; // 0.05
         rolloverFeeAPR.growth = 5 * int256(ONE); // 5.0
-        targetDeviationRatio = ONE; // 1.0
+        targetDeviation = ONE; // 1.0
     }
 
-    /// @notice Updates the target deviation ratio.
-    /// @param targetDeviationRatio_ The new target deviation ratio
+    /// @notice Updates the target deviation.
+    /// @param targetDeviation_ The new target deviation
     ///        as a fixed point number with {DECIMALS} places.
-    function updateDeviationTarget(uint256 targetDeviationRatio_) external onlyOwner {
-        require(targetDeviationRatio_ > 0, "FeeStrategy: target deviation ratio too low");
-        targetDeviationRatio = targetDeviationRatio_;
+    function updateDeviationTarget(uint256 targetDeviation_) external onlyOwner {
+        require(targetDeviation_ > 0, "FeeStrategy: target deviation too low");
+        targetDeviation = targetDeviation_;
     }
 
     /// @notice Updates the mint fee parameters.
@@ -145,25 +146,28 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
 
     /// @inheritdoc IFeeStrategy
     function computeMintFeePerc() external override returns (uint256) {
-        // when vault tvl > target, we encourage supply growth by dropping mint fees to 0
-        return (computeDeviationRatio(perp.getDepositBond()) > ONE) ? 0 : maxMintFeePerc;
+        // NOTE: when vaultTVL > targetTVL, we want to encourage supply growth;
+        //       we thus drop mint fees to 0
+        return (computeNormalizedDeviation(perp.getDepositBond()) > ONE) ? 0 : maxMintFeePerc;
     }
 
     /// @inheritdoc IFeeStrategy
     function computeBurnFeePerc() external override returns (uint256) {
-        // when vault tvl < target, we encorage supply reduction by dropping burn fees to 0
-        return (computeDeviationRatio(perp.getDepositBond()) < ONE) ? 0 : maxBurnFeePerc;
+        // NOTE: when vaultTVL < targetTVL, we want to encourage supply reduction;
+        //       we thus drop burn fees to 0
+        return (computeNormalizedDeviation(perp.getDepositBond()) < ONE) ? 0 : maxBurnFeePerc;
     }
 
     /// @inheritdoc IFeeStrategy
     function computeRolloverFeePerc() external override returns (int256) {
         IBondController referenceBond = perp.getDepositBond();
+
         int256 rolloverAPR = Sigmoid.compute(
-            computeDeviationRatio(referenceBond).toInt256(),
+            computeNormalizedDeviation(referenceBond).toInt256(),
             rolloverFeeAPR.lower,
             rolloverFeeAPR.upper,
             rolloverFeeAPR.growth,
-            int256(targetDeviationRatio)
+            ONE.toInt256()
         );
 
         // We calculate the rollover fee for the given cycle by dividing the annualized rate
@@ -176,14 +180,20 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
         return DECIMALS;
     }
 
-    /// @notice Computes the deviation ratio, ie) the ratio between the vault's TVL and the target TVL.
-    /// @return The deviation ratio as a fixed point number with {DECIMALS} places.
-    function computeDeviationRatio(IBondController referenceBond) public returns (uint256) {
+    function computeDeviation(IBondController referenceBond) public returns (uint256) {
+        (uint256 perpRatio, ) = perp.computeEffectiveTrancheRatio(referenceBond);
+        uint256 targetTVL = perp.getTVL().mulDiv(TRANCHE_RATIO_GRANULARITY, perpRatio);
+        return vault.getTVL().mulDiv(ONE, targetTVL);
+    }
+
+    /// @notice Computes the normalized deviation based on the current vaultTVL and targetTVL.
+    /// @return The deviation factor as a fixed point number with {DECIMALS} places.
+    function computeNormalizedDeviation(IBondController referenceBond) public returns (uint256) {
         // NOTE: Ensure that the perp's TVL and vault's TVL have the same base denomination.
         (uint256 perpRatio, ) = perp.computeEffectiveTrancheRatio(referenceBond);
         uint256 targetTVL = perp.getTVL().mulDiv(TRANCHE_RATIO_GRANULARITY, perpRatio);
-        uint256 currentDeviationRatio = vault.getTVL().mulDiv(ONE, targetTVL);
-        return currentDeviationRatio;
+        uint256 currentDeviation = vault.getTVL().mulDiv(ONE, targetTVL);
+        return currentDeviation.mulDiv(ONE, targetDeviation);
     }
 
     //-------------------------------------------------------------------------
