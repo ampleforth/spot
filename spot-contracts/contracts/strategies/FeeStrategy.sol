@@ -172,6 +172,7 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
 
         // We calculate the rollover fee for the given cycle by dividing the annualized rate
         // by the number of cycles in any given year.
+        // TODO: use the bond duration from the bondIssuer rather than the deposit bond
         return (rolloverAPR * referenceBond.duration().toInt256()) / ONE_YEAR_SEC;
     }
 
