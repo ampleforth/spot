@@ -8,6 +8,7 @@ import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/O
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
+import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 import { ERC20BurnableUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
@@ -130,6 +131,7 @@ contract PerpetualTranche is
     // Math
     using MathUpgradeable for uint256;
     using SignedMathUpgradeable for int256;
+    using SafeCastUpgradeable for int256;
 
     //-------------------------------------------------------------------------
     // Events
@@ -936,7 +938,7 @@ contract PerpetualTranche is
         // A positive fee percentage implies that perp charges rotators by
         // accepting tranchesIn at a discount, ie) fewer tranches out.
         if (feePerc > 0) {
-            stdTrancheOutAmt = stdTrancheOutAmt.mulDiv(HUNDRED_PERC - feePerc.abs(), HUNDRED_PERC);
+            stdTrancheOutAmt = stdTrancheOutAmt.mulDiv(HUNDRED_PERC - feePerc.toUint256(), HUNDRED_PERC);
         }
         // A negative fee percentage (or a reward) implies that perp pays the rotators by
         // accepting tranchesIn at a premium, ie) more tranches out.
@@ -969,7 +971,7 @@ contract PerpetualTranche is
             if (feePerc > 0) {
                 stdTrancheInAmt = stdTrancheInAmt.mulDiv(
                     HUNDRED_PERC,
-                    HUNDRED_PERC - feePerc.abs(),
+                    HUNDRED_PERC - feePerc.toUint256(),
                     MathUpgradeable.Rounding.Up
                 );
             }
