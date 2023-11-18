@@ -9,7 +9,6 @@ import {
   createBondWithFactory,
   getTranches,
   toFixedPtAmt,
-  toDiscountFixedPtAmt,
   toPercFixedPtAmt,
 } from "../helpers";
 use(smock.matchers);
@@ -49,8 +48,6 @@ describe("FeeStrategy", function () {
     currentBond = await createBondWithFactory(bondFactory, collateralToken, [250, 750], 28 * 86400);
     const tranches = await getTranches(currentBond);
     await perp.getDepositBond.returns(currentBond.address);
-    await perp.computeDiscount.whenCalledWith(tranches[0].address).returns(toDiscountFixedPtAmt("1"));
-    await perp.computeDiscount.whenCalledWith(tranches[1].address).returns(toDiscountFixedPtAmt("0"));
     await perp.getTVL.returns(toFixedPtAmt(perpTVL));
   }
 

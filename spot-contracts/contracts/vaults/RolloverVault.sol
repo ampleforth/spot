@@ -201,9 +201,8 @@ contract RolloverVault is
     function deploy() public override nonReentrant whenNotPaused {
         // NOTE: we only trust and add tranches from perp's deposit bond, or tranches rolled out from perp.
         (uint256 deployedAmt, BondTranches memory bt) = _tranche(perp.getDepositBond());
-        uint256 perpsRolledOver = _rollover(perp, bt);
         // NOTE: The following enforces that we only tranche the underlying if it can immediately be used for rotations.
-        if (deployedAmt <= minDeploymentAmt || perpsRolledOver <= 0) {
+        if (deployedAmt <= minDeploymentAmt || !_rollover(perp, bt)) {
             revert InsufficientDeployment();
         }
     }
@@ -591,60 +590,46 @@ contract RolloverVault is
 
     /// @dev Rolls over freshly tranched tokens from the given bond for older tranches (close to maturity) from perp.
     ///      And performs some book-keeping to keep track of the vault's assets.
-    /// @return The amount of perps rolled over.
-    function _rollover(IPerpetualTranche perp_, BondTranches memory bt) private returns (uint256) {
+    /// @return Flag indicating if any tokens were rolled over.
+    function _rollover(IPerpetualTranche perp_, BondTranches memory bt) private returns (bool) {
         // NOTE: The first element of the list is the mature tranche,
         //       there after the list is NOT ordered by maturity.
         IERC20Upgradeable[] memory rolloverTokens = perp_.getReserveTokensUpForRollover();
 
         // Batch rollover
-        uint256 totalPerpRolledOver = 0;
-        uint8 vaultTrancheIdx = 0;
-        uint256 perpTokenIdx = 0;
+        bool rollover = false;
 
-        // We pair tranche tokens held by the vault with tranche tokens held by perp,
-        // And execute the rollover and continue to the next token with a usable balance.
-        while (vaultTrancheIdx < bt.tranches.length && perpTokenIdx < rolloverTokens.length) {
-            // trancheIntoPerp refers to the tranche going into perp from the vault
-            ITranche trancheIntoPerp = bt.tranches[vaultTrancheIdx];
+        // Note: We roll-in ONLY the "senior" most tranche as perp ONLY accepts seniors.
+        // trancheIntoPerp refers to the tranche going into perp from the vault
+        ITranche trancheIntoPerp = bt.tranches[0];
 
+        // Compute available tranche in to rollover
+        uint256 trancheInAmtAvailable = trancheIntoPerp.balanceOf(address(this));
+
+        // Approve once for all rollovers
+        _checkAndApproveMax(trancheIntoPerp, address(perp_), trancheInAmtAvailable);
+
+        // We pair the senior tranche token held by the vault (from the deposit bond)
+        // with each of the perp's tokens available for rollovers and execute a rollover.
+        // We continue to rollover till either the vault's senior tranche balance is exhausted or
+        // there are no more tokens in perp available to be rolled-over.
+        for (uint256 i = 0; (i < rolloverTokens.length && trancheInAmtAvailable > 0); i++) {
             // tokenOutOfPerp is the reserve token coming out of perp into the vault
-            IERC20Upgradeable tokenOutOfPerp = rolloverTokens[perpTokenIdx];
-
-            // compute available token out
+            IERC20Upgradeable tokenOutOfPerp = rolloverTokens[i];
             uint256 tokenOutAmtAvailable = address(tokenOutOfPerp) != address(0)
-                ? tokenOutOfPerp.balanceOf(perp_.reserve())
+                ? tokenOutOfPerp.balanceOf(address(perp_))
                 : 0;
-
-            // trancheIntoPerp tokens are NOT exhausted but tokenOutOfPerp is exhausted
             if (tokenOutAmtAvailable <= 0) {
-                // Rollover is a no-op, so skipping to next tokenOutOfPerp
-                ++perpTokenIdx;
-                continue;
-            }
-
-            // Compute available tranche in
-            uint256 trancheInAmtAvailable = trancheIntoPerp.balanceOf(address(this));
-
-            // trancheInAmtAvailable is exhausted
-            if (trancheInAmtAvailable <= 0) {
-                // Rollover is a no-op, so skipping to next trancheIntoPerp
-                ++vaultTrancheIdx;
                 continue;
             }
 
             // Perform rollover
-            _checkAndApproveMax(trancheIntoPerp, address(perp_), trancheInAmtAvailable);
-            IPerpetualTranche.RolloverData memory rd = perp_.rollover(
+            IPerpetualTranche.RolloverData memory r = perp_.rollover(
                 trancheIntoPerp,
                 tokenOutOfPerp,
                 trancheInAmtAvailable
             );
-
-            // trancheIntoPerp isn't accepted by perp, likely because it's yield=0, refer perp docs for more info
-            if (rd.perpRolloverAmt <= 0) {
-                // Rollover is a no-op, so skipping to next trancheIntoPerp
-                ++vaultTrancheIdx;
+            if (r.tokenOutAmt == 0) {
                 continue;
             }
 
@@ -657,15 +642,18 @@ contract RolloverVault is
                 _syncAndAddDeployedAsset(tokenOutOfPerp);
             }
 
-            // keep track of total amount rolled over
-            totalPerpRolledOver += rd.perpRolloverAmt;
+            // Recompute trancheIn available amount
+            trancheInAmtAvailable = trancheIntoPerp.balanceOf(address(this));
+
+            // keep track if "at least" one rolled over operation occurred
+            rollover = rollover || (r.tokenOutAmt > 0);
         }
 
         // sync underlying and earned (ie perp)
         _syncAsset(underlying);
         _syncAsset(perp_);
 
-        return totalPerpRolledOver;
+        return rollover;
     }
 
     /// @dev Low level method that redeems the given mature tranche for the underlying asset.

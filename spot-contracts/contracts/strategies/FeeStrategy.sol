@@ -11,7 +11,6 @@ import { AddressUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/Ad
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { Sigmoid } from "../_utils/Sigmoid.sol";
 import { BondHelpers } from "../_utils/BondHelpers.sol";
-import { PerpHelpers } from "../_utils/PerpHelpers.sol";
 
 /**
  *  @title FeeStrategy
@@ -47,7 +46,6 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     using MathUpgradeable for uint256;
     using SafeCastUpgradeable for uint256;
     using BondHelpers for IBondController;
-    using PerpHelpers for IPerpetualTranche;
 
     /// @dev The returned fee percentages are fixed point numbers with {DECIMALS} places.
     ///      The decimals should line up with value expected by consumer (perp).
@@ -58,10 +56,6 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
 
     /// @dev Number of seconds in one year. (365.25 * 24 * 3600)
     int256 public constant ONE_YEAR_SEC = 31557600;
-
-    // Replicating value used here:
-    // https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
-    uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
 
     /// @notice Reference to the perpetual token.
     IPerpetualTranche public immutable perp;
@@ -191,38 +185,9 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
     /// @return The deviation factor as a fixed point number with {DECIMALS} places.
     function computeNormalizedDeviation(IBondController referenceBond) public returns (uint256) {
         // NOTE: Ensure that the perp's TVL and vault's TVL have the same base denomination.
-        (uint256 perpRatio, ) = perp.computeEffectiveTrancheRatio(referenceBond);
-        uint256 targetTVL = perp.getTVL().mulDiv(TRANCHE_RATIO_GRANULARITY, perpRatio);
+        (uint256 seniorRatio, uint256 remRatio) = referenceBond.getSeniorTrancheRatio();
+        uint256 targetTVL = perp.getTVL().mulDiv(seniorRatio + remRatio, seniorRatio);
         uint256 currentDeviation = vault.getTVL().mulDiv(ONE, targetTVL);
         return currentDeviation.mulDiv(ONE, targetDeviation);
-    }
-
-    //-------------------------------------------------------------------------
-    // Deprecated section, keeping for backward comparability with RouterV1.
-
-    // @notice Deprecated.
-    function feeToken() external view override returns (IERC20Upgradeable) {
-        return perp;
-    }
-
-    // @notice Deprecated.
-    function computeMintFees(
-        uint256 /*mintAmt*/
-    ) external pure override returns (int256, uint256) {
-        return (0, 0);
-    }
-
-    // @notice Deprecated.
-    function computeBurnFees(
-        uint256 /*burnAmt*/
-    ) external pure override returns (int256, uint256) {
-        return (0, 0);
-    }
-
-    // @notice Deprecated.
-    function computeRolloverFees(
-        uint256 /*rolloverAmt*/
-    ) external pure override returns (int256, uint256) {
-        return (0, 0);
     }
 }
