@@ -5,6 +5,7 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { ITranche } from "./_interfaces/buttonwood/ITranche.sol";
 import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
 import { IPerpetualTranche } from "./_interfaces/IPerpetualTranche.sol";
+import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
 
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
@@ -30,33 +31,14 @@ contract RouterV2 {
     using SafeERC20Upgradeable for ITranche;
     using SafeERC20Upgradeable for IPerpetualTranche;
 
+    // constants
+    // Values copied over from the perp contract
+    uint8 private constant PERP_PRICE_DECIMALS = 8;
+    uint256 private constant PERP_UNIT_PRICE = (10**PERP_PRICE_DECIMALS);
+
     modifier afterPerpStateUpdate(IPerpetualTranche perp) {
         perp.updateState();
         _;
-    }
-
-    /// @notice Calculates the amount of tranche tokens minted after depositing into the deposit bond.
-    /// @dev Used by off-chain services to preview a tranche operation.
-    /// @param perp Address of the perp contract.
-    /// @param collateralAmount The amount of collateral the user wants to tranche.
-    /// @return bond The address of the current deposit bond.
-    /// @return trancheAmts The tranche token amounts minted.
-    function previewTranche(IPerpetualTranche perp, uint256 collateralAmount)
-        external
-        afterPerpStateUpdate(perp)
-        returns (
-            IBondController,
-            ITranche[] memory,
-            uint256[] memory
-        )
-    {
-        IBondController bond = perp.getDepositBond();
-
-        BondTranches memory bt;
-        uint256[] memory trancheAmts;
-        (bt, trancheAmts, ) = bond.previewDeposit(collateralAmount);
-
-        return (bond, bt.tranches, trancheAmts);
     }
 
     /// @notice Tranches the collateral using the current deposit bond and then deposits individual tranches
@@ -160,6 +142,46 @@ contract RouterV2 {
         if (collateralBalance > 0) {
             collateralToken.safeTransfer(msg.sender, collateralBalance);
         }
+    }
+
+    /// @notice Redeems perps directly for the underlying asset if available.
+    /// @dev It first redeems provided perps for senior tranches,
+    ///      It then tries to meld each senior tranche with
+    ///      the vault's junior tranches and recoup the underlying token.
+    ///      However, if the meld fails it simply returns the seniors back to the user.
+    function redeemForUnderlying(
+        IPerpetualTranche perp,
+        IRolloverVault vault,
+        uint256 perpAmt
+    ) external afterPerpStateUpdate(perp) {
+        // transfer perps from the user to the router
+        perp.safeTransferFrom(msg.sender, address(this), perpAmt);
+
+        // redeem perps for tranches
+        (IERC20Upgradeable[] memory redeemedTokens, uint256[] memory redeemedTokenAmts) = perp.redeem(perpAmt);
+
+        for (uint256 i = 1; i < redeemedTokens.length; i++) {
+            ITranche tranche = ITranche(address(redeemedTokens[i]));
+            IBondController bond = IBondController(tranche.bond());
+            BondTranches memory bt = bond.getTranches();
+
+            uint256[] memory trancheAmtsToMeld = new uint256[](bt.tranches.length);
+            trancheAmtsToMeld[0] = redeemedTokenAmts[i];
+
+            // Try to melding tranches for underlying
+            // On unsuccessful meld, transfer tranches back to the user
+            _checkAndApproveMax(tranche, address(vault), redeemedTokenAmts[i]);
+
+            // solhint-disable-next-line no-empty-blocks
+            try vault.meld(bond, trancheAmtsToMeld) {} catch {}
+
+            // transfer any remaining tranches back if melding did not succeed
+            tranche.transfer(msg.sender, tranche.balanceOf(address(this)));
+        }
+
+        // transfer all underlying back to the user
+        IERC20Upgradeable underlying = redeemedTokens[0];
+        underlying.transfer(msg.sender, underlying.balanceOf(address(this)));
     }
 
     /// @dev Checks if the spender has sufficient allowance. If not, approves the maximum possible amount.

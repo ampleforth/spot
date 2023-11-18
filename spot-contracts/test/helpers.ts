@@ -244,7 +244,7 @@ export const checkReserveComposition = async (perp: Contract, tokens: Contract[]
   const ERC20 = await ethers.getContractFactory("MockERC20");
   for (let j = 0; j < tokens.length; j++) {
     const reserveToken = ERC20.attach(await perp.callStatic.getReserveAt(j));
-    expect(tokenMap[reserveToken.address]).to.eq(true);
+    expect(tokenMap[reserveToken.address] || false).to.eq(true);
     if (checkBalances) {
       expect(await reserveToken.balanceOf(await perp.reserve())).to.eq(tokenBalanceMap[reserveToken.address]);
     }

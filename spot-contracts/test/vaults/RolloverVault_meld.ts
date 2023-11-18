@@ -13,9 +13,9 @@ import {
   getTranches,
   toFixedPtAmt,
   toPriceFixedPtAmt,
+  toPercFixedPtAmt,
   getDepositBond,
   advancePerpQueue,
-  advancePerpQueueUpToBondMaturity,
   advancePerpQueueToBondMaturity,
   checkReserveComposition,
   checkVaultAssetComposition,
@@ -80,7 +80,6 @@ describe("RolloverVault", function () {
         initializer: "init(string,string,address,address,address,address)",
       },
     );
-    await feeStrategy.feeToken.returns(perp.address);
 
     await perp.updateTolerableTrancheMaturity(1200, 4800);
     await advancePerpQueueToBondMaturity(perp, await getDepositBond(perp));
@@ -128,6 +127,7 @@ describe("RolloverVault", function () {
     );
     expect(await vault.deployedCount()).to.eq(2);
     await depositIntoBond(currentBondIn, toFixedPtAmt("5000"), deployer);
+    await vault.updateMaxUndeployedPerc(toPercFixedPtAmt("1"));
   });
 
   afterEach(async function () {
@@ -271,12 +271,15 @@ describe("RolloverVault", function () {
       });
     });
 
-    describe("when the user sends too few tokens", function () {
+    describe("when vault has no paring tranches (after recovery)", function () {
       beforeEach(async function () {
-        currentTranchesIn[0].approve(vault.address, toFixedPtAmt("1"));
+        await depositIntoBond(currentBondIn, toFixedPtAmt("1000"), deployer);
+        await currentTranchesIn[0].transfer(vault.address, toFixedPtAmt("200"));
       });
       it("should be reverted", async function () {
-        await expect(vault.meld(currentBondIn.address, ["1", "0", "0"])).to.be.revertedWith("ValuelessAssets");
+        await expect(vault.meld(currentBondIn.address, [toFixedPtAmt("10"), "0", "0"])).to.be.revertedWith(
+          "ValuelessAssets",
+        );
       });
     });
 
@@ -285,13 +288,13 @@ describe("RolloverVault", function () {
         currentTranchesIn[0].approve(vault.address, toFixedPtAmt("1"));
       });
       it("should be reverted", async function () {
-        await expect(vault.meld(currentBondIn.address, ["1", "0", "0"])).to.be.revertedWith("ValuelessAssets");
+        await expect(vault.meld(currentBondIn.address, ["20", "0", "0"])).to.be.revertedWith("ValuelessAssets");
       });
     });
 
     describe("when fee is zero", async function () {
       beforeEach(async function () {
-        await advancePerpQueueUpToBondMaturity(perp, currentBondIn);
+        await vault.updateFees([toPercFixedPtAmt("0"), toPercFixedPtAmt("0"), toPercFixedPtAmt("0"), "0"]);
       });
 
       describe("when the user sends only A tranches", function () {
@@ -690,6 +693,7 @@ describe("RolloverVault", function () {
     describe("with a fee", async function () {
       let txFn: () => Promise<Transaction>, underlyingReturned: BigNumber;
       beforeEach(async function () {
+        await vault.updateFees([toPercFixedPtAmt("0"), toPercFixedPtAmt("0.05"), toPercFixedPtAmt("0"), "0"]);
         await TimeHelpers.increaseTime(parseInt((await timeToMaturity(currentBondIn)) / 2));
         currentTranchesIn[0].approve(vault.address, toFixedPtAmt("10"));
         underlyingReturned = await vault.callStatic.meld(currentBondIn.address, [
@@ -760,6 +764,25 @@ describe("RolloverVault", function () {
           .withArgs(currentTranchesIn[1].address, toFixedPtAmt("285"))
           .to.emit(vault, "AssetSynced")
           .withArgs(currentTranchesIn[2].address, toFixedPtAmt("475"));
+      });
+    });
+
+    describe("underlyingPerc", async function () {
+      beforeEach(async function () {
+        await vault.updateMaxUndeployedPerc(toPercFixedPtAmt("0.225"));
+        await currentTranchesIn[0].approve(vault.address, toFixedPtAmt("10"));
+      });
+      describe("when meld goes over", function () {
+        it("should revert", async function () {
+          await expect(vault.meld(currentBondIn.address, [toFixedPtAmt("10"), "0", "0"])).to.be.revertedWith(
+            "UndeployedPercOverLimit",
+          );
+        });
+      });
+      describe("when meld stays under", function () {
+        it("should not revert", async function () {
+          await expect(vault.meld(currentBondIn.address, [toFixedPtAmt("1"), "0", "0"])).not.to.be.reverted;
+        });
       });
     });
   });

@@ -4,6 +4,7 @@ import { Contract, Transaction, Signer } from "ethers";
 import {
   setupCollateralToken,
   mintCollteralToken,
+  toPercFixedPtAmt,
   toFixedPtAmt,
   setupBondFactory,
   depositIntoBond,
@@ -32,7 +33,6 @@ describe("RolloverVault", function () {
     perp = await smock.fake(PerpetualTranche);
 
     await perp.collateral.returns(collateralToken.address);
-    await perp.feeToken.returns(perp.address);
 
     const RolloverVault = await ethers.getContractFactory("RolloverVault");
     vault = await upgrades.deployProxy(RolloverVault.connect(deployer));
@@ -53,6 +53,23 @@ describe("RolloverVault", function () {
 
     it("should set owner", async function () {
       expect(await vault.owner()).to.eq(await deployer.getAddress());
+    });
+
+    it("should set keeper", async function () {
+      expect(await vault.keeper()).to.eq(await deployer.getAddress());
+    });
+
+    it("should set initial fee values", async function () {
+      const f = await vault.fees();
+      expect(f.redemptionFeePerc).to.eq("0");
+      expect(f.meldFeePerc).to.eq(toPercFixedPtAmt("0.1"));
+      expect(f.swapFeePerc).to.eq(toPercFixedPtAmt("0.1"));
+      expect(f.protocolFee).to.eq("0");
+    });
+
+    it("should set initial parameters", async function () {
+      expect(await vault.minDeploymentAmt()).to.eq("0");
+      expect(await vault.maxUndeployedPerc()).to.eq(toPercFixedPtAmt("0"));
     });
 
     it("should set ext service references", async function () {
@@ -80,12 +97,12 @@ describe("RolloverVault", function () {
   describe("#pause", function () {
     let tx: Transaction;
     beforeEach(async function () {
-      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
+      await vault.connect(deployer).updateKeeper(await otherUser.getAddress());
     });
 
-    describe("when triggered by non-owner", function () {
+    describe("when triggered by non-keeper", function () {
       it("should revert", async function () {
-        await expect(vault.connect(deployer).pause()).to.be.revertedWith("Ownable: caller is not the owner");
+        await expect(vault.connect(deployer).pause()).to.be.revertedWith("UnauthorizedCall");
       });
     });
 
@@ -117,16 +134,16 @@ describe("RolloverVault", function () {
   describe("#unpause", function () {
     let tx: Transaction;
     beforeEach(async function () {
-      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
+      await vault.connect(deployer).updateKeeper(await otherUser.getAddress());
     });
 
-    describe("when triggered by non-owner", function () {
+    describe("when triggered by non-keeper", function () {
       beforeEach(async function () {
         await vault.connect(otherUser).pause();
       });
 
       it("should revert", async function () {
-        await expect(vault.connect(deployer).unpause()).to.be.revertedWith("Ownable: caller is not the owner");
+        await expect(vault.connect(deployer).unpause()).to.be.revertedWith("UnauthorizedCall");
       });
     });
 
@@ -212,7 +229,7 @@ describe("RolloverVault", function () {
         await feeStrategy.decimals.returns(8);
         await feeStrategy.computeRolloverFeePerc.returns("0");
 
-        const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
+        const PricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
         const pricingStrategy = await smock.fake(PricingStrategy);
         await pricingStrategy.decimals.returns(8);
         await pricingStrategy.computeTranchePrice.returns(toPriceFixedPtAmt("1"));
@@ -283,6 +300,112 @@ describe("RolloverVault", function () {
       });
       it("should update the min deployment amount", async function () {
         expect(await vault.minDeploymentAmt()).to.eq(toFixedPtAmt("1000"));
+      });
+    });
+  });
+
+  describe("#updateMaxUndeployedPerc", function () {
+    let tx: Transaction;
+    beforeEach(async function () {
+      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
+    });
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(vault.connect(deployer).updateMaxUndeployedPerc(0)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    describe("when invalid perc", function () {
+      it("should update the max undeployed amount", async function () {
+        await expect(vault.connect(otherUser).updateMaxUndeployedPerc(toPercFixedPtAmt("1.01"))).to.be.revertedWith(
+          "InvalidPerc",
+        );
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      beforeEach(async function () {
+        tx = await vault.connect(otherUser).updateMaxUndeployedPerc(toPercFixedPtAmt("0.01"));
+        await tx;
+      });
+      it("should update the max undeployed amount", async function () {
+        expect(await vault.maxUndeployedPerc()).to.eq(toPercFixedPtAmt("0.01"));
+      });
+    });
+  });
+
+  describe("#updateFees", function () {
+    let tx: Transaction;
+    beforeEach(async function () {
+      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
+    });
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(
+          vault
+            .connect(deployer)
+            .updateFees([toPercFixedPtAmt("0"), toPercFixedPtAmt("0.05"), toPercFixedPtAmt("0.05"), "100000"]),
+        ).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+    });
+
+    describe("when invalid perc", function () {
+      it("should update the max undeployed amount", async function () {
+        await expect(
+          vault
+            .connect(otherUser)
+            .updateFees([toPercFixedPtAmt("0"), toPercFixedPtAmt("1.01"), toPercFixedPtAmt("0.05"), "0"]),
+        ).to.be.revertedWith("InvalidPerc");
+        await expect(
+          vault
+            .connect(otherUser)
+            .updateFees([toPercFixedPtAmt("0"), toPercFixedPtAmt("0.05"), toPercFixedPtAmt("1.01"), "0"]),
+        ).to.be.revertedWith("InvalidPerc");
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      beforeEach(async function () {
+        tx = await vault
+          .connect(otherUser)
+          .updateFees([toPercFixedPtAmt("0.1"), toPercFixedPtAmt("0.05"), toPercFixedPtAmt("0.05"), "100000"]);
+        await tx;
+      });
+      it("should update the max undeployed amount", async function () {
+        const f = await vault.fees();
+        expect(f.redemptionFeePerc).to.eq(toPercFixedPtAmt("0.1"));
+        expect(f.meldFeePerc).to.eq(toPercFixedPtAmt("0.05"));
+        expect(f.swapFeePerc).to.eq(toPercFixedPtAmt("0.05"));
+        expect(f.protocolFee).to.eq("100000");
+      });
+    });
+  });
+
+  describe("#updateKeeper", function () {
+    let tx: Transaction;
+    beforeEach(async function () {
+      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
+    });
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(vault.connect(deployer).updateKeeper(await otherUser.getAddress())).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      beforeEach(async function () {
+        tx = await vault.connect(otherUser).updateKeeper(await otherUser.getAddress());
+        await tx;
+      });
+      it("should update the max undeployed amount", async function () {
+        expect(await vault.keeper()).to.eq(await otherUser.getAddress());
       });
     });
   });
