@@ -90,7 +90,7 @@ library BondTranchesHelpers {
             }
 
             // if one of the balances is zero, we return
-            if (minBalanceToTrancheRatio == 0) {
+            if (minBalanceToTrancheRatio <= 0) {
                 return (redeemableAmts);
             }
         }
