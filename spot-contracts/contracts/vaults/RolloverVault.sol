@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche } from "../_interfaces/IPerpetualTranche.sol";
-import { IVault, UnexpectedAsset, UnauthorizedTransferOut, InsufficientDeployment, DeployedCountOverLimit } from "../_interfaces/IVault.sol";
+import { IVault, UnexpectedAsset, UnauthorizedTransferOut, InsufficientDeployment, DeployedCountOverLimit, UnacceptableDeposit, UnacceptableRedemption } from "../_interfaces/IVault.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -323,6 +323,9 @@ contract RolloverVault is
     function deposit(uint256 amount) external override nonReentrant whenNotPaused returns (uint256) {
         uint256 totalSupply_ = totalSupply();
         uint256 notes = (totalSupply_ > 0) ? totalSupply_.mulDiv(amount, getTVL()) : (amount * INITIAL_RATE);
+        if (amount <= 0 || notes <= 0) {
+            revert UnacceptableDeposit();
+        }
 
         underlying.safeTransferFrom(_msgSender(), address(this), amount);
         _syncAsset(underlying);
@@ -333,6 +336,9 @@ contract RolloverVault is
 
     /// @inheritdoc IVault
     function redeem(uint256 notes) external override nonReentrant whenNotPaused returns (IVault.TokenAmount[] memory) {
+        if (notes <= 0) {
+            revert UnacceptableRedemption();
+        }
         uint256 totalNotes = totalSupply();
         uint256 deployedCount_ = _deployed.length();
         uint256 assetCount = 2 + deployedCount_;
