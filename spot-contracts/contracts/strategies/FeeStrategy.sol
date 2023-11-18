@@ -175,12 +175,6 @@ contract FeeStrategy is IFeeStrategy, OwnableUpgradeable {
         return DECIMALS;
     }
 
-    function computeDeviation(IBondController referenceBond) public returns (uint256) {
-        (uint256 perpRatio, ) = perp.computeEffectiveTrancheRatio(referenceBond);
-        uint256 targetTVL = perp.getTVL().mulDiv(TRANCHE_RATIO_GRANULARITY, perpRatio);
-        return vault.getTVL().mulDiv(ONE, targetTVL);
-    }
-
     /// @notice Computes the normalized deviation based on the current vaultTVL and targetTVL.
     /// @return The deviation factor as a fixed point number with {DECIMALS} places.
     function computeNormalizedDeviation(IBondController referenceBond) public returns (uint256) {
