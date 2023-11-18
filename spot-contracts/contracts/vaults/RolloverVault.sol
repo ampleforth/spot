@@ -303,10 +303,20 @@ contract RolloverVault is
     /// @dev Its safer to call `recover` before `deploy` so the full available balance can be deployed.
     ///      Reverts if no funds are rolled over or if the minimum deployment threshold is not reached.
     function deploy() public override nonReentrant whenNotPaused {
-        // NOTE: we only trust and add tranches from perp's deposit bond, or tranches rolled out from perp.
-        (uint256 deployedAmt, BondTranches memory bt) = _tranche(perp.getDepositBond());
-        // NOTE: The following enforces that we only tranche the underlying if it can immediately be used for rotations.
-        if (deployedAmt <= minDeploymentAmt || !_rollover(perp, bt)) {
+        _deductProtocolFee();
+
+        uint256 deployedAmt = underlying.balanceOf(address(this));
+        if (deployedAmt <= minUnderlyingBal+minDeploymentAmt) {
+            revert InsufficientDeployment();
+        }
+        // Hold `minUnderlyingBal` as underlying and deploy the rest.
+        deployedAmt -= minUnderlyingBal;
+
+        // NOTE: we only trust incoming tranches from perp's deposit bond, or ones rolled out of perp.
+        IBondController depositBond = perp.getDepositBond();
+        BondTranches memory bt = depositBond.getTranches();
+        _tranche(depositBond, bt, deployedAmt);
+        if (!_rollover(perp, bt)) {
             revert InsufficientDeployment();
         }
     }
@@ -799,6 +809,11 @@ contract RolloverVault is
         if (trancheAmts[0] > 0) {
             bond.redeem(trancheAmts);
         }
+    }
+
+    // @dev Transfers a the set fixed fee amount of underlying tokens to the owner.
+    function _deductProtocolFee() private {
+        underlying.safeTransfer(owner(), fees.protocolFee);
     }
 
     /// @dev Syncs balance and adds the given asset into the deployed list if the vault has a balance.
