@@ -404,6 +404,53 @@ contract RolloverVault is
         return notes;
     }
 
+    /// @notice Deposits the underlying asset from {msg.sender} into the perp and vault systems,
+    ///         and mints both perp tokens and notes.
+    /// @param amount The amount tokens to be deposited into the vault.
+    /// @return The amount of perps and vault notes minted.
+    function deposit2(uint256 amount) external nonReentrant whenNotPaused returns (uint256, uint256) {
+        if (amount <= 0) {
+            revert UnacceptableDeposit();
+        }
+
+        uint256 totalSupply_ = totalSupply();
+        uint256 tvlBefore = getTVL();
+
+        // get deposit bond
+        IBondController depositBond = perp.getDepositBond();
+        BondTranches memory bt = depositBond.getTranches();
+
+        // NOTE: the vault may already have seniors which
+        //       we have to ignore for the sake of this operation.
+        uint256 seniorBalBefore = bt.tranches[0].balanceOf(address(this));
+
+        // transfer underlying in
+        underlying.safeTransferFrom(_msgSender(), address(this), amount);
+
+        // tranches underlying and updates vault assets with fresh tranches
+        _tranche(depositBond, bt, amount);
+
+        // mint perps using freshly tranched seniors
+        uint256 seniorsMinted = bt.tranches[0].balanceOf(address(this)) - seniorBalBefore;
+        _checkAndApproveMax(bt.tranches[0], address(perp), seniorsMinted);
+        uint256 perpsMinted = perp.deposit(bt.tranches[0], seniorsMinted);
+        _syncAndRemoveDeployedAsset(bt.tranches[0]);
+
+        // transfer perps back to user
+        IERC20Upgradeable(address(perp)).safeTransfer(_msgSender(), perpsMinted);
+        _syncAsset(perp);
+
+        // mint vault notes using remaning junior tranches
+        uint256 valueIn = getTVL() - tvlBefore;
+        uint256 notesMinted = (totalSupply_ > 0) ? totalSupply_.mulDiv(valueIn, tvlBefore) : (valueIn * INITIAL_RATE);
+        if (notesMinted <= 0) {
+            revert UnacceptableDeposit();
+        }
+        _mint(_msgSender(), notesMinted);
+
+        return (perpsMinted, notesMinted);
+    }
+
     /// @inheritdoc IVault
     function redeem(uint256 notes) external override nonReentrant whenNotPaused returns (IVault.TokenAmount[] memory) {
         if (notes <= 0) {
