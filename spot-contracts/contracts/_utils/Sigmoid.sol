@@ -16,8 +16,8 @@ library Sigmoid {
     using SafeCastUpgradeable for uint256;
 
     /// @notice Computes 2^exp with limited precision where -100 <= exp <= 100 * one
-    /// @param one 1.0 represented in the same fixed point number format as exp
     /// @param exp The power to raise 2 to -100 <= exp <= 100 * one
+    /// @param one 1.0 represented in the same fixed point number format as exp
     /// @return 2^exp represented with same number of decimals after the point as one
     function twoPower(int256 exp, int256 one) internal pure returns (int256) {
         bool reciprocal = false;
@@ -77,7 +77,12 @@ library Sigmoid {
         int256 exponent = (growth * delta) / one;
 
         // Cap exponent to guarantee it is not too big for twoPower
-        exponent = SignedMathUpgradeable.min(SignedMathUpgradeable.max(exponent, -100 * one), 100 * one);
+        if (exponent > one * 100) {
+            exponent = one * 100;
+        }
+        if (exponent < one * -100) {
+            exponent = one * -100;
+        }
 
         int256 pow = twoPower(exponent, one); // 2^(Growth*Delta)
         if (pow <= 0) {
