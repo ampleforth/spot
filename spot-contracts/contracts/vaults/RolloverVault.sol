@@ -301,7 +301,7 @@ contract RolloverVault is
 
     /// @inheritdoc IVault
     /// @dev Its safer to call `recover` before `deploy` so the full available balance can be deployed.
-    ///      The vault holds `minUnderlyingBal` as underlying tokens and deploys the rest. 
+    ///      The vault holds `minUnderlyingBal` as underlying tokens and deploys the rest.
     ///      Reverts if no funds are rolled over or enforced deployment threshold is not reached.
     function deploy() public override nonReentrant whenNotPaused {
         _deductProtocolFee();
@@ -316,7 +316,7 @@ contract RolloverVault is
             revert InsufficientDeployment();
         }
 
-        // NOTE: We only trust incoming tranches from perp's deposit bond, 
+        // NOTE: We only trust incoming tranches from perp's deposit bond,
         // or ones rolled out of perp.
         IBondController depositBond = perp.getDepositBond();
         BondTranches memory bt = depositBond.getTranches();
@@ -434,7 +434,12 @@ contract RolloverVault is
         uint256 seniorsMinted = bt.tranches[0].balanceOf(address(this)) - seniorBalBefore;
         _checkAndApproveMax(bt.tranches[0], address(perp), seniorsMinted);
         uint256 perpsMinted = perp.deposit(bt.tranches[0], seniorsMinted);
+
+        // sync vault tranche balances
         _syncAndRemoveDeployedAsset(bt.tranches[0]);
+        for (uint8 i = 1; i < bt.tranches.length; i++) {
+            _syncAndAddDeployedAsset(bt.tranches[i]);
+        }
 
         // transfer perps back to user
         IERC20Upgradeable(address(perp)).safeTransfer(_msgSender(), perpsMinted);
