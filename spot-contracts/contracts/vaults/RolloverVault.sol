@@ -135,6 +135,7 @@ contract RolloverVault is
     // v2.0.0 STORAGE ADDITION
 
     /// @notice Reference to the wallet or contract that has the ability to pause/unpause operations.
+    /// @dev The keeper is meant for time-sensitive operations, and may be different from the owner address.
     /// @return The address of the keeper.
     address public keeper;
 
@@ -217,7 +218,7 @@ contract RolloverVault is
     }
 
     //--------------------------------------------------------------------------
-    // ADMIN only methods
+    // Owner only methods
 
     /// @notice Updates the minimum deployment amount requirement.
     /// @param minDeploymentAmt_ The new minimum deployment amount, denominated in underlying tokens.
