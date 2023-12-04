@@ -155,7 +155,7 @@ contract RolloverVault is
         // @dev The final fee is discounted based on remaining time to maturity.
         uint256 meldFeePerc;
         // @notice The maximum percentage fee paid in the underlying assets by users who swap.
-        // @dev The final fee is discounted based on remaining to maturity.
+        // @dev The final fee is discounted based on remaining time to maturity.
         uint256 swapFeePerc;
         // @notice A fixed cost charged at the time of deployment denominated in the underlying asset.
         uint256 protocolFee;
