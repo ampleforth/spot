@@ -144,7 +144,7 @@ contract RolloverVault is
 
     /// @notice The enforced maximum percentage of the vault's TVL that can be held as underlying tokens.
     /// @dev When the users meld or swap assets with the vault, the vault effectively exchanges tranches
-    ///      for more liquidity that can be used for future deployments. This parameter acts controls
+    ///      for more liquidity that can be used for future deployments. This parameter controls
     ///      the extent to which the vault can allow melding or swapping.
     uint256 public maxUnderlyingPerc;
 
