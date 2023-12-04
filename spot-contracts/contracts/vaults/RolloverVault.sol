@@ -152,7 +152,7 @@ contract RolloverVault is
         // @notice The percentage of vault notes withheld as fees on redemption.
         uint256 redemptionFeePerc;
         // @notice The maximum percentage fee paid in the underlying assets by users who meld.
-        // @dev The final fee is discounted based on remaining to maturity.
+        // @dev The final fee is discounted based on remaining time to maturity.
         uint256 meldFeePerc;
         // @notice The maximum percentage fee paid in the underlying assets by users who swap.
         // @dev The final fee is discounted based on remaining to maturity.
@@ -169,7 +169,7 @@ contract RolloverVault is
 
     /// @dev Throws if called by any account other than the keeper.
     modifier onlyKeeper() {
-        if (keeper != _msgSender()) {
+        if (_msgSender() != keeper) {
             revert UnauthorizedCall(_msgSender(), keeper);
         }
         _;
