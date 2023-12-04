@@ -2,18 +2,56 @@
 // https://github.com/ampleforth/ampleforth-contracts/blob/master/contracts/UFragmentsPolicy.sol
 pragma solidity ^0.8.19;
 
-import { SafeMathInt } from "ampleforth-contracts/contracts/lib/SafeMathInt.sol";
+import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
+import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 
 /**
  *  @title Sigmoid
  *
  *  @notice Library with helper functions to compute y = sigmoid(x).
  *
- *  TODO: port over 2-pow and use plain math instead of the "safe math" lib.
- *
  */
 library Sigmoid {
-    using SafeMathInt for int256;
+    using SignedMathUpgradeable for int256;
+    using SafeCastUpgradeable for uint256;
+
+    /// @notice Computes 2^exp with limited precision where -100 <= exp <= 100 * one
+    /// @param exp The power to raise 2 to -100 <= exp <= 100 * one
+    /// @param one 1.0 represented in the same fixed point number format as exp
+    /// @return 2^exp represented with same number of decimals after the point as one
+    function twoPower(int256 exp, int256 one) internal pure returns (int256) {
+        bool reciprocal = false;
+        if (exp < 0) {
+            reciprocal = true;
+            exp = exp.abs().toInt256();
+        }
+
+        // Precomputed values for 2^(1/2^i) in 18 decimals fixed point numbers
+        int256[5] memory ks = [
+            int256(1414213562373095049),
+            1189207115002721067,
+            1090507732665257659,
+            1044273782427413840,
+            1021897148654116678
+        ];
+        int256 whole = exp / one;
+        require(whole <= 100, "Sigmoid: twoPower exp too big");
+        int256 result = int256(uint256(1) << uint256(whole)) * one;
+        int256 remaining = exp - (whole * one);
+
+        int256 current = one / 2;
+        for (uint256 i = 0; i < 5; i++) {
+            if (remaining >= current) {
+                remaining = remaining - current;
+                result = (result * ks[i]) / 10**18; // 10**18 to match hardcoded ks values
+            }
+            current = current / 2;
+        }
+        if (reciprocal) {
+            result = (one * one) / result;
+        }
+        return result;
+    }
 
     /// @notice Given number x and sigmoid parameters all represented as fixed-point number with
     ///         the same number of decimals, it computes y = sigmoid(x).
@@ -32,29 +70,30 @@ library Sigmoid {
     ) internal pure returns (int256) {
         int256 delta;
 
-        delta = (x.sub(one));
+        delta = x - one;
 
         // Compute: (Upper-Lower)/(1-(Upper/Lower)/2^(Growth*delta))) + Lower
 
-        int256 exponent = growth.mul(delta).div(one);
+        int256 exponent = (growth * delta) / one;
+
         // Cap exponent to guarantee it is not too big for twoPower
-        if (exponent > one.mul(100)) {
-            exponent = one.mul(100);
+        if (exponent > one * 100) {
+            exponent = one * 100;
         }
-        if (exponent < one.mul(-100)) {
-            exponent = one.mul(-100);
+        if (exponent < one * -100) {
+            exponent = one * -100;
         }
 
-        int256 pow = SafeMathInt.twoPower(exponent, one); // 2^(Growth*Delta)
-        if (pow == 0) {
+        int256 pow = twoPower(exponent, one); // 2^(Growth*Delta)
+        if (pow <= 0) {
             return lower;
         }
-        int256 numerator = upper.sub(lower); //(Upper-Lower)
-        int256 intermediate = upper.mul(one).div(lower);
-        intermediate = intermediate.mul(one).div(pow);
-        int256 denominator = one.sub(intermediate); // (1-(Upper/Lower)/2^(Growth*delta)))
+        int256 numerator = upper - lower; //(Upper-Lower)
+        int256 intermediate = (upper * one) / lower;
+        intermediate = (intermediate * one) / pow;
+        int256 denominator = one - intermediate; // (1-(Upper/Lower)/2^(Growth*delta)))
 
-        int256 y = (numerator.mul(one).div(denominator)).add(lower);
+        int256 y = ((numerator * one) / denominator) + lower;
         return y;
     }
 }
