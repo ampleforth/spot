@@ -158,7 +158,7 @@ contract RolloverVault is
         // @dev The final fee is discounted based on remaining time to maturity.
         uint256 swapFeePerc;
         // @notice A fixed cost charged at the time of deployment denominated in the underlying asset.
-        uint256 protocolFee;
+        uint256 deploymentProtocolFee;
     }
 
     // @notice The vault operational fees set by the owner.
@@ -208,7 +208,7 @@ contract RolloverVault is
         fees.redemptionFeePerc = 0;
         fees.meldFeePerc = 10 * UNIT_PERC;
         fees.swapFeePerc = 10 * UNIT_PERC;
-        fees.protocolFee = 0;
+        fees.deploymentProtocolFee = 0;
 
         // setting initial parameter values
         minDeploymentAmt = 0;
