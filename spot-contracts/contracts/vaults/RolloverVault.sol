@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.19;
 
-import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche } from "../_interfaces/IPerpetualTranche.sol";
-import { IVault, UnexpectedAsset, UnauthorizedTransferOut, InsufficientDeployment, DeployedCountOverLimit, UnacceptableDeposit, UnacceptableRedemption } from "../_interfaces/IVault.sol";
+import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche, IFeePolicy } from "./_interfaces/IPerpetualTranche.sol";
+import { IVault, InsufficientDeployment, DeployedCountOverLimit } from "./_interfaces/IVault.sol";
+import { UnauthorizedCall, UnauthorizedTransferOut, UnacceptableReference, UnexpectedDecimals, UnexpectedAsset, UnacceptableDeposit, UnacceptableRedemption, OutOfBounds, TVLDecreased } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -11,22 +12,9 @@ import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/
 import { ERC20BurnableUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
-import { BondTranches, BondTranchesHelpers } from "../_utils/BondTranchesHelpers.sol";
-import { TrancheHelpers } from "../_utils/TrancheHelpers.sol";
-import { BondHelpers } from "../_utils/BondHelpers.sol";
-
-/// @notice Storage array access out of bounds.
-error OutOfBounds();
-
-/// @notice Expected bond to be valid.
-/// @param bond Address of the invalid bond.
-error InvalidBond(IBondController bond);
-
-/// @notice Expected the operation not to decrease the vault's tvl.
-error TVLDecreased();
-
-/// @notice Expected assets transferred into the vault to have non-zero value.
-error ValuelessAssets();
+import { BondTranches, BondTranchesHelpers } from "./_utils/BondTranchesHelpers.sol";
+import { TrancheHelpers } from "./_utils/TrancheHelpers.sol";
+import { BondHelpers } from "./_utils/BondHelpers.sol";
 
 /*
  *  @title RolloverVault
@@ -180,7 +168,7 @@ contract RolloverVault is
         uint256 amount
     ) external onlyOwner {
         if (isVaultAsset(token)) {
-            revert UnauthorizedTransferOut(token);
+            revert UnauthorizedTransferOut();
         }
         token.safeTransfer(to, amount);
     }

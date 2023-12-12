@@ -2,7 +2,8 @@
 pragma solidity ^0.8.19;
 
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
-import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeeStrategy, IPricingStrategy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
+import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeePolicy, IPricingStrategy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
+import { UnauthorizedCall, UnauthorizedTransferOut, UnacceptableReference, UnexpectedDecimals, UnexpectedAsset, UnacceptableDeposit, UnacceptableRedemption, UnacceptableParams } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -15,35 +16,6 @@ import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/ut
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import { BondHelpers } from "./_utils/BondHelpers.sol";
 import { TrancheHelpers } from "./_utils/TrancheHelpers.sol";
-
-/// @notice Expected contract call to be triggered by authorized caller.
-/// @param caller The address which triggered the call.
-/// @param authorizedCaller The address which is authorized to trigger the call.
-error UnauthorizedCall(address caller, address authorizedCaller);
-
-/// @notice Expected transfer out asset to not be a reserve asset.
-error UnauthorizedTransferOut();
-
-/// @notice Expected contract reference to not be `address(0)`.
-error UnacceptableReference();
-
-/// @notice Expected strategy to return a fixed point with exactly expected decimals.
-error InvalidStrategyDecimals();
-
-/// @notice Expected bond issuer's collateral token to match underlying collateral token.
-error InvalidCollateral();
-
-/// @notice Expected minTrancheMaturity be less than or equal to maxTrancheMaturity.
-error InvalidTrancheMaturityBounds();
-
-/// @notice Expected deposited tranche to be of current deposit bond.
-error UnacceptableDepositTranche();
-
-/// @notice Expected to mint a non-zero amount of tokens.
-error UnacceptableMintAmt();
-
-/// @notice Expected to burn a non-zero amount of tokens.
-error UnacceptableBurnAmt();
 
 /// @notice Expected rollover to be acceptable.
 error UnacceptableRollover();
@@ -277,7 +249,7 @@ contract PerpetualTranche is
     /// @dev Throws if called by any account other than the keeper.
     modifier onlyKeeper() {
         if (keeper != _msgSender()) {
-            revert UnauthorizedCall(_msgSender(), keeper);
+            revert UnauthorizedCall();
         }
         _;
     }
@@ -287,7 +259,7 @@ contract PerpetualTranche is
         // If the set it empty, permit all callers
         // else permit only whitelisted callers.
         if (_rollers.length() > 0 && !_rollers.contains(_msgSender())) {
-            revert UnauthorizedCall(_msgSender(), address(0));
+            revert UnauthorizedCall();
         }
         _;
     }
@@ -402,7 +374,7 @@ contract PerpetualTranche is
             revert UnacceptableReference();
         }
         if (pricingStrategy_.decimals() != PRICE_DECIMALS) {
-            revert InvalidStrategyDecimals();
+            revert UnexpectedDecimals();
         }
         pricingStrategy = pricingStrategy_;
         emit UpdatedPricingStrategy(pricingStrategy_);
@@ -416,7 +388,7 @@ contract PerpetualTranche is
         onlyOwner
     {
         if (minTrancheMaturitySec_ > maxTrancheMaturitySec_) {
-            revert InvalidTrancheMaturityBounds();
+            revert UnacceptableParams();
         }
         minTrancheMaturitySec = minTrancheMaturitySec_;
         maxTrancheMaturitySec = maxTrancheMaturitySec_;
@@ -460,13 +432,13 @@ contract PerpetualTranche is
         returns (uint256)
     {
         if (!_isAcceptableTranche(trancheIn)) {
-            revert UnacceptableDepositTranche();
+            revert UnexpectedAsset();
         }
 
         // calculates the amount of perp tokens minted when depositing `trancheInAmt` of tranche tokens
         uint256 perpAmtMint = _computeMintAmt(trancheIn, trancheInAmt);
         if (trancheInAmt <= 0 || perpAmtMint <= 0) {
-            revert UnacceptableMintAmt();
+            revert UnacceptableDeposit();
         }
 
         // transfers tranche tokens from the sender to the reserve
@@ -496,7 +468,7 @@ contract PerpetualTranche is
 
         // verifies if burn amount is acceptable
         if (perpAmtBurnt <= 0 || perpAmtBurnt > perpSupply) {
-            revert UnacceptableBurnAmt();
+            revert UnacceptableRedemption();
         }
 
         // calculates share of reserve tokens to be redeemed
