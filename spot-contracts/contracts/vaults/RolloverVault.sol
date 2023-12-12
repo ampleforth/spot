@@ -109,48 +109,95 @@ contract RolloverVault is
     IPerpetualTranche public perp;
 
     //--------------------------------------------------------------------------
+    // v2.0.0 STORAGE ADDITION
+
+    /// @notice External contract that controls fees for minting, redeeming, swapping and deployment.
+    IFeePolicy public feePolicy;
+
+    /// @notice Reference to the wallet or contract that has the ability to pause/unpause operations.
+    /// @dev The keeper is meant for time-sensitive operations, and may be different from the owner address.
+    /// @return The address of the keeper.
+    address public keeper;
+
+    /// @notice The enforced minimum balance of underlying tokens to be held by the vault at all times.
+    /// @dev On deployment only the delta greater than this balance is deployed.
+    uint256 public minUnderlyingBal;
+
+    //--------------------------------------------------------------------------
+    // Modifiers
+
+    /// @dev Throws if called by any account other than the keeper.
+    modifier onlyKeeper() {
+        if (_msgSender() != keeper) {
+            revert UnauthorizedCall();
+        }
+        _;
+    }
+
+    //--------------------------------------------------------------------------
     // Construction & Initialization
 
     /// @notice Contract state initialization.
     /// @param name ERC-20 Name of the vault token.
     /// @param symbol ERC-20 Symbol of the vault token.
     /// @param perp_ ERC-20 address of the perpetual tranche rolled over.
+    /// @param feePolicy_ Address of the fee policy contract.
     function init(
         string memory name,
         string memory symbol,
-        IPerpetualTranche perp_
+        IPerpetualTranche perp_,
+        IFeePolicy feePolicy_
     ) public initializer {
+        // initialize dependencies
         __ERC20_init(name, symbol);
         __ERC20Burnable_init();
         __Ownable_init();
         __Pausable_init();
         __ReentrancyGuard_init();
 
+        // set keeper reference
+        keeper = owner();
+
+        // setup underlying collateral
         underlying = perp_.collateral();
         _syncAsset(underlying);
 
+        // set reference to perp
         perp = perp_;
+
+        // set the reference to the fee policy
+        updateFeePolicy(feePolicy_);
+
+        // setting initial parameter values
+        minDeploymentAmt = 0;
+        minUnderlyingBal = 0;
     }
 
     //--------------------------------------------------------------------------
-    // ADMIN only methods
+    // Owner only methods
 
-    /// @notice Pauses deposits, withdrawals and vault operations.
-    /// @dev NOTE: ERC-20 functions, like transfers will always remain operational.
-    function pause() external onlyOwner {
-        _pause();
+    /// @notice Update the reference to the fee policy contract.
+    /// @param feePolicy_ New strategy address.
+    function updateFeePolicy(IFeePolicy feePolicy_) public onlyOwner {
+        if (address(feePolicy_) == address(0)) {
+            revert UnacceptableReference();
+        }
+        if (feePolicy_.decimals() != PERC_DECIMALS) {
+            revert UnexpectedDecimals();
+        }
+        feePolicy = feePolicy_;
     }
 
-    /// @notice Unpauses deposits, withdrawals and vault operations.
-    /// @dev NOTE: ERC-20 functions, like transfers will always remain operational.
-    function unpause() external onlyOwner {
-        _unpause();
-    }
-
-    /// @notice Updates the minimum deployment amount.
+    /// @notice Updates the minimum deployment amount requirement.
     /// @param minDeploymentAmt_ The new minimum deployment amount, denominated in underlying tokens.
     function updateMinDeploymentAmt(uint256 minDeploymentAmt_) external onlyOwner {
         minDeploymentAmt = minDeploymentAmt_;
+    }
+
+    /// @notice Updates the minimum underlying balance requirement.
+    /// @param minUnderlyingBal_ The new minimum underlying balance.
+    function updateMinUnderlyingBal(uint256 minUnderlyingBal_) external onlyOwner {
+        minUnderlyingBal = minUnderlyingBal_;
     }
 
     /// @notice Transfers a non-vault token out of the contract, which may have been added accidentally.
@@ -168,6 +215,27 @@ contract RolloverVault is
         token.safeTransfer(to, amount);
     }
 
+    /// @notice Updates the reference to the keeper.
+    /// @param keeper_ The address of the new keeper.
+    function updateKeeper(address keeper_) public virtual onlyOwner {
+        keeper = keeper_;
+    }
+
+    //--------------------------------------------------------------------------
+    // Keeper only methods
+
+    /// @notice Pauses deposits, withdrawals and vault operations.
+    /// @dev NOTE: ERC-20 functions, like transfers will always remain operational.
+    function pause() external onlyKeeper {
+        _pause();
+    }
+
+    /// @notice Unpauses deposits, withdrawals and vault operations.
+    /// @dev NOTE: ERC-20 functions, like transfers will always remain operational.
+    function unpause() external onlyKeeper {
+        _unpause();
+    }
+
     //--------------------------------------------------------------------------
     // External & Public write methods
 
@@ -180,12 +248,27 @@ contract RolloverVault is
 
     /// @inheritdoc IVault
     /// @dev Its safer to call `recover` before `deploy` so the full available balance can be deployed.
-    ///      Reverts if no funds are rolled over or if the minimum deployment threshold is not reached.
+    ///      The vault holds `minUnderlyingBal` as underlying tokens and deploys the rest.
+    ///      Reverts if no funds are rolled over or enforced deployment threshold is not reached.
     function deploy() public override nonReentrant whenNotPaused {
-        // NOTE: we only trust and add tranches from perp's deposit bond, or tranches rolled out from perp.
-        (uint256 deployedAmt, BondTranches memory bt) = _tranche(perp.getDepositBond());
-        // NOTE: The following enforces that we only tranche the underlying if it can immediately be used for rotations.
-        if (deployedAmt <= minDeploymentAmt || !_rollover(perp, bt)) {
+        _deductProtocolFee();
+
+        uint256 usableBal = underlying.balanceOf(address(this));
+        if (usableBal <= minUnderlyingBal) {
+            revert InsufficientDeployment();
+        }
+
+        uint256 deployedAmt = usableBal - minUnderlyingBal;
+        if (deployedAmt <= minDeploymentAmt) {
+            revert InsufficientDeployment();
+        }
+
+        // NOTE: We only trust incoming tranches from perp's deposit bond,
+        // or ones rolled out of perp.
+        IBondController depositBond = perp.getDepositBond();
+        BondTranches memory bt = depositBond.getTranches();
+        _tranche(depositBond, bt, deployedAmt);
+        if (!_rollover(perp, bt)) {
             revert InsufficientDeployment();
         }
     }
@@ -261,9 +344,14 @@ contract RolloverVault is
             revert UnacceptableDeposit();
         }
 
+        // deduct mint fees
+        notes = notes.mulDiv(HUNDRED_PERC - feePolicy.computeVaultMintFeePerc(), HUNDRED_PERC);
+
+        // transfer user assets in
         underlying.safeTransferFrom(_msgSender(), address(this), amount);
         _syncAsset(underlying);
 
+        // mint notes
         _mint(_msgSender(), notes);
         return notes;
     }
@@ -290,7 +378,16 @@ contract RolloverVault is
 
         // calculating amounts and transferring assets out proportionally
         for (uint8 i = 0; i < assetCount; i++) {
+            // computing users share
             redemptions[i].amount = redemptions[i].token.balanceOf(address(this)).mulDiv(notes, totalNotes);
+
+            // deduct redemption fees
+            redemptions[i].amount = redemptions[i].amount.mulDiv(
+                HUNDRED_PERC - feePolicy.computeVaultBurnFeePerc(),
+                HUNDRED_PERC
+            );
+
+            // transfering assets out
             redemptions[i].token.safeTransfer(_msgSender(), redemptions[i].amount);
             _syncAsset(redemptions[i].token);
         }
@@ -567,6 +664,20 @@ contract RolloverVault is
         // NOTE: It is guaranteed that if one tranche amount is zero, all amounts are zeros.
         if (trancheAmts[0] > 0) {
             bond.redeem(trancheAmts);
+        }
+    }
+
+    // @dev Transfers a the set fixed fee amount of underlying tokens to the owner.
+    function _deductProtocolFee() private {
+        underlying.safeTransfer(owner(), feePolicy.computeVaultDeploymentFee());
+    }
+
+    // @dev Enforces vault composition after swap and meld operations.
+    function _enforceVaultComposition(uint256 tvlBefore) private {
+        // Assert that the vault's TVL does not decrease after this operation
+        uint256 tvlAfter = getTVL();
+        if (tvlAfter < tvlBefore) {
+            revert TVLDecreased();
         }
     }
 
