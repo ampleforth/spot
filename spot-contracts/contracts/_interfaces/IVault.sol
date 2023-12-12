@@ -3,14 +3,6 @@ pragma solidity ^0.8.0;
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 
-/// @notice Expected asset to be a valid vault asset.
-/// @param token Address of the token.
-error UnexpectedAsset(IERC20Upgradeable token);
-
-/// @notice Expected transfer out asset to not be a vault asset.
-/// @param token Address of the token transferred.
-error UnauthorizedTransferOut(IERC20Upgradeable token);
-
 /// @notice Expected a minimum amount of vault assets to be deployed.
 error InsufficientDeployment();
 
