@@ -42,4 +42,11 @@ interface IBondIssuer {
     /// @param index The index of the bond in the issued list.
     /// @return Address of the bond.
     function issuedBondAt(uint256 index) external view returns (IBondController);
+
+    /// @return The tranche ratio of the tranche at a given index.
+    /// @param trancheIdx The tranche index.
+    function trancheRatios(uint256 trancheIdx) external view returns (uint256);
+
+    /// @return The maximum maturity duration for the issued bonds.
+    function maxMaturityDuration() external view returns (uint256);
 }
