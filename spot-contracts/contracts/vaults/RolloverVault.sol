@@ -81,11 +81,6 @@ contract RolloverVault is
     /// @dev The maximum number of deployed assets that can be held in this vault at any given time.
     uint256 public constant MAX_DEPLOYED_COUNT = 47;
 
-    /// TODO: Convert this to a owner updatable paramter.
-    /// @dev The maximum percentage fee paid in the underlying assets by users who "meld".
-    ///      The meld fee paid by the user in the underlying asset.
-    uint256 public constant MAX_MELD_FEE_PERC = 5 * UNIT_PERC; // (5%)
-
     //--------------------------------------------------------------------------
     // ASSETS
     //
@@ -350,116 +345,6 @@ contract RolloverVault is
         }
 
         return redemptions;
-    }
-
-    /// @notice Swaps the bond tranche slices from the user into the underlying collateral for a fee,
-    ///         given that the vault has the remaining slices for immature redemption.
-    /// @dev When a user has some tranche slices from a given bond, and the vault has the remaining slices,
-    ///      this method allows the user and the vault to "meld" their assets together to redeem the underlying collateral
-    ///      from the bond. The user's share of the underlying is returned back and the vault charges
-    ///      the user a fee for providing liquidity.
-    /// @param bond The bond whose tranches are to be swapped.
-    /// @param trancheAmtsIn A list of amounts of each bond tranche the user is to deposit.
-    ///                      When the user does not have a particular slice, its amount in the list is to be set to zero.
-    /// @return The amount of underlying tokens returned.
-    function meld(IBondController bond, uint256[] memory trancheAmtsIn)
-        external
-        nonReentrant
-        whenNotPaused
-        returns (uint256)
-    {
-        // get bond tranches
-        BondTranches memory bt = bond.getTranches();
-
-        // * We check that the bond's underlying collateral token matches the vault's underlying.
-        // * We validate that the bond has at least 2 tranches to perform the meld operation.
-        // * We validate that the bond hasn't reached maturity as matching only works through immature redemption.
-        if (bond.collateralToken() != address(underlying) || bt.tranches.length <= 1 || bond.isMature()) {
-            revert InvalidBond(bond);
-        }
-
-        // We check if the given bond is NOT malicious by examining if:
-        // * The parent bond of all the children tranches is the given bond.
-        // * At least one of the bond's tranches is already in the vault from previous deployments.
-        bool isValidBond = false;
-        for (uint8 i = 0; i < bt.tranches.length; i++) {
-            if (bt.tranches[i].bond() != address(bond)) {
-                revert InvalidBond(bond);
-            }
-
-            isValidBond = isValidBond || _deployed.contains(address(bt.tranches[i]));
-        }
-        if (!isValidBond) {
-            revert InvalidBond(bond);
-        }
-
-        // track the vault's TVL before the match operation
-        uint256 tvlBefore = getTVL();
-
-        // First we check if the vault has all the tranches for proportional redemption and if so recover the underlying.
-        // On successful redemption, The vault's individual tranche balances will decrease, and the underlying balance will increase.
-        // If the vault tranches are not eligible for proportional redemption, its a no-op.
-        // NOTE: We sync balances finally at the end of this function.
-        _execImmatureTrancheRedemption(bond, bt);
-
-        // calculate total amount to be used by summing available amount from the user and the vault's balance
-        uint256[] memory trancheAmtsUsed = new uint256[](bt.tranches.length);
-        for (uint8 i = 0; i < bt.tranches.length; i++) {
-            trancheAmtsUsed[i] = trancheAmtsIn[i] + bt.tranches[i].balanceOf(address(this));
-        }
-
-        // compute proportional tranche amounts which can be redeemed for the underlying collateral
-        trancheAmtsUsed = bt.computeRedeemableTrancheAmounts(trancheAmtsUsed);
-
-        // computes the collateralizations for each tranche in the current immature bond
-        uint256[] memory trancheUnderlyingBalances;
-        uint256[] memory trancheSupplies;
-        (trancheUnderlyingBalances, trancheSupplies) = bond.getImmatureTrancheCollateralizations(bt);
-
-        // the user's share of the underlying collateral to be returned
-        uint256 underlyingAmt = 0;
-        for (uint8 i = 0; i < bt.tranches.length; i++) {
-            // compute the user's tranche balance to be used
-            // transfer tranche balance out of the user's wallet to the vault
-            trancheAmtsIn[i] = MathUpgradeable.min(trancheAmtsIn[i], trancheAmtsUsed[i]);
-            IERC20Upgradeable(bt.tranches[i]).safeTransferFrom(_msgSender(), address(this), trancheAmtsIn[i]);
-
-            // pre-calculate the user's share
-            underlyingAmt += trancheUnderlyingBalances[i].mulDiv(trancheAmtsIn[i], trancheSupplies[i]);
-        }
-
-        // ensure that the user is sending in tranches with some redeemable value.
-        if (underlyingAmt <= 0) {
-            revert ValuelessAssets();
-        }
-
-        // redeem the underlying using pooled balances
-        bond.redeem(trancheAmtsUsed);
-
-        // deduct fee before returning to the user
-        underlyingAmt -= _computeMeldFee(bond, underlyingAmt);
-
-        // transfer to the user
-        underlying.safeTransfer(_msgSender(), underlyingAmt);
-
-        // sync vault's tranche balances
-        for (uint8 i = 0; i < bt.tranches.length; i++) {
-            _syncAndRemoveDeployedAsset(bt.tranches[i]);
-        }
-
-        // sync underlying
-        _syncAsset(underlying);
-
-        // assert that the vault's TVL does not decrease after this operation
-        if (getTVL() < tvlBefore) {
-            revert TVLDecreased();
-        }
-
-        // TODO: assert that the percentage of raw ampl to the TVL is under
-        //       a onwer specified value. (ie) Limit the amount the meld opration
-        //       can de-lever the vault.
-
-        return underlyingAmt;
     }
 
     /// @inheritdoc IVault
