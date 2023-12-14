@@ -164,7 +164,7 @@ contract PerpetualTranche is
     /// @inheritdoc IPerpetualTranche
     address public override keeper;
 
-    /// @notice External contract that controls fees & incentives minting, redeeming and rollovers.
+    /// @notice External contract that controls fees & incentives for minting, redeeming and rollovers.
     IFeePolicy public override feePolicy;
 
     /// @notice External contract that computes a given reserve token's price.

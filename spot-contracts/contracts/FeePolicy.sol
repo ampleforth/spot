@@ -252,7 +252,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         s.targetVaultTVL = s
             .currentPerpTVL
             .mulDiv(bondIssuer.trancheRatios(1), bondIssuer.trancheRatios(0), MathUpgradeable.Rounding.Up)
-            .mulDiv(ONE, targetSubscriptionRatio, MathUpgradeable.Rounding.Up);
+            .mulDiv(targetSubscriptionRatio, ONE, MathUpgradeable.Rounding.Up);
         s.normalizedSubscriptionRatio = s.currentVaultTVL.mulDiv(ONE, s.targetVaultTVL);
         return s;
     }
