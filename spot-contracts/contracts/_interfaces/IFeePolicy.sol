@@ -36,6 +36,6 @@ interface IFeePolicy {
     ///         denominated in the underlying collateral asset.
     function computeVaultDeploymentFee() external returns (uint256);
 
-    /// @notice Number of decimals representing 1.0 or 100%.
+    /// @notice Number of decimals representing a multiplier of 1.0. So, 100% = 1*10**decimals
     function decimals() external view returns (uint8);
 }
