@@ -5,11 +5,11 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { IBondController } from "./buttonwood/IBondController.sol";
 
 interface IFeePolicy {
-    /// @notice The percentage of the mint perp tokens to be withheld as fees,
+    /// @notice The percentage of the mint perp tokens to be charged as fees,
     ///         as a fixed-point number with {PRICE_DECIMAL} decimal places.
     function computePerpMintFeePerc() external returns (uint256);
 
-    /// @notice The percentage of the burnt perp tokens to be withheld as fees,
+    /// @notice The percentage of the burnt perp tokens to be charged as fees,
     ///         as a fixed-point number with {PRICE_DECIMAL} decimal places.
     function computePerpBurnFeePerc() external returns (uint256);
 
@@ -24,15 +24,15 @@ interface IFeePolicy {
     ///         example) 99 tranchesIn for 100 tranchesOut
     function computePerpRolloverFeePerc() external returns (int256);
 
-    /// @notice The percentage of the mint vault note amount to be withheld as fees,
+    /// @notice The percentage of the mint vault note amount to be charged as fees,
     ///         as a fixed-point number with {PRICE_DECIMAL} decimal places.
     function computeVaultMintFeePerc() external returns (uint256);
 
-    /// @notice The percentage of the burnt vault note amount to be withheld as fees,
+    /// @notice The percentage of the burnt vault note amount to be charged as fees,
     ///         as a fixed-point number with {PRICE_DECIMAL} decimal places.
     function computeVaultBurnFeePerc() external returns (uint256);
 
-    /// @notice The fixed amount fee withheld by the vault during each deployment,
+    /// @notice The fixed amount fee charged by the vault during each deployment,
     ///         denominated in the underlying collateral asset.
     function computeVaultDeploymentFee() external returns (uint256);
 
