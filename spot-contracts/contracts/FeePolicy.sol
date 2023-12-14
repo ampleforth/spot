@@ -21,11 +21,12 @@ import { Sigmoid } from "./_utils/Sigmoid.sol";
  *          supports rolling over all mature collateral backing perps.
  *
  *          Fees are computed based on the following variables.
- *              - `currentVaultTVL`  : Total value of collateral in the rollover vault at a given time.
- *              - `targetVaultTVL`   : The minimum value of collateral that needs to be in the vault
- *                                     to sustain rolling over the entire perp supply.
- *              - `currentSubscriptionRatio`    : The ratio between the `currentVaultTVL` and the `targetVaultTVL`.
- *              - `targetSubscriptionRatio`     : The ratio above which the system is considered "over-subscribed".
+ *              - `currentVaultTVL`     : Total value of collateral in the rollover vault at a given time.
+ *              - `equilibriumVaultTVL` : The minimum value of collateral that needs to be in the vault
+ *                                        to sustain rolling over the entire perp supply.
+ *                                        It is the current tvl of perp divided by the tranche ratio of seniors used to mint perp.
+ *              - `currentSubscriptionRatio`    : The ratio between the `currentVaultTVL` and the `equilibriumVaultTVL`.
+ *              - `targetSubscriptionRatio`     : The subscription ratio above which the system is considered "over-subscribed".
  *                                                Adds a safety buffer to ensure that rollovers are better sustained.
  *              - `normalizedSubscriptionRatio` : The ratio between `currentSubscriptionRatio` and the `targetSubscriptionRatio`.
  *
@@ -71,27 +72,27 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Reference to the rollover vault.
     IVault public vault;
 
-    /// @notice The target deviation i.e) the normalization factor.
+    /// @notice The target subscription ratio i.e) the normalization factor.
     uint256 public targetSubscriptionRatio;
 
-    /// @notice The perp token's mint fee percentage ceiling.
-    uint256 public maxPerpMintFeePerc;
+    /// @notice The percentage fee charged on minting perp tokens.
+    uint256 public perpMintFeePerc;
 
-    /// @notice The perp token's burn fee percentage ceiling.
-    uint256 public maxPerpBurnFeePerc;
+    /// @notice The percentage fee charged on burning perp tokens.
+    uint256 public perpBurnFeePerc;
 
-    /// @notice The vault note's mint fee percentage ceiling.
-    uint256 public maxVaultMintFeePerc;
+    /// @notice The percentage fee charged on minting vault notes.
+    uint256 public vaultMintFeePerc;
 
-    /// @notice The vault note's burn fee percentage ceiling.
-    uint256 public maxVaultBurnFeePerc;
+    /// @notice The percentage fee charged on burning vault notes.
+    uint256 public vaultBurnFeePerc;
 
-    /// @notice The fixed amount vault fee withheld during each deployment.
+    /// @notice The fixed amount vault fee charged during each deployment.
     /// @dev Denominated in the underlying collateral asset and
     ///      Paid by the vault note holders to the system owner.
     uint256 public vaultDeploymentFee;
 
-    struct SigmoidParams {
+    struct RolloverFeeSigmoidParams {
         /// @notice Lower asymptote
         int256 lower;
         /// @notice Upper asymptote
@@ -101,7 +102,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @notice Parameters which control the asymptotes and the slope of the yearly perp token's rollover fee.
-    SigmoidParams public perpRolloverFeeAPR;
+    RolloverFeeSigmoidParams public perpRolloverFee;
 
     /// @dev The current subscription state the vault system relative to the perp supply.
     struct SubscriptionState {
@@ -109,8 +110,8 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         uint256 currentPerpTVL;
         /// @notice The current tvl of the rollover vault.
         uint256 currentVaultTVL;
-        /// @notice The target tvl of the rollover vault.
-        uint256 targetVaultTVL;
+        /// @notice The equilibrium tvl of the rollover vault.
+        uint256 equilibriumVaultTVL;
         /// @notice Computed normalized subscription ratio.
         uint256 normalizedSubscriptionRatio;
     }
@@ -124,15 +125,15 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         perp = perp_;
         vault = vault_;
 
-        maxPerpMintFeePerc = ONE / 30; // 0.033
-        maxPerpBurnFeePerc = ONE / 30; // 0.033
+        perpMintFeePerc = 0;
+        perpBurnFeePerc = 0;
 
-        maxVaultMintFeePerc = 0; // 0
-        maxVaultBurnFeePerc = ONE / 30; // 0.033
+        vaultMintFeePerc = 0;
+        vaultBurnFeePerc = 0;
 
-        perpRolloverFeeAPR.lower = -int256(ONE) / 30; // -0.033
-        perpRolloverFeeAPR.upper = int256(ONE) / 10; // 0.1
-        perpRolloverFeeAPR.growth = 5 * int256(ONE); // 5.0
+        perpRolloverFee.lower = -int256(ONE) / 30; // -0.033
+        perpRolloverFee.upper = int256(ONE) / 10; // 0.1
+        perpRolloverFee.growth = 5 * int256(ONE); // 5.0
 
         targetSubscriptionRatio = (ONE * 133) / 100; // 1.33
     }
@@ -145,56 +146,56 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @notice Updates the perp mint fee parameters.
-    /// @param maxPerpMintFeePerc_ The new perp mint fee ceiling percentage
+    /// @param perpMintFeePerc_ The new perp mint fee ceiling percentage
     ///        as a fixed point number with {DECIMALS} places.
-    function updatePerpMintFees(uint256 maxPerpMintFeePerc_) external onlyOwner {
-        require(maxPerpMintFeePerc_ <= ONE, "FeeStrategy: perc too high");
-        maxPerpMintFeePerc = maxPerpMintFeePerc_;
+    function updatePerpMintFees(uint256 perpMintFeePerc_) external onlyOwner {
+        require(perpMintFeePerc_ <= ONE, "FeeStrategy: perc too high");
+        perpMintFeePerc = perpMintFeePerc_;
     }
 
     /// @notice Updates the perp burn fee parameters.
-    /// @param maxPerpBurnFeePerc_ The new perp burn fee ceiling percentage
+    /// @param perpBurnFeePerc_ The new perp burn fee ceiling percentage
     ///        as a fixed point number with {DECIMALS} places.
-    function updatePerpBurnFees(uint256 maxPerpBurnFeePerc_) external onlyOwner {
-        require(maxPerpBurnFeePerc_ <= ONE, "FeeStrategy: perc too high");
-        maxPerpBurnFeePerc = maxPerpBurnFeePerc_;
+    function updatePerpBurnFees(uint256 perpBurnFeePerc_) external onlyOwner {
+        require(perpBurnFeePerc_ <= ONE, "FeeStrategy: perc too high");
+        perpBurnFeePerc = perpBurnFeePerc_;
     }
 
     /// @notice Updates the vault mint fee parameters.
-    /// @param maxVaultMintFeePerc_ The new vault mint fee ceiling percentage
+    /// @param vaultMintFeePerc_ The new vault mint fee ceiling percentage
     ///        as a fixed point number with {DECIMALS} places.
-    function updateVaultMintFees(uint256 maxVaultMintFeePerc_) external onlyOwner {
-        require(maxVaultMintFeePerc_ <= ONE, "FeeStrategy: perc too high");
-        maxVaultMintFeePerc = maxVaultMintFeePerc_;
+    function updateVaultMintFees(uint256 vaultMintFeePerc_) external onlyOwner {
+        require(vaultMintFeePerc_ <= ONE, "FeeStrategy: perc too high");
+        vaultMintFeePerc = vaultMintFeePerc_;
     }
 
     /// @notice Updates the vault burn fee parameters.
-    /// @param maxVaultBurnFeePerc_ The new vault burn fee ceiling percentage
+    /// @param vaultBurnFeePerc_ The new vault burn fee ceiling percentage
     ///        as a fixed point number with {DECIMALS} places.
-    function updateVaultBurnFees(uint256 maxVaultBurnFeePerc_) external onlyOwner {
-        require(maxVaultBurnFeePerc_ <= ONE, "FeeStrategy: perc too high");
-        maxVaultBurnFeePerc = maxVaultBurnFeePerc_;
+    function updateVaultBurnFees(uint256 vaultBurnFeePerc_) external onlyOwner {
+        require(vaultBurnFeePerc_ <= ONE, "FeeStrategy: perc too high");
+        vaultBurnFeePerc = vaultBurnFeePerc_;
     }
 
     /// @notice Update the parameters determining the slope and asymptotes of the sigmoid fee curve.
     /// @param p Lower, Upper and Growth sigmoid paramters are fixed point numbers with {DECIMALS} places.
-    function updateRolloverFees(SigmoidParams calldata p) external onlyOwner {
+    function updateRolloverFees(RolloverFeeSigmoidParams calldata p) external onlyOwner {
         require(p.lower >= -int256(SIGMOID_BOUND), "FeeStrategy: sigmoid lower bound too low");
         require(p.upper <= int256(SIGMOID_BOUND), "FeeStrategy: sigmoid upper bound too high");
         require(p.lower <= p.upper, "FeeStrategy: sigmoid asymptotes invalid");
-        perpRolloverFeeAPR.lower = p.lower;
-        perpRolloverFeeAPR.upper = p.upper;
-        perpRolloverFeeAPR.growth = p.growth;
+        perpRolloverFee.lower = p.lower;
+        perpRolloverFee.upper = p.upper;
+        perpRolloverFee.growth = p.growth;
     }
 
     /// @inheritdoc IFeePolicy
     function computePerpMintFeePerc() external override returns (uint256) {
-        return isOverSubscribed() ? 0 : maxPerpMintFeePerc;
+        return isOverSubscribed() ? 0 : perpMintFeePerc;
     }
 
     /// @inheritdoc IFeePolicy
     function computePerpBurnFeePerc() external override returns (uint256) {
-        return isOverSubscribed() ? maxPerpBurnFeePerc : 0;
+        return isOverSubscribed() ? perpBurnFeePerc : 0;
     }
 
     /// @inheritdoc IFeePolicy
@@ -202,27 +203,27 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         IBondIssuer bondIssuer = perp.bondIssuer();
         SubscriptionState memory s = computeSubscriptionState(bondIssuer);
 
-        int256 rolloverAPR = Sigmoid.compute(
+        int256 rolloverFee = Sigmoid.compute(
             s.normalizedSubscriptionRatio.toInt256(),
-            perpRolloverFeeAPR.lower,
-            perpRolloverFeeAPR.upper,
-            perpRolloverFeeAPR.growth,
+            perpRolloverFee.lower,
+            perpRolloverFee.upper,
+            perpRolloverFee.growth,
             ONE.toInt256()
         );
 
         // We calculate the rollover fee for the given cycle by dividing the annualized rate
         // by the number of cycles in any given year.
-        return (rolloverAPR * bondIssuer.maxMaturityDuration().toInt256()) / ONE_YEAR_SEC;
+        return (rolloverFee * bondIssuer.maxMaturityDuration().toInt256()) / ONE_YEAR_SEC;
     }
 
     /// @inheritdoc IFeePolicy
     function computeVaultMintFeePerc() external view override returns (uint256) {
-        return maxVaultMintFeePerc;
+        return vaultMintFeePerc;
     }
 
     /// @inheritdoc IFeePolicy
     function computeVaultBurnFeePerc() external view override returns (uint256) {
-        return maxVaultBurnFeePerc;
+        return vaultBurnFeePerc;
     }
 
     /// @inheritdoc IFeePolicy
@@ -241,7 +242,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         return s.normalizedSubscriptionRatio > ONE;
     }
 
-    /// @notice Computes the subscription detailed state based on the current `currentVaultTVL` and `targetVaultTVL`.
+    /// @notice Computes the detailed subscription state based on the current `currentVaultTVL` and `equilibriumVaultTVL`.
     /// @return The subscription state.
     function computeSubscriptionState(IBondIssuer bondIssuer) public returns (SubscriptionState memory) {
         SubscriptionState memory s;
@@ -249,11 +250,15 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         s.currentVaultTVL = vault.getTVL();
         // NOTE: We assume that perp minting bonds have only 2 tranches and perp assumes the senior one.
         //       We assume that perp's TVL and vault's TVL values have the same base denomination.
-        s.targetVaultTVL = s
-            .currentPerpTVL
-            .mulDiv(bondIssuer.trancheRatios(1), bondIssuer.trancheRatios(0), MathUpgradeable.Rounding.Up)
-            .mulDiv(targetSubscriptionRatio, ONE, MathUpgradeable.Rounding.Up);
-        s.normalizedSubscriptionRatio = s.currentVaultTVL.mulDiv(ONE, s.targetVaultTVL);
+        s.equilibriumVaultTVL = s.currentPerpTVL.mulDiv(
+            bondIssuer.trancheRatios(1),
+            bondIssuer.trancheRatios(0),
+            MathUpgradeable.Rounding.Up
+        );
+        s.normalizedSubscriptionRatio = s.currentVaultTVL.mulDiv(ONE, s.equilibriumVaultTVL).mulDiv(
+            ONE,
+            targetSubscriptionRatio
+        );
         return s;
     }
 }
