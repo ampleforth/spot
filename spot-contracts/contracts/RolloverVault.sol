@@ -67,9 +67,8 @@ contract RolloverVault is
 
     //-------------------------------------------------------------------------
     // Constants
-    uint8 public constant PERC_DECIMALS = 8;
-    uint256 public constant UNIT_PERC = 10**(PERC_DECIMALS - 2);
-    uint256 public constant HUNDRED_PERC = 10**PERC_DECIMALS;
+    uint8 public constant FEE_POLICY_DECIMALS = 8;
+    uint256 public constant FEE_ONE_PERC = (10**FEE_POLICY_DECIMALS);
 
     /// @dev Initial exchange rate between the underlying asset and notes.
     uint256 private constant INITIAL_RATE = 10**6;
@@ -111,10 +110,10 @@ contract RolloverVault is
     //--------------------------------------------------------------------------
     // v2.0.0 STORAGE ADDITION
 
-    /// @notice External contract that controls fees for minting, redeeming, swapping and deployment.
+    /// @notice External contract that orchestrates fees across the spot protocol.
     IFeePolicy public feePolicy;
 
-    /// @notice Reference to the wallet or contract that has the ability to pause/unpause operations.
+    /// @notice Reference to the address that has the ability to pause/unpause operations.
     /// @dev The keeper is meant for time-sensitive operations, and may be different from the owner address.
     /// @return The address of the keeper.
     address public keeper;
@@ -182,7 +181,7 @@ contract RolloverVault is
         if (address(feePolicy_) == address(0)) {
             revert UnacceptableReference();
         }
-        if (feePolicy_.decimals() != PERC_DECIMALS) {
+        if (feePolicy_.decimals() != FEE_POLICY_DECIMALS) {
             revert UnexpectedDecimals();
         }
         feePolicy = feePolicy_;
@@ -345,7 +344,7 @@ contract RolloverVault is
         }
 
         // deduct mint fees
-        notes = notes.mulDiv(HUNDRED_PERC - feePolicy.computeVaultMintFeePerc(), HUNDRED_PERC);
+        notes = notes.mulDiv(FEE_ONE_PERC - feePolicy.computeVaultMintFeePerc(), FEE_ONE_PERC);
 
         // transfer user assets in
         underlying.safeTransferFrom(_msgSender(), address(this), amount);
@@ -383,8 +382,8 @@ contract RolloverVault is
 
             // deduct redemption fees
             redemptions[i].amount = redemptions[i].amount.mulDiv(
-                HUNDRED_PERC - feePolicy.computeVaultBurnFeePerc(),
-                HUNDRED_PERC
+                FEE_ONE_PERC - feePolicy.computeVaultBurnFeePerc(),
+                FEE_ONE_PERC
             );
 
             // transfering assets out

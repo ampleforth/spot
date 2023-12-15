@@ -63,7 +63,7 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @return The address of the bond issuer.
     function bondIssuer() external view returns (IBondIssuer);
 
-    /// @notice Reference to the wallet or contract that has the ability to pause/unpause operations.
+    /// @notice Reference to the address that has the ability to pause/unpause operations.
     /// @return The address of the keeper.
     function keeper() external view returns (address);
 
