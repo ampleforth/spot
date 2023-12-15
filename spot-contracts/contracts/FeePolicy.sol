@@ -46,9 +46,9 @@ import { Sigmoid } from "./_utils/Sigmoid.sol";
  *          The rollover fees are signed and can flow in either direction based on the subscription ratio.
  *          The fee is a percentage is computed through a sigmoid function.
  *          The slope and asymptotes are set by the owner.
+ *          CRITICAL: The rollover fee percentage is NOT annualized, the fee percentage is applied per rollover.
+ *          The number of rollovers per year changes based on the duration of perp's minting bond.
  *
- *              rotationsPerYear = 1_year / mintingBondDuration
- *              rolloverFeePerc = sigmoid(normalizedSubscriptionRatio) / rotationsPerYear
  *
  */
 contract FeePolicy is IFeePolicy, OwnableUpgradeable {
@@ -61,10 +61,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     ///      NOTE: 10**DECIMALS => 100% or 1.0
     uint8 public constant DECIMALS = 8;
     uint256 public constant ONE = (1 * 10**DECIMALS); // 1.0 or 100%
-    uint256 public constant SIGMOID_BOUND = ONE / 10; // 0.10 or 10%
-
-    /// @dev Number of seconds in one year. (365.25 * 24 * 3600)
-    int256 public constant ONE_YEAR_SEC = 31557600;
+    uint256 public constant SIGMOID_BOUND = ONE / 100; // 0.01 or 1%
 
     /// @notice Reference to the perpetual token.
     IPerpetualTranche public perp;
@@ -101,7 +98,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         int256 growth;
     }
 
-    /// @notice Parameters which control the asymptotes and the slope of the yearly perp token's rollover fee.
+    /// @notice Parameters which control the asymptotes and the slope of the perp token's rollover fee.
     RolloverFeeSigmoidParams public perpRolloverFee;
 
     /// @dev The current subscription state the vault system relative to the perp supply.
@@ -200,20 +197,18 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @inheritdoc IFeePolicy
     function computePerpRolloverFeePerc() external override returns (int256) {
-        IBondIssuer bondIssuer = perp.bondIssuer();
-        SubscriptionState memory s = computeSubscriptionState(bondIssuer);
-
-        int256 rolloverFee = Sigmoid.compute(
-            s.normalizedSubscriptionRatio.toInt256(),
-            perpRolloverFee.lower,
-            perpRolloverFee.upper,
-            perpRolloverFee.growth,
-            ONE.toInt256()
-        );
+        SubscriptionState memory s = computeSubscriptionState();
 
         // We calculate the rollover fee for the given cycle by dividing the annualized rate
         // by the number of cycles in any given year.
-        return (rolloverFee * bondIssuer.maxMaturityDuration().toInt256()) / ONE_YEAR_SEC;
+        return
+            Sigmoid.compute(
+                s.normalizedSubscriptionRatio.toInt256(),
+                perpRolloverFee.lower,
+                perpRolloverFee.upper,
+                perpRolloverFee.growth,
+                ONE.toInt256()
+            );
     }
 
     /// @inheritdoc IFeePolicy
@@ -238,13 +233,14 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @return If the rollover vault is over-subscribed based on the current tvls.
     function isOverSubscribed() public returns (bool) {
-        SubscriptionState memory s = computeSubscriptionState(perp.bondIssuer());
+        SubscriptionState memory s = computeSubscriptionState();
         return s.normalizedSubscriptionRatio > ONE;
     }
 
     /// @notice Computes the detailed subscription state based on the current `currentVaultTVL` and `equilibriumVaultTVL`.
     /// @return The subscription state.
-    function computeSubscriptionState(IBondIssuer bondIssuer) public returns (SubscriptionState memory) {
+    function computeSubscriptionState() public returns (SubscriptionState memory) {
+        IBondIssuer bondIssuer = perp.bondIssuer();
         SubscriptionState memory s;
         s.currentPerpTVL = perp.getTVL();
         s.currentVaultTVL = vault.getTVL();
