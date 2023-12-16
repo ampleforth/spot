@@ -61,7 +61,10 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     ///      NOTE: 10**DECIMALS => 100% or 1.0
     uint8 public constant DECIMALS = 8;
     uint256 public constant ONE = (1 * 10**DECIMALS); // 1.0 or 100%
+
     uint256 public constant SIGMOID_BOUND = ONE / 100; // 0.01 or 1%
+    uint256 public constant SR_LOWER_BOUND = (ONE * 75) / 100; // 0.75 or 75%
+    uint256 public constant SR_UPPER_BOUND = 2 * ONE; // 2.0 or 200%
 
     /// @notice Reference to the perpetual token.
     IPerpetualTranche public perp;
@@ -138,7 +141,8 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Updates the target subscription ratio.
     /// @param targetSubscriptionRatio_ The new target subscription ratio as a fixed point number with {DECIMALS} places.
     function updateTargetSubscriptionRatio(uint256 targetSubscriptionRatio_) external onlyOwner {
-        require(targetSubscriptionRatio_ > 0, "FeeStrategy: invalid subscription");
+        require(targetSubscriptionRatio_ > SR_LOWER_BOUND, "FeeStrategy: sr too low");
+        require(targetSubscriptionRatio_ <= SR_UPPER_BOUND, "FeeStrategy: sr high low");
         targetSubscriptionRatio = targetSubscriptionRatio_;
     }
 
@@ -198,9 +202,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @inheritdoc IFeePolicy
     function computePerpRolloverFeePerc() external override returns (int256) {
         SubscriptionState memory s = computeSubscriptionState();
-
-        // We calculate the rollover fee for the given cycle by dividing the annualized rate
-        // by the number of cycles in any given year.
         return
             Sigmoid.compute(
                 s.normalizedSubscriptionRatio.toInt256(),
