@@ -111,10 +111,9 @@ contract PerpetualTranche is
     /// @param maxMintAmtPerTranche The max mint amount per tranche.
     event UpdatedMintingLimits(uint256 maxSupply, uint256 maxMintAmtPerTranche);
 
-    /// @notice Event emitted when the authorized rollers are updated.
-    /// @param roller The address of the roller.
-    /// @param authorized If the roller is has been authorized or not.
-    event UpdatedRollerAuthorization(address roller, bool authorized);
+    /// @notice Event emitted when the authorized rollover vault is updated.
+    /// @param vault The address of the rollover vault.
+    event UpdatedVault(address vault);
 
     //-------------------------------------------------------------------------
     // Perp Math Basics:
@@ -230,11 +229,10 @@ contract PerpetualTranche is
     //--------------------------------------------------------------------------
     // v1.1.0 STORAGE ADDITION
 
-    /// @notice Set of all authorized addresses which can execute rollovers.
-    /// @dev The contract owner can modify this set.
-    ///      NOTE: If the set is empty, all addresses are considered authorized and can execute rollovers.
-    ///            else only addresses in the set can execute rollovers.
-    EnumerableSetUpgradeable.AddressSet private _rollers;
+    /// @notice Address of the authorized rollover vault.
+    /// @dev If this address is set, only the rollover vault can perform rollovers.
+    ///      If not rollovers are publically accessible.
+    address public vault;
 
     //--------------------------------------------------------------------------
     // Modifiers
@@ -254,10 +252,10 @@ contract PerpetualTranche is
     }
 
     /// @dev Throws if called by any account other than an authorized roller.
-    modifier onlyRollers() {
-        // If the set it empty, permit all callers
-        // else permit only whitelisted callers.
-        if (_rollers.length() > 0 && !_rollers.contains(_msgSender())) {
+    modifier onlyVault() {
+        // If vault ref is set, permit all callers
+        // else permit only the authorized vault.
+        if (vault != address(0) && vault != _msgSender()) {
             revert UnauthorizedCall();
         }
         _;
@@ -324,20 +322,11 @@ contract PerpetualTranche is
         emit UpdatedKeeper(prevKeeper, newKeeper);
     }
 
-    /// @notice Updates the authorized roller set.
-    /// @dev CAUTION: If the authorized roller set is empty, all rollers are authorized.
-    /// @param roller The address of the roller.
-    /// @param authorize If the roller is to be authorized or unauthorized.
-    function authorizeRoller(address roller, bool authorize) external onlyOwner {
-        if (authorize && !_rollers.contains(roller)) {
-            _rollers.add(roller);
-        } else if (!authorize && _rollers.contains(roller)) {
-            _rollers.remove(roller);
-        } else {
-            return;
-        }
-
-        emit UpdatedRollerAuthorization(roller, authorize);
+    /// @notice Updates the reference to the rollover vault.
+    /// @param newVault The address of the new vault.
+    function updateVault(address newVault) public onlyOwner {
+        vault = newVault;
+        emit UpdatedVault(newVault);
     }
 
     /// @notice Update the reference to the bond issuer contract.
@@ -494,7 +483,7 @@ contract PerpetualTranche is
     )
         external
         override
-        onlyRollers
+        onlyVault
         nonReentrant
         whenNotPaused
         afterStateUpdate
@@ -644,17 +633,6 @@ contract PerpetualTranche is
         return _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable, tokenOutAmtRequested);
     }
 
-    /// @return Returns the number of authorized rollers.
-    function authorizedRollersCount() external view returns (uint256) {
-        return _rollers.length();
-    }
-
-    /// @return Returns the roller address from the authorized set by index.
-    /// @param i The index of the address in the set.
-    function authorizedRollerAt(uint256 i) external view returns (address) {
-        return _rollers.at(i);
-    }
-
     /// @inheritdoc IPerpetualTranche
     function computeDiscount(IERC20Upgradeable token) external view override returns (uint256) {
         return _inReserve(token) ? UNIT_DISCOUNT : 0;
@@ -757,15 +735,22 @@ contract PerpetualTranche is
 
     /// @dev Computes the perp mint amount for given amount of tranche tokens deposited into the reserve.
     function _computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) private returns (uint256) {
-        uint256 feePerc = feePolicy.computePerpMintFeePerc();
         uint256 totalSupply_ = totalSupply();
         uint256 trancheInPrice = _tranchePrice(trancheIn);
-        uint256 perpAmtMint = trancheInAmt.mulDiv(trancheInPrice, UNIT_PRICE);
+        uint256 valueIn = trancheInAmt.mulDiv(trancheInPrice, UNIT_PRICE);
+
+        // NOTE: we charge no mint fee when interacting with other parts of the system
+        uint256 feePerc = _isProtocolCaller() ? 0 : feePolicy.computePerpMintFeePerc(valueIn);
+
+        // Compute mint amt
+        uint256 perpAmtMint = valueIn;
         if (totalSupply_ > 0) {
             perpAmtMint = perpAmtMint.mulDiv(totalSupply_, _reserveValue());
         }
+
         // NOTE: The mint fees are settled by simply minting fewer perps.
         perpAmtMint = perpAmtMint.mulDiv(FEE_ONE_PERC - feePerc, FEE_ONE_PERC);
+
         return perpAmtMint;
     }
 
@@ -774,9 +759,13 @@ contract PerpetualTranche is
         private
         returns (IERC20Upgradeable[] memory, uint256[] memory)
     {
-        uint256 feePerc = feePolicy.computePerpBurnFeePerc();
         uint256 totalSupply_ = totalSupply();
         uint256 reserveCount = _reserveCount();
+
+        // NOTE: we charge no burn fee when interacting with other parts of the system
+        uint256 feePerc = _isProtocolCaller() ? 0 : feePolicy.computePerpBurnFeePerc();
+
+        // Compute redeem amts
         IERC20Upgradeable[] memory reserveTokens = new IERC20Upgradeable[](reserveCount);
         uint256[] memory redemptionAmts = new uint256[](reserveCount);
         for (uint256 i = 0; i < reserveCount; i++) {
@@ -787,6 +776,7 @@ contract PerpetualTranche is
             // NOTE: The burn fees are settled by simply redeeming for fewer tranches.
             redemptionAmts[i] = redemptionAmts[i].mulDiv(FEE_ONE_PERC - feePerc, FEE_ONE_PERC);
         }
+
         return (reserveTokens, redemptionAmts);
     }
 
@@ -798,20 +788,18 @@ contract PerpetualTranche is
         uint256 trancheInAmtAvailable,
         uint256 tokenOutAmtRequested
     ) private returns (IPerpetualTranche.RolloverData memory) {
-        // NOTE: The rollover fees are settled by,
-        // adjusting the exchange rate between `trancheInAmt` and `tokenOutAmt`.
-        int256 feePerc = feePolicy.computePerpRolloverFeePerc();
-
         IPerpetualTranche.RolloverData memory r;
-
         uint256 trancheInPrice = _tranchePrice(trancheIn);
         uint256 tokenOutPrice = _isUnderlying(tokenOut) ? UNIT_PRICE : _tranchePrice(ITranche(address(tokenOut)));
         uint256 tokenOutBalance = tokenOut.balanceOf(address(this));
         tokenOutAmtRequested = MathUpgradeable.min(tokenOutAmtRequested, tokenOutBalance);
-
         if (trancheInAmtAvailable <= 0 || trancheInPrice <= 0 || tokenOutPrice <= 0 || tokenOutAmtRequested <= 0) {
             return r;
         }
+
+        // NOTE: The rollover fees are settled by,
+        // adjusting the exchange rate between `trancheInAmt` and `tokenOutAmt`.
+        int256 feePerc = feePolicy.computePerpRolloverFeePerc();
 
         //-----------------------------------------------------------------------------
         // Basic rollover with fees:
@@ -1010,5 +998,11 @@ contract PerpetualTranche is
     /// @dev Checks if the given token is the underlying collateral token.
     function _isUnderlying(IERC20Upgradeable token) private view returns (bool) {
         return (token == _reserveAt(0));
+    }
+
+    /// @dev Checks if caller is another module within the protocol.
+    ///      NOTE: If so, we do not charge mint/burn for internal operations.
+    function _isProtocolCaller() private view returns (bool) {
+        return (_msgSender() == vault);
     }
 }
