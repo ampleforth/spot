@@ -7,7 +7,6 @@ import {
   setupCollateralToken,
   setupBondFactory,
   createBondWithFactory,
-  getTranches,
   toFixedPtAmt,
   toPercFixedPtAmt,
 } from "../helpers";
@@ -46,7 +45,6 @@ describe("FeeStrategy", function () {
     await feeStrategy.updateDeviationTarget(toPercFixedPtAmt(target));
     await vault.getTVL.returns(toFixedPtAmt(vaultTVL));
     currentBond = await createBondWithFactory(bondFactory, collateralToken, [250, 750], 28 * 86400);
-    const tranches = await getTranches(currentBond);
     await perp.getDepositBond.returns(currentBond.address);
     await perp.getTVL.returns(toFixedPtAmt(perpTVL));
   }
