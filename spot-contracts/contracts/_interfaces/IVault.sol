@@ -3,18 +3,6 @@ pragma solidity ^0.8.0;
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 
-/// @notice Expected a minimum amount of vault assets to be deployed.
-error InsufficientDeployment();
-
-/// @notice Expected the number of vault assets deployed to be under the limit.
-error DeployedCountOverLimit();
-
-/// @notice Expected to mint a non-zero amount of notes.
-error UnacceptableDeposit();
-
-/// @notice Expected to redeem a non-zero amount of notes.
-error UnacceptableRedemption();
-
 /*
  *  @title IVault
  *

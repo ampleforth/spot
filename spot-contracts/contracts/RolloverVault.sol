@@ -2,8 +2,9 @@
 pragma solidity ^0.8.19;
 
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche, IFeePolicy } from "./_interfaces/IPerpetualTranche.sol";
-import { IVault, InsufficientDeployment, DeployedCountOverLimit } from "./_interfaces/IVault.sol";
-import { UnauthorizedCall, UnauthorizedTransferOut, UnacceptableReference, UnexpectedDecimals, UnexpectedAsset, UnacceptableDeposit, UnacceptableRedemption, OutOfBounds, TVLDecreased } from "./_interfaces/ProtocolErrors.sol";
+import { IVault } from "./_interfaces/IVault.sol";
+import { IERC20Burnable } from "./_interfaces/IERC20Burnable.sol";
+import { UnauthorizedCall, UnauthorizedTransferOut, UnacceptableReference, UnexpectedDecimals, UnexpectedAsset, UnacceptableDeposit, UnacceptableRedemption, OutOfBounds, TVLDecreased, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -342,12 +343,14 @@ contract RolloverVault is
     function deposit(uint256 amount) external override nonReentrant whenNotPaused returns (uint256) {
         uint256 totalSupply_ = totalSupply();
         uint256 notes = (totalSupply_ > 0) ? totalSupply_.mulDiv(amount, getTVL()) : (amount * INITIAL_RATE);
-        if (amount <= 0 || notes <= 0) {
-            revert UnacceptableDeposit();
-        }
 
         // deduct mint fees
         notes = notes.mulDiv(FEE_ONE_PERC - feePolicy.computeVaultMintFeePerc(), FEE_ONE_PERC);
+
+        // Revert if no tokens are transferred
+        if (amount <= 0 || notes <= 0) {
+            revert UnacceptableDeposit();
+        }
 
         // transfer user assets in
         underlying.safeTransferFrom(_msgSender(), address(this), amount);
@@ -716,12 +719,12 @@ contract RolloverVault is
         BondTranches memory bt,
         uint256 amount
     ) private {
-        // Skip if balance is zero
+        // Skip if amount is zero
         if (amount <= 0) {
             return;
         }
 
-        // balance is tranched
+        // amount is tranched
         _checkAndApproveMax(underlying, address(bond), amount);
         bond.deposit(amount);
 
