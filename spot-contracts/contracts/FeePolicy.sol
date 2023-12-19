@@ -226,14 +226,14 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
             vault.getTVL()
         );
 
-        // When the vault is under-subscribed there exists an active mint fee
+        // When the system is under-subscribed there exists an active mint fee
         return (postMintState.normalizedSubscriptionRatio <= 1) ? perpMintFeePerc : 0;
     }
 
     /// @inheritdoc IFeePolicy
     function computePerpBurnFeePerc() external override returns (uint256) {
         IFeePolicy.SubscriptionState memory s = computeSubscriptionState();
-        // When the vault is over-subscribed there exists an active redemption fee
+        // When the system is over-subscribed there exists an active redemption fee
         return (s.normalizedSubscriptionRatio > 1) ? perpBurnFeePerc : 0;
     }
 
@@ -282,27 +282,29 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
             return (0, ONE);
         }
 
-        // Split the fees between the perp and vault systems
-        uint256 totalFeePerc = vaultSwapFeePerc[
+        // When the system is over-subscribed, we charge no perp mint fee.
+        uint256 vaultFeePerc = vaultSwapFeePerc[
             keccak256(abi.encodePacked(address(vault.underlying()), address(perp)))
         ];
-        // For the fee split however, we still use the "pre"-minting or current state.
-        uint256 perpSharePerc = totalFeePerc.mulDiv(currentPerpTVL, currentPerpTVL + currentVaultTVL);
-        return (perpSharePerc, totalFeePerc - perpSharePerc);
+        return (0, vaultFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
     function computePerpToUnderlyingSwapFeePercs() external override returns (uint256, uint256) {
         // When user swaps perps for vault's underlying -> perps are redeemed by the vault
-        uint256 currentPerpTVL = perp.getTVL();
-        uint256 currentVaultTVL = vault.getTVL();
+        IFeePolicy.SubscriptionState memory s = computeSubscriptionState();
 
         // Split the fees between the perp and vault systems
-        uint256 totalFeePerc = vaultSwapFeePerc[
+        uint256 vaultFeePerc = vaultSwapFeePerc[
             keccak256(abi.encodePacked(address(perp), address(vault.underlying())))
         ];
-        uint256 perpSharePerc = totalFeePerc.mulDiv(currentPerpTVL, currentPerpTVL + currentVaultTVL);
-        return (perpSharePerc, totalFeePerc - perpSharePerc);
+        // When the system is over-subscribed, we charge no perp burn fee.
+        if (s.normalizedSubscriptionRatio > 1) {
+            return (0, vaultFeePerc);
+        }
+
+        // When the system is under-subscribed, we charge a perp burn fee on top of the vault's swap fee.
+        return (perpBurnFeePerc, vaultFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
