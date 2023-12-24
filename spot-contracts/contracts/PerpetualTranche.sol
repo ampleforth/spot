@@ -2,7 +2,8 @@
 pragma solidity ^0.8.19;
 
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
-import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeeStrategy, IPricingStrategy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
+import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeePolicy, IPricingStrategy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
+import { UnauthorizedCall, UnauthorizedTransferOut, UnacceptableReference, UnexpectedDecimals, UnexpectedAsset, UnacceptableDeposit, UnacceptableRedemption, UnacceptableParams } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -15,35 +16,6 @@ import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/ut
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import { BondHelpers } from "./_utils/BondHelpers.sol";
 import { TrancheHelpers } from "./_utils/TrancheHelpers.sol";
-
-/// @notice Expected contract call to be triggered by authorized caller.
-/// @param caller The address which triggered the call.
-/// @param authorizedCaller The address which is authorized to trigger the call.
-error UnauthorizedCall(address caller, address authorizedCaller);
-
-/// @notice Expected transfer out asset to not be a reserve asset.
-error UnauthorizedTransferOut();
-
-/// @notice Expected contract reference to not be `address(0)`.
-error UnacceptableReference();
-
-/// @notice Expected strategy to return a fixed point with exactly expected decimals.
-error InvalidStrategyDecimals();
-
-/// @notice Expected bond issuer's collateral token to match underlying collateral token.
-error InvalidCollateral();
-
-/// @notice Expected minTrancheMaturity be less than or equal to maxTrancheMaturity.
-error InvalidTrancheMaturityBounds();
-
-/// @notice Expected deposited tranche to be of current deposit bond.
-error UnacceptableDepositTranche();
-
-/// @notice Expected to mint a non-zero amount of tokens.
-error UnacceptableMintAmt();
-
-/// @notice Expected to burn a non-zero amount of tokens.
-error UnacceptableBurnAmt();
 
 /// @notice Expected rollover to be acceptable.
 error UnacceptableRollover();
@@ -121,9 +93,9 @@ contract PerpetualTranche is
     /// @param issuer Address of the issuer contract.
     event UpdatedBondIssuer(IBondIssuer issuer);
 
-    /// @notice Event emitted when the fee strategy is updated.
+    /// @notice Event emitted when the fee policy is updated.
     /// @param strategy Address of the strategy contract.
-    event UpdatedFeeStrategy(IFeeStrategy strategy);
+    event UpdatedFeePolicy(IFeePolicy strategy);
 
     /// @notice Event emitted when the pricing strategy is updated.
     /// @param strategy Address of the strategy contract.
@@ -177,8 +149,8 @@ contract PerpetualTranche is
     uint8 public constant PRICE_DECIMALS = 8;
     uint256 public constant UNIT_PRICE = (10**PRICE_DECIMALS);
 
-    uint8 public constant PERC_DECIMALS = 8;
-    uint256 public constant HUNDRED_PERC = 10**PERC_DECIMALS;
+    uint8 public constant FEE_POLICY_DECIMALS = 8;
+    uint256 public constant FEE_ONE_PERC = (10**FEE_POLICY_DECIMALS);
 
     //-------------------------------------------------------------------------
     // Storage
@@ -192,8 +164,8 @@ contract PerpetualTranche is
     /// @inheritdoc IPerpetualTranche
     address public override keeper;
 
-    /// @notice External contract points controls fees & incentives for rollovers.
-    IFeeStrategy public override feeStrategy;
+    /// @notice External contract that orchestrates fees across the spot protocol.
+    IFeePolicy public override feePolicy;
 
     /// @notice External contract that computes a given reserve token's price.
     /// @dev The computed price is expected to be a fixed point unsigned integer with {PRICE_DECIMALS} decimals.
@@ -206,10 +178,9 @@ contract PerpetualTranche is
     // solhint-disable-next-line var-name-mixedcase
     address private _discountStrategy_DEPRECATED;
 
-    /// @notice External contract that stores a predefined bond config and frequency,
-    ///         and issues new bonds when poked.
+    /// @inheritdoc IPerpetualTranche
     /// @dev Only tranches of bonds issued by this whitelisted issuer are accepted into the reserve.
-    IBondIssuer public bondIssuer;
+    IBondIssuer public override bondIssuer;
 
     /// @notice The active deposit bond of whose tranches are currently being accepted to mint perps.
     IBondController private _depositBond;
@@ -277,7 +248,7 @@ contract PerpetualTranche is
     /// @dev Throws if called by any account other than the keeper.
     modifier onlyKeeper() {
         if (keeper != _msgSender()) {
-            revert UnauthorizedCall(_msgSender(), keeper);
+            revert UnauthorizedCall();
         }
         _;
     }
@@ -287,7 +258,7 @@ contract PerpetualTranche is
         // If the set it empty, permit all callers
         // else permit only whitelisted callers.
         if (_rollers.length() > 0 && !_rollers.contains(_msgSender())) {
-            revert UnauthorizedCall(_msgSender(), address(0));
+            revert UnauthorizedCall();
         }
         _;
     }
@@ -300,14 +271,14 @@ contract PerpetualTranche is
     /// @param symbol ERC-20 Symbol of the Perp token.
     /// @param collateral_ Address of the underlying collateral token.
     /// @param bondIssuer_ Address of the bond issuer contract.
-    /// @param feeStrategy_ Address of the fee strategy contract.
+    /// @param feePolicy_ Address of the fee policy contract.
     /// @param pricingStrategy_ Address of the pricing strategy contract.
     function init(
         string memory name,
         string memory symbol,
         IERC20Upgradeable collateral_,
         IBondIssuer bondIssuer_,
-        IFeeStrategy feeStrategy_,
+        IFeePolicy feePolicy_,
         IPricingStrategy pricingStrategy_
     ) public initializer {
         __ERC20_init(name, symbol);
@@ -323,7 +294,7 @@ contract PerpetualTranche is
         _syncReserve(collateral_);
 
         updateBondIssuer(bondIssuer_);
-        updateFeeStrategy(feeStrategy_);
+        updateFeePolicy(feePolicy_);
         updatePricingStrategy(pricingStrategy_);
 
         updateTolerableTrancheMaturity(1, type(uint256).max);
@@ -376,23 +347,23 @@ contract PerpetualTranche is
             revert UnacceptableReference();
         }
         if (address(_reserveAt(0)) != bondIssuer_.collateral()) {
-            revert InvalidCollateral();
+            revert UnexpectedAsset();
         }
         bondIssuer = bondIssuer_;
         emit UpdatedBondIssuer(bondIssuer_);
     }
 
-    /// @notice Update the reference to the fee strategy contract.
-    /// @param feeStrategy_ New strategy address.
-    function updateFeeStrategy(IFeeStrategy feeStrategy_) public onlyOwner {
-        if (address(feeStrategy_) == address(0)) {
+    /// @notice Update the reference to the fee policy contract.
+    /// @param feePolicy_ New strategy address.
+    function updateFeePolicy(IFeePolicy feePolicy_) public onlyOwner {
+        if (address(feePolicy_) == address(0)) {
             revert UnacceptableReference();
         }
-        if (feeStrategy_.decimals() != PERC_DECIMALS) {
-            revert InvalidStrategyDecimals();
+        if (feePolicy_.decimals() != FEE_POLICY_DECIMALS) {
+            revert UnexpectedDecimals();
         }
-        feeStrategy = feeStrategy_;
-        emit UpdatedFeeStrategy(feeStrategy_);
+        feePolicy = feePolicy_;
+        emit UpdatedFeePolicy(feePolicy_);
     }
 
     /// @notice Update the reference to the pricing strategy contract.
@@ -402,7 +373,7 @@ contract PerpetualTranche is
             revert UnacceptableReference();
         }
         if (pricingStrategy_.decimals() != PRICE_DECIMALS) {
-            revert InvalidStrategyDecimals();
+            revert UnexpectedDecimals();
         }
         pricingStrategy = pricingStrategy_;
         emit UpdatedPricingStrategy(pricingStrategy_);
@@ -416,7 +387,7 @@ contract PerpetualTranche is
         onlyOwner
     {
         if (minTrancheMaturitySec_ > maxTrancheMaturitySec_) {
-            revert InvalidTrancheMaturityBounds();
+            revert UnacceptableParams();
         }
         minTrancheMaturitySec = minTrancheMaturitySec_;
         maxTrancheMaturitySec = maxTrancheMaturitySec_;
@@ -460,13 +431,13 @@ contract PerpetualTranche is
         returns (uint256)
     {
         if (!_isAcceptableTranche(trancheIn)) {
-            revert UnacceptableDepositTranche();
+            revert UnexpectedAsset();
         }
 
         // calculates the amount of perp tokens minted when depositing `trancheInAmt` of tranche tokens
         uint256 perpAmtMint = _computeMintAmt(trancheIn, trancheInAmt);
         if (trancheInAmt <= 0 || perpAmtMint <= 0) {
-            revert UnacceptableMintAmt();
+            revert UnacceptableDeposit();
         }
 
         // transfers tranche tokens from the sender to the reserve
@@ -496,7 +467,7 @@ contract PerpetualTranche is
 
         // verifies if burn amount is acceptable
         if (perpAmtBurnt <= 0 || perpAmtBurnt > perpSupply) {
-            revert UnacceptableBurnAmt();
+            revert UnacceptableRedemption();
         }
 
         // calculates share of reserve tokens to be redeemed
@@ -786,7 +757,7 @@ contract PerpetualTranche is
 
     /// @dev Computes the perp mint amount for given amount of tranche tokens deposited into the reserve.
     function _computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) private returns (uint256) {
-        uint256 feePerc = feeStrategy.computeMintFeePerc();
+        uint256 feePerc = feePolicy.computePerpMintFeePerc();
         uint256 totalSupply_ = totalSupply();
         uint256 trancheInPrice = _tranchePrice(trancheIn);
         uint256 perpAmtMint = trancheInAmt.mulDiv(trancheInPrice, UNIT_PRICE);
@@ -794,7 +765,7 @@ contract PerpetualTranche is
             perpAmtMint = perpAmtMint.mulDiv(totalSupply_, _reserveValue());
         }
         // NOTE: The mint fees are settled by simply minting fewer perps.
-        perpAmtMint = perpAmtMint.mulDiv(HUNDRED_PERC - feePerc, HUNDRED_PERC);
+        perpAmtMint = perpAmtMint.mulDiv(FEE_ONE_PERC - feePerc, FEE_ONE_PERC);
         return perpAmtMint;
     }
 
@@ -803,7 +774,7 @@ contract PerpetualTranche is
         private
         returns (IERC20Upgradeable[] memory, uint256[] memory)
     {
-        uint256 feePerc = feeStrategy.computeBurnFeePerc();
+        uint256 feePerc = feePolicy.computePerpBurnFeePerc();
         uint256 totalSupply_ = totalSupply();
         uint256 reserveCount = _reserveCount();
         IERC20Upgradeable[] memory reserveTokens = new IERC20Upgradeable[](reserveCount);
@@ -814,13 +785,13 @@ contract PerpetualTranche is
                 ? reserveTokens[i].balanceOf(address(this)).mulDiv(perpAmtBurnt, totalSupply_)
                 : 0;
             // NOTE: The burn fees are settled by simply redeeming for fewer tranches.
-            redemptionAmts[i] = redemptionAmts[i].mulDiv(HUNDRED_PERC - feePerc, HUNDRED_PERC);
+            redemptionAmts[i] = redemptionAmts[i].mulDiv(FEE_ONE_PERC - feePerc, FEE_ONE_PERC);
         }
         return (reserveTokens, redemptionAmts);
     }
 
     /// @dev Computes the amount of reserve tokens that can be rolled out for the given amount of tranches deposited.
-    ///      The relative ratios of tokens In/Out are adjusted based on the current rollver fee perc.
+    ///      The relative ratios of tokens In/Out are adjusted based on the current rollover fee perc.
     function _computeRolloverAmt(
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
@@ -829,7 +800,7 @@ contract PerpetualTranche is
     ) private returns (IPerpetualTranche.RolloverData memory) {
         // NOTE: The rollover fees are settled by,
         // adjusting the exchange rate between `trancheInAmt` and `tokenOutAmt`.
-        int256 feePerc = feeStrategy.computeRolloverFeePerc();
+        int256 feePerc = feePolicy.computePerpRolloverFeePerc();
 
         IPerpetualTranche.RolloverData memory r;
 
@@ -854,12 +825,12 @@ contract PerpetualTranche is
         // A positive fee percentage implies that perp charges rotators by
         // accepting tranchesIn at a discount, ie) fewer tokens out.
         if (feePerc > 0) {
-            r.tokenOutAmt = r.tokenOutAmt.mulDiv(HUNDRED_PERC - feePerc.abs(), HUNDRED_PERC);
+            r.tokenOutAmt = r.tokenOutAmt.mulDiv(FEE_ONE_PERC - feePerc.abs(), FEE_ONE_PERC);
         }
         // A negative fee percentage (or a reward) implies that perp pays the rotators by
         // accepting tranchesIn at a premium, ie) more tokens out.
         else if (feePerc < 0) {
-            r.tokenOutAmt = r.tokenOutAmt.mulDiv(HUNDRED_PERC + feePerc.abs(), HUNDRED_PERC);
+            r.tokenOutAmt = r.tokenOutAmt.mulDiv(FEE_ONE_PERC + feePerc.abs(), FEE_ONE_PERC);
         }
         //-----------------------------------------------------------------------------
 
@@ -874,8 +845,8 @@ contract PerpetualTranche is
             // offering tranchesOut for a premium, ie) more tranches in.
             if (feePerc > 0) {
                 r.trancheInAmt = r.trancheInAmt.mulDiv(
-                    HUNDRED_PERC,
-                    HUNDRED_PERC - feePerc.toUint256(),
+                    FEE_ONE_PERC,
+                    FEE_ONE_PERC - feePerc.toUint256(),
                     MathUpgradeable.Rounding.Up
                 );
             }
@@ -883,8 +854,8 @@ contract PerpetualTranche is
             // offering tranchesOut at a discount, ie) fewer tranches in.
             else if (feePerc < 0) {
                 r.trancheInAmt = r.trancheInAmt.mulDiv(
-                    HUNDRED_PERC,
-                    HUNDRED_PERC + feePerc.abs(),
+                    FEE_ONE_PERC,
+                    FEE_ONE_PERC + feePerc.abs(),
                     MathUpgradeable.Rounding.Up
                 );
             }
@@ -970,13 +941,15 @@ contract PerpetualTranche is
     /// @dev Checks if the bond's tranches can be accepted into the reserve.
     ///      * Expects the bond to to have the same collateral token as perp.
     ///      * Expects the bond's maturity to be within expected bounds.
+    ///      * Expects the bond to have only two tranches.
     /// @return True if the bond is "acceptable".
     function _isAcceptableBond(IBondController bond) private view returns (bool) {
         // NOTE: `secondsToMaturity` will be 0 if the bond is past maturity.
         uint256 secondsToMaturity = bond.secondsToMaturity();
         return (address(_reserveAt(0)) == bond.collateralToken() &&
             secondsToMaturity >= minTrancheMaturitySec &&
-            secondsToMaturity < maxTrancheMaturitySec);
+            secondsToMaturity < maxTrancheMaturitySec &&
+            bond.trancheCount() == 2);
     }
 
     /// @dev Checks if the given tranche can be accepted into the reserve.

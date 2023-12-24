@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 
 import { IBondIssuer } from "./IBondIssuer.sol";
-import { IFeeStrategy } from "./IFeeStrategy.sol";
+import { IFeePolicy } from "./IFeePolicy.sol";
 import { IPricingStrategy } from "./IPricingStrategy.sol";
 import { IDiscountStrategy } from "./IDiscountStrategy.sol";
 import { IBondController } from "./buttonwood/IBondController.sol";
@@ -58,7 +58,12 @@ interface IPerpetualTranche is IERC20Upgradeable {
         uint256 trancheInAmt
     ) external returns (RolloverData memory r);
 
-    /// @notice Reference to the wallet or contract that has the ability to pause/unpause operations.
+    /// @notice External contract that stores a predefined bond config and frequency,
+    ///         and issues new bonds when poked.
+    /// @return The address of the bond issuer.
+    function bondIssuer() external view returns (IBondIssuer);
+
+    /// @notice Reference to the address that has the ability to pause/unpause operations.
     /// @return The address of the keeper.
     function keeper() external view returns (address);
 
@@ -80,9 +85,9 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @return If the given pair is a valid rollover.
     function isAcceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut) external returns (bool);
 
-    /// @notice The strategy contract with the fee computation logic.
-    /// @return Address of the strategy contract.
-    function feeStrategy() external view returns (IFeeStrategy);
+    /// @notice The policy contract with the fee computation logic for the perp and vault systems.
+    /// @return Address of the policy contract.
+    function feePolicy() external view returns (IFeePolicy);
 
     /// @notice The ERC-20 contract which holds perp balances.
     /// @return Address of the token.
