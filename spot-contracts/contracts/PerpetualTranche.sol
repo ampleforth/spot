@@ -231,7 +231,7 @@ contract PerpetualTranche is
 
     /// @notice Address of the authorized rollover vault.
     /// @dev If this address is set, only the rollover vault can perform rollovers.
-    ///      If not rollovers are publically accessible.
+    ///      If not rollovers are publicly accessible.
     address public vault;
 
     //--------------------------------------------------------------------------
@@ -253,8 +253,7 @@ contract PerpetualTranche is
 
     /// @dev Throws if called by any account other than an authorized roller.
     modifier onlyVault() {
-        // If vault ref is set, permit all callers
-        // else permit only the authorized vault.
+        // If vault reference is set, only permit the vault.
         if (vault != address(0) && vault != _msgSender()) {
             revert UnauthorizedCall();
         }
@@ -763,7 +762,7 @@ contract PerpetualTranche is
         uint256 reserveCount = _reserveCount();
 
         // NOTE: we charge no burn fee when interacting with other parts of the system
-        uint256 feePerc = _isProtocolCaller() ? 0 : feePolicy.computePerpBurnFeePerc();
+        uint256 feePerc = _isProtocolCaller() ? 0 : feePolicy.computePerpBurnFeePerc(perpAmtBurnt, totalSupply_);
 
         // Compute redeem amts
         IERC20Upgradeable[] memory reserveTokens = new IERC20Upgradeable[](reserveCount);
