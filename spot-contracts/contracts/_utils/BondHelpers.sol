@@ -76,7 +76,7 @@ library BondHelpers {
 
     /// @notice The function estimates the amount of collateral which needs to be tranched,
     ///         to mint the given number of tranche tokens with the provided tranche ratio.
-    /// @dev This function is NOT a precise estimate, ie) when you tranche the estimated amount
+    /// @dev This function is guaranteed to over-estimate, ie) when you tranche the estimated amount
     ///      of collateral you might end up minting slightly more than `trancheAmtToMint`.
     ///      It is the inverse of the `previewDeposit` function.
     /// @param b The address of the bond contract.
@@ -90,12 +90,12 @@ library BondHelpers {
     ) internal view returns (uint256) {
         return
             trancheAmtToMint
-                .mulDiv(BPS, BPS - b.feeBps(), MathUpgradeable.Rounding.Up)
                 .mulDiv(
                     IERC20Upgradeable(b.collateralToken()).balanceOf(address(b)),
                     b.totalDebt(),
                     MathUpgradeable.Rounding.Up
                 )
+                .mulDiv(BPS, BPS - b.feeBps(), MathUpgradeable.Rounding.Up)
                 .mulDiv(TRANCHE_RATIO_GRANULARITY, mintingTrancheRatio, MathUpgradeable.Rounding.Up);
     }
 

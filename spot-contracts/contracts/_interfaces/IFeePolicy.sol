@@ -5,14 +5,18 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { IBondController } from "./buttonwood/IBondController.sol";
 
 interface IFeePolicy {
+    /// TODO: remove `compute` from function names.
+
     /// @param valueIn The value of incoming assets used to mint perps.
     /// @return The percentage of the mint perp tokens to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
     function computePerpMintFeePerc(uint256 valueIn) external returns (uint256);
 
+    /// @param perpAmtBurnt The amount of perp tokens to be burnt.
+    /// @param perpTotalSupply The total supply of perp tokens.
     /// @return The percentage of the burnt perp tokens to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
-    function computePerpBurnFeePerc() external returns (uint256);
+    function computePerpBurnFeePerc(uint256 perpAmtBurnt, uint256 perpTotalSupply) external returns (uint256);
 
     /// @return The applied exchange rate adjustment between tranches into perp and
     ///         tokens out of perp during a rollover,
@@ -38,15 +42,24 @@ interface IFeePolicy {
     function computeVaultDeploymentFee() external returns (uint256);
 
     /// @param valueIn The value of underlying tokens swapped in.
-    /// @return The percentage of perp tokens out to be charged as swap fee by the perp and vault systems,
+    /// @return perpFeePerc The percentage of perp tokens out to be charged as swap fees by perp,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
-    function computeUnderlyingToPerpSwapFeePercs(uint256 valueIn) external returns (uint256, uint256);
-
-    /// @return The percentage of underlying tokens out to be charged as swap fee by the perp and vault systems,
+    /// @return vaultFeePerc The percentage of perp tokens out to be charged as swap fees by the vault,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
-    function computePerpToUnderlyingSwapFeePercs() external returns (uint256, uint256);
+    function computeUnderlyingToPerpSwapFeePercs(uint256 valueIn)
+        external
+        returns (uint256 perpFeePerc, uint256 vaultFeePerc);
 
-    /// @return Number of decimals representing 1.0 or 100%.
+    /// @param valueIn The value of perp tokens tokens swapped in.
+    /// @return perpFeePerc The percentage of underlying tokens out to be charged as swap fees by perp,
+    ///         as a fixed-point numbers with {DECIMALS} decimal places.
+    /// @return vaultFeePerc The percentage of underlying tokens out to be charged as swap fees by the vault,
+    ///         as a fixed-point numbers with {DECIMALS} decimal places.
+    function computePerpToUnderlyingSwapFeePercs(uint256 valueIn)
+        external
+        returns (uint256 perpFeePerc, uint256 vaultFeePerc);
+
+    /// @return Number of decimals representing a multiplier of 1.0. So, 100% = 1*10**decimals.
     function decimals() external view returns (uint8);
 
     /// @dev The subscription state the vault system relative to the perp supply.
