@@ -132,7 +132,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         vaultBurnFeePerc = 0;
 
         // NOTE: With the current bond length of 28 days, rollover rate is annualized by dividing by: 365/28 ~= 13
-        perpRolloverFee.lower = -int256(ONE) / (300 * 13); // -0.033/13 = -0.00253 (3.3% annualized)
+        perpRolloverFee.lower = -int256(ONE) / (30 * 13); // -0.033/13 = -0.00253 (3.3% annualized)
         perpRolloverFee.upper = int256(ONE) / (10 * 13); // 0.1/13 = 0.00769 (10% annualized)
         perpRolloverFee.growth = 5 * int256(ONE); // 5.0
 
@@ -205,7 +205,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         address assetIn,
         address assetOut,
         uint256 feePerc
-    ) public onlyOwner {
+    ) external onlyOwner {
         require(feePerc <= ONE, "FeeStrategy: perc too high");
         bytes32 pairHash = keccak256(abi.encodePacked(assetIn, assetOut));
         if (feePerc > 0) {
@@ -231,10 +231,20 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computePerpBurnFeePerc() external override returns (uint256) {
-        IFeePolicy.SubscriptionState memory s = computeSubscriptionState();
+    function computePerpBurnFeePerc(uint256 perpAmtBurnt, uint256 perpTotalSupply) external override returns (uint256) {
+        // The act of burning perps increases the subscription ratio,
+        // We thus have to check if the "post"-burning subscription state to account for fees.
+
+        // NOTE: The perp and vault TVLs are denominated in the underlying asset.
+        // We calulate the perp post-burn TVL, by multiplying the current tvl by
+        // the fraction of supply remaning.
+        IFeePolicy.SubscriptionState memory postBurnState = computeSubscriptionState(
+            perp.getDepositBond(),
+            perp.getTVL().mulDiv(perpTotalSupply - perpAmtBurnt, perpTotalSupply),
+            vault.getTVL()
+        );
         // When the system is over-subscribed there exists an active redemption fee
-        return (s.normalizedSubscriptionRatio > 1) ? perpBurnFeePerc : 0;
+        return (postBurnState.normalizedSubscriptionRatio > 1) ? perpBurnFeePerc : 0;
     }
 
     /// @inheritdoc IFeePolicy
@@ -268,7 +278,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @inheritdoc IFeePolicy
     function computeUnderlyingToPerpSwapFeePercs(uint256 valueIn) external override returns (uint256, uint256) {
         // When user swaps underlying for vault's perps -> perps are minted by the vault
-        // Similar to perp mint fees, here too we use the "post"-minting subscription state.
+        // Similar to perp mint fees, here too check the "post"-minting subscription state.
         uint256 currentPerpTVL = perp.getTVL();
         uint256 currentVaultTVL = vault.getTVL();
         IFeePolicy.SubscriptionState memory postMintState = computeSubscriptionState(
@@ -290,20 +300,27 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computePerpToUnderlyingSwapFeePercs() external override returns (uint256, uint256) {
+    function computePerpToUnderlyingSwapFeePercs(uint256 valueIn) external override returns (uint256, uint256) {
         // When user swaps perps for vault's underlying -> perps are redeemed by the vault
-        IFeePolicy.SubscriptionState memory s = computeSubscriptionState();
+        // Similar to perp burn fees, here too check the "post"-burn subscription state.
+        uint256 currentPerpTVL = perp.getTVL();
+        uint256 currentVaultTVL = vault.getTVL();
+        IFeePolicy.SubscriptionState memory postBurnState = computeSubscriptionState(
+            perp.getDepositBond(),
+            currentPerpTVL - valueIn,
+            currentVaultTVL
+        );
 
         // Split the fees between the perp and vault systems
         uint256 vaultFeePerc = vaultSwapFeePerc[
             keccak256(abi.encodePacked(address(perp), address(vault.underlying())))
         ];
-        // When the system is over-subscribed, we charge no perp burn fee.
-        if (s.normalizedSubscriptionRatio > 1) {
+        // When the system is under-subscribed, we charge no perp burn fee.
+        if (postBurnState.normalizedSubscriptionRatio <= 1) {
             return (0, vaultFeePerc);
         }
 
-        // When the system is under-subscribed, we charge a perp burn fee on top of the vault's swap fee.
+        // When the system is over-subscribed, we charge a perp burn fee on top of the vault's swap fee.
         return (perpBurnFeePerc, vaultFeePerc);
     }
 
@@ -318,7 +335,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         return computeSubscriptionState(perp.getDepositBond(), perp.getTVL(), vault.getTVL());
     }
 
-    /// @notice Computes the detailed subscription state based on the recorded `perpTVL` and `vaultTVL`.
+    /// @notice Computes the detailed subscription state based on the given `perpTVL` and `vaultTVL`.
     /// @return The subscription state.
     function computeSubscriptionState(
         IBondController depositBond,
@@ -328,12 +345,12 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         IFeePolicy.SubscriptionState memory s;
         s.perpTVL = perpTVL;
         s.vaultTVL = vaultTVL;
-        // NOTE: We assume that perp only accepts  assumes the senior one.
+        // NOTE: We assume that perp only accepts the senior one.
         //       We assume that perp's TVL and vault's TVL values have the same base denomination.
         (, uint256 perpTR) = depositBond.tranches(0);
         uint256 equilibriumVaultTVL = s.perpTVL.mulDiv(
-            perpTR,
             TRANCHE_RATIO_GRANULARITY - perpTR,
+            perpTR,
             MathUpgradeable.Rounding.Up
         );
         s.normalizedSubscriptionRatio = s.vaultTVL.mulDiv(ONE, equilibriumVaultTVL).mulDiv(
