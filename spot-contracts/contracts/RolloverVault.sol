@@ -671,7 +671,7 @@ contract RolloverVault is
     ) private {
         // If the vault already has a perp bal, mint only the delta
         uint256 perpBal = perp.balanceOf(address(this));
-        perpAmtToMint = (perpAmtToMint > perpBal) ? perpBal - perpAmtToMint : 0;
+        perpAmtToMint = (perpAmtToMint > perpBal) ? perpAmtToMint - perpBal : 0;
 
         // Skip if mint amount is zero
         if (perpAmtToMint <= 0) {
@@ -685,7 +685,7 @@ contract RolloverVault is
         // NOTE: we use only the most senior tranche to mint perps
         ITranche tranche = bt.tranches[0];
 
-        // Compute the senior tranche amount need to be deposited in order to mint perps.
+        // Compute the senior tranche amount needed to mint perps.
         uint256 seniorAmtToDeposit = perpAmtToMint.mulDiv(
             perpPrice,
             perp_.computePrice(tranche),
@@ -694,7 +694,7 @@ contract RolloverVault is
 
         // Tranche as needed
         uint256 seniorBal = tranche.balanceOf(address(this));
-        uint256 seniorAmtToMint = (seniorAmtToDeposit >= seniorBal) ? (seniorAmtToDeposit - seniorBal) : 0;
+        uint256 seniorAmtToMint = (seniorAmtToDeposit > seniorBal) ? (seniorAmtToDeposit - seniorBal) : 0;
         if (seniorAmtToMint > 0) {
             _tranche(depositBond, bt, depositBond.estimateDepositAmt(seniorAmtToMint, bt.trancheRatios[0]));
         }
