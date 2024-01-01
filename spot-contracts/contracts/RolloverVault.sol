@@ -402,14 +402,8 @@ contract RolloverVault is
 
     /// @notice Allows users to swap their underlying tokens for perps held by the vault
     /// @param underlyingAmtIn The amount of underlying tokens swapped in.
-    /// @param execRecover If set to true, recovers vault assets to maximize liquidity for swapping.
     /// @return The amount of perp tokens swapped out.
-    function swapUnderlyingForPerps(uint256 underlyingAmtIn, bool execRecover)
-        public
-        nonReentrant
-        whenNotPaused
-        returns (uint256)
-    {
+    function swapUnderlyingForPerps(uint256 underlyingAmtIn) external nonReentrant whenNotPaused returns (uint256) {
         // compute equal value perps to swap out
         uint256 perpPrice = perp.getAvgPrice();
         uint256 perpAmtOut = underlyingAmtIn.mulDiv(PERP_UNIT_PRICE, perpPrice);
@@ -433,13 +427,15 @@ contract RolloverVault is
         // transfer underlying in
         underlying.safeTransferFrom(_msgSender(), address(this), underlyingAmtIn);
 
-        if (execRecover) {
-            // redeem tranches to maximize underlying balance for minting
-            recover();
-        }
-
         // tranche and mint perps as needed
-        _trancheAndMintPerps(perp, perpPrice, perpAmtOut + perpAmtToBurn);
+        {
+            uint256 perpBal = perp.balanceOf(address(this));
+            uint256 perpsReq = perpAmtOut + perpAmtToBurn;
+            if (perpBal < perpsReq) {
+                recover();
+                _trancheAndMintPerps(perp, perpPrice, perpsReq - perpBal);
+            }
+        }
 
         // Pay perp's fee share by burning some of the minted perps
         if (perpAmtToBurn > 0) {
@@ -458,14 +454,8 @@ contract RolloverVault is
 
     /// @notice Allows users to swap their perp tokens for underlying tokens held by the vault
     /// @param perpAmtIn The amount of perp tokens swapped in.
-    /// @param execRecover If set to true, recovers vault assets to maximize liquidity for swapping.
     /// @return The amount of underlying tokens swapped out.
-    function swapPerpsForUnderlying(uint256 perpAmtIn, bool execRecover)
-        public
-        nonReentrant
-        whenNotPaused
-        returns (uint256)
-    {
+    function swapPerpsForUnderlying(uint256 perpAmtIn) external nonReentrant whenNotPaused returns (uint256) {
         // Compute equal value underlying tokens to swap out
         uint256 perpPrice = perp.getAvgPrice();
         uint256 underlyingAmtOut = perpAmtIn.mulDiv(perpPrice, PERP_UNIT_PRICE);
@@ -497,9 +487,12 @@ contract RolloverVault is
             IERC20Burnable(address(perp)).burn(perpAmtToBurn);
         }
 
-        if (execRecover) {
-            // redeem perps for tranches and recover underlying
-            recover();
+        // redeem perps and tranches to maximize underlying balance
+        {
+            uint256 underlyingBal = underlying.balanceOf(address(this));
+            if (underlyingBal < underlyingAmtOut) {
+                recover();
+            }
         }
 
         // transfer underlying out
@@ -661,7 +654,7 @@ contract RolloverVault is
         }
     }
 
-    /// @dev Tranches the vault's underlying to mint perps as needed.
+    /// @dev Tranches the vault's underlying to mint perps.
     ///      If the vault already holds required perps, it skips minting new ones.
     ///      Additionally, performs some book-keeping to keep track of the vault's assets.
     function _trancheAndMintPerps(
@@ -669,10 +662,6 @@ contract RolloverVault is
         uint256 perpPrice,
         uint256 perpAmtToMint
     ) private {
-        // If the vault already has a perp bal, mint only the delta
-        uint256 perpBal = perp.balanceOf(address(this));
-        perpAmtToMint = (perpAmtToMint > perpBal) ? perpAmtToMint - perpBal : 0;
-
         // Skip if mint amount is zero
         if (perpAmtToMint <= 0) {
             return;
