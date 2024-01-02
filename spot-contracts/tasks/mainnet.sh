@@ -1,16 +1,16 @@
 ########################################################################
 ## DEPLOYMENT
-# monthly bonds, weekly issue, offset wednesday 2pm PST (DST)
+# monthly bonds, weekly issue, offset Tuesday 10:00 PM EST, ie) 1 hr after rebase
 yarn hardhat --network mainnet deploy:BondIssuer \
-  --bond-factory-address "0x71868D38Ea3b3eB5e4db9a45ee355548B46c82E0" \
+  --bond-factory-address "0x17550f48c61915A67F216a083ced89E04d91fD54" \
   --bond-duration "2419200" \
   --issue-frequency "604800" \
-  --issue-window-offset "597600" \
+  --issue-window-offset "529200" \
   --collateral-token-address "0xD46bA6D942050d489DBd938a2C909A5d5039A161" \
-  --tranche-ratios "[200,800]"
+  --tranche-ratios "[250,750]"
 
 yarn hardhat --network mainnet deploy:PerpetualTranche \
-  --bond-issuer-address "0x2E2E49eDCd5ce08677Bab6d791C863f1361B52F2" \
+  --bond-issuer-address "0x5613Fc36A431c9c2746763B80C1DD89e03593871" \
   --collateral-token-address "0xD46bA6D942050d489DBd938a2C909A5d5039A161" \
   --name "SPOT" \
   --symbol "SPOT" \
@@ -19,7 +19,7 @@ yarn hardhat --network mainnet deploy:PerpetualTranche \
 yarn hardhat --network mainnet deploy:DiscountStrategy:setDiscount \
   --discount-strategy-address "0x2C85Fb101192e3B969c03533a3BE0b3d5f764cef" \
   --collateral-token-address "0xD46bA6D942050d489DBd938a2C909A5d5039A161" \
-  --tranche-ratios "[200,800]" \
+  --tranche-ratios "[250,750]" \
   --tranche-index "0" \
   --tranche-discount "1.0"
 
@@ -86,9 +86,12 @@ yarn hardhat --network mainnet ops:redeemTranches \
 yarn hardhat --network mainnet ops:redeemTranches \
   --bond-issuer-address 0x85d1BA777Eb3FCBb10C82cdf3aAa8231e21B6777
 
+yarn hardhat --network mainnet ops:redeemTranches \
+  --bond-issuer-address 0x5613Fc36A431c9c2746763B80C1DD89e03593871
+
 yarn hardhat --network mainnet ops:preview_tx:redeemTranches \
   --wallet-address [INSERT_WALLET_ADDRESS] \
-  --bond-issuer-address 0x85d1BA777Eb3FCBb10C82cdf3aAa8231e21B6777
+  --bond-issuer-address 0x5613Fc36A431c9c2746763B80C1DD89e03593871
 
 yarn hardhat --network mainnet ops:preview_tx:trancheAndRollover \
   --wallet-address [INSERT_WALLET_ADDRESS] \

@@ -27,7 +27,7 @@ task("deploy:BondIssuer")
     await bondIssuer.deployed();
 
     await (await bondIssuer.init(bondDuration, trancheRatios, issueFrequency, issueWindowOffset)).wait();
-    await (await bondIssuer.issue()).wait();
+    // await (await bondIssuer.issue()).wait();
 
     if (verify) {
       await sleep(15);
