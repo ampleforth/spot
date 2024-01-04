@@ -10,8 +10,8 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
  *          http://thinking.farm/essays/2022-10-05-mechanical-finance/
  *
  *          Users deposit a "underlying" asset and mint "notes" (or vault shares).
- *          The vault "deploys" underlying asset in a rules-based fashion (through a hard-coded strategy)
- *          to "earn" income. It "recovers" deployed assets once the investment matures.
+ *          The vault "deploys" underlying asset in a rules-based fashion (through a hard-coded strategy).
+ *          It "recovers" deployed assets once the investment matures.
  *
  *          The vault operates through two external poke functions which off-chain keepers can execute.
  *              1) `deploy`: When executed, the vault "puts to work" the underlying assets it holds. The vault
@@ -22,7 +22,7 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
  *          The rules of the deployment and recovery are specific to the vault strategy.
  *
  *          At any time the vault will hold multiple ERC20 tokens, together referred to as the vault's "assets".
- *          They can be a combination of the underlying asset, the earned asset and the deployed assets (receipts).
+ *          They can be a combination of the underlying asset and the deployed assets (receipts).
  *
  *          On redemption users burn their "notes" to receive a proportional slice of all the vault's assets.
  *
@@ -79,13 +79,6 @@ interface IVault {
     /// @param i The index of a token.
     /// @return The token address from the deployed asset token list by index.
     function deployedAt(uint256 i) external view returns (IERC20Upgradeable);
-
-    /// @return Total count of earned income tokens held by the vault.
-    function earnedCount() external view returns (uint256);
-
-    /// @param i The index of a token.
-    /// @return The token address from the earned income token list by index.
-    function earnedAt(uint256 i) external view returns (IERC20Upgradeable);
 
     /// @param token The address of a token to check.
     /// @return If the given token is held by the vault.
