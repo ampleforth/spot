@@ -27,7 +27,6 @@ import { BondHelpers } from "./_utils/BondHelpers.sol";
  *              1) deploy: The vault deposits the underlying asset into perp's current deposit bond
  *                 to get tranche tokens in return, it then swaps these fresh tranche tokens for
  *                 older tranche tokens (ones mature or approaching maturity) from perp.
- *                 system through a rollover operation and earns an income in perp tokens.
  *              2) recover: The vault redeems 1) perps for their underlying tranches and the
  *                          2) tranches it holds for the underlying asset.
  *                 NOTE: It performs both mature and immature redemption. Read more: https://bit.ly/3tuN6OC
@@ -88,10 +87,9 @@ contract RolloverVault is
     // ASSETS
     //
     // The vault's assets are represented by a master list of ERC-20 tokens
-    //      => { [underlying] U _deployed U _earned }
+    //      => { [underlying] U _deployed }
     //
-    // In the case of this vault, the "earned" assets are the perp tokens themselves.
-    // The reward (or yield) for performing rollovers is paid out in perp tokens.
+    //
 
     /// @notice The ERC20 token that can be deposited into this vault.
     IERC20Upgradeable public underlying;
@@ -278,9 +276,6 @@ contract RolloverVault is
 
     /// @inheritdoc IVault
     function recover() public override nonReentrant whenNotPaused {
-        // Redeem perp for tranches
-        _redeemPerps(perp);
-
         // Redeem deployed tranches
         uint8 deployedCount_ = uint8(_deployed.length());
         if (deployedCount_ <= 0) {
@@ -330,9 +325,7 @@ contract RolloverVault is
 
     /// @inheritdoc IVault
     function recover(IERC20Upgradeable token) public override nonReentrant whenNotPaused {
-        if (address(token) == address(perp)) {
-            _redeemPerps(perp);
-        } else if (_deployed.contains(address(token))) {
+        if (_deployed.contains(address(token))) {
             _redeemTranche(ITranche(address(token)));
         } else {
             revert UnexpectedAsset();
@@ -368,7 +361,7 @@ contract RolloverVault is
         }
         uint256 totalNotes = totalSupply();
         uint8 deployedCount_ = uint8(_deployed.length());
-        uint8 assetCount = 2 + deployedCount_;
+        uint8 assetCount = 1 + deployedCount_;
 
         // aggregating vault assets to be redeemed
         IVault.TokenAmount[] memory redemptions = new IVault.TokenAmount[](assetCount);
@@ -376,7 +369,6 @@ contract RolloverVault is
         for (uint8 i = 0; i < deployedCount_; i++) {
             redemptions[i + 1].token = IERC20Upgradeable(_deployed.at(i));
         }
-        redemptions[deployedCount_ + 1].token = IERC20Upgradeable(perp);
 
         // burn notes
         _burn(_msgSender(), notes);
@@ -428,14 +420,7 @@ contract RolloverVault is
         underlying.safeTransferFrom(_msgSender(), address(this), underlyingAmtIn);
 
         // tranche and mint perps as needed
-        {
-            uint256 perpBal = perp.balanceOf(address(this));
-            uint256 perpsReq = perpAmtOut + perpAmtToBurn;
-            if (perpBal < perpsReq) {
-                recover();
-                _trancheAndMintPerps(perp, perpPrice, perpsReq - perpBal);
-            }
-        }
+        _trancheAndMintPerps(perp, perpPrice, perpAmtOut + perpAmtToBurn);
 
         // Pay perp's fee share by burning some of the minted perps
         if (perpAmtToBurn > 0) {
@@ -445,9 +430,8 @@ contract RolloverVault is
         // transfer remaining perps out to the user
         perp.transfer(_msgSender(), perpAmtOut);
 
-        // sync balances
+        // sync underlying
         _syncAsset(underlying);
-        _syncAsset(perp);
 
         return perpAmtOut;
     }
@@ -487,27 +471,25 @@ contract RolloverVault is
             IERC20Burnable(address(perp)).burn(perpAmtToBurn);
         }
 
-        // redeem perps and tranches to maximize underlying balance
-        {
-            uint256 underlyingBal = underlying.balanceOf(address(this));
-            if (underlyingBal < underlyingAmtOut) {
-                recover();
-            }
-        }
+        // Redeem perps for tranches and execute recover
+        _redeemPerps(perp);
+        recover();
 
         // transfer underlying out
         underlying.transfer(_msgSender(), underlyingAmtOut);
 
-        // sync balances
-        _syncAsset(perp);
+        // sync underlying
         _syncAsset(underlying);
 
         return underlyingAmtOut;
     }
 
+    //--------------------------------------------------------------------------
+    // External & Public read methods
+
     /// @inheritdoc IVault
     /// @dev The total value is denominated in the underlying asset.
-    function getTVL() public override returns (uint256) {
+    function getTVL() public view override returns (uint256) {
         uint256 totalValue = 0;
 
         // The underlying balance
@@ -522,20 +504,12 @@ contract RolloverVault is
             }
         }
 
-        // The earned asset (perp token) value denominated in the underlying
-        uint256 perpBalance = perp.balanceOf(address(this));
-        if (perpBalance > 0) {
-            // The "earned" asset is assumed to be the perp token.
-            // Perp tokens are assumed to have the same denomination as the underlying
-            totalValue += perpBalance.mulDiv(IPerpetualTranche(address(perp)).getAvgPrice(), PERP_UNIT_PRICE);
-        }
-
         return totalValue;
     }
 
     /// @inheritdoc IVault
     /// @dev The asset value is denominated in the underlying asset.
-    function getVaultAssetValue(IERC20Upgradeable token) external override returns (uint256) {
+    function getVaultAssetValue(IERC20Upgradeable token) external view override returns (uint256) {
         uint256 balance = token.balanceOf(address(this));
 
         // Underlying asset
@@ -546,17 +520,10 @@ contract RolloverVault is
         else if (_deployed.contains(address(token))) {
             return _computeVaultTrancheValue(ITranche(address(token)), balance);
         }
-        // Earned asset
-        else if (address(token) == address(perp)) {
-            return (balance.mulDiv(IPerpetualTranche(address(perp)).getAvgPrice(), PERP_UNIT_PRICE));
-        }
 
         // Not a vault asset, so returning zero
         return 0;
     }
-
-    //--------------------------------------------------------------------------
-    // External & Public read methods
 
     /// @inheritdoc IVault
     function vaultAssetBalance(IERC20Upgradeable token) external view override returns (uint256) {
@@ -574,21 +541,8 @@ contract RolloverVault is
     }
 
     /// @inheritdoc IVault
-    function earnedCount() external pure returns (uint256) {
-        return 1;
-    }
-
-    /// @inheritdoc IVault
-    function earnedAt(uint256 i) external view override returns (IERC20Upgradeable) {
-        if (i > 0) {
-            revert OutOfBounds();
-        }
-        return IERC20Upgradeable(perp);
-    }
-
-    /// @inheritdoc IVault
     function isVaultAsset(IERC20Upgradeable token) public view override returns (bool) {
-        return (token == underlying) || _deployed.contains(address(token)) || (address(token) == address(perp));
+        return (token == underlying) || _deployed.contains(address(token)));
     }
 
     //--------------------------------------------------------------------------
@@ -599,6 +553,7 @@ contract RolloverVault is
     ///      In the case of immature redemption, this method will recover other sibling tranches as well.
     function _redeemTranche(ITranche tranche) private {
         uint256 trancheBalance = tranche.balanceOf(address(this));
+
         // if the vault has no tranche balance,
         // we update our internal book-keeping and return.
         if (trancheBalance <= 0) {
@@ -649,6 +604,7 @@ contract RolloverVault is
             for (uint8 i = 1; i < tranchesRedeemed.length; i++) {
                 _syncAndAddDeployedAsset(tranchesRedeemed[i]);
             }
+
             // sync perp
             _syncAsset(perp_);
         }
@@ -674,6 +630,7 @@ contract RolloverVault is
         // NOTE: we use only the most senior tranche to mint perps
         ITranche tranche = bt.tranches[0];
 
+        // TODO: move preview deposit amount fn into perp
         // Compute the senior tranche amount needed to mint perps.
         uint256 seniorAmtToDeposit = perpAmtToMint.mulDiv(
             perpPrice,
@@ -786,9 +743,8 @@ contract RolloverVault is
             rollover = true;
         }
 
-        // sync underlying and earned (ie perp)
+        // sync underlying
         _syncAsset(underlying);
-        _syncAsset(perp_);
 
         return rollover;
     }
@@ -827,15 +783,6 @@ contract RolloverVault is
     // @dev Transfers a the set fixed fee amount of underlying tokens to the owner.
     function _deductProtocolFee() private {
         underlying.safeTransfer(owner(), feePolicy.computeVaultDeploymentFee());
-    }
-
-    // @dev Enforces vault composition after swap and meld operations.
-    function _enforceVaultComposition(uint256 tvlBefore) private {
-        // Assert that the vault's TVL does not decrease after this operation
-        uint256 tvlAfter = getTVL();
-        if (tvlAfter < tvlBefore) {
-            revert TVLDecreased();
-        }
     }
 
     /// @dev Syncs balance and adds the given asset into the deployed list if the vault has a balance.
@@ -884,6 +831,15 @@ contract RolloverVault is
 
     //--------------------------------------------------------------------------
     // Private view methods
+
+    // @dev Enforces vault composition after swap and meld operations.
+    function _enforceVaultComposition(uint256 tvlBefore) private view {
+        // Assert that the vault's TVL does not decrease after this operation
+        uint256 tvlAfter = getTVL();
+        if (tvlAfter < tvlBefore) {
+            revert TVLDecreased();
+        }
+    }
 
     // @dev Computes the value of the tranche tokens held by the vault,
     //      based on the current CDR. Value is denominated in the underlying collateral.
