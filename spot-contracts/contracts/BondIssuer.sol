@@ -37,11 +37,11 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     ///      Rather these bonds are designed to have a predictable maturity date.
     uint256 public maxMaturityDuration;
 
-    /// @inheritdoc IBondIssuer
+    /// @notice The tranche ratios.
     /// @dev Each tranche ratio is expressed as a fixed point number
     ///      such that the sum of all the tranche ratios is exactly 1000.
     ///      https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol#L20
-    uint256[] public override trancheRatios;
+    uint256[] public trancheRatios;
 
     /// @notice Time to elapse since last issue window start, after which a new bond can be issued.
     ///         AKA, issue frequency.

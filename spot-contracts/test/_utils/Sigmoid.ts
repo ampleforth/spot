@@ -4,7 +4,7 @@ import { Contract, BigNumber } from "ethers";
 
 import { toPercFixedPtAmt } from "../helpers";
 
-describe.only("Sigmoid", function () {
+describe("Sigmoid", function () {
   let math: Contract;
   async function cmp(x, y, lower, upper, growth) {
     expect(

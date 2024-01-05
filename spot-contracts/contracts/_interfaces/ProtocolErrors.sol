@@ -36,3 +36,12 @@ error TVLDecreased();
 
 /// @notice Expected rollover to be acceptable.
 error UnacceptableRollover();
+
+/// @notice Expected to swap non-zero assets.
+error UnacceptableSwap();
+
+/// @notice Expected more assets to be deployed.
+error InsufficientDeployment();
+
+/// @notice Expected the number of vault assets deployed to be under the limit.
+error DeployedCountOverLimit();

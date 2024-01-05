@@ -74,6 +74,31 @@ library BondHelpers {
         return (r, TRANCHE_RATIO_GRANULARITY - r);
     }
 
+    /// @notice The function estimates the amount of collateral which needs to be tranched,
+    ///         to mint the given number of tranche tokens with the provided tranche ratio.
+    /// @dev This function is guaranteed to over-estimate, ie) when you tranche the estimated amount
+    ///      of collateral you might end up minting slightly more than `trancheAmtToMint`.
+    ///      It is the inverse of the `previewDeposit` function.
+    /// @param b The address of the bond contract.
+    /// @param trancheAmtToMint The amount of tranche tokens to mint.
+    /// @param mintingTrancheRatio The tranche ratio of the minting tranche.
+    /// @return The number of collateral tokens to deposit.
+    function estimateDepositAmt(
+        IBondController b,
+        uint256 trancheAmtToMint,
+        uint256 mintingTrancheRatio
+    ) internal view returns (uint256) {
+        return
+            trancheAmtToMint
+                .mulDiv(
+                    IERC20Upgradeable(b.collateralToken()).balanceOf(address(b)),
+                    b.totalDebt(),
+                    MathUpgradeable.Rounding.Up
+                )
+                .mulDiv(BPS, BPS - b.feeBps(), MathUpgradeable.Rounding.Up)
+                .mulDiv(TRANCHE_RATIO_GRANULARITY, mintingTrancheRatio, MathUpgradeable.Rounding.Up);
+    }
+
     /// @notice Helper function to estimate the amount of tranches minted when a given amount of collateral
     ///         is deposited into the bond.
     /// @dev This function is used off-chain services (using callStatic) to preview tranches minted after
