@@ -220,19 +220,19 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     // Public methods
 
     /// @inheritdoc IFeePolicy
-    function perpMintFeePerc(uint256 sr) external override returns (uint256) {
+    function perpMintFeePerc(uint256 sr) external view override returns (uint256) {
         // When the vault is under-subscribed there exists an active mint fee
         return (sr <= ONE) ? _perpMintFeePerc : 0;
     }
 
     /// @inheritdoc IFeePolicy
-    function perpBurnFeePerc(uint256 sr) external override returns (uint256) {
+    function perpBurnFeePerc(uint256 sr) external view override returns (uint256) {
         // When the system is over-subscribed there exists an active redemption fee
         return (sr > ONE) ? _perpBurnFeePerc : 0;
     }
 
     /// @inheritdoc IFeePolicy
-    function perpRolloverFeePerc(uint256 sr) external override returns (int256) {
+    function perpRolloverFeePerc(uint256 sr) external view override returns (int256) {
         return
             Sigmoid.compute(
                 sr.toInt256(),
@@ -259,7 +259,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function underlyingToPerpSwapFeePercs(uint256 sr) external override returns (uint256, uint256) {
+    function underlyingToPerpSwapFeePercs(uint256 sr) external view override returns (uint256, uint256) {
         // If the system is under-subscribed, swapping is NOT allowed.
         if (sr <= ONE) {
             return (0, ONE);
@@ -270,7 +270,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function perpToUnderlyingSwapFeePercs(uint256 sr) external override returns (uint256, uint256) {
+    function perpToUnderlyingSwapFeePercs(uint256 sr) external view override returns (uint256, uint256) {
         // When the system is under-subscribed, perp share of fees is zero.
         if (sr <= ONE) {
             return (0, _vaultPerpToUnderlyingSwapFeePerc);

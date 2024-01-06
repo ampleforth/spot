@@ -54,7 +54,7 @@ contract RouterV2 {
 
         BondTranches memory bt;
         uint256[] memory trancheAmts;
-        (bt, trancheAmts, ) = bond.previewDeposit(collateralAmount);
+        (bt, trancheAmts) = bond.previewDeposit(collateralAmount);
 
         return (bond, bt.tranches, trancheAmts);
     }
@@ -100,66 +100,6 @@ contract RouterV2 {
 
         // transfers perp tokens back
         perp.safeTransfer(msg.sender, perp.balanceOf(address(this)));
-    }
-
-    struct RolloverBatch {
-        ITranche trancheIn;
-        IERC20Upgradeable tokenOut;
-        uint256 trancheInAmt;
-    }
-
-    /// @notice Tranches collateral and performs a batch rollover.
-    /// @param perp Address of the perp contract.
-    /// @param bond Address of the deposit bond.
-    /// @param collateralAmount The amount of collateral the user wants to tranche.
-    /// @param rollovers List of batch rollover operations pre-computed off-chain.
-    function trancheAndRollover(
-        IPerpetualTranche perp,
-        IBondController bond,
-        uint256 collateralAmount,
-        RolloverBatch[] calldata rollovers
-    ) external afterPerpStateUpdate(perp) {
-        BondTranches memory bt = bond.getTranches();
-        IERC20Upgradeable collateralToken = IERC20Upgradeable(bond.collateralToken());
-
-        // transfers collateral & fees to router
-        collateralToken.safeTransferFrom(msg.sender, address(this), collateralAmount);
-
-        // approves collateral to be tranched
-        _checkAndApproveMax(collateralToken, address(bond), collateralAmount);
-
-        // tranches collateral
-        bond.deposit(collateralAmount);
-
-        for (uint256 i = 0; i < rollovers.length; i++) {
-            // approve trancheIn to be spent by perp
-            _checkAndApproveMax(rollovers[i].trancheIn, address(perp), rollovers[i].trancheInAmt);
-
-            // perform rollover
-            perp.rollover(rollovers[i].trancheIn, rollovers[i].tokenOut, rollovers[i].trancheInAmt);
-        }
-
-        for (uint256 i = 0; i < rollovers.length; i++) {
-            // transfer remaining tokenOut tokens back
-            uint256 tokenOutBalance = rollovers[i].tokenOut.balanceOf(address(this));
-            if (tokenOutBalance > 0) {
-                rollovers[i].tokenOut.safeTransfer(msg.sender, tokenOutBalance);
-            }
-        }
-
-        // transfers unused tranches back
-        for (uint8 i = 0; i < bt.tranches.length; i++) {
-            uint256 trancheBalance = bt.tranches[i].balanceOf(address(this));
-            if (trancheBalance > 0) {
-                bt.tranches[i].safeTransfer(msg.sender, trancheBalance);
-            }
-        }
-
-        // transfers any remaining collateral tokens back
-        uint256 collateralBalance = collateralToken.balanceOf(address(this));
-        if (collateralBalance > 0) {
-            collateralToken.safeTransfer(msg.sender, collateralBalance);
-        }
     }
 
     /// @dev Checks if the spender has sufficient allowance. If not, approves the maximum possible amount.
