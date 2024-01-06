@@ -22,7 +22,6 @@ library BondHelpers {
     // Replicating value used here:
     // https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
     uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
-    uint256 private constant BPS = 10_000;
 
     /// @notice Given a bond, calculates the time remaining to maturity.
     /// @param b The address of the bond contract.
@@ -82,52 +81,22 @@ library BondHelpers {
         return (r, TRANCHE_RATIO_GRANULARITY - r);
     }
 
-    /// @notice The function estimates the amount of collateral which needs to be tranched,
-    ///         to mint the given number of tranche tokens with the provided tranche ratio.
-    /// @dev This function is guaranteed to over-estimate, ie) when you tranche the estimated amount
-    ///      of collateral you might end up minting slightly more than `trancheAmtToMint`.
-    ///      It is the inverse of the `previewDeposit` function.
-    /// @param b The address of the bond contract.
-    /// @param trancheAmtToMint The amount of tranche tokens to mint.
-    /// @param mintingTrancheRatio The tranche ratio of the minting tranche.
-    /// @return The number of collateral tokens to deposit.
-    function estimateDepositAmt(
-        IBondController b,
-        uint256 trancheAmtToMint,
-        uint256 mintingTrancheRatio
-    ) internal view returns (uint256) {
-        return
-            trancheAmtToMint
-                .mulDiv(
-                    IERC20Upgradeable(b.collateralToken()).balanceOf(address(b)),
-                    b.totalDebt(),
-                    MathUpgradeable.Rounding.Up
-                )
-                .mulDiv(BPS, BPS - b.feeBps(), MathUpgradeable.Rounding.Up)
-                .mulDiv(TRANCHE_RATIO_GRANULARITY, mintingTrancheRatio, MathUpgradeable.Rounding.Up);
-    }
-
     /// @notice Helper function to estimate the amount of tranches minted when a given amount of collateral
     ///         is deposited into the bond.
-    /// @dev This function is used off-chain services (using callStatic) to preview tranches minted after
+    /// @dev This function is used off-chain services (using callStatic) to preview tranches minted.
+    ///      This function assumes that the no fees are withheld for tranching.
     /// @param b The address of the bond contract.
-    /// @return The tranche data, an array of tranche amounts and fees.
+    /// @return The tranche data, an array of tranche amounts.
     function previewDeposit(IBondController b, uint256 collateralAmount)
         internal
         view
-        returns (
-            BondTranches memory,
-            uint256[] memory,
-            uint256[] memory
-        )
+        returns (BondTranches memory, uint256[] memory)
     {
         BondTranches memory bt = getTranches(b);
         uint256[] memory trancheAmts = new uint256[](bt.tranches.length);
-        uint256[] memory fees = new uint256[](bt.tranches.length);
 
         uint256 totalDebt = b.totalDebt();
         uint256 collateralBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(address(b));
-        uint256 feeBps = b.feeBps();
 
         for (uint8 i = 0; i < bt.tranches.length; i++) {
             trancheAmts[i] = collateralAmount.mulDiv(bt.trancheRatios[i], TRANCHE_RATIO_GRANULARITY);
@@ -136,14 +105,6 @@ library BondHelpers {
             }
         }
 
-        if (feeBps > 0) {
-            for (uint8 i = 0; i < bt.tranches.length; i++) {
-                fees[i] = trancheAmts[i].mulDiv(feeBps, BPS);
-                trancheAmts[i] -= fees[i];
-            }
-        }
-
-        return (bt, trancheAmts, fees);
-    }
+        return (bt, trancheAmts);
     }
 }
