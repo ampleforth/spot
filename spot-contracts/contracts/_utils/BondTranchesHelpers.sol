@@ -27,19 +27,6 @@ library BondTranchesHelpers {
     // https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
     uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
 
-    /// @notice Iterates through the tranche data to find the seniority index of the given tranche.
-    /// @param bt The tranche data object.
-    /// @param t The address of the tranche to check.
-    /// @return the index of the tranche in the tranches array.
-    function indexOf(BondTranches memory bt, ITranche t) internal pure returns (uint8) {
-        for (uint8 i = 0; i < bt.tranches.length; i++) {
-            if (bt.tranches[i] == t) {
-                return i;
-            }
-        }
-        revert UnacceptableTranche(t);
-    }
-
     /// @notice For a given bond's tranche data and user address, computes the maximum number of each of the bond's tranches
     ///         the user is able to redeem before the bond's maturity. These tranche amounts necessarily match the bond's tranche ratios.
     /// @param bt The bond's tranche data.
