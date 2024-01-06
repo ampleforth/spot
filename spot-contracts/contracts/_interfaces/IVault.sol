@@ -60,11 +60,11 @@ interface IVault {
     function redeem(uint256 notes) external returns (TokenAmount[] memory);
 
     /// @return The total value of assets currently held by the vault, denominated in a standard unit of account.
-    function getTVL() external returns (uint256);
+    function getTVL() external view returns (uint256);
 
     /// @param token The address of the asset ERC-20 token held by the vault.
     /// @return The vault's asset token value, denominated in a standard unit of account.
-    function getVaultAssetValue(IERC20Upgradeable token) external returns (uint256);
+    function getVaultAssetValue(IERC20Upgradeable token) external view returns (uint256);
 
     /// @notice The ERC20 token that can be deposited into this vault.
     function underlying() external view returns (IERC20Upgradeable);
