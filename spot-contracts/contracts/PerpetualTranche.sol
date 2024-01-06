@@ -946,6 +946,7 @@ contract PerpetualTranche is
     ///      * Expects the bond to to have the same collateral token as perp.
     ///      * Expects the bond's maturity to be within expected bounds.
     ///      * Expects the bond to have only two tranches.
+    ///      * Expects the bond controller to not withhold any fees.
     /// @return True if the bond is "acceptable".
     function _isAcceptableBond(IBondController bond) private view returns (bool) {
         // NOTE: `secondsToMaturity` will be 0 if the bond is past maturity.
@@ -953,7 +954,8 @@ contract PerpetualTranche is
         return (address(_reserveAt(0)) == bond.collateralToken() &&
             secondsToMaturity >= minTrancheMaturitySec &&
             secondsToMaturity < maxTrancheMaturitySec &&
-            bond.trancheCount() == 2);
+            bond.trancheCount() == 2 &&
+            bond.feeBps() == 0);
     }
 
     /// @dev Checks if the given tranche can be accepted into the reserve.
