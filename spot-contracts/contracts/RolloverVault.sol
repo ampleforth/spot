@@ -502,7 +502,7 @@ contract RolloverVault is
     /// @inheritdoc IVault
     function computeMintAmt(uint256 underlyingAmtIn) public returns (uint256) {
         //-----------------------------------------------------------------------------
-        uint256 feePerc = feePolicy.vaultMintFeePerc();
+        uint256 feePerc = feePolicy.computeVaultMintFeePerc();
         //-----------------------------------------------------------------------------
 
         // Comunte mint amt
@@ -520,7 +520,7 @@ contract RolloverVault is
     /// @inheritdoc IVault
     function computeRedemptionAmts(uint256 perpAmtBurnt) public returns (IVault.TokenAmount[] memory) {
         //-----------------------------------------------------------------------------
-        uint256 feePerc = feePolicy.vaultBurnFeePerc();
+        uint256 feePerc = feePolicy.computeVaultBurnFeePerc();
         //-----------------------------------------------------------------------------
 
         uint256 totalSupply_ = totalSupply();
@@ -573,8 +573,8 @@ contract RolloverVault is
         postSwapState.vaultTVL = s.vaultTVL;
         postSwapState.perpTR = s.perpTR;
         postSwapState.vaultTR = s.vaultTR;
-        (uint256 swapFeePerpSharePerc, uint256 swapFeeVaultSharePerc) = feePolicy.underlyingToPerpSwapFeePercs(
-            feePolicy.computeSubscriptionRatio(postSwapState)
+        (uint256 swapFeePerpSharePerc, uint256 swapFeeVaultSharePerc) = feePolicy.computeUnderlyingToPerpSwapFeePercs(
+            feePolicy.computeDeviationRatio(postSwapState)
         );
         //-----------------------------------------------------------------------------
 
@@ -612,8 +612,8 @@ contract RolloverVault is
         postSwapState.vaultTVL = s.vaultTVL;
         postSwapState.perpTR = s.perpTR;
         postSwapState.vaultTR = s.vaultTR;
-        (uint256 swapFeePerpSharePerc, uint256 swapFeeVaultSharePerc) = feePolicy.perpToUnderlyingSwapFeePercs(
-            feePolicy.computeSubscriptionRatio(postSwapState)
+        (uint256 swapFeePerpSharePerc, uint256 swapFeeVaultSharePerc) = feePolicy.computePerpToUnderlyingSwapFeePercs(
+            feePolicy.computeDeviationRatio(postSwapState)
         );
         //-----------------------------------------------------------------------------
 
@@ -885,7 +885,7 @@ contract RolloverVault is
 
     // @dev Transfers a the set fixed fee amount of underlying tokens to the owner.
     function _deductProtocolFee() private {
-        underlying.safeTransfer(owner(), feePolicy.vaultDeploymentFee());
+        underlying.safeTransfer(owner(), feePolicy.computeVaultDeploymentFee());
     }
 
     /// @dev Syncs balance and adds the given asset into the deployed list if the vault has a balance.

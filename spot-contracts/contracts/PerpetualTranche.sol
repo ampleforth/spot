@@ -711,7 +711,7 @@ contract PerpetualTranche is
             // We check the post-mint subscription state to account for fees accordingly.
             postMintState = _querySubscriptionState();
             postMintState.perpTVL += valueIn;
-            feePerc = feePolicy.perpMintFeePerc(feePolicy.computeSubscriptionRatio(postMintState));
+            feePerc = feePolicy.computePerpMintFeePerc(feePolicy.computeDeviationRatio(postMintState));
         }
         //-----------------------------------------------------------------------------
 
@@ -749,7 +749,7 @@ contract PerpetualTranche is
             // the fraction of supply remaining.
             IFeePolicy.SubscriptionParams memory postBurnState = _querySubscriptionState();
             postBurnState.perpTVL = postBurnState.perpTVL.mulDiv(perpSupply - perpAmtBurnt, perpSupply);
-            feePerc = feePolicy.perpBurnFeePerc(feePolicy.computeSubscriptionRatio(postBurnState));
+            feePerc = feePolicy.computePerpBurnFeePerc(feePolicy.computeDeviationRatio(postBurnState));
         }
         //-----------------------------------------------------------------------------
 
@@ -786,7 +786,9 @@ contract PerpetualTranche is
         // The rollover fees are settled by, adjusting the exchange rate
         // between `trancheInAmt` and `tokenOutAmt`.
         //
-        int256 feePerc = feePolicy.perpRolloverFeePerc(feePolicy.computeSubscriptionRatio(_querySubscriptionState()));
+        int256 feePerc = feePolicy.computePerpRolloverFeePerc(
+            feePolicy.computeDeviationRatio(_querySubscriptionState())
+        );
         //-----------------------------------------------------------------------------
 
         IPerpetualTranche.RolloverData memory r;

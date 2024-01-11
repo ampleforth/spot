@@ -22,32 +22,35 @@ import { UnacceptableSwap } from "./_interfaces/ProtocolErrors.sol";
  *          the demand for holding vault tokens; such that the total collateral in the vault
  *          supports rolling over all mature collateral backing perps.
  *
- *          Fees are computed based on the system's subscription ratio which is calculated.
- *              - `subscriptionRatio`  = ((vaultTVL * perpTR) / (perpTVL * vaultTR)) / targetSubscriptionRatio
+ *          Fees are computed based on the deviation between the system's current subscription ratio
+ *          and the target subscription ratio.
+ *              - `subscriptionRatio`   = (vaultTVL * perpTR) / (perpTVL * vaultTR)
+ *              - `deviationRatio` (dr) = subscriptionRatio / targetSubscriptionRatio
  *
- *          When the system is "under-subscribed" (sr <= 1):
+ *          When the system is "under-subscribed" (dr <= 1):
  *              - Rollover fees flow from perp holders to vault note holders.
  *              - Fees are charged for minting new perps.
  *              - No fees are charged for redeeming perps.
  *
- *          When the system is "over-subscribed" (sr > 1):
+ *          When the system is "over-subscribed" (dr > 1):
  *              - Rollover fees flow from vault note holders to perp holders.
  *              - No fees are charged for minting new perps.
  *              - Fees are charged for redeeming perps.
  *
- *          Regardless of the subscription ratio, the system charges a fixed percentage fee
+ *          Regardless of the `deviationRatio`, the system charges a fixed percentage fee
  *          for minting and redeeming vault notes.
  *
- *          The system favors an elastic perp supply and an inelastic vault note supply.
  *
- *          The rollover fees are signed and can flow in either direction based on the subscription ratio.
+ *          The rollover fees are signed and can flow in either direction based on the `deviationRatio`.
  *          The fee is a percentage is computed through a sigmoid function.
  *          The slope and asymptotes are set by the owner.
+ *
  *          CRITICAL: The rollover fee percentage is NOT annualized, the fee percentage is applied per rollover.
  *          The number of rollovers per year changes based on the duration of perp's minting bond.
  *
- *          We consider a `normalizedSubscriptionRatio` of greater than 1.0 healthy.
- *          Minting additional perps or redeeming vault notes reduces the subscription ratio.
+ *          We consider a `deviationRatio` of greater than 1.0 healthy (or "over-subscribed").
+ *          In general, the system favors an elastic perp supply and an inelastic vault note supply.
+ *
  *
  */
 contract FeePolicy is IFeePolicy, OwnableUpgradeable {
@@ -67,7 +70,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     //-----------------------------------------------------------------------------
     /// @notice The target subscription ratio i.e) the normalization factor.
-    /// @dev The ratio above which the system is considered "over-subscribed".
+    /// @dev The ratio under which the system is considered "under-subscribed".
     ///      Adds a safety buffer to ensure that rollovers are better sustained.
     uint256 public targetSubscriptionRatio;
 
@@ -77,10 +80,10 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     // Perp fee parameters
 
     /// @notice The percentage fee charged on minting perp tokens.
-    uint256 private _perpMintFeePerc;
+    uint256 public perpMintFeePerc;
 
     /// @notice The percentage fee charged on burning perp tokens.
-    uint256 private _perpBurnFeePerc;
+    uint256 public perpBurnFeePerc;
 
     struct RolloverFeeSigmoidParams {
         /// @notice Lower asymptote
@@ -92,7 +95,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @notice Parameters which control the asymptotes and the slope of the perp token's rollover fee.
-    RolloverFeeSigmoidParams private _perpRolloverFee;
+    RolloverFeeSigmoidParams public perpRolloverFee;
 
     //-----------------------------------------------------------------------------
 
@@ -100,21 +103,21 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     // Vault fee parameters
 
     /// @notice The percentage fee charged on minting vault notes.
-    uint256 private _vaultMintFeePerc;
+    uint256 public vaultMintFeePerc;
 
     /// @notice The percentage fee charged on burning vault notes.
-    uint256 private _vaultBurnFeePerc;
+    uint256 public vaultBurnFeePerc;
 
-    /// @notice The percentage fee charged by the vault to swap underlying tokes for perp tokens.
-    uint256 private _vaultUnderlyingToPerpSwapFeePerc;
+    /// @notice The percentage fee charged by the vault to swap underlying tokens for perp tokens.
+    uint256 public vaultUnderlyingToPerpSwapFeePerc;
 
-    /// @notice The percentage fee charged by the vault to swap perp tokens for underlying tokes.
-    uint256 private _vaultPerpToUnderlyingSwapFeePerc;
+    /// @notice The percentage fee charged by the vault to swap perp tokens for underlying tokens.
+    uint256 public vaultPerpToUnderlyingSwapFeePerc;
 
     /// @notice The fixed amount vault fee charged during each deployment.
     /// @dev Denominated in the underlying collateral asset and
     ///      Paid by the vault note holders to the system owner.
-    uint256 private _vaultDeploymentFee;
+    uint256 public vaultDeploymentFee;
 
     //-----------------------------------------------------------------------------
 
@@ -123,19 +126,19 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         __Ownable_init();
 
         // initializing mint/burn fees to zero
-        _perpMintFeePerc = 0;
-        _perpBurnFeePerc = 0;
-        _vaultMintFeePerc = 0;
-        _vaultBurnFeePerc = 0;
+        perpMintFeePerc = 0;
+        perpBurnFeePerc = 0;
+        vaultMintFeePerc = 0;
+        vaultBurnFeePerc = 0;
 
         // initializing swap fees to 100%, to disable swapping initially
-        _vaultUnderlyingToPerpSwapFeePerc = ONE;
-        _vaultPerpToUnderlyingSwapFeePerc = ONE;
+        vaultUnderlyingToPerpSwapFeePerc = ONE;
+        vaultPerpToUnderlyingSwapFeePerc = ONE;
 
         // NOTE: With the current bond length of 28 days, rollover rate is annualized by dividing by: 365/28 ~= 13
-        _perpRolloverFee.lower = -int256(ONE) / (30 * 13); // -0.033/13 = -0.00253 (3.3% annualized)
-        _perpRolloverFee.upper = int256(ONE) / (10 * 13); // 0.1/13 = 0.00769 (10% annualized)
-        _perpRolloverFee.growth = 5 * int256(ONE); // 5.0
+        perpRolloverFee.lower = -int256(ONE) / (30 * 13); // -0.033/13 = -0.00253 (3.3% annualized)
+        perpRolloverFee.upper = int256(ONE) / (10 * 13); // 0.1/13 = 0.00769 (10% annualized)
+        perpRolloverFee.growth = 5 * int256(ONE); // 5.0
 
         targetSubscriptionRatio = (ONE * 133) / 100; // 1.33
     }
@@ -156,7 +159,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     ///        as a fixed point number with {DECIMALS} places.
     function updatePerpMintFees(uint256 perpMintFeePerc_) external onlyOwner {
         require(perpMintFeePerc_ <= ONE, "FeeStrategy: perc too high");
-        _perpMintFeePerc = perpMintFeePerc_;
+        perpMintFeePerc = perpMintFeePerc_;
     }
 
     /// @notice Updates the perp burn fee parameters.
@@ -164,7 +167,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     ///        as a fixed point number with {DECIMALS} places.
     function updatePerpBurnFees(uint256 perpBurnFeePerc_) external onlyOwner {
         require(perpBurnFeePerc_ <= ONE, "FeeStrategy: perc too high");
-        _perpMintFeePerc = perpBurnFeePerc_;
+        perpBurnFeePerc = perpBurnFeePerc_;
     }
 
     /// @notice Update the parameters determining the slope and asymptotes of the sigmoid fee curve.
@@ -173,9 +176,9 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         require(p.lower >= -int256(SIGMOID_BOUND), "FeeStrategy: sigmoid lower bound too low");
         require(p.upper <= int256(SIGMOID_BOUND), "FeeStrategy: sigmoid upper bound too high");
         require(p.lower <= p.upper, "FeeStrategy: sigmoid asymptotes invalid");
-        _perpRolloverFee.lower = p.lower;
-        _perpRolloverFee.upper = p.upper;
-        _perpRolloverFee.growth = p.growth;
+        perpRolloverFee.lower = p.lower;
+        perpRolloverFee.upper = p.upper;
+        perpRolloverFee.growth = p.growth;
     }
 
     /// @notice Updates the vault mint fee parameters.
@@ -183,7 +186,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     ///        as a fixed point number with {DECIMALS} places.
     function updateVaultMintFees(uint256 vaultMintFeePerc_) external onlyOwner {
         require(vaultMintFeePerc_ <= ONE, "FeeStrategy: perc too high");
-        _vaultMintFeePerc = vaultMintFeePerc_;
+        vaultMintFeePerc = vaultMintFeePerc_;
     }
 
     /// @notice Updates the vault burn fee parameters.
@@ -191,92 +194,90 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     ///        as a fixed point number with {DECIMALS} places.
     function updateVaultBurnFees(uint256 vaultBurnFeePerc_) external onlyOwner {
         require(vaultBurnFeePerc_ <= ONE, "FeeStrategy: perc too high");
-        _vaultBurnFeePerc = vaultBurnFeePerc_;
+        vaultBurnFeePerc = vaultBurnFeePerc_;
     }
 
     /// @notice Updates the vault's deployment fee parameters.
     /// @param vaultDeploymentFee_ The new deployment fee denominated in the underlying tokens.
     function updateVaultDeploymentFees(uint256 vaultDeploymentFee_) external onlyOwner {
-        _vaultDeploymentFee = vaultDeploymentFee_;
+        vaultDeploymentFee = vaultDeploymentFee_;
     }
 
     /// @notice Updates the vault's share of the underlying to perp swap fee.
-    /// @dev Setting fees to 100% or 1.0 will effectively pause swapping.
     /// @param feePerc The new fee percentage.
     function updateVaultUnderlyingToPerpSwapFeePerc(uint256 feePerc) external onlyOwner {
-        require(feePerc > ONE, "FeeStrategy: perc too high");
-        _vaultUnderlyingToPerpSwapFeePerc = feePerc;
+        require(feePerc <= ONE, "FeeStrategy: perc too high");
+        vaultUnderlyingToPerpSwapFeePerc = feePerc;
     }
 
     /// @notice Updates the vault's share of the perp to underlying swap fee.
-    /// @dev Setting fees to 100% or 1.0 will effectively pause swapping.
     /// @param feePerc The new fee percentage.
     function updateVaultPerpToUnderlyingSwapFeePerc(uint256 feePerc) external onlyOwner {
-        require(feePerc > ONE, "FeeStrategy: perc too high");
-        _vaultPerpToUnderlyingSwapFeePerc = feePerc;
+        require(feePerc <= ONE, "FeeStrategy: perc too high");
+        vaultPerpToUnderlyingSwapFeePerc = feePerc;
     }
 
     //-----------------------------------------------------------------------------
     // Public methods
 
     /// @inheritdoc IFeePolicy
-    function perpMintFeePerc(uint256 sr) external view override returns (uint256) {
+    function computePerpMintFeePerc(uint256 dr) external view override returns (uint256) {
         // When the vault is under-subscribed there exists an active mint fee
-        return (sr <= ONE) ? _perpMintFeePerc : 0;
+        return (dr <= ONE) ? perpMintFeePerc : 0;
     }
 
     /// @inheritdoc IFeePolicy
-    function perpBurnFeePerc(uint256 sr) external view override returns (uint256) {
+    function computePerpBurnFeePerc(uint256 dr) external view override returns (uint256) {
         // When the system is over-subscribed there exists an active redemption fee
-        return (sr > ONE) ? _perpBurnFeePerc : 0;
+        return (dr > ONE) ? perpBurnFeePerc : 0;
     }
 
     /// @inheritdoc IFeePolicy
-    function perpRolloverFeePerc(uint256 sr) external view override returns (int256) {
+    function computePerpRolloverFeePerc(uint256 dr) external view override returns (int256) {
         return
             Sigmoid.compute(
-                sr.toInt256(),
-                _perpRolloverFee.lower,
-                _perpRolloverFee.upper,
-                _perpRolloverFee.growth,
+                dr.toInt256(),
+                perpRolloverFee.lower,
+                perpRolloverFee.upper,
+                perpRolloverFee.growth,
                 ONE.toInt256()
             );
     }
 
     /// @inheritdoc IFeePolicy
-    function vaultMintFeePerc() external view override returns (uint256) {
-        return _vaultMintFeePerc;
+    function computeVaultMintFeePerc() external view override returns (uint256) {
+        return vaultMintFeePerc;
     }
 
     /// @inheritdoc IFeePolicy
-    function vaultBurnFeePerc() external view override returns (uint256) {
-        return _vaultBurnFeePerc;
+    function computeVaultBurnFeePerc() external view override returns (uint256) {
+        return vaultBurnFeePerc;
     }
 
     /// @inheritdoc IFeePolicy
-    function vaultDeploymentFee() external view override returns (uint256) {
-        return _vaultDeploymentFee;
+    function computeVaultDeploymentFee() external view override returns (uint256) {
+        return vaultDeploymentFee;
     }
 
     /// @inheritdoc IFeePolicy
-    function underlyingToPerpSwapFeePercs(uint256 sr) external view override returns (uint256, uint256) {
+    function computeUnderlyingToPerpSwapFeePercs(uint256 dr) external view override returns (uint256, uint256) {
         // If the system is under-subscribed, swapping is NOT allowed.
-        if (sr <= ONE) {
+        if (dr <= ONE) {
             return (0, ONE);
         }
 
         // When the system is over-subscribed, perp share of fees is zero.
-        return (0, _vaultUnderlyingToPerpSwapFeePerc);
+        return (0, vaultUnderlyingToPerpSwapFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
-    function perpToUnderlyingSwapFeePercs(uint256 sr) external view override returns (uint256, uint256) {
+    function computePerpToUnderlyingSwapFeePercs(uint256 dr) external view override returns (uint256, uint256) {
         // When the system is under-subscribed, perp share of fees is zero.
-        if (sr <= ONE) {
-            return (0, _vaultPerpToUnderlyingSwapFeePerc);
+        if (dr <= ONE) {
+            return (0, vaultPerpToUnderlyingSwapFeePerc);
         }
 
-        return (_perpBurnFeePerc, _vaultPerpToUnderlyingSwapFeePerc);
+        return (perpBurnFeePerc, vaultPerpToUnderlyingSwapFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
@@ -285,12 +286,13 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computeSubscriptionRatio(IFeePolicy.SubscriptionParams memory s) public view returns (uint256) {
+    function computeDeviationRatio(IFeePolicy.SubscriptionParams memory s) external view returns (uint256) {
         // NOTE: We assume that perp's TVL and vault's TVL values have the same base denomination.
         return
-            s.vaultTVL.mulDiv(ONE, targetSubscriptionRatio).mulDiv(
+            s.vaultTVL.mulDiv(s.perpTR, (s.perpTVL * s.vaultTR), MathUpgradeable.Rounding.Up).mulDiv(
                 ONE,
-                s.perpTVL.mulDiv(s.vaultTR, s.perpTR, MathUpgradeable.Rounding.Up)
+                targetSubscriptionRatio,
+                MathUpgradeable.Rounding.Up
             );
     }
 }
