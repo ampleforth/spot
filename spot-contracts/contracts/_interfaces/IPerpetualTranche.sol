@@ -82,7 +82,7 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @notice Returns the ratio of tranches held in perp and the vault.
     /// @return seniorRatio The tranche ratio of the senior most tranche which is accepted by perp.
     /// @return remRatio The remaining tranche ratio which is held by the rotaion vault.
-    function getPerpVaultRatio() external returns (uint256, uint256);
+    function getPerpVaultRatios() external returns (uint256, uint256);
 
     /// @notice Checks if the given `trancheIn` can be rolled out for `tokenOut`.
     /// @param trancheIn The tranche token deposited.

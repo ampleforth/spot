@@ -508,8 +508,8 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    function getPerpVaultRatio() external override afterStateUpdate returns (uint256, uint256) {
-        return _depositBond.getSeniorJuniorRatio();
+    function getPerpVaultRatios() external override afterStateUpdate returns (uint256, uint256) {
+        return _depositBond.getSeniorJuniorRatios();
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -705,13 +705,16 @@ contract PerpetualTranche is
         //-----------------------------------------------------------------------------
         // We charge no mint fee when interacting with other callers within the system.
         uint256 feePerc = 0;
-        IFeePolicy.SubscriptionParams memory postMintState;
+        uint256 perpTVL = 0;
         if (!_isProtocolCaller()) {
+            IFeePolicy.SubscriptionParams memory s = _querySubscriptionState();
+            perpTVL = s.perpTVL;
             // Minting more perps reduces the subscription ratio,
             // We check the post-mint subscription state to account for fees accordingly.
-            postMintState = _querySubscriptionState();
-            postMintState.perpTVL += valueIn;
-            feePerc = feePolicy.computePerpMintFeePerc(feePolicy.computeDeviationRatio(postMintState));
+            s.perpTVL += valueIn;
+            feePerc = feePolicy.computePerpMintFeePerc(feePolicy.computeDeviationRatio(s));
+        } else {
+            perpTVL = _reserveValue();
         }
         //-----------------------------------------------------------------------------
 
@@ -719,8 +722,6 @@ contract PerpetualTranche is
         uint256 totalSupply_ = totalSupply();
         uint256 perpAmtMint = valueIn;
         if (totalSupply_ > 0) {
-            // In case we have the perp's reserve value in memory we use that, If not we compute.
-            uint256 perpTVL = !_isProtocolCaller() ? (postMintState.perpTVL - valueIn) : _reserveValue();
             perpAmtMint = perpAmtMint.mulDiv(totalSupply_, perpTVL);
         }
 
@@ -742,14 +743,14 @@ contract PerpetualTranche is
         uint256 feePerc = 0;
 
         if (!_isProtocolCaller()) {
+            IFeePolicy.SubscriptionParams memory s = _querySubscriptionState();
+
             // Burning perps increases the subscription ratio,
             // We check the post-burn subscription state to account for fees accordingly.
-
             // We calculate the perp post-burn TVL, by multiplying the current TVL by
             // the fraction of supply remaining.
-            IFeePolicy.SubscriptionParams memory postBurnState = _querySubscriptionState();
-            postBurnState.perpTVL = postBurnState.perpTVL.mulDiv(perpSupply - perpAmtBurnt, perpSupply);
-            feePerc = feePolicy.computePerpBurnFeePerc(feePolicy.computeDeviationRatio(postBurnState));
+            s.perpTVL = s.perpTVL.mulDiv(perpSupply - perpAmtBurnt, perpSupply);
+            feePerc = feePolicy.computePerpBurnFeePerc(feePolicy.computeDeviationRatio(s));
         }
         //-----------------------------------------------------------------------------
 
@@ -781,8 +782,6 @@ contract PerpetualTranche is
         uint256 tokenOutAmtRequested
     ) private returns (IPerpetualTranche.RolloverData memory) {
         //-----------------------------------------------------------------------------
-        // Rollover fees have to be settled with all callers.
-        //
         // The rollover fees are settled by, adjusting the exchange rate
         // between `trancheInAmt` and `tokenOutAmt`.
         //
@@ -794,6 +793,8 @@ contract PerpetualTranche is
         IPerpetualTranche.RolloverData memory r;
 
         // We compute "price" as the value of a unit token.
+        // The perp, tranche tokens and the underlying are denominated as fixed point numbers
+        // with the same number of decimals.
         uint256 unitTokenAmt = (10**_decimals);
         uint256 trancheInPrice = _computeReserveTrancheValue(
             trancheIn,
@@ -1003,7 +1004,7 @@ contract PerpetualTranche is
     function _querySubscriptionState() private view returns (IFeePolicy.SubscriptionParams memory s) {
         s.perpTVL = _reserveValue();
         s.vaultTVL = IVault(vault).getTVL();
-        (s.perpTR, s.vaultTR) = _depositBond.getSeniorJuniorRatio();
+        (s.perpTR, s.vaultTR) = _depositBond.getSeniorJuniorRatios();
         return s;
     }
 

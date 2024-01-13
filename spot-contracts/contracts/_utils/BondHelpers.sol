@@ -76,7 +76,7 @@ library BondHelpers {
     /// @param b The address of the bond contract.
     /// @return seniorRatio The tranche ratio of the senior most tranche.
     /// @return remRatio The tranche ratio of every other tranche.
-    function getSeniorJuniorRatio(IBondController b) internal view returns (uint256, uint256) {
+    function getSeniorJuniorRatios(IBondController b) internal view returns (uint256, uint256) {
         (, uint256 r) = b.tranches(0);
         return (r, TRANCHE_RATIO_GRANULARITY - r);
     }

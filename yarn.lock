@@ -27,7 +27,6 @@ __metadata:
     "@types/node": ^18.6.1
     "@typescript-eslint/eslint-plugin": ^5.0.0
     "@typescript-eslint/parser": ^5.0.0
-    ampleforth-contracts: "https://github.com/ampleforth/ampleforth-contracts.git#master"
     chai: ^4.3.6
     dotenv: ^16.0.1
     eslint: ^8.20.0
@@ -2245,15 +2244,6 @@ __metadata:
   version: 1.0.1
   resolution: "amdefine@npm:1.0.1"
   checksum: 9d4e15b94641643a9385b2841b4cb2bcf4e8e2f741ea4bd475c93ad7bab261ad4ed827a32e9c549b38b98759c4526c173ae4e6dde8caeb75ee5cebedc9863762
-  languageName: node
-  linkType: hard
-
-"ampleforth-contracts@https://github.com/ampleforth/ampleforth-contracts.git#master":
-  version: 0.0.1
-  resolution: "ampleforth-contracts@https://github.com/ampleforth/ampleforth-contracts.git#commit=113254b4f6f6f69910c73654ac84eb796cb5857e"
-  dependencies:
-    "@openzeppelin/contracts-upgradeable": ^4.7.3
-  checksum: 71e9a7639a59a62509e019d33e8b6ed8cab307266f7501d127b98ae77e8f46e0186c8774a766e0b47c0de628a9a37806601f4aff9a8c635c4acf43ca5bb7701a
   languageName: node
   linkType: hard
 

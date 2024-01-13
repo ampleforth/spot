@@ -936,7 +936,7 @@ contract RolloverVault is
     function _querySubscriptionState() private returns (IFeePolicy.SubscriptionParams memory s) {
         s.perpTVL = perp.getTVL();
         s.vaultTVL = getTVL();
-        (s.perpTR, s.vaultTR) = perp.getPerpVaultRatio();
+        (s.perpTR, s.vaultTR) = perp.getPerpVaultRatios();
         return s;
     }
 

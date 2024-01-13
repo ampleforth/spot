@@ -52,7 +52,7 @@ library PerpHelpers {
         // Get the minting bond and tranche data
         IBondController depositBond = perp.getDepositBond();
         ITranche depositTranche = depositBond.getSeniorTranche();
-        (uint256 seniorTR, uint256 juniorTR) = depositBond.getSeniorJuniorRatio();
+        (uint256 seniorTR, uint256 juniorTR) = depositBond.getSeniorJuniorRatios();
 
         uint256 bondCollateralBalance = IERC20Upgradeable(depositBond.collateralToken()).balanceOf(
             address(depositBond)
