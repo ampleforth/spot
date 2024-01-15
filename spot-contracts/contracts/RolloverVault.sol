@@ -505,7 +505,7 @@ contract RolloverVault is
         uint256 feePerc = feePolicy.computeVaultMintFeePerc();
         //-----------------------------------------------------------------------------
 
-        // Comunte mint amt
+        // Compute mint amt
         uint256 totalSupply_ = totalSupply();
         uint256 notes = (totalSupply_ > 0)
             ? totalSupply_.mulDiv(underlyingAmtIn, getTVL())
@@ -518,31 +518,27 @@ contract RolloverVault is
     }
 
     /// @inheritdoc IVault
-    function computeRedemptionAmts(uint256 perpAmtBurnt) public returns (IVault.TokenAmount[] memory) {
+    function computeRedemptionAmts(uint256 notes) public returns (IVault.TokenAmount[] memory) {
         //-----------------------------------------------------------------------------
         uint256 feePerc = feePolicy.computeVaultBurnFeePerc();
         //-----------------------------------------------------------------------------
 
         uint256 totalSupply_ = totalSupply();
-        uint8 deployedCount_ = uint8(_deployed.length());
-        uint8 assetCount_ = 1 + deployedCount_;
+        uint8 assetCount_ = 1 + uint8(_deployed.length());
 
         // aggregating vault assets to be redeemed
         IVault.TokenAmount[] memory redemptions = new IVault.TokenAmount[](assetCount_);
 
         // underlying share to be redeemed
         redemptions[0].token = underlying;
-        redemptions[0].amount = redemptions[0].token.balanceOf(address(this)).mulDiv(perpAmtBurnt, totalSupply_);
+        redemptions[0].amount = redemptions[0].token.balanceOf(address(this)).mulDiv(notes, totalSupply_);
         redemptions[0].amount = redemptions[0].amount.mulDiv(FEE_ONE_PERC - feePerc, FEE_ONE_PERC);
 
-        for (uint8 i = 0; i < deployedCount_; i++) {
+        for (uint8 i = 1; i < assetCount_; i++) {
             // tranche token share to be redeemed
-            redemptions[i + 1].token = IERC20Upgradeable(_deployed.at(i));
-            redemptions[i + 1].amount = redemptions[i + 1].token.balanceOf(address(this)).mulDiv(
-                perpAmtBurnt,
-                totalSupply_
-            );
-            redemptions[i + 1].amount = redemptions[i + 1].amount.mulDiv(FEE_ONE_PERC - feePerc, FEE_ONE_PERC);
+            redemptions[i].token = IERC20Upgradeable(_deployed.at(i - 1));
+            redemptions[i].amount = redemptions[i].token.balanceOf(address(this)).mulDiv(notes, totalSupply_);
+            redemptions[i].amount = redemptions[i].amount.mulDiv(FEE_ONE_PERC - feePerc, FEE_ONE_PERC);
         }
 
         return redemptions;
@@ -578,7 +574,7 @@ contract RolloverVault is
         );
         //-----------------------------------------------------------------------------
 
-        // Calculate perp fee share to be paid by the vault
+        // Calculate perp's share of swap fee paid to perp by burning tokens
         uint256 perpFeeAmtToBurn = perpAmtOut.mulDiv(swapFeePerpSharePerc, FEE_ONE_PERC, MathUpgradeable.Rounding.Up);
 
         // We deduct fees by transferring out fewer perp tokens
@@ -617,7 +613,7 @@ contract RolloverVault is
         );
         //-----------------------------------------------------------------------------
 
-        // Calculate perp fee share to be paid by the vault
+        // Calculate perp's share of swap fee paid to perp by burning tokens
         uint256 perpFeeAmtToBurn = perpAmtIn.mulDiv(swapFeePerpSharePerc, FEE_ONE_PERC, MathUpgradeable.Rounding.Up);
 
         // We deduct fees by transferring out fewer underlying tokens
@@ -641,7 +637,7 @@ contract RolloverVault is
     function assetAt(uint256 i) external view override returns (IERC20Upgradeable) {
         if (i == 0) {
             return underlying;
-        } else if (i < _deployed.length() + 1) {
+        } else if (i <= _deployed.length()) {
             return IERC20Upgradeable(_deployed.at(i - 1));
         }
         revert OutOfBounds();

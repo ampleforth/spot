@@ -19,10 +19,14 @@ library PerpHelpers {
     using MathUpgradeable for uint256;
     using BondHelpers for IBondController;
 
-    /// @notice The function estimates the amount of underlying tokens that need to be tranched
+    // Replicating value used here:
+    // https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
+    uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
+
+    /// @notice This function estimates the amount of underlying tokens that need to be tranched
     ///         in order to mint the given amount of perp tokens.
-    /// @dev This function is guaranteed to over-estimate, ie) when you tranche the estimated amount
-    ///      of underlying tokens, and use the senior tranches to mint perps,
+    /// @dev If this function errs, it is guaranteed to err by overestimating, ie) when you tranche the estimated amount
+    ///      of underlying tokens, then and use the senior tranches to mint perps,
     ///      you might end up minting slightly more than `perpAmtToMint`.
     /// @param perp The address of the perp contract.
     /// @param perpTVL The current TVL of perp.
@@ -52,7 +56,7 @@ library PerpHelpers {
         // Get the minting bond and tranche data
         IBondController depositBond = perp.getDepositBond();
         ITranche depositTranche = depositBond.getSeniorTranche();
-        (uint256 seniorTR, uint256 juniorTR) = depositBond.getSeniorJuniorRatios();
+        (uint256 seniorTR, ) = depositBond.getSeniorJuniorRatios();
 
         uint256 bondCollateralBalance = IERC20Upgradeable(depositBond.collateralToken()).balanceOf(
             address(depositBond)
@@ -60,14 +64,14 @@ library PerpHelpers {
         uint256 seniorAmtToDeposit = _estimateDepositAmt(
             perpTVL,
             perp.totalSupply(),
-            depositTranche,
+            depositTranche.totalSupply(),
             bondCollateralBalance,
             perpAmtToMint
         );
 
         uint256 underlyingAmtToTranche = seniorAmtToDeposit
             .mulDiv(bondCollateralBalance, depositBond.totalDebt(), MathUpgradeable.Rounding.Up)
-            .mulDiv((seniorTR + juniorTR), seniorTR, MathUpgradeable.Rounding.Up);
+            .mulDiv(TRANCHE_RATIO_GRANULARITY, seniorTR, MathUpgradeable.Rounding.Up);
 
         return (underlyingAmtToTranche, seniorAmtToDeposit, depositBond, depositTranche);
     }
@@ -79,18 +83,17 @@ library PerpHelpers {
     ///      This function is an inverse of the `perp.computeMintAmt` function.
     /// @param perpTVL The current TVL of perp.
     /// @param perpSupply The total supply of perp tokens.
-    /// @param seniorTranche The most "senior" tranche of the deposit bond currently accepted by perp.
+    /// @param seniorSupply The total supply of the most "senior" tranche of the deposit bond currently accepted by perp.
     /// @param bondCollateralBalance The parent bond's collateral balance.
     /// @param perpAmtToMint The required number of perp tokens to mint.
     /// @return seniorAmtToDeposit The number of seniors to deposit into perp.
     function _estimateDepositAmt(
         uint256 perpTVL,
         uint256 perpSupply,
-        ITranche seniorTranche,
+        uint256 seniorSupply,
         uint256 bondCollateralBalance,
         uint256 perpAmtToMint
-    ) private view returns (uint256) {
-        uint256 seniorSupply = seniorTranche.totalSupply();
+    ) private pure returns (uint256) {
         uint256 seniorClaim = MathUpgradeable.min(seniorSupply, bondCollateralBalance);
         return
             perpAmtToMint.mulDiv(perpTVL, perpSupply, MathUpgradeable.Rounding.Up).mulDiv(
