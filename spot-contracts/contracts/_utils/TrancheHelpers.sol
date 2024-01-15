@@ -37,7 +37,7 @@ library TrancheHelpers {
         // When the tranche's parent bond is not mature
         BondTranches memory bt = BondHelpers.getTranches(bond);
 
-        // NOTE: We assume that the system only accepts with bonds with 2 tranches
+        // NOTE: We assume that the system only accepts bonds with 2 tranches
         require(bt.tranches.length == 2, "TrancheHelpers: Unexpected tranche count");
         uint256 trancheIndex = (bt.tranches[0] == tranche) ? 0 : 1;
 
