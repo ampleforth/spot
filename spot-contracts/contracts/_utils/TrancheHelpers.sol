@@ -4,6 +4,7 @@ pragma solidity ^0.8.19;
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
+import { UnacceptableTrancheLength } from "../_interfaces/ProtocolErrors.sol";
 
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
