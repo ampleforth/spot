@@ -54,7 +54,6 @@ contract RolloverVault is
     using BondHelpers for IBondController;
     using TrancheHelpers for ITranche;
     using BondTranchesHelpers for BondTranches;
-    using PerpHelpers for IPerpetualTranche;
 
     // ERC20 operations
     using SafeERC20Upgradeable for IERC20Upgradeable;
@@ -80,6 +79,13 @@ contract RolloverVault is
 
     /// @dev The maximum number of deployed assets that can be held in this vault at any given time.
     uint256 public constant MAX_DEPLOYED_COUNT = 47;
+
+    /// @dev Immature redemption may result in some dust tranches when balances are not perfectly divisible by the tranche ratio.
+    ///      Based on current the implementation of `computeRedeemableTrancheAmounts`,
+    ///      the dust balances which remain after immature redemption will be at most {TRANCHE_RATIO_GRANULARITY} or 1000.
+    ///      We exclude the vault's dust tranche balances from TVL computation, note redemption and
+    ///      during recovery (through recurrent immature redemption).
+    uint256 public constant TRANCHE_DUST_AMT = 1000;
 
     //--------------------------------------------------------------------------
     // ASSETS
@@ -268,6 +274,10 @@ contract RolloverVault is
         if (!_rollover()) {
             revert InsufficientDeployment();
         }
+
+        // Cleanup rollover; In case that there remain excess seniors and juniors after a successful rollover,
+        // we recover back to underlying.
+        _redeemTranche(trancheIntoPerp);
     }
 
     /// @inheritdoc IVault
@@ -291,6 +301,7 @@ contract RolloverVault is
 
             // get the parent bond
             IBondController bond = IBondController(tranche.bond());
+            BondTranches memory bt = bond.getTranches();
 
             // if bond has matured, redeem the tranche token
             if (bond.secondsToMaturity() <= 0) {
@@ -300,10 +311,11 @@ contract RolloverVault is
             // if not redeem using proportional balances
             // redeems this tranche and it's siblings if the vault holds balances.
             // NOTE: For gas optimization, we perform this operation only once
-            // ie) when we encounter the most-senior tranche.
-            else if (tranche == bond.trancheAt(0)) {
+            // i.e) when we encounter the most-senior tranche.
+            // We also skip if the tranche balance is too low as immature redemption will be a no-op.
+            else if (tranche == bt.tranches[0] && trancheBalance > TRANCHE_DUST_AMT) {
                 // execute redemption
-                _execImmatureTrancheRedemption(bond, bond.getTranches());
+                _execImmatureTrancheRedemption(bond, bt);
             }
         }
 
@@ -472,8 +484,8 @@ contract RolloverVault is
         for (uint8 i = 0; i < _deployed.length(); i++) {
             ITranche tranche = ITranche(_deployed.at(i));
             uint256 balance = tranche.balanceOf(address(this));
-            if (balance > 0) {
-                totalValue += _computeVaultTrancheValue(tranche, IBondController(tranche.bond()), underlying, balance);
+            if (balance > TRANCHE_DUST_AMT) {
+                totalValue += _computeVaultTrancheValue(tranche, underlying, balance);
             }
         }
 
@@ -492,7 +504,7 @@ contract RolloverVault is
         // Deployed asset
         else if (_deployed.contains(address(token))) {
             ITranche tranche = ITranche(address(token));
-            return _computeVaultTrancheValue(tranche, IBondController(tranche.bond()), underlying, balance);
+            return (balance > TRANCHE_DUST_AMT) ? _computeVaultTrancheValue(tranche, underlying, balance) : 0;
         }
 
         // Not a vault asset, so returning zero
@@ -692,7 +704,8 @@ contract RolloverVault is
         }
         // if not redeem using proportional balances
         // redeems this tranche and it's siblings if the vault holds balances.
-        else {
+        // We skip if the tranche balance is too low as immature redemption will be a no-op.
+        else if (trancheBalance > TRANCHE_DUST_AMT) {
             // execute redemption
             BondTranches memory bt = bond.getTranches();
             _execImmatureTrancheRedemption(bond, bt);
