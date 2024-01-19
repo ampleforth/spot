@@ -2,8 +2,8 @@ import { HardhatUserConfig } from "hardhat/config";
 import { Wallet } from "ethers";
 
 import "@nomiclabs/hardhat-ethers";
-import "@nomiclabs/hardhat-waffle";
 import "@nomicfoundation/hardhat-chai-matchers";
+import "@nomicfoundation/hardhat-verify";
 import "@openzeppelin/hardhat-upgrades";
 import "solidity-coverage";
 import "hardhat-gas-reporter";
@@ -55,7 +55,7 @@ export default {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 200,
+            runs: 750,
           },
         },
       },
@@ -71,6 +71,6 @@ export default {
     apiKey: process.env.ETHERSCAN_API_KEY,
   },
   mocha: {
-    bail: false,
+    bail: true,
   },
 } as HardhatUserConfig;
