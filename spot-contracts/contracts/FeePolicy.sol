@@ -2,16 +2,20 @@
 pragma solidity ^0.8.19;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
-import { IPerpetualTranche, IBondController } from "./_interfaces/IPerpetualTranche.sol";
-import { IVault } from "./_interfaces/IVault.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
-import { AddressUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { Sigmoid } from "./_utils/Sigmoid.sol";
 
-import { UnacceptableSwap } from "./_interfaces/ProtocolErrors.sol";
+/// @notice Expected perc value to be at most (1 * 10**DECIMALS), i.e) 1.0 or 100%.
+error InvalidPerc();
+
+/// @notice Expected target subscription ratio to be within defined bounds.
+error InvalidTargetSRBounds();
+
+/// @notice Expected sigmoid asymptotes to be within defined bounds.
+error InvalidSigmoidAsymptotes();
 
 /**
  *  @title FeePolicy
@@ -149,8 +153,9 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Updates the target subscription ratio.
     /// @param targetSubscriptionRatio_ The new target subscription ratio as a fixed point number with {DECIMALS} places.
     function updateTargetSubscriptionRatio(uint256 targetSubscriptionRatio_) external onlyOwner {
-        require(targetSubscriptionRatio_ > SR_LOWER_BOUND, "FeeStrategy: sr too low");
-        require(targetSubscriptionRatio_ <= SR_UPPER_BOUND, "FeeStrategy: sr high low");
+        if (targetSubscriptionRatio_ < SR_LOWER_BOUND || targetSubscriptionRatio_ > SR_UPPER_BOUND) {
+            revert InvalidTargetSRBounds();
+        }
         targetSubscriptionRatio = targetSubscriptionRatio_;
     }
 
@@ -158,7 +163,9 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @param perpMintFeePerc_ The new perp mint fee ceiling percentage
     ///        as a fixed point number with {DECIMALS} places.
     function updatePerpMintFees(uint256 perpMintFeePerc_) external onlyOwner {
-        require(perpMintFeePerc_ <= ONE, "FeeStrategy: perc too high");
+        if (perpMintFeePerc_ > ONE) {
+            revert InvalidPerc();
+        }
         perpMintFeePerc = perpMintFeePerc_;
     }
 
@@ -166,16 +173,21 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @param perpBurnFeePerc_ The new perp burn fee ceiling percentage
     ///        as a fixed point number with {DECIMALS} places.
     function updatePerpBurnFees(uint256 perpBurnFeePerc_) external onlyOwner {
-        require(perpBurnFeePerc_ <= ONE, "FeeStrategy: perc too high");
+        if (perpBurnFeePerc_ > ONE) {
+            revert InvalidPerc();
+        }
         perpBurnFeePerc = perpBurnFeePerc_;
     }
 
     /// @notice Update the parameters determining the slope and asymptotes of the sigmoid fee curve.
     /// @param p Lower, Upper and Growth sigmoid paramters are fixed point numbers with {DECIMALS} places.
     function updatePerpRolloverFees(RolloverFeeSigmoidParams calldata p) external onlyOwner {
-        require(p.lower >= -int256(SIGMOID_BOUND), "FeeStrategy: sigmoid lower bound too low");
-        require(p.upper <= int256(SIGMOID_BOUND), "FeeStrategy: sigmoid upper bound too high");
-        require(p.lower <= p.upper, "FeeStrategy: sigmoid asymptotes invalid");
+        // SIGMOID_BOUND is set to 1%, i.e) the rollover fee can be at most 1% on either direction.
+        // If the bond duration is 28 days and 13 rollovers happen per year,
+        // perp can be inflated or enriched up to ~13% annually.
+        if (p.lower < -int256(SIGMOID_BOUND) || p.upper > int256(SIGMOID_BOUND) || p.lower > p.upper) {
+            revert InvalidSigmoidAsymptotes();
+        }
         perpRolloverFee.lower = p.lower;
         perpRolloverFee.upper = p.upper;
         perpRolloverFee.growth = p.growth;
@@ -185,7 +197,9 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @param vaultMintFeePerc_ The new vault mint fee ceiling percentage
     ///        as a fixed point number with {DECIMALS} places.
     function updateVaultMintFees(uint256 vaultMintFeePerc_) external onlyOwner {
-        require(vaultMintFeePerc_ <= ONE, "FeeStrategy: perc too high");
+        if (vaultMintFeePerc_ > ONE) {
+            revert InvalidPerc();
+        }
         vaultMintFeePerc = vaultMintFeePerc_;
     }
 
@@ -193,7 +207,9 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @param vaultBurnFeePerc_ The new vault burn fee ceiling percentage
     ///        as a fixed point number with {DECIMALS} places.
     function updateVaultBurnFees(uint256 vaultBurnFeePerc_) external onlyOwner {
-        require(vaultBurnFeePerc_ <= ONE, "FeeStrategy: perc too high");
+        if (vaultBurnFeePerc_ > ONE) {
+            revert InvalidPerc();
+        }
         vaultBurnFeePerc = vaultBurnFeePerc_;
     }
 
@@ -206,14 +222,18 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Updates the vault's share of the underlying to perp swap fee.
     /// @param feePerc The new fee percentage.
     function updateVaultUnderlyingToPerpSwapFeePerc(uint256 feePerc) external onlyOwner {
-        require(feePerc <= ONE, "FeeStrategy: perc too high");
+        if (feePerc > ONE) {
+            revert InvalidPerc();
+        }
         vaultUnderlyingToPerpSwapFeePerc = feePerc;
     }
 
     /// @notice Updates the vault's share of the perp to underlying swap fee.
     /// @param feePerc The new fee percentage.
     function updateVaultPerpToUnderlyingSwapFeePerc(uint256 feePerc) external onlyOwner {
-        require(feePerc <= ONE, "FeeStrategy: perc too high");
+        if (feePerc > ONE) {
+            revert InvalidPerc();
+        }
         vaultPerpToUnderlyingSwapFeePerc = feePerc;
     }
 

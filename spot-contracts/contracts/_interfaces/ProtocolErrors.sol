@@ -45,3 +45,6 @@ error InsufficientDeployment();
 
 /// @notice Expected the number of vault assets deployed to be under the limit.
 error DeployedCountOverLimit();
+
+/// @notice Expected parent bond to have only 2 children tranches.
+error UnacceptableTrancheLength();
