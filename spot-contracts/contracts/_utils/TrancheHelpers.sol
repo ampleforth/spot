@@ -57,17 +57,15 @@ library TrancheHelpers {
 
     /// @notice Given a senior immature tranche, calculates the claimable collateral balance backing the tranche supply.
     /// @param seniorTranche Address of the tranche token.
-    /// @param bond Address of the tranche's parent bond.
-    /// @param collateralToken Address of the tranche's underlying collateral token.
+    /// @param parentBondCollateralBalance The total amount of collateral backing the given tranche's parent bond.
     /// @return The collateral balance and the tranche token supply.
-    function getImmatureSeniorTrancheCollateralization(
-        ITranche seniorTranche,
-        IBondController bond,
-        IERC20Upgradeable collateralToken
-    ) internal view returns (uint256, uint256) {
-        uint256 bondCollateralBalance = collateralToken.balanceOf(address(bond));
+    function getImmatureSeniorTrancheCollateralization(ITranche seniorTranche, uint256 parentBondCollateralBalance)
+        internal
+        view
+        returns (uint256, uint256)
+    {
         uint256 seniorSupply = seniorTranche.totalSupply();
-        uint256 seniorClaim = MathUpgradeable.min(seniorSupply, bondCollateralBalance);
+        uint256 seniorClaim = MathUpgradeable.min(seniorSupply, parentBondCollateralBalance);
         return (seniorClaim, seniorSupply);
     }
 }
