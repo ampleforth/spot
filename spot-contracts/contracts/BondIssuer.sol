@@ -9,6 +9,9 @@ import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/O
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 import { BondHelpers } from "./_utils/BondHelpers.sol";
 
+/// @notice Expected tranche ratios to sum up to {TRANCHE_RATIO_GRANULARITY}.
+error UnacceptableTrancheRatios();
+
 /**
  *  @title BondIssuer
  *
@@ -102,7 +105,10 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
         for (uint8 i = 0; i < trancheRatios_.length; i++) {
             ratioSum += trancheRatios_[i];
         }
-        require(ratioSum == TRANCHE_RATIO_GRANULARITY, "BondIssuer: Invalid tranche ratios");
+
+        if (ratioSum > TRANCHE_RATIO_GRANULARITY) {
+            revert UnacceptableTrancheRatios();
+        }
     }
 
     /// @notice Updates the bond frequency and offset.

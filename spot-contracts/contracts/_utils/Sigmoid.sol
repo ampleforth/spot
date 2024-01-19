@@ -5,6 +5,9 @@ pragma solidity ^0.8.19;
 import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 
+/// @notice Expected exponent to be at most 100.
+error ExpTooLarge();
+
 /**
  *  @title Sigmoid
  *
@@ -35,7 +38,9 @@ library Sigmoid {
             1021897148654116678
         ];
         int256 whole = exp / one;
-        require(whole <= 100, "Sigmoid: twoPower exp too big");
+        if (whole > 100) {
+            revert ExpTooLarge();
+        }
         int256 result = int256(uint256(1) << uint256(whole)) * one;
         int256 remaining = exp - (whole * one);
 
