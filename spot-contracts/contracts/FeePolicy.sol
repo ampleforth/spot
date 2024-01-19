@@ -28,7 +28,7 @@ error InvalidSigmoidAsymptotes();
  *
  *          Fees are computed based on the deviation between the system's current subscription ratio
  *          and the target subscription ratio.
- *              - `subscriptionRatio`   = (vaultTVL * perpTR) / (perpTVL * vaultTR)
+ *              - `subscriptionRatio`   = (vaultTVL * seniorTR) / (perpTVL * 1-seniorTR)
  *              - `deviationRatio` (dr) = subscriptionRatio / targetSubscriptionRatio
  *
  *          When the system is "under-subscribed" (dr <= 1):
@@ -61,6 +61,10 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     // Libraries
     using MathUpgradeable for uint256;
     using SafeCastUpgradeable for uint256;
+
+    // Replicating value used here:
+    // https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
+    uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
 
     /// @dev The returned fee percentages are fixed point numbers with {DECIMALS} places.
     ///      The decimals should line up with value expected by consumer (perp, vault).
@@ -306,13 +310,21 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computeDeviationRatio(IFeePolicy.SubscriptionParams memory s) external view returns (uint256) {
+    function computeDeviationRatio(IFeePolicy.SubscriptionParams memory s) public view returns (uint256) {
+        return computeDeviationRatio(s.perpTVL, s.vaultTVL, s.seniorTR);
+    }
+
+    /// @inheritdoc IFeePolicy
+    function computeDeviationRatio(
+        uint256 perpTVL,
+        uint256 vaultTVL,
+        uint256 seniorTR
+    ) public view returns (uint256) {
         // NOTE: We assume that perp's TVL and vault's TVL values have the same base denomination.
         return
-            s.vaultTVL.mulDiv(s.perpTR, (s.perpTVL * s.vaultTR), MathUpgradeable.Rounding.Up).mulDiv(
+            vaultTVL.mulDiv(ONE, targetSubscriptionRatio).mulDiv(
                 ONE,
-                targetSubscriptionRatio,
-                MathUpgradeable.Rounding.Up
+                perpTVL.mulDiv((TRANCHE_RATIO_GRANULARITY - seniorTR), seniorTR, MathUpgradeable.Rounding.Up)
             );
     }
 }
