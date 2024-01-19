@@ -508,11 +508,6 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    function getPerpVaultRatios() external override afterStateUpdate returns (uint256, uint256) {
-        return _depositBond.getSeniorJuniorRatios();
-    }
-
-    /// @inheritdoc IPerpetualTranche
     function isAcceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut)
         external
         override

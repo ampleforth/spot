@@ -97,7 +97,7 @@ interface IVault {
     /// @return The amount of notes to be minted.
     function computeMintAmt(uint256 amount) external returns (uint256);
 
-    /// @notice Computes the amount asset tokens redeemed when burning given number of vault notes.
+    /// @notice Computes the amount of asset tokens redeemed when burning given number of vault notes.
     /// @param notes The amount of notes to be burnt.
     /// @return The list of asset tokens and amounts redeemed.
     function computeRedemptionAmts(uint256 notes) external returns (TokenAmount[] memory);
