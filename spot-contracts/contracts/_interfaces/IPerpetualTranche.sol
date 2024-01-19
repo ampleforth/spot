@@ -79,6 +79,9 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @return Address of the deposit tranche ERC-20 token.
     function getDepositTranche() external returns (ITranche);
 
+    /// @return The tranche ratio of the current deposit tranche.
+    function getDepositTrancheRatio() external returns (uint256);
+
     /// @notice Checks if the given `trancheIn` can be rolled out for `tokenOut`.
     /// @param trancheIn The tranche token deposited.
     /// @param tokenOut The reserve token to be redeemed.
