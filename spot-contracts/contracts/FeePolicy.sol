@@ -72,7 +72,9 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     uint8 public constant DECIMALS = 8;
     uint256 public constant ONE = (1 * 10**DECIMALS); // 1.0 or 100%
 
+    /// @dev SIGMOID_BOUND is set to 1%, i.e) the rollover fee can be at most 1% on either direction.
     uint256 public constant SIGMOID_BOUND = ONE / 100; // 0.01 or 1%
+
     uint256 public constant SR_LOWER_BOUND = (ONE * 75) / 100; // 0.75 or 75%
     uint256 public constant SR_UPPER_BOUND = 2 * ONE; // 2.0 or 200%
 
@@ -186,7 +188,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Update the parameters determining the slope and asymptotes of the sigmoid fee curve.
     /// @param p Lower, Upper and Growth sigmoid paramters are fixed point numbers with {DECIMALS} places.
     function updatePerpRolloverFees(RolloverFeeSigmoidParams calldata p) external onlyOwner {
-        // SIGMOID_BOUND is set to 1%, i.e) the rollover fee can be at most 1% on either direction.
         // If the bond duration is 28 days and 13 rollovers happen per year,
         // perp can be inflated or enriched up to ~13% annually.
         if (p.lower < -int256(SIGMOID_BOUND) || p.upper > int256(SIGMOID_BOUND) || p.lower > p.upper) {
@@ -322,9 +323,11 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     ) public view returns (uint256) {
         // NOTE: We assume that perp's TVL and vault's TVL values have the same base denomination.
         return
-            vaultTVL.mulDiv(ONE, targetSubscriptionRatio).mulDiv(
-                ONE,
-                perpTVL.mulDiv((TRANCHE_RATIO_GRANULARITY - seniorTR), seniorTR, MathUpgradeable.Rounding.Up)
-            );
+            vaultTVL
+                .mulDiv(
+                    ONE,
+                    perpTVL.mulDiv((TRANCHE_RATIO_GRANULARITY - seniorTR), seniorTR, MathUpgradeable.Rounding.Up)
+                )
+                .mulDiv(ONE, targetSubscriptionRatio);
     }
 }
