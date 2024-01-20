@@ -22,34 +22,9 @@ contract BondHelpersTester {
     function previewDeposit(IBondController b, uint256 collateralAmount)
         public
         view
-        returns (
-            BondTranches memory,
-            uint256[] memory,
-            uint256[] memory
-        )
+        returns (BondTranches memory, uint256[] memory)
     {
         return b.previewDeposit(collateralAmount);
-    }
-
-    function getTrancheCollateralizations(IBondController b)
-        public
-        view
-        returns (
-            BondTranches memory,
-            uint256[] memory,
-            uint256[] memory
-        )
-    {
-        BondTranches memory bt = b.getTranches();
-        uint256[] memory collateralBalances;
-        uint256[] memory trancheSupplies;
-        (collateralBalances, trancheSupplies) = b.getTrancheCollateralizations(bt);
-        return (bt, collateralBalances, trancheSupplies);
-    }
-
-    function indexOf(IBondController b, ITranche t) public view returns (uint8) {
-        BondTranches memory bt = b.getTranches();
-        return bt.indexOf(t);
     }
 
     function computeRedeemableTrancheAmounts(IBondController b, address u)

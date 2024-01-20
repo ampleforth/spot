@@ -5,19 +5,17 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { IBondController } from "./buttonwood/IBondController.sol";
 
 interface IFeePolicy {
-    /// TODO: remove `compute` from function names.
-
-    /// @param valueIn The value of incoming assets used to mint perps.
+    /// @param dr The current system deviation ratio.
     /// @return The percentage of the mint perp tokens to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
-    function computePerpMintFeePerc(uint256 valueIn) external returns (uint256);
+    function computePerpMintFeePerc(uint256 dr) external returns (uint256);
 
-    /// @param perpAmtBurnt The amount of perp tokens to be burnt.
-    /// @param perpTotalSupply The total supply of perp tokens.
+    /// @param dr The current system deviation ratio.
     /// @return The percentage of the burnt perp tokens to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
-    function computePerpBurnFeePerc(uint256 perpAmtBurnt, uint256 perpTotalSupply) external returns (uint256);
+    function computePerpBurnFeePerc(uint256 dr) external returns (uint256);
 
+    /// @param dr The current system deviation ratio.
     /// @return The applied exchange rate adjustment between tranches into perp and
     ///         tokens out of perp during a rollover,
     ///         as a fixed-point number with {DECIMALS} decimal places.
@@ -27,7 +25,7 @@ interface IFeePolicy {
     ///         example) 100 tranchesIn for 99 tranchesOut
     ///      - A fee of -1%, implies the exchange rate is adjusted in favor of tranchesOut.
     ///         example) 99 tranchesIn for 100 tranchesOut
-    function computePerpRolloverFeePerc() external returns (int256);
+    function computePerpRolloverFeePerc(uint256 dr) external returns (int256);
 
     /// @return The percentage of the mint vault note amount to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
@@ -41,37 +39,40 @@ interface IFeePolicy {
     ///         denominated in the underlying collateral asset.
     function computeVaultDeploymentFee() external returns (uint256);
 
-    /// @param valueIn The value of underlying tokens swapped in.
+    /// @param dr The current system deviation ratio.
     /// @return perpFeePerc The percentage of perp tokens out to be charged as swap fees by perp,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
     /// @return vaultFeePerc The percentage of perp tokens out to be charged as swap fees by the vault,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
-    function computeUnderlyingToPerpSwapFeePercs(uint256 valueIn)
+    function computeUnderlyingToPerpSwapFeePercs(uint256 dr)
         external
         returns (uint256 perpFeePerc, uint256 vaultFeePerc);
 
-    /// @param valueIn The value of perp tokens tokens swapped in.
+    /// @param dr The current system deviation ratio.
     /// @return perpFeePerc The percentage of underlying tokens out to be charged as swap fees by perp,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
     /// @return vaultFeePerc The percentage of underlying tokens out to be charged as swap fees by the vault,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
-    function computePerpToUnderlyingSwapFeePercs(uint256 valueIn)
+    function computePerpToUnderlyingSwapFeePercs(uint256 dr)
         external
         returns (uint256 perpFeePerc, uint256 vaultFeePerc);
 
     /// @return Number of decimals representing a multiplier of 1.0. So, 100% = 1*10**decimals.
     function decimals() external view returns (uint8);
 
-    /// @dev The subscription state the vault system relative to the perp supply.
-    struct SubscriptionState {
-        /// @notice The recorded tvl of perp.
+    /// @notice The system subscription parameters.
+    struct SubscriptionParams {
+        /// @notice The tranche ratio of seniors accepted by perp.
+        uint256 perpTR;
+        /// @notice The remainder tranche ratio held in the vault.
+        uint256 vaultTR;
+        /// @notice The current TVL of perp denominated in the underlying.
         uint256 perpTVL;
-        /// @notice The recorded tvl of the rollover vault.
+        /// @notice The current TVL of the vault denominated in the underlying.
         uint256 vaultTVL;
-        /// @notice Computed normalized subscription ratio.
-        uint256 normalizedSubscriptionRatio;
     }
 
-    /// @dev Computes the current subscription state of vault system.
-    function computeSubscriptionState() external returns (SubscriptionState memory);
+    /// @param s The subscription parameters of both the perp and vault systems.
+    /// @return The system deviation ratio.
+    function computeDeviationRatio(SubscriptionParams memory s) external returns (uint256);
 }

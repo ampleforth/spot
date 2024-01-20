@@ -69,15 +69,15 @@ interface IPerpetualTranche is IERC20Upgradeable {
 
     /// @notice The address of the underlying rebasing ERC-20 collateral token backing the tranches.
     /// @return Address of the underlying collateral token.
-    function collateral() external view returns (IERC20Upgradeable);
-
-    /// @notice The address of the underlying rebasing ERC-20 collateral token backing the tranches.
-    /// @return Address of the underlying collateral token.
     function underlying() external view returns (IERC20Upgradeable);
 
     /// @notice The parent bond whose tranches are currently accepted to mint perp tokens.
     /// @return Address of the deposit bond.
     function getDepositBond() external returns (IBondController);
+
+    /// @notice The tranche token contract currently accepted to mint perp tokens.
+    /// @return Address of the deposit tranche ERC-20 token.
+    function getDepositTranche() external returns (ITranche);
 
     /// @notice Checks if the given `trancheIn` can be rolled out for `tokenOut`.
     /// @param trancheIn The tranche token deposited.
@@ -88,14 +88,6 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @notice The policy contract with the fee computation logic for the perp and vault systems.
     /// @return Address of the policy contract.
     function feePolicy() external view returns (IFeePolicy);
-
-    /// @notice The ERC-20 contract which holds perp balances.
-    /// @return Address of the token.
-    function perpERC20() external view returns (IERC20Upgradeable);
-
-    /// @notice The contract where the protocol holds funds which back the perp token supply.
-    /// @return Address of the reserve.
-    function reserve() external view returns (address);
 
     /// @notice Total count of tokens held in the reserve.
     /// @return The reserve token count.
@@ -121,10 +113,6 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @param token The address of the tranche token held by the reserve.
     /// @return The value of the reserve token balance held by the reserve, in a standard denomination.
     function getReserveTokenValue(IERC20Upgradeable token) external returns (uint256);
-
-    /// @notice Computes the price of each perp token, i.e) reserve value / total supply.
-    /// @return The average price per perp token.
-    function getAvgPrice() external returns (uint256);
 
     /// @notice Computes the total value of assets currently held in the reserve.
     /// @return The total value of the perp system, in a standard denomination.
@@ -162,16 +150,6 @@ interface IPerpetualTranche is IERC20Upgradeable {
         uint256 trancheInAmtAvailable,
         uint256 tokenOutAmtRequested
     ) external returns (RolloverData memory r);
-
-    /// @notice The discount to be applied given the reserve token.
-    /// @param token The address of the reserve token.
-    /// @return The discount applied.
-    function computeDiscount(IERC20Upgradeable token) external view returns (uint256);
-
-    /// @notice The price of the given reserve token.
-    /// @param token The address of the reserve token.
-    /// @return The computed price.
-    function computePrice(IERC20Upgradeable token) external view returns (uint256);
 
     /// @notice Updates time dependent storage state.
     function updateState() external;

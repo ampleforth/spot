@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.19;
 
-import { IFeePolicy, IERC20Upgradeable } from "./_interfaces/IFeePolicy.sol";
+import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
 import { IPerpetualTranche, IBondController } from "./_interfaces/IPerpetualTranche.sol";
 import { IVault } from "./_interfaces/IVault.sol";
 
@@ -22,38 +22,35 @@ import { UnacceptableSwap } from "./_interfaces/ProtocolErrors.sol";
  *          the demand for holding vault tokens; such that the total collateral in the vault
  *          supports rolling over all mature collateral backing perps.
  *
- *          Fees are computed based on the following variables.
- *              - `vaultTVL`                    : Total value of collateral in the rollover vault at a given time.
- *              - `equilibriumVaultTVL`         : The minimum value of collateral that needs to be in the vault
- *                                                to sustain rolling over the entire perp supply.
- *              - `subscriptionRatio`           : The ratio between the `vaultTVL` and the `equilibriumVaultTVL`.
- *              - `targetSubscriptionRatio`     : The ratio above which the system is considered "over-subscribed".
- *                                                Adds a safety buffer to ensure that rollovers are better sustained.
- *              - `normalizedSubscriptionRatio` : The ratio between `subscriptionRatio` and the `targetSubscriptionRatio`.
+ *          Fees are computed based on the deviation between the system's current subscription ratio
+ *          and the target subscription ratio.
+ *              - `subscriptionRatio`   = (vaultTVL * perpTR) / (perpTVL * vaultTR)
+ *              - `deviationRatio` (dr) = subscriptionRatio / targetSubscriptionRatio
  *
- *          When the system is "under-subscribed":
+ *          When the system is "under-subscribed" (dr <= 1):
  *              - Rollover fees flow from perp holders to vault note holders.
  *              - Fees are charged for minting new perps.
  *              - No fees are charged for redeeming perps.
  *
- *          When the system is "over-subscribed":
+ *          When the system is "over-subscribed" (dr > 1):
  *              - Rollover fees flow from vault note holders to perp holders.
  *              - No fees are charged for minting new perps.
  *              - Fees are charged for redeeming perps.
  *
- *          Regardless of the subscription ratio, the system charges a fixed percentage fee
+ *          Regardless of the `deviationRatio`, the system charges a fixed percentage fee
  *          for minting and redeeming vault notes.
  *
- *          The system favors an elastic perp supply and an inelastic vault note supply.
  *
- *          The rollover fees are signed and can flow in either direction based on the subscription ratio.
+ *          The rollover fees are signed and can flow in either direction based on the `deviationRatio`.
  *          The fee is a percentage is computed through a sigmoid function.
  *          The slope and asymptotes are set by the owner.
+ *
  *          CRITICAL: The rollover fee percentage is NOT annualized, the fee percentage is applied per rollover.
  *          The number of rollovers per year changes based on the duration of perp's minting bond.
  *
- *          We consider a `normalizedSubscriptionRatio` of greater than 1.0 healthy.
- *          Minting additional perps or redeeming vault notes reduces the subscription ratio.
+ *          We consider a `deviationRatio` of greater than 1.0 healthy (or "over-subscribed").
+ *          In general, the system favors an elastic perp supply and an inelastic vault note supply.
+ *
  *
  */
 contract FeePolicy is IFeePolicy, OwnableUpgradeable {
@@ -67,42 +64,26 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     uint8 public constant DECIMALS = 8;
     uint256 public constant ONE = (1 * 10**DECIMALS); // 1.0 or 100%
 
-    /// @dev Using the same granularity as the underlying buttonwood tranche contracts.
-    ///      https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
-    uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
-
     uint256 public constant SIGMOID_BOUND = ONE / 100; // 0.01 or 1%
     uint256 public constant SR_LOWER_BOUND = (ONE * 75) / 100; // 0.75 or 75%
     uint256 public constant SR_UPPER_BOUND = 2 * ONE; // 2.0 or 200%
 
-    /// @notice Reference to the perpetual token.
-    IPerpetualTranche public perp;
-
-    /// @notice Reference to the rollover vault.
-    IVault public vault;
-
+    //-----------------------------------------------------------------------------
     /// @notice The target subscription ratio i.e) the normalization factor.
+    /// @dev The ratio under which the system is considered "under-subscribed".
+    ///      Adds a safety buffer to ensure that rollovers are better sustained.
     uint256 public targetSubscriptionRatio;
+
+    //-----------------------------------------------------------------------------
+
+    //-----------------------------------------------------------------------------
+    // Perp fee parameters
 
     /// @notice The percentage fee charged on minting perp tokens.
     uint256 public perpMintFeePerc;
 
     /// @notice The percentage fee charged on burning perp tokens.
     uint256 public perpBurnFeePerc;
-
-    /// @notice The percentage fee charged on minting vault notes.
-    uint256 public vaultMintFeePerc;
-
-    /// @notice The percentage fee charged on burning vault notes.
-    uint256 public vaultBurnFeePerc;
-
-    /// @notice The fixed amount vault fee charged during each deployment.
-    /// @dev Denominated in the underlying collateral asset and
-    ///      Paid by the vault note holders to the system owner.
-    uint256 public vaultDeploymentFee;
-
-    /// @notice Mapping between `hash({assetIn,assetOut})` and the fee percentage.
-    mapping(bytes32 => uint256) public vaultSwapFeePerc;
 
     struct RolloverFeeSigmoidParams {
         /// @notice Lower asymptote
@@ -116,20 +97,43 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Parameters which control the asymptotes and the slope of the perp token's rollover fee.
     RolloverFeeSigmoidParams public perpRolloverFee;
 
+    //-----------------------------------------------------------------------------
+
+    //-----------------------------------------------------------------------------
+    // Vault fee parameters
+
+    /// @notice The percentage fee charged on minting vault notes.
+    uint256 public vaultMintFeePerc;
+
+    /// @notice The percentage fee charged on burning vault notes.
+    uint256 public vaultBurnFeePerc;
+
+    /// @notice The percentage fee charged by the vault to swap underlying tokens for perp tokens.
+    uint256 public vaultUnderlyingToPerpSwapFeePerc;
+
+    /// @notice The percentage fee charged by the vault to swap perp tokens for underlying tokens.
+    uint256 public vaultPerpToUnderlyingSwapFeePerc;
+
+    /// @notice The fixed amount vault fee charged during each deployment.
+    /// @dev Denominated in the underlying collateral asset and
+    ///      Paid by the vault note holders to the system owner.
+    uint256 public vaultDeploymentFee;
+
+    //-----------------------------------------------------------------------------
+
     /// @notice Contract initializer.
-    /// @param perp_ Reference to perp.
-    /// @param vault_ Reference to the rollover vault.
-    function init(IPerpetualTranche perp_, IVault vault_) public initializer {
+    function init() public initializer {
         __Ownable_init();
 
-        perp = perp_;
-        vault = vault_;
-
+        // initializing mint/burn fees to zero
         perpMintFeePerc = 0;
         perpBurnFeePerc = 0;
-
         vaultMintFeePerc = 0;
         vaultBurnFeePerc = 0;
+
+        // initializing swap fees to 100%, to disable swapping initially
+        vaultUnderlyingToPerpSwapFeePerc = ONE;
+        vaultPerpToUnderlyingSwapFeePerc = ONE;
 
         // NOTE: With the current bond length of 28 days, rollover rate is annualized by dividing by: 365/28 ~= 13
         perpRolloverFee.lower = -int256(ONE) / (30 * 13); // -0.033/13 = -0.00253 (3.3% annualized)
@@ -138,6 +142,9 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
         targetSubscriptionRatio = (ONE * 133) / 100; // 1.33
     }
+
+    //-----------------------------------------------------------------------------
+    // Owner only
 
     /// @notice Updates the target subscription ratio.
     /// @param targetSubscriptionRatio_ The new target subscription ratio as a fixed point number with {DECIMALS} places.
@@ -196,63 +203,40 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         vaultDeploymentFee = vaultDeploymentFee_;
     }
 
-    /// @notice Updates the swap fee percentage for a given pair of assets.
-    /// @dev Setting fees to 100% or 1.0 will effectively pause swapping.
-    /// @param assetIn The asset swapped in.
-    /// @param assetOut The vault asset swapped out.
-    /// @param feePerc The swap fee percentage.
-    function updateVaultSwapFees(
-        address assetIn,
-        address assetOut,
-        uint256 feePerc
-    ) external onlyOwner {
+    /// @notice Updates the vault's share of the underlying to perp swap fee.
+    /// @param feePerc The new fee percentage.
+    function updateVaultUnderlyingToPerpSwapFeePerc(uint256 feePerc) external onlyOwner {
         require(feePerc <= ONE, "FeeStrategy: perc too high");
-        bytes32 pairHash = keccak256(abi.encodePacked(assetIn, assetOut));
-        if (feePerc > 0) {
-            vaultSwapFeePerc[pairHash] = feePerc;
-        } else {
-            delete vaultSwapFeePerc[pairHash];
-        }
+        vaultUnderlyingToPerpSwapFeePerc = feePerc;
+    }
+
+    /// @notice Updates the vault's share of the perp to underlying swap fee.
+    /// @param feePerc The new fee percentage.
+    function updateVaultPerpToUnderlyingSwapFeePerc(uint256 feePerc) external onlyOwner {
+        require(feePerc <= ONE, "FeeStrategy: perc too high");
+        vaultPerpToUnderlyingSwapFeePerc = feePerc;
+    }
+
+    //-----------------------------------------------------------------------------
+    // Public methods
+
+    /// @inheritdoc IFeePolicy
+    function computePerpMintFeePerc(uint256 dr) external view override returns (uint256) {
+        // When the vault is under-subscribed there exists an active mint fee
+        return (dr <= ONE) ? perpMintFeePerc : 0;
     }
 
     /// @inheritdoc IFeePolicy
-    function computePerpMintFeePerc(uint256 perpValueIn) external override returns (uint256) {
-        // The act of minting more perps reduces the subscription ratio,
-        // We thus have to check if the "post"-minting subscription state is healthy and
-        // account for fees accordingly.
-        IFeePolicy.SubscriptionState memory postMintState = computeSubscriptionState(
-            perp.getDepositBond(),
-            perp.getTVL() + perpValueIn,
-            vault.getTVL()
-        );
-
-        // When the system is under-subscribed there exists an active mint fee
-        return (postMintState.normalizedSubscriptionRatio <= 1) ? perpMintFeePerc : 0;
-    }
-
-    /// @inheritdoc IFeePolicy
-    function computePerpBurnFeePerc(uint256 perpAmtBurnt, uint256 perpTotalSupply) external override returns (uint256) {
-        // The act of burning perps increases the subscription ratio,
-        // We thus have to check if the "post"-burning subscription state to account for fees.
-
-        // NOTE: The perp and vault TVLs are denominated in the underlying asset.
-        // We calulate the perp post-burn TVL, by multiplying the current tvl by
-        // the fraction of supply remaning.
-        IFeePolicy.SubscriptionState memory postBurnState = computeSubscriptionState(
-            perp.getDepositBond(),
-            perp.getTVL().mulDiv(perpTotalSupply - perpAmtBurnt, perpTotalSupply),
-            vault.getTVL()
-        );
+    function computePerpBurnFeePerc(uint256 dr) external view override returns (uint256) {
         // When the system is over-subscribed there exists an active redemption fee
-        return (postBurnState.normalizedSubscriptionRatio > 1) ? perpBurnFeePerc : 0;
+        return (dr > ONE) ? perpBurnFeePerc : 0;
     }
 
     /// @inheritdoc IFeePolicy
-    function computePerpRolloverFeePerc() external override returns (int256) {
-        IFeePolicy.SubscriptionState memory s = computeSubscriptionState();
+    function computePerpRolloverFeePerc(uint256 dr) external view override returns (int256) {
         return
             Sigmoid.compute(
-                s.normalizedSubscriptionRatio.toInt256(),
+                dr.toInt256(),
                 perpRolloverFee.lower,
                 perpRolloverFee.upper,
                 perpRolloverFee.growth,
@@ -276,52 +260,24 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computeUnderlyingToPerpSwapFeePercs(uint256 valueIn) external override returns (uint256, uint256) {
-        // When user swaps underlying for vault's perps -> perps are minted by the vault
-        // Similar to perp mint fees, here too check the "post"-minting subscription state.
-        uint256 currentPerpTVL = perp.getTVL();
-        uint256 currentVaultTVL = vault.getTVL();
-        IFeePolicy.SubscriptionState memory postMintState = computeSubscriptionState(
-            perp.getDepositBond(),
-            currentPerpTVL + valueIn,
-            currentVaultTVL
-        );
-
-        // If minting leaves the vault under-subscribed, swapping by minting perps is NOT allowed.
-        if (postMintState.normalizedSubscriptionRatio <= 1) {
+    function computeUnderlyingToPerpSwapFeePercs(uint256 dr) external view override returns (uint256, uint256) {
+        // If the system is under-subscribed, swapping is NOT allowed.
+        if (dr <= ONE) {
             return (0, ONE);
         }
 
-        // When the system is over-subscribed, we charge no perp mint fee.
-        uint256 vaultFeePerc = vaultSwapFeePerc[
-            keccak256(abi.encodePacked(address(vault.underlying()), address(perp)))
-        ];
-        return (0, vaultFeePerc);
+        // When the system is over-subscribed, perp share of fees is zero.
+        return (0, vaultUnderlyingToPerpSwapFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
-    function computePerpToUnderlyingSwapFeePercs(uint256 valueIn) external override returns (uint256, uint256) {
-        // When user swaps perps for vault's underlying -> perps are redeemed by the vault
-        // Similar to perp burn fees, here too check the "post"-burn subscription state.
-        uint256 currentPerpTVL = perp.getTVL();
-        uint256 currentVaultTVL = vault.getTVL();
-        IFeePolicy.SubscriptionState memory postBurnState = computeSubscriptionState(
-            perp.getDepositBond(),
-            currentPerpTVL - valueIn,
-            currentVaultTVL
-        );
-
-        // Split the fees between the perp and vault systems
-        uint256 vaultFeePerc = vaultSwapFeePerc[
-            keccak256(abi.encodePacked(address(perp), address(vault.underlying())))
-        ];
-        // When the system is under-subscribed, we charge no perp burn fee.
-        if (postBurnState.normalizedSubscriptionRatio <= 1) {
-            return (0, vaultFeePerc);
+    function computePerpToUnderlyingSwapFeePercs(uint256 dr) external view override returns (uint256, uint256) {
+        // When the system is under-subscribed, perp share of fees is zero.
+        if (dr <= ONE) {
+            return (0, vaultPerpToUnderlyingSwapFeePerc);
         }
 
-        // When the system is over-subscribed, we charge a perp burn fee on top of the vault's swap fee.
-        return (perpBurnFeePerc, vaultFeePerc);
+        return (perpBurnFeePerc, vaultPerpToUnderlyingSwapFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
@@ -329,34 +285,14 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         return DECIMALS;
     }
 
-    /// @notice Computes the detailed subscription state.
-    /// @return The subscription state.
-    function computeSubscriptionState() public override returns (IFeePolicy.SubscriptionState memory) {
-        return computeSubscriptionState(perp.getDepositBond(), perp.getTVL(), vault.getTVL());
-    }
-
-    /// @notice Computes the detailed subscription state based on the given `perpTVL` and `vaultTVL`.
-    /// @return The subscription state.
-    function computeSubscriptionState(
-        IBondController depositBond,
-        uint256 perpTVL,
-        uint256 vaultTVL
-    ) public view returns (IFeePolicy.SubscriptionState memory) {
-        IFeePolicy.SubscriptionState memory s;
-        s.perpTVL = perpTVL;
-        s.vaultTVL = vaultTVL;
-        // NOTE: We assume that perp only accepts the senior one.
-        //       We assume that perp's TVL and vault's TVL values have the same base denomination.
-        (, uint256 perpTR) = depositBond.tranches(0);
-        uint256 equilibriumVaultTVL = s.perpTVL.mulDiv(
-            TRANCHE_RATIO_GRANULARITY - perpTR,
-            perpTR,
-            MathUpgradeable.Rounding.Up
-        );
-        s.normalizedSubscriptionRatio = s.vaultTVL.mulDiv(ONE, equilibriumVaultTVL).mulDiv(
-            ONE,
-            targetSubscriptionRatio
-        );
-        return s;
+    /// @inheritdoc IFeePolicy
+    function computeDeviationRatio(IFeePolicy.SubscriptionParams memory s) external view returns (uint256) {
+        // NOTE: We assume that perp's TVL and vault's TVL values have the same base denomination.
+        return
+            s.vaultTVL.mulDiv(s.perpTR, (s.perpTVL * s.vaultTR), MathUpgradeable.Rounding.Up).mulDiv(
+                ONE,
+                targetSubscriptionRatio,
+                MathUpgradeable.Rounding.Up
+            );
     }
 }
