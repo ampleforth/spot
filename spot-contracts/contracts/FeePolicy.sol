@@ -2,6 +2,7 @@
 pragma solidity ^0.8.19;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
+import { SubscriptionParams } from "./_interfaces/ReturnData.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
@@ -79,10 +80,10 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     uint256 public constant SR_UPPER_BOUND = 2 * ONE; // 2.0 or 200%
 
     //-----------------------------------------------------------------------------
-    /// @notice The target subscription ratio i.e) the normalization factor.
+    /// @inheritdoc IFeePolicy
     /// @dev The ratio under which the system is considered "under-subscribed".
     ///      Adds a safety buffer to ensure that rollovers are better sustained.
-    uint256 public targetSubscriptionRatio;
+    uint256 public override targetSubscriptionRatio;
 
     //-----------------------------------------------------------------------------
 
@@ -311,7 +312,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computeDeviationRatio(IFeePolicy.SubscriptionParams memory s) public view returns (uint256) {
+    function computeDeviationRatio(SubscriptionParams memory s) public view returns (uint256) {
         return computeDeviationRatio(s.perpTVL, s.vaultTVL, s.seniorTR);
     }
 

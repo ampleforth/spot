@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import { TokenAmount } from "./ReturnData.sol";
 
 /*
  *  @title IVault
@@ -28,7 +29,7 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
  *
  */
 
-interface IVault {
+interface IVault is IERC20Upgradeable {
     /// @notice Recovers deployed funds and redeploys them.
     function recoverAndRedeploy() external;
 
@@ -46,13 +47,6 @@ interface IVault {
     /// @param amount The amount tokens to be deposited into the vault.
     /// @return The amount of notes.
     function deposit(uint256 amount) external returns (uint256);
-
-    struct TokenAmount {
-        /// @notice The asset token redeemed.
-        IERC20Upgradeable token;
-        /// @notice The amount redeemed.
-        uint256 amount;
-    }
 
     /// @notice Burns notes and sends a proportional share of vault's assets back to {msg.sender}.
     /// @param notes The amount of notes to be burnt.

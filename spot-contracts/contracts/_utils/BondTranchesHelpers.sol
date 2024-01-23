@@ -3,7 +3,9 @@ pragma solidity ^0.8.19;
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
+
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
+import { UnacceptableTrancheLength } from "../_interfaces/ProtocolErrors.sol";
 
 struct BondTranches {
     ITranche[] tranches;
