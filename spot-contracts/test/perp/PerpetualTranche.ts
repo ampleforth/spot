@@ -206,16 +206,12 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when invalid reference is", function () {
-      it("should revert", async function () {
-        await expect(perp.connect(deployer).updateVault(await deployer.getAddress())).to.be.reverted;
-      });
-    });
-
     describe("when reference is reset", function () {
       it("should not revert", async function () {
-        await expect(perp.connect(deployer).updateVault(constants.AddressZero)).not.to.be.reverted;
-        expect(await perp.vault()).to.eq(constants.AddressZero);
+        await expect(perp.connect(deployer).updateVault(constants.AddressZero)).to.be.revertedWithCustomError(
+          perp,
+          "UnacceptableReference",
+        );
       });
     });
 
