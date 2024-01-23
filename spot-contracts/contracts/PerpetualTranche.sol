@@ -243,10 +243,9 @@ contract PerpetualTranche is
         _;
     }
 
-    /// @dev Throws if called by any account other than an authorized roller.
+    /// @dev Throws if called not called by vault.
     modifier onlyVault() {
-        // If vault reference is set, only permit the vault.
-        if (vault != address(0) && vault != _msgSender()) {
+        if (vault != _msgSender()) {
             revert UnauthorizedCall();
         }
         _;
@@ -313,12 +312,8 @@ contract PerpetualTranche is
     /// @notice Updates the reference to the rollover vault.
     /// @param newVault The address of the new vault.
     function updateVault(address newVault) public onlyOwner {
-        // If set to a non-zero address, we expect vault to be valid and implement `getTVL()`
-        if (newVault != address(0)) {
-            // solhint-disable-next-line no-empty-blocks
-            try IVault(newVault).getTVL() {} catch {
-                revert UnacceptableReference();
-            }
+        if (address(newVault) == address(0)) {
+            revert UnacceptableReference();
         }
         vault = newVault;
         emit UpdatedVault(newVault);
@@ -1015,7 +1010,7 @@ contract PerpetualTranche is
     /// @dev Queries the current subscription state of the perp and vault systems.
     function _querySubscriptionState() private view returns (IFeePolicy.SubscriptionParams memory s) {
         s.perpTVL = _reserveValue();
-        s.vaultTVL = (address(vault) != address(0)) ? IVault(vault).getTVL() : 0;
+        s.vaultTVL = IVault(vault).getTVL();
         s.seniorTR = _depositBond.getSeniorTrancheRatio();
         return s;
     }
