@@ -76,6 +76,7 @@ interface IFeePolicy {
         uint256 seniorTR
     ) external view returns (uint256);
 
-    /// @notice The target subscription ratio i.e) the normalization factor.
-    function targetSubscriptionRatio() external view returns (uint256);
+    /// @param seniorTR The tranche ratio of seniors accepted by perp.
+    /// @return The percentage of underlying split into perp and the vault to maintain a deviation ratio of 1.
+    function computeNeutralPerpVaultSplit(uint256 seniorTR) external view returns (uint256, uint256);
 }

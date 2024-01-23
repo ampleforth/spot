@@ -218,6 +218,9 @@ contract PerpetualTranche is
     ///      If not rollovers are publicly accessible.
     IRolloverVault public override vault;
 
+    /// @notice External router contract that allows users to interact with both perp and the vault together.
+    address public balancer;
+
     //--------------------------------------------------------------------------
     // Modifiers
 
@@ -266,16 +269,24 @@ contract PerpetualTranche is
         __ReentrancyGuard_init();
         _decimals = IERC20MetadataUpgradeable(address(collateral_)).decimals();
 
+        // set keeper reference
+        updateKeeper(owner());
+
         // NOTE: `_reserveAt(0)` always points to the underling collateral token
         // and is to be never updated.
         _reserves.add(address(collateral_));
         _syncReserve(collateral_);
 
+        // set references
         updateBondIssuer(bondIssuer_);
         updateFeePolicy(feePolicy_);
 
+        // setting initial parameter values
         updateTolerableTrancheMaturity(1, type(uint256).max);
         updateMintingLimits(type(uint256).max, type(uint256).max);
+
+        // set the balancer to address(0)
+        updateBalancer(address(0));
     }
 
     //--------------------------------------------------------------------------
@@ -374,6 +385,12 @@ contract PerpetualTranche is
             revert UnauthorizedTransferOut();
         }
         token.safeTransfer(to, amount);
+    }
+
+    /// @notice Updates the reference to the balancer router.
+    /// @param newBalancer The address of the new balancer.
+    function updateBalancer(address newBalancer) public onlyOwner {
+        balancer = newBalancer;
     }
 
     //--------------------------------------------------------------------------
@@ -1050,6 +1067,6 @@ contract PerpetualTranche is
     /// @dev Checks if caller is another module within the protocol.
     ///      If so, we do not charge mint/burn for internal operations.
     function _isProtocolCaller() private view returns (bool) {
-        return (_msgSender() == address(vault));
+        return (_msgSender() == address(vault) || _msgSender() == balancer);
     }
 }

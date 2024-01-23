@@ -120,13 +120,16 @@ contract RolloverVault is
     //--------------------------------------------------------------------------
     // v2.0.0 STORAGE ADDITION
 
-    /// @notice External contract that orchestrates fees across the spot protocol.
-    IFeePolicy public feePolicy;
-
     /// @notice Reference to the address that has the ability to pause/unpause operations.
     /// @dev The keeper is meant for time-sensitive operations, and may be different from the owner address.
     /// @return The address of the keeper.
     address public keeper;
+
+    /// @notice External contract that orchestrates fees across the spot protocol.
+    IFeePolicy public feePolicy;
+
+    /// @notice External router contract that allows users to interact with both perp and the vault together.
+    address public balancer;
 
     /// @notice The enforced minimum balance of underlying tokens to be held by the vault at all times.
     /// @dev On deployment only the delta greater than this balance is deployed.
@@ -164,9 +167,6 @@ contract RolloverVault is
         __Pausable_init();
         __ReentrancyGuard_init();
 
-        // set keeper reference
-        keeper = owner();
-
         // setup underlying collateral
         underlying = perp_.underlying();
         _syncAsset(underlying);
@@ -174,12 +174,18 @@ contract RolloverVault is
         // set reference to perp
         perp = perp_;
 
+        // set keeper reference
+        updateKeeper(owner());
+
         // set the reference to the fee policy
         updateFeePolicy(feePolicy_);
 
         // setting initial parameter values
         minDeploymentAmt = 0;
         minUnderlyingBal = 0;
+
+        // set the balancer to address(0)
+        updateBalancer(address(0));
     }
 
     //--------------------------------------------------------------------------
@@ -226,8 +232,14 @@ contract RolloverVault is
 
     /// @notice Updates the reference to the keeper.
     /// @param keeper_ The address of the new keeper.
-    function updateKeeper(address keeper_) public virtual onlyOwner {
+    function updateKeeper(address keeper_) public onlyOwner {
         keeper = keeper_;
+    }
+
+    /// @notice Updates the reference to the balancer router.
+    /// @param newBalancer The address of the new balancer.
+    function updateBalancer(address newBalancer) public onlyOwner {
+        balancer = newBalancer;
     }
 
     //--------------------------------------------------------------------------
@@ -511,9 +523,15 @@ contract RolloverVault is
         //-----------------------------------------------------------------------------
         // When user swaps underlying for vault's perps -> perps are minted by the vault
         // We thus compute fees based on the post-mint subscription state.
-        (uint256 swapFeePerpSharePerc, uint256 swapFeeVaultSharePerc) = feePolicy.computeUnderlyingToPerpSwapFeePercs(
-            feePolicy.computeDeviationRatio(s.perpTVL + underlyingAmtIn, s.vaultTVL, s.seniorTR)
-        );
+
+        // We charge no swap fee when interacting with other parts of the system.
+        uint256 swapFeePerpSharePerc = 0;
+        uint256 swapFeeVaultSharePerc = 0;
+        if (!_isProtocolCaller()) {
+            (swapFeePerpSharePerc, swapFeeVaultSharePerc) = feePolicy.computeUnderlyingToPerpSwapFeePercs(
+                feePolicy.computeDeviationRatio(s.perpTVL + underlyingAmtIn, s.vaultTVL, s.seniorTR)
+            );
+        }
         //-----------------------------------------------------------------------------
 
         // Calculate perp fee share to be paid by the vault
@@ -542,9 +560,15 @@ contract RolloverVault is
         //-----------------------------------------------------------------------------
         // When user swaps perps for vault's underlying -> perps are redeemed by the vault
         // We thus compute fees based on the post-burn subscription state.
-        (uint256 swapFeePerpSharePerc, uint256 swapFeeVaultSharePerc) = feePolicy.computePerpToUnderlyingSwapFeePercs(
-            feePolicy.computeDeviationRatio(s.perpTVL - underlyingAmtOut, s.vaultTVL, s.seniorTR)
-        );
+
+        // We charge no swap fee when interacting with other parts of the system.
+        uint256 swapFeePerpSharePerc = 0;
+        uint256 swapFeeVaultSharePerc = 0;
+        if (!_isProtocolCaller()) {
+            (swapFeePerpSharePerc, swapFeeVaultSharePerc) = feePolicy.computePerpToUnderlyingSwapFeePercs(
+                feePolicy.computeDeviationRatio(s.perpTVL - underlyingAmtOut, s.vaultTVL, s.seniorTR)
+            );
+        }
         //-----------------------------------------------------------------------------
 
         // Calculate perp fee share to be paid by the vault
@@ -604,7 +628,8 @@ contract RolloverVault is
     /// @inheritdoc IVault
     function computeMintAmt(uint256 underlyingAmtIn) public view returns (uint256) {
         //-----------------------------------------------------------------------------
-        uint256 feePerc = feePolicy.computeVaultMintFeePerc();
+        // We charge no mint fee when interacting with other callers within the system.
+        uint256 feePerc = !_isProtocolCaller() ? feePolicy.computeVaultMintFeePerc() : 0;
         //-----------------------------------------------------------------------------
 
         // Compute mint amt
@@ -621,7 +646,8 @@ contract RolloverVault is
     /// @inheritdoc IVault
     function computeRedemptionAmts(uint256 notes) public view returns (TokenAmount[] memory) {
         //-----------------------------------------------------------------------------
-        uint256 feePerc = feePolicy.computeVaultBurnFeePerc();
+        // We charge no burn fee when interacting with other parts of the system.
+        uint256 feePerc = !_isProtocolCaller() ? feePolicy.computeVaultBurnFeePerc() : 0;
         //-----------------------------------------------------------------------------
 
         uint256 totalSupply_ = totalSupply();
@@ -1002,5 +1028,11 @@ contract RolloverVault is
     ) private view returns (uint256) {
         (uint256 trancheClaim, uint256 trancheSupply) = tranche.getTrancheCollateralization(collateralToken);
         return trancheClaim.mulDiv(trancheAmt, trancheSupply, MathUpgradeable.Rounding.Up);
+    }
+
+    /// @dev Checks if caller is another module within the protocol.
+    ///      If so, we do not charge mint/burn for internal operations.
+    function _isProtocolCaller() private view returns (bool) {
+        return (_msgSender() == balancer);
     }
 }

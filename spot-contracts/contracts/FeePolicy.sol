@@ -80,10 +80,10 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     uint256 public constant SR_UPPER_BOUND = 2 * ONE; // 2.0 or 200%
 
     //-----------------------------------------------------------------------------
-    /// @inheritdoc IFeePolicy
+    /// @notice The target subscription ratio i.e) the normalization factor.
     /// @dev The ratio under which the system is considered "under-subscribed".
     ///      Adds a safety buffer to ensure that rollovers are better sustained.
-    uint256 public override targetSubscriptionRatio;
+    uint256 public targetSubscriptionRatio;
 
     //-----------------------------------------------------------------------------
 
@@ -151,7 +151,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         perpRolloverFee.upper = int256(ONE) / (10 * 13); // 0.1/13 = 0.00769 (10% annualized)
         perpRolloverFee.growth = 5 * int256(ONE); // 5.0
 
-        targetSubscriptionRatio = (ONE * 133) / 100; // 1.33
+        targetSubscriptionRatio = (ONE * 15) / 10; // 1.5
     }
 
     //-----------------------------------------------------------------------------
@@ -312,7 +312,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computeDeviationRatio(SubscriptionParams memory s) public view returns (uint256) {
+    function computeDeviationRatio(SubscriptionParams memory s) external view override returns (uint256) {
         return computeDeviationRatio(s.perpTVL, s.vaultTVL, s.seniorTR);
     }
 
@@ -321,9 +321,18 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         uint256 perpTVL,
         uint256 vaultTVL,
         uint256 seniorTR
-    ) public view returns (uint256) {
+    ) public view override returns (uint256) {
         // NOTE: We assume that perp's TVL and vault's TVL values have the same base denomination.
         uint256 juniorTR = TRANCHE_RATIO_GRANULARITY - seniorTR;
         return (vaultTVL * seniorTR).mulDiv(ONE, (perpTVL * juniorTR)).mulDiv(ONE, targetSubscriptionRatio);
+    }
+
+    /// @inheritdoc IFeePolicy
+    function computeNeutralPerpVaultSplit(uint256 seniorTR) external view override returns (uint256, uint256) {
+        uint256 juniorTR = TRANCHE_RATIO_GRANULARITY - seniorTR;
+        uint256 neutralJuniorTR = juniorTR.mulDiv(targetSubscriptionRatio, ONE, MathUpgradeable.Rounding.Up);
+        uint256 vaultPerc = ONE.mulDiv(neutralJuniorTR, (seniorTR + neutralJuniorTR), MathUpgradeable.Rounding.Up);
+        uint256 perpPerc = ONE - vaultPerc;
+        return (perpPerc, vaultPerc);
     }
 }
