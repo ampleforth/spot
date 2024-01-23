@@ -232,26 +232,26 @@ describe("BondTranchesHelpers", function () {
           await tranches[a].transfer(userAddress, toFixedPtAmt(amounts[a]));
         }
         const b = await helper["computeRedeemableTrancheAmounts(address,address)"](bond.address, userAddress);
-        if (b[1][0].gt("0")) {
-          await bond.connect(user).redeem(b[1]);
-        }
         for (const a in redemptionAmts) {
           expect(b[1][a]).to.eq(toFixedPtAmt(redemptionAmts[a]));
+        }
+        if (b[1][0].gt("0")) {
+          await bond.connect(user).redeem(b[1]);
         }
       }
 
       describe("when the user has the entire supply", function () {
-        describe("[200,300,500]:[200, 300, 500]", async function () {
+        describe("[200,800]:[200,800]", async function () {
           it("should calculate the amounts", async function () {
-            await checkRedeemableAmts([200, 300, 500], ["200", "300", "500"], ["200", "300", "500"]);
+            await checkRedeemableAmts([200, 800], ["200", "800"], ["200", "800"]);
           });
         });
       });
 
       describe("when the user does not have the entire supply", function () {
-        describe("[200,300,500]:[10, 15, 25]", async function () {
+        describe("[200,800]:[10, 15, 25]", async function () {
           it("should calculate the amounts", async function () {
-            await checkRedeemableAmts([200, 300, 500], ["10", "15", "25"], ["10", "15", "25"]);
+            await checkRedeemableAmts([200, 800], ["10", "40"], ["10", "40"]);
           });
         });
       });
@@ -274,84 +274,82 @@ describe("BondTranchesHelpers", function () {
           await tranches[a].transfer(userAddress, toFixedPtAmt(amounts[a]));
         }
         const b = await helper["computeRedeemableTrancheAmounts(address,address)"](bond.address, userAddress);
-        if (b[1][0].gt("0")) {
-          await bond.connect(user).redeem(b[1]);
-        }
         for (const a in redemptionAmts) {
           expect(b[1][a]).to.eq(toFixedPtAmt(redemptionAmts[a]));
         }
+        if (b[1][0].gt("0")) {
+          await bond.connect(user).redeem(b[1]);
+        }
       }
 
-      describe("[200,300,500]:[9, 15, 25]", async function () {
+      describe("[200,800]:[9, 40]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["9", "15", "25"], ["9", "13.5", "22.5"]);
+          await checkRedeemableAmts([200, 800], ["9", "40"], ["9", "36"]);
         });
       });
 
-      describe("[200,300,500]:[10, 15, 250]", async function () {
+      describe("[200,800]:[10, 265]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["10", "15", "250"], ["10", "15", "25"]);
+          await checkRedeemableAmts([200, 800], ["10", "265"], ["10", "40"]);
         });
       });
 
-      describe("[200,300,500]:[10, 12, 250]", async function () {
+      describe("[200,800]:[10, 32]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["10", "12", "250"], ["8", "12", "20"]);
+          await checkRedeemableAmts([200, 800], ["10", "32"], ["8", "32"]);
         });
       });
 
-      describe("[200,300,500]:[10, 12, 5]", async function () {
+      describe("[200,800]:[100, 9]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["10", "12", "5"], ["2", "3", "5"]);
+          await checkRedeemableAmts([200, 800], ["100", "9"], ["2.25", "9"]);
         });
       });
 
-      describe("[200,300,500]:[10, 12, 0.5]", async function () {
+      describe("[200,800]:[10, 0.8]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["10", "12", "0.5"], ["0.2", "0.3", "0.5"]);
+          await checkRedeemableAmts([200, 800], ["10", "0.8"], ["0.2", "0.8"]);
         });
       });
 
-      describe("[200,300,500]:[10, 0, 25]", async function () {
+      describe("[200,800]:[10, 0]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["10", "0", "25"], ["0", "0", "0"]);
+          await checkRedeemableAmts([200, 800], ["10", "0"], ["0", "0"]);
         });
       });
 
-      describe("[200,300,500]:[0, 15, 25]", async function () {
+      describe("[200,800]:[0, 40]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["0", "15", "25"], ["0", "0", "0"]);
+          await checkRedeemableAmts([200, 800], ["0", "40"], ["0", "0"]);
         });
       });
 
       describe("imperfect rounding", function () {
-        describe("[200,300,500]:[10, 15, 7.461048491123254231]", async function () {
+        describe("[200,800]:[10, 22.461048491123254231]", async function () {
           it("should calculate the amounts", async function () {
             await checkRedeemableAmts(
-              [200, 300, 500],
-              ["10", "15", "7.461048491123254230"],
-              ["2.984419396449301600", "4.476629094673952400", "7.461048491123254000"],
+              [200, 800],
+              ["10", "22.461048491123254231"],
+              ["5.6152621227808134", "22.4610484911232536"],
             );
           });
         });
 
-        describe("[200,300,500]:[1000e-18,5001e-18,503e-18]", async function () {
+        describe("[200,800]:[1000e-18,801e-18]", async function () {
           it("should calculate the amounts", async function () {
-            await checkRedeemableAmts(
-              [200, 300, 500],
-              ["1000e-18", "5001e-18", "503e-18"],
-              ["200e-18", "300e-18", "500e-18"],
-            );
+            await checkRedeemableAmts([200, 800], ["1000e-18", "801e-18"], ["200e-18", "800e-18"]);
           });
         });
 
-        describe("[200,300,500]:[1000e-18,5001e-18,506e-18]", async function () {
+        describe("[200,800]:[1000e-18,1001e-18]", async function () {
           it("should calculate the amounts", async function () {
-            await checkRedeemableAmts(
-              [200, 300, 500],
-              ["1000e-18", "5001e-18", "506e-18"],
-              ["200e-18", "300e-18", "500e-18"],
-            );
+            await checkRedeemableAmts([200, 800], ["1000e-18", "1001e-18"], ["200e-18", "800e-18"]);
+          });
+        });
+
+        describe("[200,800]:[1000e-18,1601e-18]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts([200, 800], ["1000e-18", "1601e-18"], ["400e-18", "1600e-18"]);
           });
         });
 
@@ -406,30 +404,30 @@ describe("BondTranchesHelpers", function () {
         }
       }
 
-      describe("[200, 300, 500]:[200, 300, 500]", async function () {
+      describe("[200,800]:[200,800]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["200", "300", "500"], ["200", "300", "500"]);
+          await checkRedeemableAmts([200, 800], ["200", "800"], ["200", "800"]);
         });
       });
 
-      describe("[200, 300, 500]:[6, 9, 15]", async function () {
+      describe("[200,800]:[6, 9, 15]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["6", "9", "15"], ["6", "9", "15"]);
+          await checkRedeemableAmts([200, 800], ["6", "24"], ["6", "24"]);
         });
       });
 
-      describe("[200, 300, 500]:[202, 303, 505]", async function () {
+      describe("[200,800]:[202, 808]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["202", "303", "505"], ["202", "303", "505"]);
+          await checkRedeemableAmts([200, 800], ["202", "808"], ["202", "808"]);
         });
       });
 
       describe("when the bond has a balance", async function () {
         await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
 
-        describe("[200, 300, 500]:[202, 303, 505]", async function () {
+        describe("[200,800]:[202, 808]", async function () {
           it("should calculate the amounts", async function () {
-            await checkRedeemableAmts([200, 300, 500], ["202", "303", "505"], ["202", "303", "505"]);
+            await checkRedeemableAmts([200, 800], ["202", "808"], ["202", "808"]);
           });
         });
       });
@@ -456,88 +454,74 @@ describe("BondTranchesHelpers", function () {
         }
       }
 
-      describe("[200, 300, 500]:[9, 15, 25]", async function () {
+      describe("[200,800]:[9, 40]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["9", "15", "25"], ["9", "13.5", "22.5"]);
+          await checkRedeemableAmts([200, 800], ["9", "40"], ["9", "36"]);
         });
       });
 
-      describe("[200, 300, 500]:[10, 15, 250]", async function () {
+      describe("[200,800]:[10, 265]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["10", "15", "250"], ["10", "15", "25"]);
+          await checkRedeemableAmts([200, 800], ["10", "265"], ["10", "40"]);
         });
       });
 
-      describe("[200, 300, 500]:[10, 12, 250]", async function () {
+      describe("[200,800]:[10, 32]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["10", "12", "250"], ["8", "12", "20"]);
+          await checkRedeemableAmts([200, 800], ["10", "32"], ["8", "32"]);
         });
       });
 
-      describe("[200, 300, 500]:[10, 12, 5]", async function () {
+      describe("[200,800]:[100, 9]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["10", "12", "5"], ["2", "3", "5"]);
+          await checkRedeemableAmts([200, 800], ["100", "9"], ["2.25", "9"]);
         });
       });
 
-      describe("[200, 300, 500]:[10, 12, 0.5]", async function () {
+      describe("[200,800]:[10, 0.8]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["10", "12", "0.5"], ["0.2", "0.3", "0.5"]);
+          await checkRedeemableAmts([200, 800], ["10", "0.8"], ["0.2", "0.8"]);
         });
       });
 
-      describe("[200, 300, 500]:[10, 0, 25]", async function () {
+      describe("[200,800]:[10, 0]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["10", "0", "25"], ["0", "0", "0"]);
+          await checkRedeemableAmts([200, 800], ["10", "0"], ["0", "0"]);
         });
       });
 
-      describe("[200, 300, 500]:[0, 15, 25]", async function () {
+      describe("[200,800]:[0, 40]", async function () {
         it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["0", "15", "25"], ["0", "0", "0"]);
-        });
-      });
-
-      describe("[200, 300, 500]:[10, 15, 0]", async function () {
-        it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["10", "15", "0"], ["0", "0", "0"]);
-        });
-      });
-
-      describe("[200, 300, 500]:[200, 300, 505]", async function () {
-        it("should calculate the amounts", async function () {
-          await checkRedeemableAmts([200, 300, 500], ["200", "300", "505"], ["200", "300", "500"]);
+          await checkRedeemableAmts([200, 800], ["0", "40"], ["0", "0"]);
         });
       });
 
       describe("imperfect rounding", function () {
-        describe("[200,300,500]:[10, 15, 7.461048491123254231]", async function () {
+        describe("[200,800]:[10, 22.461048491123254231]", async function () {
           it("should calculate the amounts", async function () {
             await checkRedeemableAmts(
-              [200, 300, 500],
-              ["10", "15", "7.461048491123254230"],
-              ["2.984419396449301600", "4.476629094673952400", "7.461048491123254000"],
+              [200, 800],
+              ["10", "22.461048491123254231"],
+              ["5.6152621227808134", "22.4610484911232536"],
             );
           });
         });
 
-        describe("[200,300,500]:[1000e-18,5001e-18,503e-18]", async function () {
+        describe("[200,800]:[1000e-18,801e-18]", async function () {
           it("should calculate the amounts", async function () {
-            await checkRedeemableAmts(
-              [200, 300, 500],
-              ["1000e-18", "5001e-18", "503e-18"],
-              ["200e-18", "300e-18", "500e-18"],
-            );
+            await checkRedeemableAmts([200, 800], ["1000e-18", "801e-18"], ["200e-18", "800e-18"]);
           });
         });
 
-        describe("[200,300,500]:[1000e-18,5001e-18,506e-18]", async function () {
+        describe("[200,800]:[1000e-18,1001e-18]", async function () {
           it("should calculate the amounts", async function () {
-            await checkRedeemableAmts(
-              [200, 300, 500],
-              ["1000e-18", "5001e-18", "506e-18"],
-              ["200e-18", "300e-18", "500e-18"],
-            );
+            await checkRedeemableAmts([200, 800], ["1000e-18", "1001e-18"], ["200e-18", "800e-18"]);
+          });
+        });
+
+        describe("[200,800]:[1000e-18,1601e-18]", async function () {
+          it("should calculate the amounts", async function () {
+            await checkRedeemableAmts([200, 800], ["1000e-18", "1601e-18"], ["400e-18", "1600e-18"]);
           });
         });
 
