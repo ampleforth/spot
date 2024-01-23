@@ -2,6 +2,7 @@
 pragma solidity ^0.8.19;
 
 import { IPerpetualTranche, IERC20Upgradeable, ITranche } from "../../_interfaces/IPerpetualTranche.sol";
+import { TokenAmount, RolloverData } from "../../_interfaces/ReturnData.sol";
 
 contract MockVault {
     function getTVL() public pure returns (uint256) {
@@ -31,16 +32,14 @@ contract MockVault {
 
     function redeemPerps(IPerpetualTranche perp, uint256 perpAmt) public {
         perp.transferFrom(msg.sender, address(this), perpAmt);
-        (IERC20Upgradeable[] memory tokensOut, ) = perp.redeem(perpAmt);
+        TokenAmount[] memory tokensOut = perp.redeem(perpAmt);
         for (uint256 i = 0; i < tokensOut.length; i++) {
-            tokensOut[i].transfer(msg.sender, tokensOut[i].balanceOf(address(this)));
+            IERC20Upgradeable tokenOut = tokensOut[i].token;
+            tokenOut.transfer(msg.sender, tokenOut.balanceOf(address(this)));
         }
     }
 
-    function computePerpRedemptionAmts(IPerpetualTranche perp, uint256 perpAmt)
-        public
-        returns (IERC20Upgradeable[] memory, uint256[] memory)
-    {
+    function computePerpRedemptionAmts(IPerpetualTranche perp, uint256 perpAmt) public returns (TokenAmount[] memory) {
         return perp.computeRedemptionAmts(perpAmt);
     }
 
@@ -49,11 +48,11 @@ contract MockVault {
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmt
-    ) public returns (IPerpetualTranche.RolloverData memory) {
+    ) public returns (RolloverData memory) {
         trancheIn.transferFrom(msg.sender, address(this), trancheInAmt);
 
         trancheIn.approve(address(perp), trancheInAmt);
-        IPerpetualTranche.RolloverData memory r = perp.rollover(trancheIn, tokenOut, trancheInAmt);
+        RolloverData memory r = perp.rollover(trancheIn, tokenOut, trancheInAmt);
 
         trancheIn.transfer(msg.sender, trancheIn.balanceOf(address(this)));
         tokenOut.transfer(msg.sender, tokenOut.balanceOf(address(this)));

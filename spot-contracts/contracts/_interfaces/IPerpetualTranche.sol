@@ -5,10 +5,10 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 
 import { IBondIssuer } from "./IBondIssuer.sol";
 import { IFeePolicy } from "./IFeePolicy.sol";
-import { IPricingStrategy } from "./IPricingStrategy.sol";
-import { IDiscountStrategy } from "./IDiscountStrategy.sol";
 import { IBondController } from "./buttonwood/IBondController.sol";
 import { ITranche } from "./buttonwood/ITranche.sol";
+import { IRolloverVault } from "./IRolloverVault.sol";
+import { TokenAmount, RolloverData } from "./ReturnData.sol";
 
 interface IPerpetualTranche is IERC20Upgradeable {
     //--------------------------------------------------------------------------
@@ -34,18 +34,8 @@ interface IPerpetualTranche is IERC20Upgradeable {
 
     /// @notice Burn perp tokens and redeem the share of reserve assets.
     /// @param perpAmtBurnt The amount of perp tokens burnt from the caller.
-    /// @return tokensOut The list of reserve tokens redeemed.
-    /// @return tokenOutAmts The list of reserve token amounts redeemed.
-    function redeem(uint256 perpAmtBurnt)
-        external
-        returns (IERC20Upgradeable[] memory tokensOut, uint256[] memory tokenOutAmts);
-
-    struct RolloverData {
-        /// @notice The amount of tokens rolled out.
-        uint256 tokenOutAmt;
-        /// @notice The amount of trancheIn tokens rolled in.
-        uint256 trancheInAmt;
-    }
+    /// @return tokensOut The list of reserve tokens and amounts redeemed.
+    function redeem(uint256 perpAmtBurnt) external returns (TokenAmount[] memory tokensOut);
 
     /// @notice Rotates newer tranches in for reserve tokens.
     /// @param trancheIn The tranche token deposited.
@@ -70,6 +60,9 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @notice The address of the underlying rebasing ERC-20 collateral token backing the tranches.
     /// @return Address of the underlying collateral token.
     function underlying() external view returns (IERC20Upgradeable);
+
+    /// @return Address of perp's rollover vault.
+    function vault() external view returns (IRolloverVault);
 
     /// @notice The parent bond whose tranches are currently accepted to mint perp tokens.
     /// @return Address of the deposit bond.
@@ -134,11 +127,8 @@ interface IPerpetualTranche is IERC20Upgradeable {
 
     /// @notice Computes the amount reserve tokens redeemed when burning given number of perp tokens.
     /// @param perpAmtBurnt The amount of perp tokens to be burnt.
-    /// @return tokensOut The list of reserve tokens redeemed.
-    /// @return tokenOutAmts The list of reserve token amounts redeemed.
-    function computeRedemptionAmts(uint256 perpAmtBurnt)
-        external
-        returns (IERC20Upgradeable[] memory tokensOut, uint256[] memory tokenOutAmts);
+    /// @return tokensOut The list of reserve tokens and amounts redeemed.
+    function computeRedemptionAmts(uint256 perpAmtBurnt) external returns (TokenAmount[] memory tokensOut);
 
     /// @notice Computes the amount reserve tokens that are rolled out for the given number
     ///         of `trancheIn` tokens rolled in.
