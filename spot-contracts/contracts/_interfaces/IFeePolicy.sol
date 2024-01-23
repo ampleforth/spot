@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import { SubscriptionParams } from "./ReturnData.sol";
 
 interface IFeePolicy {
     /// @param dr The current system deviation ratio.
@@ -61,16 +62,6 @@ interface IFeePolicy {
     /// @return Number of decimals representing a multiplier of 1.0. So, 100% = 1*10**decimals.
     function decimals() external view returns (uint8);
 
-    /// @notice The system subscription parameters.
-    struct SubscriptionParams {
-        /// @notice The current TVL of perp denominated in the underlying.
-        uint256 perpTVL;
-        /// @notice The current TVL of the vault denominated in the underlying.
-        uint256 vaultTVL;
-        /// @notice The tranche ratio of seniors accepted by perp.
-        uint256 seniorTR;
-    }
-
     /// @param s The subscription parameters of both the perp and vault systems.
     /// @return The deviation ratio given the system subscription parameters.
     function computeDeviationRatio(SubscriptionParams memory s) external view returns (uint256);
@@ -84,4 +75,7 @@ interface IFeePolicy {
         uint256 vaultTVL,
         uint256 seniorTR
     ) external view returns (uint256);
+
+    /// @notice The target subscription ratio i.e) the normalization factor.
+    function targetSubscriptionRatio() external view returns (uint256);
 }

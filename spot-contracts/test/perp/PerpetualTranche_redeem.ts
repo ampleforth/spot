@@ -137,10 +137,8 @@ describe("PerpetualTranche", function () {
         await expect(perp.redeem(toFixedPtAmt("100"))).to.revertedWithCustomError(perp, "UnacceptableRedemption");
       });
 
-      it("should return 0", async function () {
-        const r = await perp.callStatic.computeRedemptionAmts(toFixedPtAmt("100"));
-        await expect(r[1][0]).to.eq("0");
-        await expect(r[1][1]).to.eq("0");
+      it("should return revert", async function () {
+        await expect(perp.callStatic.computeRedemptionAmts(toFixedPtAmt("100"))).to.revertedWithCustomError(perp, "UnacceptableRedemption");
       });
     });
 
@@ -168,17 +166,17 @@ describe("PerpetualTranche", function () {
       });
       it("should return the redemption amounts", async function () {
         const r = await perp.callStatic.redeem(toFixedPtAmt("500"));
-        expect(r[0][0]).to.eq(collateralToken.address);
-        expect(r[0][1]).to.eq(initialDepositTranche.address);
-        expect(r[1][0]).to.eq("0");
-        expect(r[1][1]).to.eq(toFixedPtAmt("500"));
+        expect(r[0].token).to.eq(collateralToken.address);
+        expect(r[1].token).to.eq(initialDepositTranche.address);
+        expect(r[0].amount).to.eq("0");
+        expect(r[1].amount).to.eq(toFixedPtAmt("500"));
       });
       it("should return the redemption amounts", async function () {
         const r = await perp.callStatic.computeRedemptionAmts(toFixedPtAmt("500"));
-        expect(r[0][0]).to.eq(collateralToken.address);
-        expect(r[0][1]).to.eq(initialDepositTranche.address);
-        expect(r[1][0]).to.eq("0");
-        expect(r[1][1]).to.eq(toFixedPtAmt("500"));
+        expect(r[0].token).to.eq(collateralToken.address);
+        expect(r[1].token).to.eq(initialDepositTranche.address);
+        expect(r[0].amount).to.eq("0");
+        expect(r[1].amount).to.eq(toFixedPtAmt("500"));
       });
     });
 
@@ -692,12 +690,12 @@ describe("PerpetualTranche", function () {
 
       it("should return the redemption amounts", async function () {
         const r = await mockVault.callStatic.computePerpRedemptionAmts(perp.address, toFixedPtAmt("500"));
-        expect(r[0][0]).to.eq(collateralToken.address);
-        expect(r[0][1]).to.eq(initialDepositTranche.address);
-        expect(r[0][2]).to.eq(newRedemptionTranche.address);
-        expect(r[1][0]).to.eq(toFixedPtAmt("50"));
-        expect(r[1][1]).to.eq(toFixedPtAmt("250"));
-        expect(r[1][2]).to.eq(toFixedPtAmt("250"));
+        expect(r[0].token).to.eq(collateralToken.address);
+        expect(r[1].token).to.eq(initialDepositTranche.address);
+        expect(r[2].token).to.eq(newRedemptionTranche.address);
+        expect(r[0].amount).to.eq(toFixedPtAmt("50"));
+        expect(r[1].amount).to.eq(toFixedPtAmt("250"));
+        expect(r[2].amount).to.eq(toFixedPtAmt("250"));
       });
     });
   });
