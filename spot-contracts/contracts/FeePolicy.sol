@@ -322,12 +322,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         uint256 seniorTR
     ) public view returns (uint256) {
         // NOTE: We assume that perp's TVL and vault's TVL values have the same base denomination.
-        return
-            vaultTVL
-                .mulDiv(
-                    ONE,
-                    perpTVL.mulDiv((TRANCHE_RATIO_GRANULARITY - seniorTR), seniorTR, MathUpgradeable.Rounding.Up)
-                )
-                .mulDiv(ONE, targetSubscriptionRatio);
+        uint256 juniorTR = TRANCHE_RATIO_GRANULARITY - seniorTR;
+        return (vaultTVL * seniorTR).mulDiv(ONE, (perpTVL * juniorTR)).mulDiv(ONE, targetSubscriptionRatio);
     }
 }
