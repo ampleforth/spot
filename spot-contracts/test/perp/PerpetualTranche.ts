@@ -51,6 +51,11 @@ describe("PerpetualTranche", function () {
         initializer: "init(string,string,address,address,address)",
       },
     );
+
+    const RolloverVault = await ethers.getContractFactory("RolloverVault");
+    const vault = await smock.fake(RolloverVault);
+    await vault.getTVL.returns("0");
+    await perp.updateVault(vault.address);
   });
 
   afterEach(async function () {
@@ -222,7 +227,6 @@ describe("PerpetualTranche", function () {
         vault = await smock.fake(RolloverVault);
         await vault.getTVL.returns(0);
 
-        expect(await perp.vault()).to.eq(constants.AddressZero);
         tx = perp.connect(deployer).updateVault(vault.address);
         await tx;
       });

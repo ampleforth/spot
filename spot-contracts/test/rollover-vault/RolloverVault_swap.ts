@@ -65,6 +65,12 @@ describe("RolloverVault", function () {
     await perp.updateTolerableTrancheMaturity(1200, 4800);
     await advancePerpQueueToBondMaturity(perp, await getDepositBond(perp));
 
+    const RolloverVault = await ethers.getContractFactory("RolloverVault");
+    vault = await upgrades.deployProxy(RolloverVault.connect(deployer));
+    await collateralToken.approve(vault.address, toFixedPtAmt("1"));
+    await vault.init("RolloverVault", "VSHARE", perp.address, feePolicy.address);
+    await perp.updateVault(vault.address);
+
     reserveTranches = [];
     remainingJuniorTranches = [];
     for (let i = 0; i < 4; i++) {
@@ -85,19 +91,12 @@ describe("RolloverVault", function () {
       [collateralToken, ...reserveTranches.slice(-3)],
       [toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
     );
-
-    await mintCollteralToken(collateralToken, toFixedPtAmt("100000"), deployer);
-    const RolloverVault = await ethers.getContractFactory("RolloverVault");
-    vault = await upgrades.deployProxy(RolloverVault.connect(deployer));
-    await collateralToken.approve(vault.address, toFixedPtAmt("1"));
-    await vault.init("RolloverVault", "VSHARE", perp.address, feePolicy.address);
-    await perp.updateVault(vault.address);
     await checkVaultAssetComposition(vault, [collateralToken], ["0"]);
     expect(await vault.deployedCount()).to.eq(0);
 
+    await mintCollteralToken(collateralToken, toFixedPtAmt("100000"), deployer);
     currentBondIn = await bondAt(await perp.callStatic.getDepositBond());
     currentTranchesIn = await getTranches(currentBondIn);
-
     await collateralToken.transfer(vault.address, toFixedPtAmt("1000"));
     await vault.deploy();
     await collateralToken.transfer(vault.address, toFixedPtAmt("1000"));

@@ -18,6 +18,7 @@ let perp: Contract,
   collateralToken: Contract,
   issuer: Contract,
   feePolicy: Contract,
+  vault: Contract,
   deployer: Signer,
   deployerAddress: string,
   router: Contract,
@@ -54,6 +55,11 @@ describe("RouterV2", function () {
     );
     await perp.updateTolerableTrancheMaturity(600, 3600);
     await advancePerpQueue(perp, 3600);
+
+    const RolloverVault = await ethers.getContractFactory("RolloverVault");
+    vault = await smock.fake(RolloverVault);
+    await vault.getTVL.returns("0");
+    await perp.updateVault(vault.address);
 
     depositBond = await bondAt(await perp.callStatic.getDepositBond());
     depositTranches = await getTranches(depositBond);

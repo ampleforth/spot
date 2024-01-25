@@ -49,13 +49,24 @@ contract MockVault {
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmt
-    ) public {
+    ) public returns (IPerpetualTranche.RolloverData memory) {
         trancheIn.transferFrom(msg.sender, address(this), trancheInAmt);
 
         trancheIn.approve(address(perp), trancheInAmt);
-        perp.rollover(trancheIn, tokenOut, trancheInAmt);
+        IPerpetualTranche.RolloverData memory r = perp.rollover(trancheIn, tokenOut, trancheInAmt);
 
         trancheIn.transfer(msg.sender, trancheIn.balanceOf(address(this)));
         tokenOut.transfer(msg.sender, tokenOut.balanceOf(address(this)));
+
+        return r;
+    }
+
+    function callRollover(
+        IPerpetualTranche perp,
+        ITranche trancheIn,
+        IERC20Upgradeable tokenOut,
+        uint256 trancheInAmt
+    ) public {
+        perp.rollover(trancheIn, tokenOut, trancheInAmt);
     }
 }

@@ -68,6 +68,7 @@ describe("PerpetualTranche", function () {
 
     await perp.updateTolerableTrancheMaturity(1200, 10800);
     await advancePerpQueue(perp, 10900);
+    await perp.updateVault(mockVault.address);
 
     holdingPenBond = await bondAt(await perp.callStatic.getDepositBond());
     [holdingPenTranche1] = await getTranches(holdingPenBond);
@@ -100,6 +101,9 @@ describe("PerpetualTranche", function () {
       [collateralToken, reserveTranche, rolloverInTranche],
       [toFixedPtAmt("500"), toFixedPtAmt("500"), toFixedPtAmt("500")],
     );
+
+    await rolloverInTranche.approve(mockVault.address, toFixedPtAmt("5000"));
+    await reserveTranche.approve(mockVault.address, toFixedPtAmt("5000"));
   });
 
   afterEach(async function () {
@@ -115,7 +119,7 @@ describe("PerpetualTranche", function () {
 
       it("should revert", async function () {
         await expect(
-          perp.rollover(rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
         ).to.revertedWith("Pausable: paused");
       });
     });
@@ -146,7 +150,7 @@ describe("PerpetualTranche", function () {
       });
       it("should revert", async function () {
         await expect(
-          perp.rollover(rolloverInTranche.address, tranches[1].address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, rolloverInTranche.address, tranches[1].address, toFixedPtAmt("500")),
         ).to.revertedWithCustomError(perp, "UnacceptableRollover");
       });
     });
@@ -154,16 +158,16 @@ describe("PerpetualTranche", function () {
     describe("when trancheIn is NOT of deposit bond", function () {
       it("should revert", async function () {
         await expect(
-          perp.rollover(reserveTranche.address, collateralToken.address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, reserveTranche.address, collateralToken.address, toFixedPtAmt("500")),
         ).to.revertedWithCustomError(perp, "UnacceptableRollover");
         await expect(
-          perp.rollover(reserveTranche.address, reserveTranche.address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, reserveTranche.address, reserveTranche.address, toFixedPtAmt("500")),
         ).to.revertedWithCustomError(perp, "UnacceptableRollover");
         await expect(
-          perp.rollover(reserveTranche.address, reserveTranche.address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, reserveTranche.address, reserveTranche.address, toFixedPtAmt("500")),
         ).to.revertedWithCustomError(perp, "UnacceptableRollover");
         await expect(
-          perp.rollover(reserveTranche.address, holdingPenTranche1.address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, reserveTranche.address, holdingPenTranche1.address, toFixedPtAmt("500")),
         ).to.revertedWithCustomError(perp, "UnacceptableRollover");
       });
     });
@@ -176,7 +180,7 @@ describe("PerpetualTranche", function () {
       });
       it("should revert", async function () {
         await expect(
-          perp.rollover(rolloverInTranche.address, maliciousTranche.address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, rolloverInTranche.address, maliciousTranche.address, toFixedPtAmt("500")),
         ).to.revertedWithCustomError(perp, "UnacceptableRollover");
       });
     });
@@ -187,10 +191,17 @@ describe("PerpetualTranche", function () {
         await advancePerpQueue(perp, 1200);
         const newRotationInBond = await bondAt(await perp.callStatic.getDepositBond());
         [newRotationInTranche] = await getTranches(newRotationInBond);
+        await depositIntoBond(newRotationInBond, toFixedPtAmt("2000"), deployer);
+        await newRotationInTranche.approve(mockVault.address, toFixedPtAmt("500"));
       });
       it("should revert", async function () {
         await expect(
-          perp.rollover(newRotationInTranche.address, rolloverInTranche.address, toFixedPtAmt("500")),
+          mockVault.rollover(
+            perp.address,
+            newRotationInTranche.address,
+            rolloverInTranche.address,
+            toFixedPtAmt("500"),
+          ),
         ).to.revertedWithCustomError(perp, "UnacceptableRollover");
       });
     });
@@ -203,11 +214,11 @@ describe("PerpetualTranche", function () {
         await maliciousTranche.init("Tranche", "TRA");
         await maliciousTranche.mint(deployerAddress, toFixedPtAmt("500"));
         await maliciousTranche.setBond(await perp.callStatic.getDepositBond());
-        await maliciousTranche.approve(perp.address, toFixedPtAmt("500"));
+        await maliciousTranche.approve(mockVault.address, toFixedPtAmt("500"));
       });
       it("should revert", async function () {
         await expect(
-          perp.rollover(maliciousTranche.address, reserveTranche.address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, maliciousTranche.address, reserveTranche.address, toFixedPtAmt("500")),
         ).to.revertedWithCustomError(perp, "UnacceptableRollover");
       });
     });
@@ -220,27 +231,28 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         expect(await rolloverInTranche.balanceOf(deployerAddress)).to.lt(toFixedPtAmt("500"));
         await expect(
-          perp.rollover(rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
         ).to.revertedWith("ERC20: transfer amount exceeds balance");
       });
     });
 
-    describe("when user has insufficient approval", function () {
-      beforeEach(async function () {
-        await rolloverInTranche.approve(perp.address, "0");
-      });
-
-      it("should revert", async function () {
-        expect(await rolloverInTranche.allowance(deployerAddress, perp.address)).to.lte(toFixedPtAmt("500"));
+    describe("when approval is insufficient", function () {
+      it("should return without rollover", async function () {
+        await rolloverInTranche.transfer(mockVault.address, toFixedPtAmt("500"));
         await expect(
-          perp.rollover(rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
+          mockVault.callRollover(perp.address, rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
         ).to.revertedWith("ERC20: transfer amount exceeds allowance");
       });
     });
 
     describe("when trancheInAmt is zero", function () {
       it("should return without rollover", async function () {
-        const r = await perp.callStatic.rollover(rolloverInTranche.address, reserveTranche.address, "0");
+        const r = await mockVault.callStatic.rollover(
+          perp.address,
+          rolloverInTranche.address,
+          reserveTranche.address,
+          "0",
+        );
         expect(r.tokenOutAmt).to.eq("0");
         expect(r.trancheInAmt).to.eq("0");
       });
@@ -251,11 +263,12 @@ describe("PerpetualTranche", function () {
       beforeEach(async function () {
         const tranches = await getTranches(rolloverInBond);
         newRotationInTranche = tranches[1];
+        await newRotationInTranche.approve(mockVault.address, toFixedPtAmt("500"));
       });
 
       it("should revert", async function () {
         await expect(
-          perp.rollover(newRotationInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, newRotationInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
         ).to.revertedWithCustomError(perp, "UnacceptableRollover");
       });
     });
@@ -489,17 +502,17 @@ describe("PerpetualTranche", function () {
       });
       it("should transfer the tranches in", async function () {
         await expect(() =>
-          perp.rollover(rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
         ).to.changeTokenBalances(rolloverInTranche, [deployer, perp], [toFixedPtAmt("-500"), toFixedPtAmt("500")]);
       });
       it("should transfer the tranches out", async function () {
         await expect(() =>
-          perp.rollover(rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
         ).to.changeTokenBalances(reserveTranche, [deployer, perp], [toFixedPtAmt("500"), toFixedPtAmt("-500")]);
       });
       it("should charge fee", async function () {
         await expect(() =>
-          perp.rollover(rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
         ).to.changeTokenBalance(perp, perp, "0");
       });
       it("should calculate rollover amt", async function () {
@@ -520,12 +533,12 @@ describe("PerpetualTranche", function () {
       });
       it("should transfer the tranches in", async function () {
         await expect(() =>
-          perp.rollover(rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
         ).to.changeTokenBalances(rolloverInTranche, [deployer, perp], [toFixedPtAmt("-500"), toFixedPtAmt("500")]);
       });
       it("should transfer the tranches out", async function () {
         await expect(() =>
-          perp.rollover(rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
         ).to.changeTokenBalances(reserveTranche, [deployer, perp], [toFixedPtAmt("495"), toFixedPtAmt("-495")]);
       });
       it("should calculate rollover amt", async function () {
@@ -546,7 +559,7 @@ describe("PerpetualTranche", function () {
       });
       it("should transfer the tranches in", async function () {
         await expect(() =>
-          perp.rollover(rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
         ).to.changeTokenBalances(
           rolloverInTranche,
           [deployer, perp],
@@ -555,7 +568,7 @@ describe("PerpetualTranche", function () {
       });
       it("should transfer the tranches out", async function () {
         await expect(() =>
-          perp.rollover(rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
+          mockVault.rollover(perp.address, rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500")),
         ).to.changeTokenBalances(reserveTranche, [deployer, perp], [toFixedPtAmt("500"), toFixedPtAmt("-500")]);
       });
       it("should calculate rollover amt", async function () {
@@ -577,14 +590,19 @@ describe("PerpetualTranche", function () {
         const newRolloverInBond = await bondAt(await perp.callStatic.getDepositBond());
         await depositIntoBond(newRolloverInBond, toFixedPtAmt("1000"), deployer);
         [newRotationInTranche] = await getTranches(newRolloverInBond);
-        await newRotationInTranche.approve(perp.address, toFixedPtAmt("250"));
+        await newRotationInTranche.approve(mockVault.address, toFixedPtAmt("250"));
         r = await perp.callStatic.computeRolloverAmt(
           newRotationInTranche.address,
           collateralToken.address,
           toFixedPtAmt("250"),
           constants.MaxUint256,
         );
-        tx = perp.rollover(newRotationInTranche.address, collateralToken.address, toFixedPtAmt("250"));
+        tx = mockVault.rollover(
+          perp.address,
+          newRotationInTranche.address,
+          collateralToken.address,
+          toFixedPtAmt("250"),
+        );
         await tx;
       });
       it("should update the reserve", async function () {
@@ -616,7 +634,7 @@ describe("PerpetualTranche", function () {
           toFixedPtAmt("250"),
           constants.MaxUint256,
         );
-        tx = perp.rollover(rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("250"));
+        tx = mockVault.rollover(perp.address, rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("250"));
         await tx;
       });
 
@@ -649,7 +667,7 @@ describe("PerpetualTranche", function () {
           toFixedPtAmt("250"),
           constants.MaxUint256,
         );
-        tx = perp.rollover(rolloverInTranche.address, collateralToken.address, toFixedPtAmt("250"));
+        tx = mockVault.rollover(perp.address, rolloverInTranche.address, collateralToken.address, toFixedPtAmt("250"));
         await tx;
       });
 
@@ -683,7 +701,7 @@ describe("PerpetualTranche", function () {
           toFixedPtAmt("250"),
           constants.MaxUint256,
         );
-        tx = perp.rollover(rolloverInTranche.address, collateralToken.address, toFixedPtAmt("250"));
+        tx = mockVault.rollover(perp.address, rolloverInTranche.address, collateralToken.address, toFixedPtAmt("250"));
         await tx;
       });
 
@@ -717,7 +735,7 @@ describe("PerpetualTranche", function () {
           toFixedPtAmt("250"),
           constants.MaxUint256,
         );
-        tx = perp.rollover(rolloverInTranche.address, collateralToken.address, toFixedPtAmt("250"));
+        tx = mockVault.rollover(perp.address, rolloverInTranche.address, collateralToken.address, toFixedPtAmt("250"));
         await tx;
       });
 
@@ -750,7 +768,7 @@ describe("PerpetualTranche", function () {
           toFixedPtAmt("500"),
           constants.MaxUint256,
         );
-        tx = perp.rollover(rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500"));
+        tx = mockVault.rollover(perp.address, rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("500"));
         await tx;
       });
 
@@ -784,7 +802,7 @@ describe("PerpetualTranche", function () {
           toFixedPtAmt("500"),
           constants.MaxUint256,
         );
-        tx = perp.rollover(rolloverInTranche.address, collateralToken.address, toFixedPtAmt("500"));
+        tx = mockVault.rollover(perp.address, rolloverInTranche.address, collateralToken.address, toFixedPtAmt("500"));
         await tx;
       });
 
@@ -817,7 +835,7 @@ describe("PerpetualTranche", function () {
           toFixedPtAmt("100"),
           constants.MaxUint256,
         );
-        tx = perp.rollover(rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("100"));
+        tx = mockVault.rollover(perp.address, rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("100"));
         await tx;
       });
 
@@ -851,7 +869,7 @@ describe("PerpetualTranche", function () {
           toFixedPtAmt("2000"),
           constants.MaxUint256,
         );
-        tx = perp.rollover(rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("2000"));
+        tx = mockVault.rollover(perp.address, rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("2000"));
         await tx;
       });
 
@@ -886,7 +904,7 @@ describe("PerpetualTranche", function () {
           toFixedPtAmt("2000"),
           constants.MaxUint256,
         );
-        tx = perp.rollover(rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("2000"));
+        tx = mockVault.rollover(perp.address, rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("2000"));
         await tx;
       });
 
@@ -921,7 +939,7 @@ describe("PerpetualTranche", function () {
           toFixedPtAmt("2000"),
           constants.MaxUint256,
         );
-        tx = perp.rollover(rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("2000"));
+        tx = mockVault.rollover(perp.address, rolloverInTranche.address, reserveTranche.address, toFixedPtAmt("2000"));
         await tx;
       });
 
@@ -955,7 +973,7 @@ describe("PerpetualTranche", function () {
           toFixedPtAmt("100"),
           constants.MaxUint256,
         );
-        tx = perp.rollover(rolloverInTranche.address, collateralToken.address, toFixedPtAmt("100"));
+        tx = mockVault.rollover(perp.address, rolloverInTranche.address, collateralToken.address, toFixedPtAmt("100"));
         await tx;
       });
 
