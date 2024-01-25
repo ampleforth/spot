@@ -291,7 +291,7 @@ contract RolloverVault is
     }
 
     /// @inheritdoc IVault
-    function recover() public override whenNotPaused {
+    function recover() public override nonReentrant whenNotPaused {
         // Redeem deployed tranches
         uint8 deployedCount_ = uint8(_deployed.length());
         if (deployedCount_ <= 0) {
