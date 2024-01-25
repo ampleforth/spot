@@ -58,6 +58,11 @@ describe("PerpetualTranche", function () {
     );
     await advancePerpQueue(perp, 3600);
 
+    const RolloverVault = await ethers.getContractFactory("RolloverVault");
+    const vault = await smock.fake(RolloverVault);
+    await vault.getTVL.returns("0");
+    await perp.updateVault(vault.address);
+
     depositBond = await bondAt(await perp.callStatic.getDepositBond());
     [initialDepositTranche] = await getTranches(depositBond);
 
