@@ -9,23 +9,20 @@ import {
   depositIntoBond,
   getTranches,
   toFixedPtAmt,
-  toDiscountFixedPtAmt,
-  toPriceFixedPtAmt,
   advancePerpQueue,
   bondAt,
   checkReserveComposition,
   TimeHelpers,
   rebase,
   advancePerpQueueToRollover,
-} from "./helpers";
+} from "../helpers";
 use(smock.matchers);
 
 let perp: Contract,
   collateralToken: Contract,
   rebaseOracle: Contract,
   issuer: Contract,
-  feeStrategy: Contract,
-  pricingStrategy: Contract,
+  feePolicy: Contract,
   deployer: Signer,
   otherUser: Signer;
 describe("PerpetualTranche", function () {
@@ -42,30 +39,23 @@ describe("PerpetualTranche", function () {
     issuer = await smock.fake(BondIssuer);
     await issuer.collateral.returns(collateralToken.address);
 
-    const FeeStrategy = await ethers.getContractFactory("FeeStrategy");
-    feeStrategy = await smock.fake(FeeStrategy);
-    await feeStrategy.decimals.returns(8);
-
-    const CDRPricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
-    pricingStrategy = await smock.fake(CDRPricingStrategy);
-    await pricingStrategy.decimals.returns(8);
-    await pricingStrategy.computeTranchePrice.returns(toPriceFixedPtAmt("1"));
+    const FeePolicy = await ethers.getContractFactory("FeePolicy");
+    feePolicy = await smock.fake(FeePolicy);
+    await feePolicy.decimals.returns(8);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
       PerpetualTranche.connect(deployer),
-      [
-        "PerpetualTranche",
-        "PERP",
-        collateralToken.address,
-        issuer.address,
-        feeStrategy.address,
-        pricingStrategy.address,
-      ],
+      ["PerpetualTranche", "PERP", collateralToken.address, issuer.address, feePolicy.address],
       {
-        initializer: "init(string,string,address,address,address,address)",
+        initializer: "init(string,string,address,address,address)",
       },
     );
+
+    const RolloverVault = await ethers.getContractFactory("RolloverVault");
+    const vault = await smock.fake(RolloverVault);
+    await vault.getTVL.returns("0");
+    await perp.updateVault(vault.address);
   });
 
   afterEach(async function () {
@@ -85,24 +75,11 @@ describe("PerpetualTranche", function () {
 
     it("should set ext service references", async function () {
       expect(await perp.bondIssuer()).to.eq(issuer.address);
-      expect(await perp.feeStrategy()).to.eq(feeStrategy.address);
+      expect(await perp.feePolicy()).to.eq(feePolicy.address);
     });
 
-    it("should set collateral reference", async function () {
-      expect(await perp.collateral()).to.eq(collateralToken.address);
-    });
-
-    it("should set collateral discount", async function () {
-      expect(await perp.computeDiscount(collateralToken.address)).to.eq(toDiscountFixedPtAmt("1"));
-    });
-
-    it("should set collateral price", async function () {
-      expect(await perp.computePrice(collateralToken.address)).to.eq(toPriceFixedPtAmt("1"));
-    });
-
-    it("should set fund pool references", async function () {
-      expect(await perp.reserve()).to.eq(perp.address);
-      expect(await perp.perpERC20()).to.eq(perp.address);
+    it("should set underlying collateral reference", async function () {
+      expect(await perp.underlying()).to.eq(collateralToken.address);
     });
 
     it("should initialize lists", async function () {
@@ -225,67 +202,39 @@ describe("PerpetualTranche", function () {
     });
   });
 
-  describe("#authorizeRoller", function () {
-    let tx: Transaction;
-
+  describe("#updateVault", function () {
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
-        await expect(perp.connect(otherUser).authorizeRoller(constants.AddressZero, true)).to.be.revertedWith(
+        await expect(perp.connect(otherUser).updateVault(constants.AddressZero)).to.be.revertedWith(
           "Ownable: caller is not the owner",
         );
       });
     });
 
-    describe("when roller is not authorized and is authorized", function () {
+    describe("when reference is reset", function () {
+      it("should not revert", async function () {
+        await expect(perp.connect(deployer).updateVault(constants.AddressZero)).to.be.revertedWithCustomError(
+          perp,
+          "UnacceptableReference",
+        );
+      });
+    });
+
+    describe("when vault reference is set", function () {
+      let tx: Transaction, vault: Contract;
       beforeEach(async function () {
-        expect(await perp.authorizedRollersCount()).to.eq(0);
-        tx = perp.authorizeRoller(await otherUser.getAddress(), true);
+        const RolloverVault = await ethers.getContractFactory("RolloverVault");
+        vault = await smock.fake(RolloverVault);
+        await vault.getTVL.returns(0);
+
+        tx = perp.connect(deployer).updateVault(vault.address);
         await tx;
       });
-      it("should authorize roller", async function () {
-        expect(await perp.authorizedRollersCount()).to.eq(1);
-        expect(await perp.authorizedRollerAt(0)).to.eq(await otherUser.getAddress());
+      it("should update vault reference", async function () {
+        expect(await perp.vault()).to.eq(vault.address);
       });
       it("should emit event", async function () {
-        await expect(tx)
-          .to.emit(perp, "UpdatedRollerAuthorization")
-          .withArgs(await otherUser.getAddress(), true);
-      });
-    });
-
-    describe("when roller is already authorized and is authorized again", function () {
-      beforeEach(async function () {
-        await perp.authorizeRoller(await otherUser.getAddress(), true);
-      });
-      it("should NOT revert", async function () {
-        await expect(perp.authorizeRoller(await otherUser.getAddress(), true)).not.to.be.reverted;
-        expect(await perp.authorizedRollersCount()).to.eq(1);
-        expect(await perp.authorizedRollerAt(0)).to.eq(await otherUser.getAddress());
-      });
-    });
-
-    describe("when roller is not authorized and is unauthorized", function () {
-      it("should NOT revert", async function () {
-        expect(await perp.authorizedRollersCount()).to.eq(0);
-        await expect(perp.authorizeRoller(await otherUser.getAddress(), false)).not.to.be.reverted;
-        expect(await perp.authorizedRollersCount()).to.eq(0);
-      });
-    });
-
-    describe("when roller is authorized and is unauthorized", function () {
-      beforeEach(async function () {
-        await perp.authorizeRoller(await otherUser.getAddress(), true);
-        expect(await perp.authorizedRollersCount()).to.eq(1);
-        tx = perp.authorizeRoller(await otherUser.getAddress(), false);
-        await tx;
-      });
-      it("should unauthorize roller", async function () {
-        expect(await perp.authorizedRollersCount()).to.eq(0);
-      });
-      it("should emit event", async function () {
-        await expect(tx)
-          .to.emit(perp, "UpdatedRollerAuthorization")
-          .withArgs(await otherUser.getAddress(), false);
+        await expect(tx).to.emit(perp, "UpdatedVault").withArgs(vault.address);
       });
     });
   });
@@ -333,17 +282,17 @@ describe("PerpetualTranche", function () {
         await newIssuer.collateral.returns(constants.AddressZero);
       });
       it("should revert", async function () {
-        await expect(perp.updateBondIssuer(newIssuer.address)).to.be.revertedWithCustomError(perp, "InvalidCollateral");
+        await expect(perp.updateBondIssuer(newIssuer.address)).to.be.revertedWithCustomError(perp, "UnexpectedAsset");
       });
     });
   });
 
-  describe("#updateFeeStrategy", function () {
-    let newFeeStrategy: Contract, tx: Transaction;
+  describe("#updateFeePolicy", function () {
+    let newFeePolicy: Contract, tx: Transaction;
 
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
-        await expect(perp.connect(otherUser).updateFeeStrategy(constants.AddressZero)).to.be.revertedWith(
+        await expect(perp.connect(otherUser).updateFeePolicy(constants.AddressZero)).to.be.revertedWith(
           "Ownable: caller is not the owner",
         );
       });
@@ -351,7 +300,7 @@ describe("PerpetualTranche", function () {
 
     describe("when set address is NOT valid", function () {
       it("should revert", async function () {
-        await expect(perp.updateFeeStrategy(constants.AddressZero)).to.be.revertedWithCustomError(
+        await expect(perp.updateFeePolicy(constants.AddressZero)).to.be.revertedWithCustomError(
           perp,
           "UnacceptableReference",
         );
@@ -360,80 +309,29 @@ describe("PerpetualTranche", function () {
 
     describe("when set strategy decimals dont match", function () {
       it("should revert", async function () {
-        const FeeStrategy = await ethers.getContractFactory("FeeStrategy");
-        newFeeStrategy = await smock.fake(FeeStrategy);
-        await newFeeStrategy.decimals.returns(7);
-        await expect(perp.updateFeeStrategy(newFeeStrategy.address)).to.be.revertedWithCustomError(
+        const FeePolicy = await ethers.getContractFactory("FeePolicy");
+        newFeePolicy = await smock.fake(FeePolicy);
+        await newFeePolicy.decimals.returns(7);
+        await expect(perp.updateFeePolicy(newFeePolicy.address)).to.be.revertedWithCustomError(
           perp,
-          "InvalidStrategyDecimals",
+          "UnexpectedDecimals",
         );
       });
     });
 
     describe("when set address is valid", function () {
       beforeEach(async function () {
-        const FeeStrategy = await ethers.getContractFactory("FeeStrategy");
-        newFeeStrategy = await smock.fake(FeeStrategy);
-        await newFeeStrategy.decimals.returns(8);
-        tx = perp.updateFeeStrategy(newFeeStrategy.address);
+        const FeePolicy = await ethers.getContractFactory("FeePolicy");
+        newFeePolicy = await smock.fake(FeePolicy);
+        await newFeePolicy.decimals.returns(8);
+        tx = perp.updateFeePolicy(newFeePolicy.address);
         await tx;
       });
       it("should update reference", async function () {
-        expect(await perp.feeStrategy()).to.eq(newFeeStrategy.address);
+        expect(await perp.feePolicy()).to.eq(newFeePolicy.address);
       });
       it("should emit event", async function () {
-        await expect(tx).to.emit(perp, "UpdatedFeeStrategy").withArgs(newFeeStrategy.address);
-      });
-    });
-  });
-
-  describe("#updatePricingStrategy", function () {
-    let newPricingStrategy: Contract, tx: Transaction;
-
-    describe("when triggered by non-owner", function () {
-      it("should revert", async function () {
-        await expect(perp.connect(otherUser).updatePricingStrategy(constants.AddressZero)).to.be.revertedWith(
-          "Ownable: caller is not the owner",
-        );
-      });
-    });
-
-    describe("when set address is NOT valid", function () {
-      it("should revert", async function () {
-        await expect(perp.updatePricingStrategy(constants.AddressZero)).to.be.revertedWithCustomError(
-          perp,
-          "UnacceptableReference",
-        );
-      });
-    });
-
-    describe("when new strategy has different decimals", function () {
-      beforeEach(async function () {
-        const PricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
-        newPricingStrategy = await smock.fake(PricingStrategy);
-        await newPricingStrategy.decimals.returns(18);
-      });
-      it("should revert", async function () {
-        await expect(perp.updatePricingStrategy(newPricingStrategy.address)).to.be.revertedWithCustomError(
-          perp,
-          "InvalidStrategyDecimals",
-        );
-      });
-    });
-
-    describe("when set address is valid", function () {
-      beforeEach(async function () {
-        const PricingStrategy = await ethers.getContractFactory("CDRPricingStrategy");
-        newPricingStrategy = await smock.fake(PricingStrategy);
-        await newPricingStrategy.decimals.returns(8);
-        tx = perp.updatePricingStrategy(newPricingStrategy.address);
-        await tx;
-      });
-      it("should update reference", async function () {
-        expect(await perp.pricingStrategy()).to.eq(newPricingStrategy.address);
-      });
-      it("should emit event", async function () {
-        await expect(tx).to.emit(perp, "UpdatedPricingStrategy").withArgs(newPricingStrategy.address);
+        await expect(tx).to.emit(perp, "UpdatedFeePolicy").withArgs(newFeePolicy.address);
       });
     });
   });
@@ -453,7 +351,7 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await expect(perp.updateTolerableTrancheMaturity(86400, 3600)).to.be.revertedWithCustomError(
           perp,
-          "InvalidTrancheMaturityBounds",
+          "UnacceptableParams",
         );
       });
     });
@@ -540,7 +438,7 @@ describe("PerpetualTranche", function () {
     describe("when withdrawing perp", function () {
       it("should NOT revert", async function () {
         const bondFactory = await setupBondFactory();
-        const bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 3600);
+        const bond = await createBondWithFactory(bondFactory, collateralToken, [200, 800], 3600);
         const tranches = await getTranches(bond);
         await issuer.getLatestBond.returns(bond.address);
         await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
@@ -552,43 +450,6 @@ describe("PerpetualTranche", function () {
     });
   });
 
-  describe("#computeDiscount", function () {
-    let bondFactory: Contract, bond: Contract, tranches: Contract[];
-    beforeEach(async function () {
-      bondFactory = await setupBondFactory();
-      bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 3600);
-      tranches = await getTranches(bond);
-      await issuer.getLatestBond.returns(bond.address);
-    });
-
-    describe("when tranche instance is not in the system", function () {
-      it("should return zero", async function () {
-        expect(await perp.computeDiscount(tranches[0].address)).to.eq(toDiscountFixedPtAmt("0"));
-      });
-    });
-
-    describe("when tranche instance is already in system", function () {
-      beforeEach(async function () {
-        await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
-        await tranches[0].approve(perp.address, toFixedPtAmt("200"));
-        await perp.deposit(tranches[0].address, toFixedPtAmt("200"));
-      });
-      it("should return 1", async function () {
-        expect(await perp.computeDiscount(tranches[0].address)).to.eq(toDiscountFixedPtAmt("1"));
-      });
-    });
-  });
-
-  describe("#computePrice", function () {
-    beforeEach(async function () {
-      expect(await perp.computePrice(constants.AddressZero)).not.to.eq(toPriceFixedPtAmt("0.33"));
-      await pricingStrategy.computeTranchePrice.returns(toPriceFixedPtAmt("0.33"));
-    });
-    it("should return the price from the strategy", async function () {
-      expect(await perp.computePrice(constants.AddressZero)).to.eq(toPriceFixedPtAmt("0.33"));
-    });
-  });
-
   describe("#reserve", function () {
     let bondFactory: Contract, bond: Contract, tranches: Contract[], bondNext: Contract, tranchesNext: Contract[];
     beforeEach(async function () {
@@ -597,10 +458,7 @@ describe("PerpetualTranche", function () {
 
     describe("when reserve has no tranches", function () {
       it("should have expected reserve composition", async function () {
-        await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("0")]);
-      });
-      it("should calculate the avg. perp price", async function () {
-        expect(await perp.callStatic.getAvgPrice()).to.eq(0);
+        await checkReserveComposition(perp, [collateralToken], ["0"]);
       });
       it("should calculate the tvl", async function () {
         expect(await perp.callStatic.getTVL()).to.eq(0);
@@ -609,7 +467,7 @@ describe("PerpetualTranche", function () {
 
     describe("when reserve has one tranche", function () {
       beforeEach(async function () {
-        bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 3600);
+        bond = await createBondWithFactory(bondFactory, collateralToken, [200, 800], 3600);
         tranches = await getTranches(bond);
         await issuer.getLatestBond.returns(bond.address);
 
@@ -619,10 +477,7 @@ describe("PerpetualTranche", function () {
       });
 
       it("should have expected reserve composition", async function () {
-        await checkReserveComposition(perp, [collateralToken, tranches[0]], [toFixedPtAmt("0"), toFixedPtAmt("200")]);
-      });
-      it("should calculate the avg. perp price", async function () {
-        expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1"));
+        await checkReserveComposition(perp, [collateralToken, tranches[0]], ["0", toFixedPtAmt("200")]);
       });
       it("should calculate the tvl", async function () {
         expect(await perp.callStatic.getTVL()).to.eq(toFixedPtAmt("200"));
@@ -631,7 +486,7 @@ describe("PerpetualTranche", function () {
 
     describe("when reserve has many tranches", function () {
       beforeEach(async function () {
-        bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 3600);
+        bond = await createBondWithFactory(bondFactory, collateralToken, [200, 800], 3600);
         tranches = await getTranches(bond);
         await issuer.getLatestBond.returns(bond.address);
 
@@ -639,13 +494,12 @@ describe("PerpetualTranche", function () {
         await tranches[0].approve(perp.address, toFixedPtAmt("200"));
         await perp.deposit(tranches[0].address, toFixedPtAmt("200"));
 
-        bondNext = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 3600);
+        await rebase(collateralToken, rebaseOracle, -0.9);
+
+        bondNext = await createBondWithFactory(bondFactory, collateralToken, [200, 800], 3600);
         tranchesNext = await getTranches(bondNext);
         await issuer.getLatestBond.returns(bondNext.address);
 
-        await pricingStrategy.computeTranchePrice
-          .whenCalledWith(tranchesNext[0].address)
-          .returns(toPriceFixedPtAmt("0.5"));
         await depositIntoBond(bondNext, toFixedPtAmt("1000"), deployer);
         await tranchesNext[0].approve(perp.address, toFixedPtAmt("100"));
         await perp.deposit(tranchesNext[0].address, toFixedPtAmt("100"));
@@ -655,14 +509,11 @@ describe("PerpetualTranche", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, tranches[0], tranchesNext[0]],
-          [toFixedPtAmt("0"), toFixedPtAmt("200"), toFixedPtAmt("100")],
+          ["0", toFixedPtAmt("200"), toFixedPtAmt("100")],
         );
       });
-      it("should calculate the avg. perp price", async function () {
-        expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1"));
-      });
       it("should calculate the tvl", async function () {
-        expect(await perp.callStatic.getTVL()).to.eq(toFixedPtAmt("250"));
+        expect(await perp.callStatic.getTVL()).to.eq(toFixedPtAmt("200"));
       });
     });
 
@@ -671,7 +522,7 @@ describe("PerpetualTranche", function () {
       beforeEach(async function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
         issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
-        await issuer.init(3600, [200, 300, 500], 1200, 0);
+        await issuer.init(3600, [200, 800], 1200, 0);
         await perp.updateBondIssuer(issuer.address);
 
         await advancePerpQueue(perp, 1200);
@@ -696,9 +547,6 @@ describe("PerpetualTranche", function () {
       it("should have expected reserve composition", async function () {
         await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("300")]);
       });
-      it("should calculate the avg. perp price", async function () {
-        expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1"));
-      });
       it("should calculate the tvl", async function () {
         expect(await perp.callStatic.getTVL()).to.eq(toFixedPtAmt("300"));
       });
@@ -709,7 +557,7 @@ describe("PerpetualTranche", function () {
       beforeEach(async function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
         issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
-        await issuer.init(3600, [200, 300, 500], 1200, 0);
+        await issuer.init(3600, [200, 800], 1200, 0);
         await perp.updateBondIssuer(issuer.address);
 
         await advancePerpQueue(perp, 3600);
@@ -738,9 +586,6 @@ describe("PerpetualTranche", function () {
           [toFixedPtAmt("200"), toFixedPtAmt("100")],
         );
       });
-      it("should calculate the avg. perp price", async function () {
-        expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1"));
-      });
       it("should calculate the tvl", async function () {
         expect(await perp.callStatic.getTVL()).to.eq(toFixedPtAmt("300"));
       });
@@ -751,7 +596,7 @@ describe("PerpetualTranche", function () {
       beforeEach(async function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
         issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
-        await issuer.init(3600, [200, 300, 500], 1200, 0);
+        await issuer.init(3600, [200, 800], 1200, 0);
         await perp.updateBondIssuer(issuer.address);
         await advancePerpQueue(perp, 3600);
         bond = await bondAt(await perp.callStatic.getDepositBond());
@@ -781,9 +626,6 @@ describe("PerpetualTranche", function () {
           [toFixedPtAmt("220"), toFixedPtAmt("100")],
         );
       });
-      it("should calculate the avg. perp price", async function () {
-        expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("1.06666666"));
-      });
       it("should calculate the tvl", async function () {
         expect(await perp.callStatic.getTVL()).to.eq(toFixedPtAmt("320"));
       });
@@ -794,7 +636,7 @@ describe("PerpetualTranche", function () {
       beforeEach(async function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
         issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
-        await issuer.init(3600, [200, 300, 500], 1200, 0);
+        await issuer.init(3600, [200, 800], 1200, 0);
         await perp.updateBondIssuer(issuer.address);
 
         await advancePerpQueue(perp, 3600);
@@ -825,9 +667,6 @@ describe("PerpetualTranche", function () {
           [toFixedPtAmt("180"), toFixedPtAmt("100")],
         );
       });
-      it("should calculate the avg. perp price", async function () {
-        expect(await perp.callStatic.getAvgPrice()).to.eq(toPriceFixedPtAmt("0.93333333"));
-      });
       it("should calculate the tvl", async function () {
         expect(await perp.callStatic.getTVL()).to.eq(toFixedPtAmt("280"));
       });
@@ -845,7 +684,7 @@ describe("PerpetualTranche", function () {
     describe("when the deposit bond is not acceptable", function () {
       describe("when deposit bond matures too soon", async function () {
         beforeEach(async function () {
-          bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 600);
+          bond = await createBondWithFactory(bondFactory, collateralToken, [200, 800], 600);
           await issuer.getLatestBond.returns(bond.address);
           await perp.updateState();
         });
@@ -858,7 +697,7 @@ describe("PerpetualTranche", function () {
       describe("when deposit bond matures too late", async function () {
         beforeEach(async function () {
           await perp.updateTolerableTrancheMaturity(1200, 7200);
-          bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 7210);
+          bond = await createBondWithFactory(bondFactory, collateralToken, [200, 800], 7210);
           await issuer.getLatestBond.returns(bond.address);
           await perp.updateState();
         });
@@ -872,7 +711,7 @@ describe("PerpetualTranche", function () {
         beforeEach(async function () {
           await perp.updateTolerableTrancheMaturity(1200, 7200);
           const r = await setupCollateralToken("Ethereum", "ETH");
-          bond = await createBondWithFactory(bondFactory, r.collateralToken, [200, 300, 500], 3600);
+          bond = await createBondWithFactory(bondFactory, r.collateralToken, [200, 800], 3600);
           await issuer.getLatestBond.returns(bond.address);
           await perp.updateState();
         });
@@ -886,7 +725,7 @@ describe("PerpetualTranche", function () {
         let tx: Transaction;
         beforeEach(async function () {
           await perp.updateTolerableTrancheMaturity(1200, 7200);
-          bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 3600);
+          bond = await createBondWithFactory(bondFactory, collateralToken, [200, 800], 3600);
           await issuer.getLatestBond.returns(bond.address);
           tx = perp.updateState();
           await tx;
@@ -926,7 +765,7 @@ describe("PerpetualTranche", function () {
           perp,
           [collateralToken, ...reserveTranches],
           [
-            toFixedPtAmt("0"),
+            "0",
             toFixedPtAmt("500"),
             toFixedPtAmt("500"),
             toFixedPtAmt("500"),
@@ -936,7 +775,7 @@ describe("PerpetualTranche", function () {
         );
 
         expect(await perp.callStatic.getReserveCount()).to.eq("6");
-        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq("0");
+        expect(await collateralToken.balanceOf(perp.address)).to.eq("0");
 
         await TimeHelpers.increaseTime(1200);
         tx = await perp.updateState();
@@ -948,7 +787,7 @@ describe("PerpetualTranche", function () {
           perp,
           [collateralToken, ...reserveTranches],
           [
-            toFixedPtAmt("0"),
+            "0",
             toFixedPtAmt("500"),
             toFixedPtAmt("500"),
             toFixedPtAmt("500"),
@@ -965,11 +804,11 @@ describe("PerpetualTranche", function () {
       it("should NOT change tranche balances", async function () {});
 
       it("should emit ReserveSynced", async function () {
-        await expect(tx).to.emit(perp, "ReserveSynced").withArgs(collateralToken.address, toFixedPtAmt("0"));
+        await expect(tx).to.emit(perp, "ReserveSynced").withArgs(collateralToken.address, "0");
       });
 
       it("should NOT update the reserve balance", async function () {
-        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq("0");
+        expect(await collateralToken.balanceOf(perp.address)).to.eq("0");
       });
     });
 
@@ -998,7 +837,7 @@ describe("PerpetualTranche", function () {
           perp,
           [collateralToken, ...reserveTranches],
           [
-            toFixedPtAmt("0"),
+            "0",
             toFixedPtAmt("500"),
             toFixedPtAmt("500"),
             toFixedPtAmt("500"),
@@ -1007,7 +846,7 @@ describe("PerpetualTranche", function () {
           ],
         );
         expect(await perp.callStatic.getReserveCount()).to.eq("6");
-        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq("0");
+        expect(await collateralToken.balanceOf(perp.address)).to.eq("0");
 
         await TimeHelpers.increaseTime(6000);
         // NOTE: invoking mature on reserveTranches[0],
@@ -1032,8 +871,6 @@ describe("PerpetualTranche", function () {
 
       it("should call mature if not already called", async function () {
         await expect(tx)
-          .to.emit(await bondAt(await reserveTranches[0].bond()), "Mature")
-          .withArgs(perp.address)
           .to.emit(await bondAt(await reserveTranches[1].bond()), "Mature")
           .withArgs(perp.address);
       });
@@ -1049,7 +886,7 @@ describe("PerpetualTranche", function () {
       });
 
       it("should update the reserve balance", async function () {
-        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq(toFixedPtAmt("1000"));
+        expect(await collateralToken.balanceOf(perp.address)).to.eq(toFixedPtAmt("1000"));
       });
     });
 
@@ -1079,7 +916,7 @@ describe("PerpetualTranche", function () {
           perp,
           [collateralToken, ...reserveTranches],
           [
-            toFixedPtAmt("0"),
+            "0",
             toFixedPtAmt("500"),
             toFixedPtAmt("500"),
             toFixedPtAmt("500"),
@@ -1088,7 +925,7 @@ describe("PerpetualTranche", function () {
           ],
         );
         expect(await perp.callStatic.getReserveCount()).to.eq("6");
-        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq("0");
+        expect(await collateralToken.balanceOf(perp.address)).to.eq("0");
 
         await TimeHelpers.increaseTime(6000);
         tx = perp.updateState();
@@ -1126,7 +963,7 @@ describe("PerpetualTranche", function () {
       });
 
       it("should update the reserve balance", async function () {
-        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq("553710919999999999999");
+        expect(await collateralToken.balanceOf(perp.address)).to.eq("553710919999999999999");
       });
     });
 
@@ -1155,7 +992,7 @@ describe("PerpetualTranche", function () {
           perp,
           [collateralToken, ...reserveTranches],
           [
-            toFixedPtAmt("0"),
+            "0",
             toFixedPtAmt("500"),
             toFixedPtAmt("500"),
             toFixedPtAmt("500"),
@@ -1164,7 +1001,7 @@ describe("PerpetualTranche", function () {
           ],
         );
         expect(await perp.callStatic.getReserveCount()).to.eq("6");
-        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq("0");
+        expect(await collateralToken.balanceOf(perp.address)).to.eq("0");
 
         await TimeHelpers.increaseTime(6000);
         tx = perp.updateState();
@@ -1204,7 +1041,66 @@ describe("PerpetualTranche", function () {
       });
 
       it("should update the reserve balance", async function () {
-        expect(await collateralToken.balanceOf(await perp.reserve())).to.eq(toFixedPtAmt("1000"));
+        expect(await collateralToken.balanceOf(perp.address)).to.eq(toFixedPtAmt("1000"));
+      });
+    });
+
+    describe("when paused", async function () {
+      let issuer: Contract;
+      let tx: Transaction;
+      const reserveTranches: Contract[] = [];
+      beforeEach(async function () {
+        const BondIssuer = await ethers.getContractFactory("BondIssuer");
+        issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
+        await issuer.init(10800, [500, 500], 1200, 0);
+        await perp.updateBondIssuer(issuer.address);
+        await perp.updateTolerableTrancheMaturity(0, 10800);
+        await advancePerpQueue(perp, 10900);
+        for (let i = 0; i < 5; i++) {
+          const depositBond = await bondAt(await perp.callStatic.getDepositBond());
+          const tranches = await getTranches(depositBond);
+          await depositIntoBond(depositBond, toFixedPtAmt("1000"), deployer);
+          await tranches[0].approve(perp.address, toFixedPtAmt("500"));
+          await perp.deposit(tranches[0].address, toFixedPtAmt("500"));
+          reserveTranches[i] = tranches[0];
+          await advancePerpQueue(perp, 1200);
+        }
+
+        await checkReserveComposition(
+          perp,
+          [collateralToken, ...reserveTranches],
+          [
+            "0",
+            toFixedPtAmt("500"),
+            toFixedPtAmt("500"),
+            toFixedPtAmt("500"),
+            toFixedPtAmt("500"),
+            toFixedPtAmt("500"),
+          ],
+        );
+        expect(await perp.callStatic.getReserveCount()).to.eq("6");
+        expect(await collateralToken.balanceOf(perp.address)).to.eq("0");
+
+        await TimeHelpers.increaseTime(6000);
+        await perp.updateKeeper(await deployer.getAddress());
+        await perp.pause();
+        tx = perp.updateState();
+        await tx;
+      });
+
+      it("should have not updated composition", async function () {
+        await checkReserveComposition(
+          perp,
+          [collateralToken, ...reserveTranches],
+          [
+            "0",
+            toFixedPtAmt("500"),
+            toFixedPtAmt("500"),
+            toFixedPtAmt("500"),
+            toFixedPtAmt("500"),
+            toFixedPtAmt("500"),
+          ],
+        );
       });
     });
   });
@@ -1288,24 +1184,24 @@ describe("PerpetualTranche", function () {
       for (let i = 0; i < 5; i++) {
         const depositBond = await bondAt(await perp.callStatic.getDepositBond());
         const tranches = await getTranches(depositBond);
-        await pricingStrategy.computeTranchePrice.whenCalledWith(tranches[0].address).returns(toPriceFixedPtAmt("0.9"));
         await depositIntoBond(depositBond, toFixedPtAmt("1000"), deployer);
         await tranches[0].approve(perp.address, toFixedPtAmt("500"));
         await perp.deposit(tranches[0].address, toFixedPtAmt("500"));
         depositTranches[i] = tranches[0];
         await advancePerpQueue(perp, 1200);
+        await rebase(collateralToken, rebaseOracle, -0.5);
       }
       await advancePerpQueueToRollover(perp, await bondAt(depositTranches[2].bond()));
     });
 
     it("should return the tranche value", async function () {
       expect(await perp.callStatic.getReserveTokenValue(perp.address)).to.eq("0");
-      expect(await perp.callStatic.getReserveTokenValue(collateralToken.address)).to.eq(toFixedPtAmt("1000"));
+      expect(await perp.callStatic.getReserveTokenValue(collateralToken.address)).to.eq(toFixedPtAmt("93.75"));
       expect(await perp.callStatic.getReserveTokenValue(depositTranches[0].address)).to.eq("0");
       expect(await perp.callStatic.getReserveTokenValue(depositTranches[1].address)).to.eq("0");
-      expect(await perp.callStatic.getReserveTokenValue(depositTranches[2].address)).to.eq(toFixedPtAmt("450"));
-      expect(await perp.callStatic.getReserveTokenValue(depositTranches[3].address)).to.eq(toFixedPtAmt("450"));
-      expect(await perp.callStatic.getReserveTokenValue(depositTranches[4].address)).to.eq(toFixedPtAmt("450"));
+      expect(await perp.callStatic.getReserveTokenValue(depositTranches[2].address)).to.eq(toFixedPtAmt("125"));
+      expect(await perp.callStatic.getReserveTokenValue(depositTranches[3].address)).to.eq(toFixedPtAmt("250"));
+      expect(await perp.callStatic.getReserveTokenValue(depositTranches[4].address)).to.eq(toFixedPtAmt("500"));
     });
   });
 });

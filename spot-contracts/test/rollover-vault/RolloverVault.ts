@@ -1,6 +1,6 @@
 import { expect, use } from "chai";
 import { network, ethers, upgrades } from "hardhat";
-import { Contract, Transaction, Signer } from "ethers";
+import { Contract, Transaction, Signer, constants } from "ethers";
 import {
   setupCollateralToken,
   mintCollteralToken,
@@ -8,7 +8,6 @@ import {
   setupBondFactory,
   depositIntoBond,
   getTranches,
-  toPriceFixedPtAmt,
   getDepositBond,
   advancePerpQueueToBondMaturity,
 } from "../helpers";
@@ -16,7 +15,12 @@ import { smock, FakeContract } from "@defi-wonderland/smock";
 
 use(smock.matchers);
 
-let vault: Contract, perp: FakeContract, collateralToken: Contract, deployer: Signer, otherUser: Signer;
+let vault: Contract,
+  perp: FakeContract,
+  feePolicy: FakeContract,
+  collateralToken: Contract,
+  deployer: Signer,
+  otherUser: Signer;
 describe("RolloverVault", function () {
   beforeEach(async function () {
     await network.provider.send("hardhat_reset");
@@ -30,14 +34,17 @@ describe("RolloverVault", function () {
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await smock.fake(PerpetualTranche);
+    await perp.underlying.returns(collateralToken.address);
 
-    await perp.collateral.returns(collateralToken.address);
-    await perp.feeToken.returns(perp.address);
+    const FeePolicy = await ethers.getContractFactory("FeePolicy");
+    feePolicy = await smock.fake(FeePolicy);
+    await feePolicy.decimals.returns(8);
 
     const RolloverVault = await ethers.getContractFactory("RolloverVault");
     vault = await upgrades.deployProxy(RolloverVault.connect(deployer));
     await collateralToken.approve(vault.address, toFixedPtAmt("1"));
-    await vault.init("RolloverVault", "VSHARE", perp.address);
+    await vault.init("RolloverVault", "VSHARE", perp.address, feePolicy.address);
+    await perp.vault.returns(vault.address);
   });
 
   afterEach(async function () {
@@ -65,11 +72,10 @@ describe("RolloverVault", function () {
 
     it("should initialize lists", async function () {
       expect(await vault.deployedCount()).to.eq(0);
-      expect(await vault.earnedCount()).to.eq(1);
-      expect(await vault.earnedAt(0)).to.eq(perp.address);
-      await expect(vault.earnedAt(1)).to.be.revertedWithCustomError(vault, "OutOfBounds");
+      expect(await vault.assetCount()).to.eq(1);
+      expect(await vault.assetAt(0)).to.eq(collateralToken.address);
       expect(await vault.isVaultAsset(collateralToken.address)).to.eq(true);
-      expect(await vault.isVaultAsset(perp.address)).to.eq(true);
+      expect(await vault.isVaultAsset(perp.address)).to.eq(false);
     });
 
     it("should NOT be paused", async function () {
@@ -80,12 +86,12 @@ describe("RolloverVault", function () {
   describe("#pause", function () {
     let tx: Transaction;
     beforeEach(async function () {
-      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
+      await vault.updateKeeper(await otherUser.getAddress());
     });
 
-    describe("when triggered by non-owner", function () {
+    describe("when triggered by non-keeper", function () {
       it("should revert", async function () {
-        await expect(vault.connect(deployer).pause()).to.be.revertedWith("Ownable: caller is not the owner");
+        await expect(vault.connect(deployer).pause()).to.be.revertedWithCustomError(vault, "UnauthorizedCall");
       });
     });
 
@@ -93,6 +99,7 @@ describe("RolloverVault", function () {
       beforeEach(async function () {
         await vault.connect(otherUser).pause();
       });
+
       it("should revert", async function () {
         await expect(vault.connect(otherUser).pause()).to.be.revertedWith("Pausable: paused");
       });
@@ -117,7 +124,7 @@ describe("RolloverVault", function () {
   describe("#unpause", function () {
     let tx: Transaction;
     beforeEach(async function () {
-      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
+      await vault.updateKeeper(await otherUser.getAddress());
     });
 
     describe("when triggered by non-owner", function () {
@@ -126,7 +133,7 @@ describe("RolloverVault", function () {
       });
 
       it("should revert", async function () {
-        await expect(vault.connect(deployer).unpause()).to.be.revertedWith("Ownable: caller is not the owner");
+        await expect(vault.connect(deployer).unpause()).to.be.revertedWithCustomError(vault, "UnauthorizedCall");
       });
     });
 
@@ -191,11 +198,10 @@ describe("RolloverVault", function () {
       });
     });
 
-    describe("when earned asset", function () {
-      it("should revert", async function () {
-        await expect(
-          vault.transferERC20(await vault.earnedAt(0), toAddress, toFixedPtAmt("100")),
-        ).to.be.revertedWithCustomError(vault, "UnauthorizedTransferOut");
+    describe("when perp", function () {
+      it("should not revert", async function () {
+        await perp.transfer.returns(() => true);
+        await expect(vault.transferERC20(perp.address, toAddress, toFixedPtAmt("100"))).not.to.be.reverted;
       });
     });
 
@@ -205,37 +211,26 @@ describe("RolloverVault", function () {
         ({ collateralToken } = await setupCollateralToken("Bitcoin", "BTC"));
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
         const issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
-        await issuer.init(4800, [200, 300, 500], 1200, 0);
-
-        const FeeStrategy = await ethers.getContractFactory("FeeStrategy");
-        const feeStrategy = await smock.fake(FeeStrategy);
-        await feeStrategy.decimals.returns(8);
-        await feeStrategy.computeRolloverFeePerc.returns("0");
-
-        const PricingStrategy = await ethers.getContractFactory("UnitPricingStrategy");
-        const pricingStrategy = await smock.fake(PricingStrategy);
-        await pricingStrategy.decimals.returns(8);
-        await pricingStrategy.computeTranchePrice.returns(toPriceFixedPtAmt("1"));
+        await issuer.init(4800, [200, 800], 1200, 0);
 
         const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
         perp = await upgrades.deployProxy(
           PerpetualTranche.connect(deployer),
-          [
-            "PerpetualTranche",
-            "PERP",
-            collateralToken.address,
-            issuer.address,
-            feeStrategy.address,
-            pricingStrategy.address,
-          ],
+          ["PerpetualTranche", "PERP", collateralToken.address, issuer.address, feePolicy.address],
           {
-            initializer: "init(string,string,address,address,address,address)",
+            initializer: "init(string,string,address,address,address)",
           },
         );
 
         await perp.updateTolerableTrancheMaturity(1200, 4800);
         await advancePerpQueueToBondMaturity(perp, await getDepositBond(perp));
 
+        const RolloverVault = await ethers.getContractFactory("RolloverVault");
+        vault = await upgrades.deployProxy(RolloverVault.connect(deployer));
+        await vault.init("RolloverVault", "VSHARE", perp.address, feePolicy.address);
+        await perp.updateVault(vault.address);
+
+        await mintCollteralToken(collateralToken, toFixedPtAmt("100000"), deployer);
         const bond = await getDepositBond(perp);
         const tranches = await getTranches(bond);
         await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
@@ -243,21 +238,43 @@ describe("RolloverVault", function () {
         await perp.deposit(tranches[0].address, toFixedPtAmt("200"));
         await advancePerpQueueToBondMaturity(perp, bond);
 
-        await mintCollteralToken(collateralToken, toFixedPtAmt("100000"), deployer);
-        const RolloverVault = await ethers.getContractFactory("RolloverVault");
-        vault = await upgrades.deployProxy(RolloverVault.connect(deployer));
-        await vault.init("RolloverVault", "VSHARE", perp.address);
         await collateralToken.transfer(vault.address, toFixedPtAmt("1000"));
         await vault.deploy();
-        expect(await vault.deployedCount()).to.eq(2);
+        expect(await vault.deployedCount()).to.eq(1);
       });
       it("should revert", async function () {
         await expect(
           vault.transferERC20(await vault.deployedAt(0), toAddress, toFixedPtAmt("100")),
         ).to.be.revertedWithCustomError(vault, "UnauthorizedTransferOut");
-        await expect(
-          vault.transferERC20(await vault.deployedAt(1), toAddress, toFixedPtAmt("100")),
-        ).to.be.revertedWithCustomError(vault, "UnauthorizedTransferOut");
+      });
+    });
+  });
+
+  describe("#updateFeePolicy", function () {
+    let tx: Transaction;
+    beforeEach(async function () {
+      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
+    });
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(vault.connect(deployer).updateFeePolicy(constants.AddressZero)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      let newFeePolicy: Contract;
+      beforeEach(async function () {
+        const FeePolicy = await ethers.getContractFactory("FeePolicy");
+        newFeePolicy = await smock.fake(FeePolicy);
+        await newFeePolicy.decimals.returns(8);
+        tx = await vault.connect(otherUser).updateFeePolicy(newFeePolicy.address);
+        await tx;
+      });
+      it("should update the fee policy", async function () {
+        expect(await vault.feePolicy()).to.eq(newFeePolicy.address);
       });
     });
   });
@@ -283,6 +300,56 @@ describe("RolloverVault", function () {
       });
       it("should update the min deployment amount", async function () {
         expect(await vault.minDeploymentAmt()).to.eq(toFixedPtAmt("1000"));
+      });
+    });
+  });
+
+  describe("#updateMinUnderlyingBal", function () {
+    let tx: Transaction;
+    beforeEach(async function () {
+      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
+    });
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(vault.connect(deployer).updateMinUnderlyingBal(0)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      beforeEach(async function () {
+        tx = await vault.connect(otherUser).updateMinUnderlyingBal(toFixedPtAmt("1000"));
+        await tx;
+      });
+      it("should update the min underlying balance", async function () {
+        expect(await vault.minUnderlyingBal()).to.eq(toFixedPtAmt("1000"));
+      });
+    });
+  });
+
+  describe("#updateKeeper", function () {
+    let tx: Transaction;
+    beforeEach(async function () {
+      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
+    });
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(vault.connect(deployer).updateKeeper(constants.AddressZero)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      beforeEach(async function () {
+        tx = await vault.connect(otherUser).updateKeeper(await otherUser.getAddress());
+        await tx;
+      });
+      it("should update the keeper", async function () {
+        expect(await vault.keeper()).to.eq(await otherUser.getAddress());
       });
     });
   });

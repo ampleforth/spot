@@ -5,10 +5,6 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 
-/// @notice Expected tranche to be part of bond.
-/// @param tranche Address of the tranche token.
-error UnacceptableTranche(ITranche tranche);
-
 struct BondTranches {
     ITranche[] tranches;
     uint256[] trancheRatios;
@@ -70,7 +66,6 @@ library BondTranchesHelpers {
             //       tranche ratio. This ensures that `minBalanceToTrancheRatio`
             //       can be represented without loss as a fixedPt number.
             uint256 bal = trancheBalsAvailable[i] - (trancheBalsAvailable[i] % bt.trancheRatios[i]);
-
             uint256 d = bal.mulDiv(TRANCHE_RATIO_GRANULARITY, bt.trancheRatios[i]);
             if (d < minBalanceToTrancheRatio) {
                 minBalanceToTrancheRatio = d;

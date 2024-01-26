@@ -25,6 +25,8 @@ describe("Sigmoid", function () {
       await math.deployed();
     });
     it("should return sigmoid(x)", async function () {
+      await cmp(0, 0, -0.01, 0.05, 0);
+      await cmp(1, 0, -0.01, 0.05, 0);
       await cmp(0, -0.00925926, -0.01, 0.05, 4);
       await cmp(0.1, -0.00902227, -0.01, 0.05, 4);
       await cmp(0.25, -0.00853659, -0.01, 0.05, 4);
@@ -115,12 +117,12 @@ describe("Sigmoid", function () {
     it("should fail on too small exponents", async function () {
       const e = BigNumber.from("-1011000000000");
       const one = BigNumber.from(1).mul(decimals10);
-      await expect(math.twoPower(e, one)).to.be.revertedWith("Sigmoid: twoPower exp too big");
+      await expect(math.twoPower(e, one)).to.be.revertedWithCustomError(math, "ExpTooLarge");
     });
     it("should fail on too large exponents", async function () {
       const e = BigNumber.from("1011000000000");
       const one = BigNumber.from(1).mul(decimals10);
-      await expect(math.twoPower(e, one)).to.be.revertedWith("Sigmoid: twoPower exp too big");
+      await expect(math.twoPower(e, one)).to.be.revertedWithCustomError(math, "ExpTooLarge");
     });
   });
 });

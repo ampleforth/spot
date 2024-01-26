@@ -72,8 +72,9 @@ describe("BondIssuer", function () {
 
     describe("when tranche ratios are improper", function () {
       it("should revert", async function () {
-        await expect(issuer.updateTrancheRatios([200, 300, 501])).to.be.revertedWith(
-          "BondIssuer: Invalid tranche ratios",
+        await expect(issuer.updateTrancheRatios([200, 300, 501])).to.be.revertedWithCustomError(
+          issuer,
+          "UnacceptableTrancheRatios",
         );
       });
     });
@@ -132,10 +133,9 @@ describe("BondIssuer", function () {
         expect(await issuer.lastIssueWindowTimestamp()).to.eq(mockTime(4500));
 
         expect(await issuer.issuedCount()).to.eq(2);
-        await expect(issuer.issuedBondAt(1)).to.not.be.reverted;
-
+        await expect(issuer.issuedBondAt(2)).to.be.reverted;
         expect(await issuer.activeCount()).to.eq(2);
-        await expect(issuer.activeBondAt(1)).to.not.be.reverted;
+        await expect(issuer.activeBondAt(2)).to.be.reverted;
 
         await TimeHelpers.setNextBlockTimestamp(mockTime(4505));
         await expect(issuer.issue()).not.to.emit(issuer, "BondIssued");
@@ -221,7 +221,7 @@ describe("BondIssuer", function () {
       });
 
       it("should revert", async function () {
-        await expect(issuer.matureActive()).to.be.revertedWith("NoMaturedBonds");
+        await expect(issuer.matureActive()).to.be.revertedWithCustomError(issuer, "NoMaturedBonds");
       });
     });
 
