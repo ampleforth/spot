@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
-import { SubscriptionParams } from "./_interfaces/ReturnData.sol";
+import { SubscriptionParams } from "./_interfaces/CommonTypes.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";

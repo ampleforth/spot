@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
-import { TokenAmount } from "./ReturnData.sol";
+import { TokenAmount } from "./CommonTypes.sol";
 
 /*
  *  @title IVault
