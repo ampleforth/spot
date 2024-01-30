@@ -60,14 +60,14 @@ library BondTranchesHelpers {
 
         uint256[] memory trancheAmtsReq = new uint256[](2);
 
-        // We compute the amount of juniors required using all the seniors
-        trancheAmtsReq[0] = trancheBalsAvailable[0] - (trancheBalsAvailable[0] % bt.trancheRatios[0]);
-        trancheAmtsReq[1] = (trancheAmtsReq[0] * bt.trancheRatios[1]) / bt.trancheRatios[0];
+        // We compute the amount of seniors required using all the juniors
+        trancheAmtsReq[1] = trancheBalsAvailable[1] - (trancheBalsAvailable[1] % bt.trancheRatios[1]);
+        trancheAmtsReq[0] = (trancheAmtsReq[1] * bt.trancheRatios[0]) / bt.trancheRatios[1];
 
-        // If enough juniors aren't available, we compute the amount of seniors required using all the juniors
-        if (trancheAmtsReq[1] > trancheBalsAvailable[1]) {
-            trancheAmtsReq[1] = trancheBalsAvailable[1] - (trancheBalsAvailable[1] % bt.trancheRatios[1]);
-            trancheAmtsReq[0] = (trancheAmtsReq[1] * bt.trancheRatios[0]) / bt.trancheRatios[1];
+        // If enough seniors aren't available, we compute the amount of juniors required using all the seniors
+        if (trancheAmtsReq[0] > trancheBalsAvailable[0]) {
+            trancheAmtsReq[0] = trancheBalsAvailable[0] - (trancheBalsAvailable[0] % bt.trancheRatios[0]);
+            trancheAmtsReq[1] = (trancheAmtsReq[0] * bt.trancheRatios[1]) / bt.trancheRatios[0];
         }
 
         return trancheAmtsReq;

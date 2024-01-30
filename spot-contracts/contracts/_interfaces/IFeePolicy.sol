@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
-import { SubscriptionParams } from "./ReturnData.sol";
+import { SubscriptionParams } from "./CommonTypes.sol";
 
 interface IFeePolicy {
     /// @param dr The current system deviation ratio.

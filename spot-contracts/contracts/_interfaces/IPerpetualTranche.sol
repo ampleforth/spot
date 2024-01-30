@@ -8,7 +8,7 @@ import { IFeePolicy } from "./IFeePolicy.sol";
 import { IBondController } from "./buttonwood/IBondController.sol";
 import { ITranche } from "./buttonwood/ITranche.sol";
 import { IRolloverVault } from "./IRolloverVault.sol";
-import { TokenAmount, RolloverData } from "./ReturnData.sol";
+import { TokenAmount, RolloverData } from "./CommonTypes.sol";
 
 interface IPerpetualTranche is IERC20Upgradeable {
     //--------------------------------------------------------------------------

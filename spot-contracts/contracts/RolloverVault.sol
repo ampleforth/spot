@@ -6,7 +6,7 @@ import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITr
 import { IVault } from "./_interfaces/IVault.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
 import { IERC20Burnable } from "./_interfaces/IERC20Burnable.sol";
-import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/ReturnData.sol";
+import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/CommonTypes.sol";
 import { UnauthorizedCall, UnauthorizedTransferOut, UnacceptableReference, UnexpectedDecimals, UnexpectedAsset, UnacceptableDeposit, UnacceptableRedemption, OutOfBounds, TVLDecreased, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -408,10 +408,8 @@ contract RolloverVault is
         return redeem(notes);
     }
 
-    /// @notice Allows users to swap their underlying tokens for perps held by the vault.
+    /// @inheritdoc IRolloverVault
     /// @dev Callers should call `recover` before executing `swapUnderlyingForPerps` to maximize vault liquidity.
-    /// @param underlyingAmtIn The amount of underlying tokens swapped in.
-    /// @return The amount of perp tokens swapped out.
     function swapUnderlyingForPerps(uint256 underlyingAmtIn) external nonReentrant whenNotPaused returns (uint256) {
         // Calculates the fee adjusted perp amount to transfer to the user.
         // NOTE: This operation should precede any token transfers.
@@ -453,9 +451,7 @@ contract RolloverVault is
         return perpAmtOut;
     }
 
-    /// @notice Allows users to swap their perp tokens for underlying tokens held by the vault.
-    /// @param perpAmtIn The amount of perp tokens swapped in.
-    /// @return The amount of underlying tokens swapped out.
+    /// @inheritdoc IRolloverVault
     function swapPerpsForUnderlying(uint256 perpAmtIn) external nonReentrant whenNotPaused returns (uint256) {
         // Calculates the fee adjusted underlying amount to transfer to the user.
         IPerpetualTranche perp_ = perp;
@@ -498,11 +494,7 @@ contract RolloverVault is
     //--------------------------------------------------------------------------
     // External & Public methods
 
-    /// @notice Computes the amount of perp tokens that are returned when user swaps a given number of underlying tokens.
-    /// @param underlyingAmtIn The number of underlying tokens the user swaps in.
-    /// @return perpAmtOut The number of perp tokens returned to the user.
-    /// @return perpFeeAmtToBurn The amount of perp tokens to be paid to the perp contract as mint fees.
-    /// @return s The pre-swap perp and vault subscription state.
+    /// @inheritdoc IRolloverVault
     function computeUnderlyingToPerpSwapAmt(uint256 underlyingAmtIn)
         public
         returns (
@@ -533,11 +525,7 @@ contract RolloverVault is
         return (perpAmtOut, perpFeeAmtToBurn, s);
     }
 
-    /// @notice Computes the amount of underlying tokens that are returned when user swaps a given number of perp tokens.
-    /// @param perpAmtIn The number of perp tokens the user swaps in.
-    /// @return underlyingAmtOut The number of underlying tokens returned to the user.
-    /// @return perpFeeAmtToBurn The amount of perp tokens to be paid to the perp contract as burn fees.
-    /// @return s The pre-swap perp and vault subscription state.
+    /// @inheritdoc IRolloverVault
     function computePerpToUnderlyingSwapAmt(uint256 perpAmtIn)
         public
         returns (

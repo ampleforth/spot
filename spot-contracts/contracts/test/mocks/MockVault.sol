@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import { IPerpetualTranche, IERC20Upgradeable, ITranche } from "../../_interfaces/IPerpetualTranche.sol";
-import { TokenAmount, RolloverData } from "../../_interfaces/ReturnData.sol";
+import { TokenAmount, RolloverData } from "../../_interfaces/CommonTypes.sol";
 
 contract MockVault {
     function getTVL() public pure returns (uint256) {
