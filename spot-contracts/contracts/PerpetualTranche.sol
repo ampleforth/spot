@@ -4,7 +4,7 @@ pragma solidity ^0.8.19;
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeePolicy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
-import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/ReturnData.sol";
+import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/CommonTypes.sol";
 import { UnauthorizedCall, UnauthorizedTransferOut, UnacceptableReference, UnexpectedDecimals, UnexpectedAsset, UnacceptableDeposit, UnacceptableRedemption, UnacceptableParams, UnacceptableRollover, ExceededMaxSupply, ExceededMaxMintPerTranche } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -585,10 +585,10 @@ contract PerpetualTranche is
         returns (TokenAmount[] memory)
     {
         uint256 perpSupply = totalSupply();
-        if(perpSupply == 0){
+        if (perpSupply == 0) {
             revert UnacceptableRedemption();
         }
-        return _computeRedemptionAmts(perpAmtBurnt, totalSupply());
+        return _computeRedemptionAmts(perpAmtBurnt, perpSupply);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -851,10 +851,7 @@ contract PerpetualTranche is
         uint256 tokenOutBalance = tokenOut.balanceOf(address(this));
         tokenOutAmtRequested = MathUpgradeable.min(tokenOutAmtRequested, tokenOutBalance);
         if (trancheInAmtAvailable <= 0 || trancheInPrice <= 0 || tokenOutPrice <= 0 || tokenOutAmtRequested <= 0) {
-            return RolloverData({
-                trancheInAmt: 0,
-                tokenOutAmt: 0
-            });
+            return RolloverData({ trancheInAmt: 0, tokenOutAmt: 0 });
         }
         //-----------------------------------------------------------------------------
         // Basic rollover with fees:

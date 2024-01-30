@@ -138,7 +138,10 @@ describe("PerpetualTranche", function () {
       });
 
       it("should return revert", async function () {
-        await expect(perp.callStatic.computeRedemptionAmts(toFixedPtAmt("100"))).to.revertedWithCustomError(perp, "UnacceptableRedemption");
+        await expect(perp.callStatic.computeRedemptionAmts(toFixedPtAmt("100"))).to.revertedWithCustomError(
+          perp,
+          "UnacceptableRedemption",
+        );
       });
     });
 
