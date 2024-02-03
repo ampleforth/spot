@@ -3,7 +3,7 @@ pragma solidity ^0.8.19;
 
 import { IBondFactory } from "./_interfaces/buttonwood/IBondFactory.sol";
 import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
-import { IBondIssuer, NoMaturedBonds } from "./_interfaces/IBondIssuer.sol";
+import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
@@ -11,6 +11,9 @@ import { BondHelpers } from "./_utils/BondHelpers.sol";
 
 /// @notice Expected tranche ratios to sum up to {TRANCHE_RATIO_GRANULARITY}.
 error UnacceptableTrancheRatios();
+
+/// @notice Expected at least one matured bond.
+error NoMaturedBonds();
 
 /**
  *  @title BondIssuer

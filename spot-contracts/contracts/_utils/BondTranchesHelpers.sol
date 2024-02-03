@@ -3,7 +3,9 @@ pragma solidity ^0.8.19;
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
+
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
+import { UnacceptableTrancheLength } from "../_interfaces/ProtocolErrors.sol";
 
 struct BondTranches {
     ITranche[] tranches;
@@ -51,37 +53,23 @@ library BondTranchesHelpers {
         pure
         returns (uint256[] memory)
     {
-        uint256[] memory redeemableAmts = new uint256[](bt.tranches.length);
-
-        // We Calculate how many underlying assets could be redeemed from each available tranche balance,
-        // assuming other tranches are not an issue, and record the smallest amount.
-        //
-        // Usually one tranche balance is the limiting factor, we first loop through to identify
-        // it by figuring out the one which has the least `trancheBalance/trancheRatio`.
-        //
-        uint256 minBalanceToTrancheRatio = type(uint256).max;
-        uint8 i;
-        for (i = 0; i < bt.tranches.length; i++) {
-            // NOTE: We round the avaiable balance down to the nearest multiple of the
-            //       tranche ratio. This ensures that `minBalanceToTrancheRatio`
-            //       can be represented without loss as a fixedPt number.
-            uint256 bal = trancheBalsAvailable[i] - (trancheBalsAvailable[i] % bt.trancheRatios[i]);
-            uint256 d = bal.mulDiv(TRANCHE_RATIO_GRANULARITY, bt.trancheRatios[i]);
-            if (d < minBalanceToTrancheRatio) {
-                minBalanceToTrancheRatio = d;
-            }
-
-            // if one of the balances is zero, we return
-            if (minBalanceToTrancheRatio <= 0) {
-                return (redeemableAmts);
-            }
+        // NOTE: This implementation assumes the bond has only two tranches.
+        if (bt.tranches.length != 2) {
+            revert UnacceptableTrancheLength();
         }
 
-        // Now that we have `minBalanceToTrancheRatio`, we compute the redeemable amounts.
-        for (i = 0; i < bt.tranches.length; i++) {
-            redeemableAmts[i] = bt.trancheRatios[i].mulDiv(minBalanceToTrancheRatio, TRANCHE_RATIO_GRANULARITY);
+        uint256[] memory trancheAmtsReq = new uint256[](2);
+
+        // We compute the amount of seniors required using all the juniors
+        trancheAmtsReq[1] = trancheBalsAvailable[1] - (trancheBalsAvailable[1] % bt.trancheRatios[1]);
+        trancheAmtsReq[0] = (trancheAmtsReq[1] * bt.trancheRatios[0]) / bt.trancheRatios[1];
+
+        // If enough seniors aren't available, we compute the amount of juniors required using all the seniors
+        if (trancheAmtsReq[0] > trancheBalsAvailable[0]) {
+            trancheAmtsReq[0] = trancheBalsAvailable[0] - (trancheBalsAvailable[0] % bt.trancheRatios[0]);
+            trancheAmtsReq[1] = (trancheAmtsReq[0] * bt.trancheRatios[1]) / bt.trancheRatios[0];
         }
 
-        return redeemableAmts;
+        return trancheAmtsReq;
     }
 }
