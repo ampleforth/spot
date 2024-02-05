@@ -70,8 +70,9 @@ contract RolloverVault is
 
     //-------------------------------------------------------------------------
     // Constants
+    // Number of decimals for a multiplier of 1.0x (i.e. 100%)
     uint8 public constant FEE_POLICY_DECIMALS = 8;
-    uint256 public constant FEE_ONE_PERC = (10**FEE_POLICY_DECIMALS);
+    uint256 public constant FEE_ONE = (10**FEE_POLICY_DECIMALS);
 
     /// @dev Initial exchange rate between the underlying asset and notes.
     uint256 private constant INITIAL_RATE = 10**6;
@@ -517,10 +518,10 @@ contract RolloverVault is
         //-----------------------------------------------------------------------------
 
         // Calculate perp fee share to be paid by the vault
-        uint256 perpFeeAmtToBurn = perpAmtOut.mulDiv(swapFeePerpSharePerc, FEE_ONE_PERC, MathUpgradeable.Rounding.Up);
+        uint256 perpFeeAmtToBurn = perpAmtOut.mulDiv(swapFeePerpSharePerc, FEE_ONE, MathUpgradeable.Rounding.Up);
 
         // We deduct fees by transferring out fewer perp tokens
-        perpAmtOut = perpAmtOut.mulDiv(FEE_ONE_PERC - (swapFeePerpSharePerc + swapFeeVaultSharePerc), FEE_ONE_PERC);
+        perpAmtOut = perpAmtOut.mulDiv(FEE_ONE - (swapFeePerpSharePerc + swapFeeVaultSharePerc), FEE_ONE);
 
         return (perpAmtOut, perpFeeAmtToBurn, s);
     }
@@ -548,12 +549,12 @@ contract RolloverVault is
         //-----------------------------------------------------------------------------
 
         // Calculate perp fee share to be paid by the vault
-        uint256 perpFeeAmtToBurn = perpAmtIn.mulDiv(swapFeePerpSharePerc, FEE_ONE_PERC, MathUpgradeable.Rounding.Up);
+        uint256 perpFeeAmtToBurn = perpAmtIn.mulDiv(swapFeePerpSharePerc, FEE_ONE, MathUpgradeable.Rounding.Up);
 
         // We deduct fees by transferring out fewer underlying tokens
         underlyingAmtOut = underlyingAmtOut.mulDiv(
-            FEE_ONE_PERC - (swapFeePerpSharePerc + swapFeeVaultSharePerc),
-            FEE_ONE_PERC
+            FEE_ONE - (swapFeePerpSharePerc + swapFeeVaultSharePerc),
+            FEE_ONE
         );
 
         return (underlyingAmtOut, perpFeeAmtToBurn, s);
@@ -614,7 +615,7 @@ contract RolloverVault is
             : (underlyingAmtIn * INITIAL_RATE);
 
         // The mint fees are settled by simply minting fewer vault notes.
-        notes = notes.mulDiv(FEE_ONE_PERC - feePerc, FEE_ONE_PERC);
+        notes = notes.mulDiv(FEE_ONE - feePerc, FEE_ONE);
         return notes;
     }
 
@@ -636,7 +637,7 @@ contract RolloverVault is
             token: underlying_,
             amount: underlying_.balanceOf(address(this)).mulDiv(notes, totalSupply_)
         });
-        redemptions[0].amount = redemptions[0].amount.mulDiv(FEE_ONE_PERC - feePerc, FEE_ONE_PERC);
+        redemptions[0].amount = redemptions[0].amount.mulDiv(FEE_ONE - feePerc, FEE_ONE);
 
         for (uint8 i = 1; i < assetCount_; i++) {
             // tranche token share to be redeemed
@@ -647,7 +648,7 @@ contract RolloverVault is
             });
 
             // deduct redemption fee
-            redemptions[i].amount = redemptions[i].amount.mulDiv(FEE_ONE_PERC - feePerc, FEE_ONE_PERC);
+            redemptions[i].amount = redemptions[i].amount.mulDiv(FEE_ONE - feePerc, FEE_ONE);
 
             // in case the redemption amount is just dust, we skip
             if (redemptions[i].amount < TRANCHE_DUST_AMT) {

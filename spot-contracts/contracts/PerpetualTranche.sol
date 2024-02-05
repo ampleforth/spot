@@ -131,8 +131,9 @@ contract PerpetualTranche is
     //
     //-------------------------------------------------------------------------
     // Constants & Immutables
+    // Number of decimals for a multiplier of 1.0x (i.e. 100%)
     uint8 public constant FEE_POLICY_DECIMALS = 8;
-    uint256 public constant FEE_ONE_PERC = (10**FEE_POLICY_DECIMALS);
+    uint256 public constant FEE_ONE = (10**FEE_POLICY_DECIMALS);
 
     //-------------------------------------------------------------------------
     // Storage
@@ -760,7 +761,7 @@ contract PerpetualTranche is
 
         // The mint fees are settled by simply minting fewer perps.
         if (feePerc > 0) {
-            perpAmtMint = perpAmtMint.mulDiv(FEE_ONE_PERC - feePerc, FEE_ONE_PERC);
+            perpAmtMint = perpAmtMint.mulDiv(FEE_ONE - feePerc, FEE_ONE);
         }
 
         return perpAmtMint;
@@ -805,7 +806,7 @@ contract PerpetualTranche is
 
             // The burn fees are settled by simply redeeming for fewer tranches.
             if (feePerc > 0) {
-                reserveTokens[i].amount = reserveTokens[i].amount.mulDiv(FEE_ONE_PERC - feePerc, FEE_ONE_PERC);
+                reserveTokens[i].amount = reserveTokens[i].amount.mulDiv(FEE_ONE - feePerc, FEE_ONE);
             }
         }
 
@@ -868,13 +869,13 @@ contract PerpetualTranche is
         // accepting tranchesIn at a discount, i.e) fewer tokens out.
         // This results in perp enrichment.
         if (feePerc > 0) {
-            r.tokenOutAmt = r.tokenOutAmt.mulDiv(FEE_ONE_PERC - feePerc.abs(), FEE_ONE_PERC);
+            r.tokenOutAmt = r.tokenOutAmt.mulDiv(FEE_ONE - feePerc.abs(), FEE_ONE);
         }
         // A negative fee percentage (or a reward) implies that perp pays the rotators by
         // accepting tranchesIn at a premium, i.e) more tokens out.
         // This results in perp debasement.
         else if (feePerc < 0) {
-            r.tokenOutAmt = r.tokenOutAmt.mulDiv(FEE_ONE_PERC + feePerc.abs(), FEE_ONE_PERC);
+            r.tokenOutAmt = r.tokenOutAmt.mulDiv(FEE_ONE + feePerc.abs(), FEE_ONE);
         }
         //-----------------------------------------------------------------------------
 
@@ -889,8 +890,8 @@ contract PerpetualTranche is
             // offering tranchesOut for a premium, i.e) more tranches in.
             if (feePerc > 0) {
                 r.trancheInAmt = r.trancheInAmt.mulDiv(
-                    FEE_ONE_PERC,
-                    FEE_ONE_PERC - feePerc.toUint256(),
+                    FEE_ONE,
+                    FEE_ONE - feePerc.toUint256(),
                     MathUpgradeable.Rounding.Up
                 );
             }
@@ -898,8 +899,8 @@ contract PerpetualTranche is
             // offering tranchesOut at a discount, i.e) fewer tranches in.
             else if (feePerc < 0) {
                 r.trancheInAmt = r.trancheInAmt.mulDiv(
-                    FEE_ONE_PERC,
-                    FEE_ONE_PERC + feePerc.abs(),
+                    FEE_ONE,
+                    FEE_ONE + feePerc.abs(),
                     MathUpgradeable.Rounding.Up
                 );
             }
