@@ -282,18 +282,6 @@ contract PerpetualTranche is
     //--------------------------------------------------------------------------
     // ADMIN only methods
 
-    /// @notice Pauses deposits, withdrawals and rollovers.
-    /// @dev ERC-20 functions, like transfers will always remain operational.
-    function pause() public onlyKeeper {
-        _pause();
-    }
-
-    /// @notice Unpauses deposits, withdrawals and rollovers.
-    /// @dev ERC-20 functions, like transfers will always remain operational.
-    function unpause() public onlyKeeper {
-        _unpause();
-    }
-
     /// @notice Updates the reference to the keeper.
     /// @param newKeeper The address of the new keeper.
     function updateKeeper(address newKeeper) public onlyOwner {
@@ -375,6 +363,21 @@ contract PerpetualTranche is
             revert UnauthorizedTransferOut();
         }
         token.safeTransfer(to, amount);
+    }
+
+    //--------------------------------------------------------------------------
+    // Keeper only methods
+
+    /// @notice Pauses deposits, withdrawals and rollovers.
+    /// @dev ERC-20 functions, like transfers will always remain operational.
+    function pause() public onlyKeeper {
+        _pause();
+    }
+
+    /// @notice Unpauses deposits, withdrawals and rollovers.
+    /// @dev ERC-20 functions, like transfers will always remain operational.
+    function unpause() public onlyKeeper {
+        _unpause();
     }
 
     //--------------------------------------------------------------------------
