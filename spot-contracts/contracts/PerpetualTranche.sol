@@ -5,7 +5,7 @@ import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/t
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeePolicy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
 import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/CommonTypes.sol";
-import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, UnacceptableRedemption, UnacceptableParams, UnacceptableRollover, ExceededMaxSupply, ExceededMaxMintPerTranche } from "./_interfaces/ProtocolErrors.sol";
+import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, UnacceptableParams, UnacceptableRollover, ExceededMaxSupply, ExceededMaxMintPerTranche } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -524,10 +524,6 @@ contract PerpetualTranche is
     function computeRedemptionAmts(
         uint256 perpAmtBurnt
     ) external override afterStateUpdate returns (TokenAmount[] memory) {
-        uint256 perpSupply = totalSupply();
-        if (perpSupply == 0) {
-            revert UnacceptableRedemption();
-        }
         return _computeRedemptionAmts(perpAmtBurnt, perpSupply);
     }
 
