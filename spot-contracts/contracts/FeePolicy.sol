@@ -141,6 +141,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         perpBurnFeePerc = 0;
         vaultMintFeePerc = 0;
         vaultBurnFeePerc = 0;
+        vaultDeploymentFee = 0;
 
         // initializing swap fees to 100%, to disable swapping initially
         vaultUnderlyingToPerpSwapFeePerc = ONE;
