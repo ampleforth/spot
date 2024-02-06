@@ -6,9 +6,7 @@ import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { UnacceptableTrancheLength } from "../_interfaces/ProtocolErrors.sol";
 
-import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
-import { BondTranches, BondTranchesHelpers } from "./BondTranchesHelpers.sol";
 import { BondHelpers } from "./BondHelpers.sol";
 
 /**
@@ -24,11 +22,10 @@ library TrancheHelpers {
     /// @param tranche Address of the tranche token.
     /// @param collateralToken Address of the tranche's underlying collateral token.
     /// @return The collateral balance and the tranche token supply.
-    function getTrancheCollateralization(ITranche tranche, IERC20Upgradeable collateralToken)
-        internal
-        view
-        returns (uint256, uint256)
-    {
+    function getTrancheCollateralization(
+        ITranche tranche,
+        IERC20Upgradeable collateralToken
+    ) internal view returns (uint256, uint256) {
         IBondController bond = IBondController(tranche.bond());
 
         uint256 trancheSupply = tranche.totalSupply();
@@ -70,11 +67,10 @@ library TrancheHelpers {
     /// @param seniorTranche Address of the tranche token.
     /// @param parentBondCollateralBalance The total amount of collateral backing the given tranche's parent bond.
     /// @return The collateral balance and the tranche token supply.
-    function getImmatureSeniorTrancheCollateralization(ITranche seniorTranche, uint256 parentBondCollateralBalance)
-        internal
-        view
-        returns (uint256, uint256)
-    {
+    function getImmatureSeniorTrancheCollateralization(
+        ITranche seniorTranche,
+        uint256 parentBondCollateralBalance
+    ) internal view returns (uint256, uint256) {
         uint256 seniorSupply = seniorTranche.totalSupply();
         uint256 seniorClaim = MathUpgradeable.min(seniorSupply, parentBondCollateralBalance);
         return (seniorClaim, seniorSupply);

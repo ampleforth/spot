@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
-import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IBondController, ITranche, IFeePolicy } from "./_interfaces/IPerpetualTranche.sol";
+import { IERC20Upgradeable, IPerpetualTranche, IBondController, ITranche, IFeePolicy } from "./_interfaces/IPerpetualTranche.sol";
 import { IVault } from "./_interfaces/IVault.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
 import { IERC20Burnable } from "./_interfaces/IERC20Burnable.sol";
@@ -72,10 +72,10 @@ contract RolloverVault is
     // Constants
     // Number of decimals for a multiplier of 1.0x (i.e. 100%)
     uint8 public constant FEE_POLICY_DECIMALS = 8;
-    uint256 public constant FEE_ONE = (10**FEE_POLICY_DECIMALS);
+    uint256 public constant FEE_ONE = (10 ** FEE_POLICY_DECIMALS);
 
     /// @dev Initial exchange rate between the underlying asset and notes.
-    uint256 private constant INITIAL_RATE = 10**6;
+    uint256 private constant INITIAL_RATE = 10 ** 6;
 
     /// @dev The maximum number of deployed assets that can be held in this vault at any given time.
     uint256 public constant MAX_DEPLOYED_COUNT = 47;
@@ -214,11 +214,7 @@ contract RolloverVault is
     /// @param token The token address.
     /// @param to The destination address.
     /// @param amount The amount of tokens to be transferred.
-    function transferERC20(
-        IERC20Upgradeable token,
-        address to,
-        uint256 amount
-    ) external onlyOwner {
+    function transferERC20(IERC20Upgradeable token, address to, uint256 amount) external onlyOwner {
         if (isVaultAsset(token)) {
             revert UnauthorizedTransferOut();
         }
@@ -421,7 +417,7 @@ contract RolloverVault is
         );
 
         // Revert if insufficient tokens are swapped in or out
-        uint256 minAmtIn = MIN_SWAP_UNITS * (10**IERC20MetadataUpgradeable(address(underlying_)).decimals());
+        uint256 minAmtIn = MIN_SWAP_UNITS * (10 ** IERC20MetadataUpgradeable(address(underlying_)).decimals());
         if (underlyingAmtIn < minAmtIn || perpAmtOut <= 0) {
             revert UnacceptableSwap();
         }
@@ -464,7 +460,7 @@ contract RolloverVault is
         ) = computePerpToUnderlyingSwapAmt(perpAmtIn);
 
         // Revert if insufficient tokens are swapped in or out
-        uint256 minAmtIn = MIN_SWAP_UNITS * (10**IERC20MetadataUpgradeable(address(perp_)).decimals());
+        uint256 minAmtIn = MIN_SWAP_UNITS * (10 ** IERC20MetadataUpgradeable(address(perp_)).decimals());
         if (perpAmtIn < minAmtIn || underlyingAmtOut <= 0) {
             revert UnacceptableSwap();
         }
@@ -496,14 +492,9 @@ contract RolloverVault is
     // External & Public methods
 
     /// @inheritdoc IRolloverVault
-    function computeUnderlyingToPerpSwapAmt(uint256 underlyingAmtIn)
-        public
-        returns (
-            uint256,
-            uint256,
-            SubscriptionParams memory
-        )
-    {
+    function computeUnderlyingToPerpSwapAmt(
+        uint256 underlyingAmtIn
+    ) public returns (uint256, uint256, SubscriptionParams memory) {
         // Compute equal value perps to swap out to the user
         IPerpetualTranche perp_ = perp;
         SubscriptionParams memory s = _querySubscriptionState(perp_);
@@ -527,14 +518,9 @@ contract RolloverVault is
     }
 
     /// @inheritdoc IRolloverVault
-    function computePerpToUnderlyingSwapAmt(uint256 perpAmtIn)
-        public
-        returns (
-            uint256,
-            uint256,
-            SubscriptionParams memory
-        )
-    {
+    function computePerpToUnderlyingSwapAmt(
+        uint256 perpAmtIn
+    ) public returns (uint256, uint256, SubscriptionParams memory) {
         // Compute equal value underlying tokens to swap out
         IPerpetualTranche perp_ = perp;
         SubscriptionParams memory s = _querySubscriptionState(perp_);
@@ -552,10 +538,7 @@ contract RolloverVault is
         uint256 perpFeeAmtToBurn = perpAmtIn.mulDiv(swapFeePerpSharePerc, FEE_ONE, MathUpgradeable.Rounding.Up);
 
         // We deduct fees by transferring out fewer underlying tokens
-        underlyingAmtOut = underlyingAmtOut.mulDiv(
-            FEE_ONE - (swapFeePerpSharePerc + swapFeeVaultSharePerc),
-            FEE_ONE
-        );
+        underlyingAmtOut = underlyingAmtOut.mulDiv(FEE_ONE - (swapFeePerpSharePerc + swapFeeVaultSharePerc), FEE_ONE);
 
         return (underlyingAmtOut, perpFeeAmtToBurn, s);
     }
@@ -805,11 +788,7 @@ contract RolloverVault is
     /// @dev Given a bond and its tranche data, deposits the provided amount into the bond
     ///      and receives tranche tokens in return.
     ///      Additionally, performs some book-keeping to keep track of the vault's assets.
-    function _tranche(
-        IBondController bond,
-        IERC20Upgradeable underlying_,
-        uint256 underlyingAmt
-    ) private {
+    function _tranche(IBondController bond, IERC20Upgradeable underlying_, uint256 underlyingAmt) private {
         // Skip if amount is zero
         if (underlyingAmt <= 0) {
             return;
@@ -897,11 +876,7 @@ contract RolloverVault is
     ///      This function should NOT be called directly, use `recover()` or `recover(tranche)`
     ///      which wrap this function with the internal book-keeping necessary,
     ///      to keep track of the vault's assets.
-    function _execMatureTrancheRedemption(
-        IBondController bond,
-        ITranche tranche,
-        uint256 amount
-    ) private {
+    function _execMatureTrancheRedemption(IBondController bond, ITranche tranche, uint256 amount) private {
         if (!bond.isMature()) {
             bond.mature();
         }
@@ -960,11 +935,7 @@ contract RolloverVault is
     }
 
     /// @dev Checks if the spender has sufficient allowance. If not, approves the maximum possible amount.
-    function _checkAndApproveMax(
-        IERC20Upgradeable token,
-        address spender,
-        uint256 amount
-    ) private {
+    function _checkAndApproveMax(IERC20Upgradeable token, address spender, uint256 amount) private {
         uint256 allowance = token.allowance(address(this), spender);
         if (allowance < amount) {
             token.safeApprove(spender, 0);

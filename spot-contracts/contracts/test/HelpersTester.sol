@@ -36,28 +36,25 @@ contract HelpersTester {
         return b.getSeniorTrancheRatio();
     }
 
-    function previewDeposit(IBondController b, uint256 collateralAmount)
-        public
-        view
-        returns (BondTranches memory, uint256[] memory)
-    {
+    function previewDeposit(
+        IBondController b,
+        uint256 collateralAmount
+    ) public view returns (BondTranches memory, uint256[] memory) {
         return b.previewDeposit(collateralAmount);
     }
 
-    function computeRedeemableTrancheAmounts(IBondController b, address u)
-        public
-        view
-        returns (BondTranches memory, uint256[] memory)
-    {
+    function computeRedeemableTrancheAmounts(
+        IBondController b,
+        address u
+    ) public view returns (BondTranches memory, uint256[] memory) {
         BondTranches memory bt = b.getTranches();
         return (bt, bt.computeRedeemableTrancheAmounts(u));
     }
 
-    function computeRedeemableTrancheAmounts(IBondController b, uint256[] memory trancheBalsAvailable)
-        public
-        view
-        returns (BondTranches memory, uint256[] memory)
-    {
+    function computeRedeemableTrancheAmounts(
+        IBondController b,
+        uint256[] memory trancheBalsAvailable
+    ) public view returns (BondTranches memory, uint256[] memory) {
         BondTranches memory bt = b.getTranches();
         return (bt, bt.computeRedeemableTrancheAmounts(trancheBalsAvailable));
     }

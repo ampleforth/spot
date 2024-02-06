@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.19;
 
-import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
@@ -30,11 +29,10 @@ library BondTranchesHelpers {
     /// @param bt The bond's tranche data.
     /// @param u The address to check balance for.
     /// @return An array of tranche token balances.
-    function computeRedeemableTrancheAmounts(BondTranches memory bt, address u)
-        internal
-        view
-        returns (uint256[] memory)
-    {
+    function computeRedeemableTrancheAmounts(
+        BondTranches memory bt,
+        address u
+    ) internal view returns (uint256[] memory) {
         uint256[] memory trancheBalsAvailable = new uint256[](bt.tranches.length);
         for (uint8 i = 0; i < bt.tranches.length; i++) {
             trancheBalsAvailable[i] = bt.tranches[i].balanceOf(u);
@@ -48,11 +46,10 @@ library BondTranchesHelpers {
     /// @param bt The bond's tranche data.
     /// @param trancheBalsAvailable The tranche balance of each bond tranche available to be used for redemption.
     /// @return An array of tranche token balances.
-    function computeRedeemableTrancheAmounts(BondTranches memory bt, uint256[] memory trancheBalsAvailable)
-        internal
-        pure
-        returns (uint256[] memory)
-    {
+    function computeRedeemableTrancheAmounts(
+        BondTranches memory bt,
+        uint256[] memory trancheBalsAvailable
+    ) internal pure returns (uint256[] memory) {
         // NOTE: This implementation assumes the bond has only two tranches.
         if (bt.tranches.length != 2) {
             revert UnacceptableTrancheLength();

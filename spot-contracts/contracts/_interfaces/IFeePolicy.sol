@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { SubscriptionParams } from "./CommonTypes.sol";
 
 interface IFeePolicy {
@@ -44,20 +43,18 @@ interface IFeePolicy {
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
     /// @return vaultFeePerc The percentage of perp tokens out to be charged as swap fees by the vault,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
-    function computeUnderlyingToPerpSwapFeePercs(uint256 dr)
-        external
-        view
-        returns (uint256 perpFeePerc, uint256 vaultFeePerc);
+    function computeUnderlyingToPerpSwapFeePercs(
+        uint256 dr
+    ) external view returns (uint256 perpFeePerc, uint256 vaultFeePerc);
 
     /// @param dr The current system deviation ratio.
     /// @return perpFeePerc The percentage of underlying tokens out to be charged as swap fees by perp,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
     /// @return vaultFeePerc The percentage of underlying tokens out to be charged as swap fees by the vault,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
-    function computePerpToUnderlyingSwapFeePercs(uint256 dr)
-        external
-        view
-        returns (uint256 perpFeePerc, uint256 vaultFeePerc);
+    function computePerpToUnderlyingSwapFeePercs(
+        uint256 dr
+    ) external view returns (uint256 perpFeePerc, uint256 vaultFeePerc);
 
     /// @return Number of decimals representing a multiplier of 1.0. So, 100% = 1*10**decimals.
     function decimals() external view returns (uint8);
@@ -70,11 +67,7 @@ interface IFeePolicy {
     /// @param vaultTVL The current TVL of the vault denominated in the underlying.
     /// @param seniorTR The tranche ratio of seniors accepted by perp.
     /// @return The deviation ratio given the system subscription parameters.
-    function computeDeviationRatio(
-        uint256 perpTVL,
-        uint256 vaultTVL,
-        uint256 seniorTR
-    ) external view returns (uint256);
+    function computeDeviationRatio(uint256 perpTVL, uint256 vaultTVL, uint256 seniorTR) external view returns (uint256);
 
     /// @notice The target subscription ratio i.e) the normalization factor.
     function targetSubscriptionRatio() external view returns (uint256);
