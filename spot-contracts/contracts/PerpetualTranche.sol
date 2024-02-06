@@ -765,7 +765,7 @@ contract PerpetualTranche is
         }
 
         uint256 tokenOutBalance = tokenOut.balanceOf(address(this));
-        if (trancheInAmtAvailable <= 0 || tokenOutBalance <= 0) {
+        if (trancheInAmtAvailable <= 0 || tokenOutBalance <= 0 || trancheInPrice <= 0 || tokenOutPrice <= 0) {
             return RolloverData({ trancheInAmt: 0, tokenOutAmt: 0 });
         }
         //-----------------------------------------------------------------------------
