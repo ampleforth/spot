@@ -454,7 +454,7 @@ contract PerpetualTranche is
 
     /// @inheritdoc IPerpetualTranche
     function getReserveCount() external override afterStateUpdate returns (uint256) {
-        return _reserveCount();
+        return _reserves.length();
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -492,7 +492,7 @@ contract PerpetualTranche is
     /// @inheritdoc IPerpetualTranche
     /// @dev Reserve tokens which are not up for rollover are marked by `address(0)`.
     function getReserveTokensUpForRollover() external override afterStateUpdate returns (IERC20Upgradeable[] memory) {
-        uint256 reserveCount = _reserveCount();
+        uint256 reserveCount = _reserves.length();
         IERC20Upgradeable[] memory rolloverTokens = new IERC20Upgradeable[](reserveCount);
 
         // If any underlying collateral exists it can be rolled over.
@@ -581,7 +581,7 @@ contract PerpetualTranche is
         //       end of the set and removing the last element.
         //       We also skip the `reserveAt(0)`, i.e) the underlying collateral,
         //       which is never removed.
-        uint256 reserveCount = _reserveCount();
+        uint256 reserveCount = _reserves.length();
         for (uint256 i = reserveCount - 1; i > 0; i--) {
             ITranche tranche = ITranche(address(_reserveAt(i)));
             IBondController bond = IBondController(tranche.bond());
@@ -731,7 +731,7 @@ contract PerpetualTranche is
         //-----------------------------------------------------------------------------
 
         // Compute redemption amounts
-        uint256 reserveCount = _reserveCount();
+        uint256 reserveCount = _reserves.length();
         TokenAmount[] memory reserveTokens = new TokenAmount[](reserveCount);
         for (uint256 i = 0; i < reserveCount; i++) {
             reserveTokens[i] = TokenAmount({
@@ -903,11 +903,6 @@ contract PerpetualTranche is
         }
     }
 
-    /// @dev Counts the number of tokens currently in the reserve.
-    function _reserveCount() private view returns (uint256) {
-        return _reserves.length();
-    }
-
     /// @dev Fetches the reserve token by index.
     function _reserveAt(uint256 i) private view returns (IERC20Upgradeable) {
         return IERC20Upgradeable(_reserves.at(i));
@@ -933,7 +928,7 @@ contract PerpetualTranche is
     function _reserveValue() private view returns (uint256) {
         IERC20Upgradeable underlying_ = _reserveAt(0);
         uint256 totalVal = underlying_.balanceOf(address(this));
-        for (uint256 i = 1; i < _reserveCount(); i++) {
+        for (uint256 i = 1; i < _reserves.length(); i++) {
             ITranche tranche = ITranche(address(_reserveAt(i)));
             IBondController parentBond = IBondController(tranche.bond());
             totalVal += _computeReserveTrancheValue(
