@@ -41,15 +41,10 @@ contract RouterV2 {
     /// @param collateralAmount The amount of collateral the user wants to tranche.
     /// @return bond The address of the current deposit bond.
     /// @return trancheAmts The tranche token amounts minted.
-    function previewTranche(IPerpetualTranche perp, uint256 collateralAmount)
-        external
-        afterPerpStateUpdate(perp)
-        returns (
-            IBondController,
-            ITranche[] memory,
-            uint256[] memory
-        )
-    {
+    function previewTranche(
+        IPerpetualTranche perp,
+        uint256 collateralAmount
+    ) external afterPerpStateUpdate(perp) returns (IBondController, ITranche[] memory, uint256[] memory) {
         IBondController bond = perp.getDepositBond();
 
         BondTranches memory bt;
@@ -103,11 +98,7 @@ contract RouterV2 {
     }
 
     /// @dev Checks if the spender has sufficient allowance. If not, approves the maximum possible amount.
-    function _checkAndApproveMax(
-        IERC20Upgradeable token,
-        address spender,
-        uint256 amount
-    ) private {
+    function _checkAndApproveMax(IERC20Upgradeable token, address spender, uint256 amount) private {
         uint256 allowance = token.allowance(address(this), spender);
         if (allowance < amount) {
             token.safeApprove(spender, 0);

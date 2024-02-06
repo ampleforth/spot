@@ -9,11 +9,7 @@ contract MockVault {
         return 0;
     }
 
-    function mintPerps(
-        IPerpetualTranche perp,
-        ITranche trancheIn,
-        uint256 trancheInAmt
-    ) public {
+    function mintPerps(IPerpetualTranche perp, ITranche trancheIn, uint256 trancheInAmt) public {
         trancheIn.transferFrom(msg.sender, address(this), trancheInAmt);
 
         trancheIn.approve(address(perp), trancheInAmt);

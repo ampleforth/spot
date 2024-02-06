@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { IVault } from "./IVault.sol";
-import { IFeePolicy } from "./IFeePolicy.sol";
 import { SubscriptionParams } from "./CommonTypes.sol";
 
 interface IRolloverVault is IVault {
@@ -22,24 +20,16 @@ interface IRolloverVault is IVault {
     /// @return perpAmtOut The number of perp tokens returned to the user.
     /// @return perpFeeAmtToBurn The amount of perp tokens to be paid to the perp contract as mint fees.
     /// @return s The pre-swap perp and vault subscription state.
-    function computeUnderlyingToPerpSwapAmt(uint256 underlyingAmtIn)
-        external
-        returns (
-            uint256,
-            uint256,
-            SubscriptionParams memory
-        );
+    function computeUnderlyingToPerpSwapAmt(
+        uint256 underlyingAmtIn
+    ) external returns (uint256, uint256, SubscriptionParams memory);
 
     /// @notice Computes the amount of underlying tokens that are returned when user swaps a given number of perp tokens.
     /// @param perpAmtIn The number of perp tokens the user swaps in.
     /// @return underlyingAmtOut The number of underlying tokens returned to the user.
     /// @return perpFeeAmtToBurn The amount of perp tokens to be paid to the perp contract as burn fees.
     /// @return s The pre-swap perp and vault subscription state.
-    function computePerpToUnderlyingSwapAmt(uint256 perpAmtIn)
-        external
-        returns (
-            uint256,
-            uint256,
-            SubscriptionParams memory
-        );
+    function computePerpToUnderlyingSwapAmt(
+        uint256 perpAmtIn
+    ) external returns (uint256, uint256, SubscriptionParams memory);
 }

@@ -7,7 +7,7 @@ import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
-import { BondTranches, BondTranchesHelpers } from "./BondTranchesHelpers.sol";
+import { BondTranches } from "./BondTranchesHelpers.sol";
 
 /**
  *  @title BondHelpers
@@ -86,11 +86,10 @@ library BondHelpers {
     ///      This function assumes that the no fees are withheld for tranching.
     /// @param b The address of the bond contract.
     /// @return The tranche data, an array of tranche amounts.
-    function previewDeposit(IBondController b, uint256 collateralAmount)
-        internal
-        view
-        returns (BondTranches memory, uint256[] memory)
-    {
+    function previewDeposit(
+        IBondController b,
+        uint256 collateralAmount
+    ) internal view returns (BondTranches memory, uint256[] memory) {
         BondTranches memory bt = getTranches(b);
         uint256[] memory trancheAmts = new uint256[](bt.tranches.length);
 

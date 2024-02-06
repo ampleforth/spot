@@ -71,7 +71,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     ///      The decimals should line up with value expected by consumer (perp, vault).
     ///      NOTE: 10**DECIMALS => 100% or 1.0
     uint8 public constant DECIMALS = 8;
-    uint256 public constant ONE = (1 * 10**DECIMALS); // 1.0 or 100%
+    uint256 public constant ONE = (1 * 10 ** DECIMALS); // 1.0 or 100%
 
     /// @dev SIGMOID_BOUND is set to 1%, i.e) the rollover fee can be at most 1% on either direction.
     uint256 public constant SIGMOID_BOUND = ONE / 100; // 0.01 or 1%
@@ -317,11 +317,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computeDeviationRatio(
-        uint256 perpTVL,
-        uint256 vaultTVL,
-        uint256 seniorTR
-    ) public view returns (uint256) {
+    function computeDeviationRatio(uint256 perpTVL, uint256 vaultTVL, uint256 seniorTR) public view returns (uint256) {
         // NOTE: We assume that perp's TVL and vault's TVL values have the same base denomination.
         uint256 juniorTR = TRANCHE_RATIO_GRANULARITY - seniorTR;
         return (vaultTVL * seniorTR).mulDiv(ONE, (perpTVL * juniorTR)).mulDiv(ONE, targetSubscriptionRatio);

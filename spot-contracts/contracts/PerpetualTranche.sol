@@ -133,7 +133,7 @@ contract PerpetualTranche is
     // Constants & Immutables
     // Number of decimals for a multiplier of 1.0x (i.e. 100%)
     uint8 public constant FEE_POLICY_DECIMALS = 8;
-    uint256 public constant FEE_ONE = (10**FEE_POLICY_DECIMALS);
+    uint256 public constant FEE_ONE = (10 ** FEE_POLICY_DECIMALS);
 
     //-------------------------------------------------------------------------
     // Storage
@@ -329,10 +329,10 @@ contract PerpetualTranche is
     /// @notice Update the maturity tolerance parameters.
     /// @param minTrancheMaturitySec_ New minimum maturity time.
     /// @param maxTrancheMaturitySec_ New maximum maturity time.
-    function updateTolerableTrancheMaturity(uint256 minTrancheMaturitySec_, uint256 maxTrancheMaturitySec_)
-        public
-        onlyOwner
-    {
+    function updateTolerableTrancheMaturity(
+        uint256 minTrancheMaturitySec_,
+        uint256 maxTrancheMaturitySec_
+    ) public onlyOwner {
         if (minTrancheMaturitySec_ > maxTrancheMaturitySec_) {
             revert UnacceptableParams();
         }
@@ -354,11 +354,7 @@ contract PerpetualTranche is
     /// @param token The token address.
     /// @param to The destination address.
     /// @param amount The amount of tokens to be transferred.
-    function transferERC20(
-        IERC20Upgradeable token,
-        address to,
-        uint256 amount
-    ) external afterStateUpdate onlyOwner {
+    function transferERC20(IERC20Upgradeable token, address to, uint256 amount) external afterStateUpdate onlyOwner {
         if (_inReserve(token)) {
             revert UnauthorizedTransferOut();
         }
@@ -384,14 +380,10 @@ contract PerpetualTranche is
     // External methods
 
     /// @inheritdoc IPerpetualTranche
-    function deposit(ITranche trancheIn, uint256 trancheInAmt)
-        external
-        override
-        nonReentrant
-        whenNotPaused
-        afterStateUpdate
-        returns (uint256)
-    {
+    function deposit(
+        ITranche trancheIn,
+        uint256 trancheInAmt
+    ) external override nonReentrant whenNotPaused afterStateUpdate returns (uint256) {
         if (!_isAcceptableTranche(trancheIn)) {
             revert UnexpectedAsset();
         }
@@ -417,14 +409,9 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    function redeem(uint256 perpAmtBurnt)
-        external
-        override
-        nonReentrant
-        whenNotPaused
-        afterStateUpdate
-        returns (TokenAmount[] memory)
-    {
+    function redeem(
+        uint256 perpAmtBurnt
+    ) external override nonReentrant whenNotPaused afterStateUpdate returns (TokenAmount[] memory) {
         // gets the current perp supply
         uint256 perpSupply = totalSupply();
 
@@ -495,12 +482,10 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    function isAcceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut)
-        external
-        override
-        afterStateUpdate
-        returns (bool)
-    {
+    function isAcceptableRollover(
+        ITranche trancheIn,
+        IERC20Upgradeable tokenOut
+    ) external override afterStateUpdate returns (bool) {
         return _isAcceptableRollover(trancheIn, tokenOut);
     }
 
@@ -572,22 +557,17 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    function computeMintAmt(ITranche trancheIn, uint256 trancheInAmt)
-        external
-        override
-        afterStateUpdate
-        returns (uint256)
-    {
+    function computeMintAmt(
+        ITranche trancheIn,
+        uint256 trancheInAmt
+    ) external override afterStateUpdate returns (uint256) {
         return _computeMintAmt(trancheIn, trancheInAmt);
     }
 
     /// @inheritdoc IPerpetualTranche
-    function computeRedemptionAmts(uint256 perpAmtBurnt)
-        external
-        override
-        afterStateUpdate
-        returns (TokenAmount[] memory)
-    {
+    function computeRedemptionAmts(
+        uint256 perpAmtBurnt
+    ) external override afterStateUpdate returns (TokenAmount[] memory) {
         uint256 perpSupply = totalSupply();
         if (perpSupply == 0) {
             revert UnacceptableRedemption();
@@ -685,22 +665,14 @@ contract PerpetualTranche is
 
     /// @dev Transfers tokens from the given address to self and updates the reserve set.
     /// @return Reserve's token balance after transfer in.
-    function _transferIntoReserve(
-        address from,
-        IERC20Upgradeable token,
-        uint256 trancheAmt
-    ) private returns (uint256) {
+    function _transferIntoReserve(address from, IERC20Upgradeable token, uint256 trancheAmt) private returns (uint256) {
         token.safeTransferFrom(from, address(this), trancheAmt);
         return _syncReserve(token);
     }
 
     /// @dev Transfers tokens from self into the given address and updates the reserve set.
     /// @return Reserve's token balance after transfer out.
-    function _transferOutOfReserve(
-        address to,
-        IERC20Upgradeable token,
-        uint256 tokenAmt
-    ) private returns (uint256) {
+    function _transferOutOfReserve(address to, IERC20Upgradeable token, uint256 tokenAmt) private returns (uint256) {
         token.safeTransfer(to, tokenAmt);
         return _syncReserve(token);
     }
@@ -771,11 +743,10 @@ contract PerpetualTranche is
     }
 
     /// @dev Computes the reserve token amounts redeemed when a given number of perps are burnt.
-    function _computeRedemptionAmts(uint256 perpAmtBurnt, uint256 perpSupply)
-        private
-        view
-        returns (TokenAmount[] memory)
-    {
+    function _computeRedemptionAmts(
+        uint256 perpAmtBurnt,
+        uint256 perpSupply
+    ) private view returns (TokenAmount[] memory) {
         //-----------------------------------------------------------------------------
         // We charge no burn fee when interacting with other parts of the system.
         uint256 feePerc = 0;
@@ -837,7 +808,7 @@ contract PerpetualTranche is
         // The perp, tranche tokens and the underlying are denominated as fixed point numbers
         // with the same number of decimals.
         IERC20Upgradeable underlying_ = _reserveAt(0);
-        uint256 unitTokenAmt = (10**_decimals);
+        uint256 unitTokenAmt = (10 ** _decimals);
         uint256 trancheInPrice = _computeReserveTrancheValue(trancheIn, _depositBond, underlying_, unitTokenAmt, false);
         uint256 tokenOutPrice = unitTokenAmt;
         if (tokenOut != underlying_) {
@@ -901,11 +872,7 @@ contract PerpetualTranche is
             // A negative fee percentage (or a reward) implies that perp pays the rotators by
             // offering tranchesOut at a discount, i.e) fewer tranches in.
             else if (feePerc < 0) {
-                r.trancheInAmt = r.trancheInAmt.mulDiv(
-                    FEE_ONE,
-                    FEE_ONE + feePerc.abs(),
-                    MathUpgradeable.Rounding.Up
-                );
+                r.trancheInAmt = r.trancheInAmt.mulDiv(FEE_ONE, FEE_ONE + feePerc.abs(), MathUpgradeable.Rounding.Up);
             }
         }
 

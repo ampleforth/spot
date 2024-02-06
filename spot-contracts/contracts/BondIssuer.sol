@@ -32,9 +32,11 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
 
     /// @notice Address of the bond factory.
+    // solhint-disable-next-line immutable-vars-naming
     IBondFactory public immutable bondFactory;
 
     /// @notice The underlying rebasing token used for tranching.
+    // solhint-disable-next-line immutable-vars-naming
     address public immutable collateral;
 
     /// @notice The maximum maturity duration for the issued bonds.
@@ -117,10 +119,10 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     /// @notice Updates the bond frequency and offset.
     /// @param minIssueTimeIntervalSec_ The new issuance interval.
     /// @param issueWindowOffsetSec_ The new issue window offset.
-    function updateIssuanceTimingConfig(uint256 minIssueTimeIntervalSec_, uint256 issueWindowOffsetSec_)
-        public
-        onlyOwner
-    {
+    function updateIssuanceTimingConfig(
+        uint256 minIssueTimeIntervalSec_,
+        uint256 issueWindowOffsetSec_
+    ) public onlyOwner {
         minIssueTimeIntervalSec = minIssueTimeIntervalSec_;
         issueWindowOffsetSec = issueWindowOffsetSec_;
     }
