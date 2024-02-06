@@ -347,7 +347,7 @@ contract PerpetualTranche is
         ITranche trancheIn,
         uint256 trancheInAmt
     ) external override afterStateUpdate nonReentrant whenNotPaused returns (uint256) {
-        if (!_isAcceptableTranche(trancheIn)) {
+        if (!_isDepositTranche(trancheIn)) {
             revert UnexpectedAsset();
         }
 
@@ -445,14 +445,6 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    function isAcceptableRollover(
-        ITranche trancheIn,
-        IERC20Upgradeable tokenOut
-    ) external override afterStateUpdate returns (bool) {
-        return _isAcceptableRollover(trancheIn, tokenOut);
-    }
-
-    /// @inheritdoc IPerpetualTranche
     function getReserveCount() external override afterStateUpdate returns (uint256) {
         return _reserves.length();
     }
@@ -504,8 +496,7 @@ contract PerpetualTranche is
         // Iterating through the reserve to find tranches that are no longer "acceptable"
         for (uint256 i = 1; i < reserveCount; i++) {
             IERC20Upgradeable token = _reserveAt(i);
-            IBondController bond = IBondController(ITranche(address(token)).bond());
-            if (!_isAcceptableBond(bond)) {
+            if (_isReadyForRollout(ITranche(address(token)))) {
                 rolloverTokens[i] = token;
             }
         }
@@ -567,7 +558,7 @@ contract PerpetualTranche is
         IBondController newBond = bondIssuer.getLatestBond();
 
         // If the new bond has been issued by the issuer and is "acceptable"
-        if (_depositBond != newBond && _isAcceptableBond(newBond)) {
+        if (_depositBond != newBond && _isValidDepositBond(newBond)) {
             // updates `_depositBond` with the new bond
             _depositBond = newBond;
             emit UpdatedDepositBond(newBond);
@@ -848,43 +839,46 @@ contract PerpetualTranche is
     ///          - expects incoming tranche to be part of the deposit bond
     ///          - expects outgoing tranche to NOT be part of the deposit bond, (ie bondIn != bondOut)
     ///          - expects outgoing tranche to be in the reserve
-    ///          - expects outgoing bond to NOT be "acceptable" any more
+    ///          - expects outgoing tranche to be ready for rollout.
     function _isAcceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut) private view returns (bool) {
         // when rolling out the underlying collateral
         if (_isUnderlying(tokenOut)) {
-            return _isAcceptableTranche(trancheIn);
+            return _isDepositTranche(trancheIn);
         }
 
         // when rolling out a normal tranche
         ITranche trancheOut = ITranche(address(tokenOut));
-        IBondController bondOut = IBondController(trancheOut.bond());
-        return (_isAcceptableTranche(trancheIn) &&
-            !_isAcceptableTranche(trancheOut) &&
+        return (
             _inReserve(trancheOut) &&
-            !_isAcceptableBond(bondOut));
+            _isDepositTranche(trancheIn) && 
+            !_isDepositTranche(trancheOut) && 
+            _isReadyForRollout(trancheOut)
+        );
     }
 
-    /// @dev Checks if the bond's tranches can be accepted into the reserve.
+    /// @dev Checks if the given bond is valid and can be accepted into the reserve.
     ///      * Expects the bond to to have the same collateral token as perp.
-    ///      * Expects the bond's maturity to be within expected bounds.
     ///      * Expects the bond to have only two tranches.
     ///      * Expects the bond controller to not withhold any fees.
-    /// @return True if the bond is "acceptable".
-    function _isAcceptableBond(IBondController bond) private view returns (bool) {
-        // NOTE: `secondsToMaturity` will be 0 if the bond is past maturity.
-        uint256 secondsToMaturity = bond.secondsToMaturity();
-        return (address(_reserveAt(0)) == bond.collateralToken() &&
-            secondsToMaturity >= minTrancheMaturitySec &&
-            secondsToMaturity < maxTrancheMaturitySec &&
+    ///      * Expects the bond's duration to be within the max safety bound.
+    /// @return True if the bond is valid.
+    function _isValidDepositBond(IBondController bond) private view returns (bool) {
+        return (bond.collateralToken() == address(_reserveAt(0)) &&
             bond.trancheCount() == 2 &&
-            bond.feeBps() == 0);
+            bond.feeBps() == 0 && 
+            bond.duration() < maxTrancheMaturitySec);
     }
 
-    /// @dev Checks if the given tranche can be accepted into the reserve.
-    ///      * Expects the given tranche belongs to the current deposit bond.
-    ///      * Expects the given tranche is the most "senior" in the bond.
-    /// @return True if the tranche is "acceptable".
-    function _isAcceptableTranche(ITranche tranche) private view returns (bool) {
+    /// @dev Checks if the given tranche's parent bond's time remaining to maturity is less than `minTrancheMaturitySec`.
+    /// @return True if the tranche can be rolled out of perp.
+    function _isReadyForRollout(ITranche tranche) private view returns (bool) {
+        // NOTE: `secondsToMaturity` will be 0 if the bond is past maturity.
+        return (IBondController(tranche.bond()).secondsToMaturity() <= minTrancheMaturitySec);
+    }
+
+    /// @dev Checks if the given tranche is the most senior tranche of the current deposit bond.
+    /// @return True if the tranche is the deposit tranche.
+    function _isDepositTranche(ITranche tranche) private view returns (bool) {
         bool isDepositBondTranche = (_depositBond.trancheTokenAddresses(tranche) &&
             address(_depositBond) == tranche.bond());
         return (isDepositBondTranche && (_depositBond.getSeniorTranche() == tranche));
