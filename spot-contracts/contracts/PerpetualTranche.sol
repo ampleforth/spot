@@ -377,9 +377,6 @@ contract PerpetualTranche is
     function redeem(
         uint256 perpAmtBurnt
     ) external override afterStateUpdate nonReentrant whenNotPaused returns (TokenAmount[] memory) {
-        // gets the current perp supply
-        uint256 perpSupply = totalSupply();
-
         // verifies if burn amount is acceptable
         if (perpAmtBurnt <= 0) {
             return new TokenAmount[](0);
@@ -387,7 +384,7 @@ contract PerpetualTranche is
 
         // Calculates the fee adjusted share of reserve tokens to be redeemed
         // NOTE: This operation should precede any token transfers.
-        TokenAmount[] memory tokensOut = _computeRedemptionAmts(perpAmtBurnt, perpSupply);
+        TokenAmount[] memory tokensOut = _computeRedemptionAmts(perpAmtBurnt);
 
         // burns perp tokens from the sender
         _burn(msg.sender, perpAmtBurnt);
@@ -524,7 +521,7 @@ contract PerpetualTranche is
     function computeRedemptionAmts(
         uint256 perpAmtBurnt
     ) external override afterStateUpdate returns (TokenAmount[] memory) {
-        return _computeRedemptionAmts(perpAmtBurnt, perpSupply);
+        return _computeRedemptionAmts(perpAmtBurnt);
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -643,9 +640,7 @@ contract PerpetualTranche is
         if (balance > 0 && !inReserve_) {
             // Inserts new tranche into reserve set.
             _reserves.add(address(token));
-        }
-
-        else if (balance <= 0 && inReserve_) {
+        } else if (balance <= 0 && inReserve_) {
             // Removes tranche from reserve set.
             _reserves.remove(address(token));
 
@@ -678,10 +673,10 @@ contract PerpetualTranche is
         //-----------------------------------------------------------------------------
 
         // Compute mint amt
-        uint256 totalSupply_ = totalSupply();
+        uint256 perpSupply = totalSupply();
         uint256 perpAmtMint = valueIn;
-        if (totalSupply_ > 0) {
-            perpAmtMint = perpAmtMint.mulDiv(totalSupply_, perpTVL);
+        if (perpSupply > 0) {
+            perpAmtMint = perpAmtMint.mulDiv(perpSupply, perpTVL);
         }
 
         // The mint fees are settled by simply minting fewer perps.
@@ -693,10 +688,9 @@ contract PerpetualTranche is
     }
 
     /// @dev Computes the reserve token amounts redeemed when a given number of perps are burnt.
-    function _computeRedemptionAmts(
-        uint256 perpAmtBurnt,
-        uint256 perpSupply
-    ) private view returns (TokenAmount[] memory) {
+    function _computeRedemptionAmts(uint256 perpAmtBurnt) private view returns (TokenAmount[] memory) {
+        uint256 perpSupply = totalSupply();
+
         //-----------------------------------------------------------------------------
         // We charge no burn fee when interacting with other parts of the system.
         uint256 feePerc = 0;
@@ -790,11 +784,7 @@ contract PerpetualTranche is
         // A positive fee percentage implies that perp charges rotators by
         // offering tranchesOut for a premium, i.e) more tranches in.
         if (feePerc > 0) {
-            r.trancheInAmt = r.trancheInAmt.mulDiv(
-                FEE_ONE,
-                FEE_ONE - feePerc.toUint256(),
-                MathUpgradeable.Rounding.Up
-            );
+            r.trancheInAmt = r.trancheInAmt.mulDiv(FEE_ONE, FEE_ONE - feePerc.toUint256(), MathUpgradeable.Rounding.Up);
         }
         // A negative fee percentage (or a reward) implies that perp pays the rotators by
         // offering tranchesOut at a discount, i.e) fewer tranches in.
