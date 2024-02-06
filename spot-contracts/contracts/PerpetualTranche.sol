@@ -337,7 +337,7 @@ contract PerpetualTranche is
     function deposit(
         ITranche trancheIn,
         uint256 trancheInAmt
-    ) external override nonReentrant whenNotPaused afterStateUpdate returns (uint256) {
+    ) external override afterStateUpdate nonReentrant whenNotPaused returns (uint256) {
         if (!_isAcceptableTranche(trancheIn)) {
             revert UnexpectedAsset();
         }
@@ -365,7 +365,7 @@ contract PerpetualTranche is
     /// @inheritdoc IPerpetualTranche
     function redeem(
         uint256 perpAmtBurnt
-    ) external override nonReentrant whenNotPaused afterStateUpdate returns (TokenAmount[] memory) {
+    ) external override afterStateUpdate nonReentrant whenNotPaused returns (TokenAmount[] memory) {
         // gets the current perp supply
         uint256 perpSupply = totalSupply();
 
@@ -396,7 +396,7 @@ contract PerpetualTranche is
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable
-    ) external override onlyVault nonReentrant whenNotPaused afterStateUpdate returns (RolloverData memory) {
+    ) external override onlyVault afterStateUpdate nonReentrant whenNotPaused returns (RolloverData memory) {
         // verifies if rollover is acceptable
         if (!_isAcceptableRollover(trancheIn, tokenOut)) {
             revert UnacceptableRollover();
@@ -547,7 +547,7 @@ contract PerpetualTranche is
     /// @dev Lazily updates time-dependent reserve storage state.
     ///      This function is to be invoked on all external function entry points which are
     ///      read the reserve storage. This function is intended to be idempotent.
-    function updateState() public override {
+    function updateState() public override nonReentrant {
         // Skip state update when system is paused.
         if (paused()) {
             return;
