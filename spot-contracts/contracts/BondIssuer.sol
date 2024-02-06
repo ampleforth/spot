@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import { IBondFactory } from "./_interfaces/buttonwood/IBondFactory.sol";
 import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";

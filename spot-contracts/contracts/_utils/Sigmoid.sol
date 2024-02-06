@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // https://github.com/ampleforth/ampleforth-contracts/blob/master/contracts/UFragmentsPolicy.sol
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
