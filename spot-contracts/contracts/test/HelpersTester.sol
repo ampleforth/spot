@@ -64,12 +64,6 @@ contract HelpersTester {
         return t.getTrancheCollateralization(IERC20Upgradeable(bond.collateralToken()));
     }
 
-    function getImmatureSeniorTrancheCollateralization(ITranche t) public view returns (uint256, uint256) {
-        IBondController bond = IBondController(t.bond());
-        IERC20Upgradeable collateralToken = IERC20Upgradeable(bond.collateralToken());
-        return t.getImmatureSeniorTrancheCollateralization(collateralToken.balanceOf(address(bond)));
-    }
-
     function estimateUnderlyingAmtToTranche(
         IPerpetualTranche perp,
         uint256 perpTVL,
