@@ -39,16 +39,22 @@ import { TrancheHelpers } from "./_utils/TrancheHelpers.sol";
  *          Incentivized parties can "rollover" tranches approaching maturity or the underlying collateral,
  *          for newer seniors (which expire further out in the future) that belong to the updated "depositBond".
  *
- *          The time dependent system state is updated "lazily" without a need for an explicit poke
- *          from the outside world. Every external function that deals with the reserve
- *          invokes the `afterStateUpdate` modifier at the entry-point.
- *          This brings the system storage state up to date.
  *
- *          CRITICAL: On the 3 main system operations: deposit, redeem and rollover;
- *          We first compute fees before executing any transfers in or out of the system.
- *          The ordering of operations is very important as the fee computation logic,
- *          requires the system TVL as an input and which should be recorded prior to any value
- *          entering or leaving the system.
+ * @dev The time dependent system state is updated "lazily" without a need for an explicit poke
+ *      from the outside world. Every external function that deals with the reserve
+ *      invokes the `afterStateUpdate` modifier at the entry-point.
+ *      This brings the system storage state up to date.
+ *
+ *      CRITICAL: On the 3 main system operations: deposit, redeem and rollover;
+ *      We first compute fees before executing any transfers in or out of the system.
+ *      The ordering of operations is very important as the fee computation logic,
+ *      requires the system TVL as an input and which should be recorded prior to any value
+ *      entering or leaving the system.
+ *
+ *      With the new demand based fee policy implementation,
+ *      both perp and the rollover have a mutual dependency on each other.
+ *      None of the perp operations will work unless it's pointed to a valid vault.
+ *
  *
  */
 contract PerpetualTranche is
