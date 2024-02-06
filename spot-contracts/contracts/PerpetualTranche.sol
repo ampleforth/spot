@@ -17,7 +17,6 @@ import { ERC20BurnableUpgradeable } from "@openzeppelin/contracts-upgradeable/to
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import { BondHelpers } from "./_utils/BondHelpers.sol";
-import { TrancheHelpers } from "./_utils/TrancheHelpers.sol";
 
 /**
  *  @title PerpetualTranche
@@ -70,7 +69,6 @@ contract PerpetualTranche is
     // data handling
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
     using BondHelpers for IBondController;
-    using TrancheHelpers for ITranche;
 
     // ERC20 operations
     using SafeERC20Upgradeable for IERC20Upgradeable;
@@ -963,11 +961,10 @@ contract PerpetualTranche is
     ) private view returns (uint256) {
         // NOTE: As an optimization here, we assume that the reserve tranche is immature and has the most senior claim.
         uint256 parentBondCollateralBalance = collateralToken.balanceOf(address(parentBond));
-        (uint256 trancheClaim, uint256 trancheSupply) = tranche.getImmatureSeniorTrancheCollateralization(
-            parentBondCollateralBalance
-        );
-
-        // Tranche supply is zero (its parent bond has no deposits yet); the tranche's CDR is assumed 1.0.
+        uint256 trancheSupply = tranche.totalSupply();
+        uint256 trancheClaim = MathUpgradeable.min(trancheSupply, parentBondCollateralBalance);
+        // Tranche supply is zero (its parent bond has no deposits yet);
+        // the tranche's CDR is assumed 1.0.
         return
             (trancheSupply > 0)
                 ? trancheClaim.mulDiv(
