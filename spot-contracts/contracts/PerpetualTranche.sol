@@ -763,10 +763,9 @@ contract PerpetualTranche is
         uint256 tokenOutPrice = unitTokenAmt;
         if (tokenOut != underlying_) {
             ITranche trancheOut = ITranche(address(tokenOut));
-            IBondController trancheOutParentBond = IBondController(trancheOut.bond());
             tokenOutPrice = _computeReserveTrancheValue(
                 trancheOut,
-                trancheOutParentBond,
+                IBondController(trancheOut.bond()),
                 underlying_,
                 unitTokenAmt,
                 true
