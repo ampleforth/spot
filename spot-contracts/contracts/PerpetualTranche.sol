@@ -720,15 +720,13 @@ contract PerpetualTranche is
             // We calculate the perp post-burn TVL, by multiplying the current TVL by
             // the fraction of supply remaining.
             SubscriptionParams memory s = _querySubscriptionState();
-            feePerc = (perpSupply > 0)
-                ? feePolicy.computePerpBurnFeePerc(
-                    feePolicy.computeDeviationRatio(
-                        s.perpTVL.mulDiv(perpSupply - perpAmtBurnt, perpSupply),
-                        s.vaultTVL,
-                        s.seniorTR
-                    )
+            feePerc = feePolicy.computePerpBurnFeePerc(
+                feePolicy.computeDeviationRatio(
+                    s.perpTVL.mulDiv(perpSupply - perpAmtBurnt, perpSupply),
+                    s.vaultTVL,
+                    s.seniorTR
                 )
-                : 0;
+            );
         }
         //-----------------------------------------------------------------------------
 
