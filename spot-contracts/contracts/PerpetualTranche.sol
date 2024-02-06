@@ -415,7 +415,7 @@ contract PerpetualTranche is
 
         // Calculates the fee adjusted amount of tranches exchanged during a rolled over
         // NOTE: This operation should precede any token transfers.
-        RolloverData memory r = _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable, type(uint256).max);
+        RolloverData memory r = _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable);
 
         // Verifies if rollover amount is acceptable
         if (r.trancheInAmt <= 0) {
@@ -779,46 +779,50 @@ contract PerpetualTranche is
         // (1 +/- f) . (trancheInAmt . trancheInPrice) = (tokenOutAmt . tokenOutPrice)
         //-----------------------------------------------------------------------------
 
-        // Given the amount of tranches In, we compute the amount of tokens out
+        // Using perp's tokenOutBalance, we calculate the amount of tokens in to rollover
+        // the entire balance.
+
         RolloverData memory r = RolloverData({
-            trancheInAmt: trancheInAmtAvailable,
-            tokenOutAmt: trancheInAmtAvailable.mulDiv(trancheInPrice, tokenOutPrice)
+            tokenOutAmt: tokenOutBalance,
+            trancheInAmt: tokenOutBalance.mulDiv(tokenOutPrice, trancheInPrice, MathUpgradeable.Rounding.Up)
         });
 
         // A positive fee percentage implies that perp charges rotators by
-        // accepting tranchesIn at a discount, i.e) fewer tokens out.
-        // This results in perp enrichment.
+        // offering tranchesOut for a premium, i.e) more tranches in.
         if (feePerc > 0) {
-            r.tokenOutAmt = r.tokenOutAmt.mulDiv(FEE_ONE - feePerc.abs(), FEE_ONE);
+            r.trancheInAmt = r.trancheInAmt.mulDiv(
+                FEE_ONE,
+                FEE_ONE - feePerc.toUint256(),
+                MathUpgradeable.Rounding.Up
+            );
         }
         // A negative fee percentage (or a reward) implies that perp pays the rotators by
-        // accepting tranchesIn at a premium, i.e) more tokens out.
-        // This results in perp debasement.
+        // offering tranchesOut at a discount, i.e) fewer tranches in.
         else if (feePerc < 0) {
-            r.tokenOutAmt = r.tokenOutAmt.mulDiv(FEE_ONE + feePerc.abs(), FEE_ONE);
+            r.trancheInAmt = r.trancheInAmt.mulDiv(FEE_ONE, FEE_ONE + feePerc.abs(), MathUpgradeable.Rounding.Up);
         }
+
         //-----------------------------------------------------------------------------
 
-        // When the tokenOut balance is NOT covered:
-        // we fix tokenOutAmt = tokenOutBalance and re-calculate other values
-        if (r.tokenOutAmt > tokenOutBalance) {
-            // Given the amount of tokens out, we compute the amount of tranches in
-            r.tokenOutAmt = tokenOutBalance;
-            r.trancheInAmt = r.tokenOutAmt.mulDiv(tokenOutPrice, trancheInPrice, MathUpgradeable.Rounding.Up);
+        // When the trancheInAmt exceeds trancheInAmtAvailable:
+        // we fix trancheInAmt = trancheInAmtAvailable and re-calculate tokenOutAmt
 
-            // A postive fee percentage implies that perp charges rotators by
-            // offering tranchesOut for a premium, i.e) more tranches in.
+        if (r.trancheInAmt > trancheInAmtAvailable) {
+            // Given the amount of tranches In, we compute the amount of tokens out
+            r.trancheInAmt = trancheInAmtAvailable;
+            r.tokenOutAmt = trancheInAmtAvailable.mulDiv(trancheInPrice, tokenOutPrice);
+
+            // A positive fee percentage implies that perp charges rotators by
+            // accepting tranchesIn at a discount, i.e) fewer tokens out.
+            // This results in perp enrichment.
             if (feePerc > 0) {
-                r.trancheInAmt = r.trancheInAmt.mulDiv(
-                    FEE_ONE,
-                    FEE_ONE - feePerc.toUint256(),
-                    MathUpgradeable.Rounding.Up
-                );
+                r.tokenOutAmt = r.tokenOutAmt.mulDiv(FEE_ONE - feePerc.abs(), FEE_ONE);
             }
             // A negative fee percentage (or a reward) implies that perp pays the rotators by
-            // offering tranchesOut at a discount, i.e) fewer tranches in.
+            // accepting tranchesIn at a premium, i.e) more tokens out.
+            // This results in perp debasement.
             else if (feePerc < 0) {
-                r.trancheInAmt = r.trancheInAmt.mulDiv(FEE_ONE, FEE_ONE + feePerc.abs(), MathUpgradeable.Rounding.Up);
+                r.tokenOutAmt = r.tokenOutAmt.mulDiv(FEE_ONE + feePerc.abs(), FEE_ONE);
             }
         }
 
