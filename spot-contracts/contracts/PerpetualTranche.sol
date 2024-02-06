@@ -645,7 +645,7 @@ contract PerpetualTranche is
             _reserves.add(address(token));
         }
 
-        if (balance <= 0 && inReserve_) {
+        else if (balance <= 0 && inReserve_) {
             // Removes tranche from reserve set.
             _reserves.remove(address(token));
 
