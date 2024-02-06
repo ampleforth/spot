@@ -76,8 +76,8 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @dev SIGMOID_BOUND is set to 1%, i.e) the rollover fee can be at most 1% on either direction.
     uint256 public constant SIGMOID_BOUND = ONE / 100; // 0.01 or 1%
 
-    uint256 public constant SR_LOWER_BOUND = (ONE * 75) / 100; // 0.75 or 75%
-    uint256 public constant SR_UPPER_BOUND = 2 * ONE; // 2.0 or 200%
+    uint256 public constant TARGET_SR_LOWER_BOUND = (ONE * 75) / 100; // 0.75 or 75%
+    uint256 public constant TARGET_SR_UPPER_BOUND = 2 * ONE; // 2.0 or 200%
 
     //-----------------------------------------------------------------------------
     /// @inheritdoc IFeePolicy
@@ -160,7 +160,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Updates the target subscription ratio.
     /// @param targetSubscriptionRatio_ The new target subscription ratio as a fixed point number with {DECIMALS} places.
     function updateTargetSubscriptionRatio(uint256 targetSubscriptionRatio_) external onlyOwner {
-        if (targetSubscriptionRatio_ < SR_LOWER_BOUND || targetSubscriptionRatio_ > SR_UPPER_BOUND) {
+        if (targetSubscriptionRatio_ < TARGET_SR_LOWER_BOUND || targetSubscriptionRatio_ > TARGET_SR_UPPER_BOUND) {
             revert InvalidTargetSRBounds();
         }
         targetSubscriptionRatio = targetSubscriptionRatio_;
