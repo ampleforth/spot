@@ -5,7 +5,7 @@ import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/t
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeePolicy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
 import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/CommonTypes.sol";
-import { UnauthorizedCall, UnauthorizedTransferOut, UnacceptableReference, UnexpectedDecimals, UnexpectedAsset, UnacceptableDeposit, UnacceptableRedemption, UnacceptableParams, UnacceptableRollover, ExceededMaxSupply, ExceededMaxMintPerTranche } from "./_interfaces/ProtocolErrors.sol";
+import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, UnacceptableDeposit, UnacceptableRedemption, UnacceptableParams, UnacceptableRollover, ExceededMaxSupply, ExceededMaxMintPerTranche } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -73,36 +73,6 @@ contract PerpetualTranche is
     using MathUpgradeable for uint256;
     using SignedMathUpgradeable for int256;
     using SafeCastUpgradeable for int256;
-
-    //-------------------------------------------------------------------------
-    // Events
-
-    /// @notice Event emitted when the keeper is updated.
-    /// @param prevKeeper The address of the previous keeper.
-    /// @param newKeeper The address of the new keeper.
-    event UpdatedKeeper(address prevKeeper, address newKeeper);
-
-    /// @notice Event emitted when the bond issuer is updated.
-    /// @param issuer Address of the issuer contract.
-    event UpdatedBondIssuer(IBondIssuer issuer);
-
-    /// @notice Event emitted when the fee policy is updated.
-    /// @param strategy Address of the strategy contract.
-    event UpdatedFeePolicy(IFeePolicy strategy);
-
-    /// @notice Event emitted when maturity tolerance parameters are updated.
-    /// @param min The minimum maturity time.
-    /// @param max The maximum maturity time.
-    event UpdatedTolerableTrancheMaturity(uint256 min, uint256 max);
-
-    /// @notice Event emitted when the supply caps are updated.
-    /// @param maxSupply The max total supply.
-    /// @param maxMintAmtPerTranche The max mint amount per tranche.
-    event UpdatedMintingLimits(uint256 maxSupply, uint256 maxMintAmtPerTranche);
-
-    /// @notice Event emitted when the authorized rollover vault is updated.
-    /// @param vault The address of the rollover vault.
-    event UpdatedVault(IRolloverVault vault);
 
     //-------------------------------------------------------------------------
     // Perp Math Basics:
@@ -283,47 +253,33 @@ contract PerpetualTranche is
     // ADMIN only methods
 
     /// @notice Updates the reference to the keeper.
-    /// @param newKeeper The address of the new keeper.
-    function updateKeeper(address newKeeper) public onlyOwner {
-        address prevKeeper = keeper;
-        keeper = newKeeper;
-        emit UpdatedKeeper(prevKeeper, newKeeper);
+    /// @param keeper_ The address of the new keeper.
+    function updateKeeper(address keeper_) public onlyOwner {
+        keeper = keeper_;
     }
 
     /// @notice Updates the reference to the rollover vault.
-    /// @param newVault The address of the new vault.
-    function updateVault(IRolloverVault newVault) public onlyOwner {
-        if (address(newVault) == address(0)) {
-            revert UnacceptableReference();
-        }
-        vault = newVault;
-        emit UpdatedVault(newVault);
+    /// @param vault_ The address of the new vault.
+    function updateVault(IRolloverVault vault_) public onlyOwner {
+        vault = vault_;
     }
 
     /// @notice Update the reference to the bond issuer contract.
     /// @param bondIssuer_ New bond issuer address.
     function updateBondIssuer(IBondIssuer bondIssuer_) public onlyOwner {
-        if (address(bondIssuer_) == address(0)) {
-            revert UnacceptableReference();
-        }
-        if (address(_reserveAt(0)) != bondIssuer_.collateral()) {
+        if (bondIssuer_.collateral() != address(_reserveAt(0))) {
             revert UnexpectedAsset();
         }
         bondIssuer = bondIssuer_;
-        emit UpdatedBondIssuer(bondIssuer_);
     }
 
     /// @notice Update the reference to the fee policy contract.
     /// @param feePolicy_ New strategy address.
     function updateFeePolicy(IFeePolicy feePolicy_) public onlyOwner {
-        if (address(feePolicy_) == address(0)) {
-            revert UnacceptableReference();
-        }
         if (feePolicy_.decimals() != FEE_POLICY_DECIMALS) {
             revert UnexpectedDecimals();
         }
         feePolicy = feePolicy_;
-        emit UpdatedFeePolicy(feePolicy_);
     }
 
     /// @notice Update the maturity tolerance parameters.
@@ -338,7 +294,6 @@ contract PerpetualTranche is
         }
         minTrancheMaturitySec = minTrancheMaturitySec_;
         maxTrancheMaturitySec = maxTrancheMaturitySec_;
-        emit UpdatedTolerableTrancheMaturity(minTrancheMaturitySec_, maxTrancheMaturitySec_);
     }
 
     /// @notice Update parameters controlling the perp token mint limits.
@@ -347,7 +302,6 @@ contract PerpetualTranche is
     function updateMintingLimits(uint256 maxSupply_, uint256 maxMintAmtPerTranche_) public onlyOwner {
         maxSupply = maxSupply_;
         maxMintAmtPerTranche = maxMintAmtPerTranche_;
-        emit UpdatedMintingLimits(maxSupply_, maxMintAmtPerTranche_);
     }
 
     /// @notice Allows the owner to transfer non-critical assets out of the system if required.
