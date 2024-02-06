@@ -242,8 +242,9 @@ contract PerpetualTranche is
         _reserves.add(address(collateral_));
         _syncReserve(collateral_);
 
-        updateBondIssuer(bondIssuer_);
+        updateKeeper(owner());
         updateFeePolicy(feePolicy_);
+        updateBondIssuer(bondIssuer_);
 
         updateTolerableTrancheMaturity(1, type(uint256).max);
         updateMintingLimits(type(uint256).max, type(uint256).max);
