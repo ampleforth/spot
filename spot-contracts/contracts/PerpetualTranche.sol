@@ -54,6 +54,8 @@ import { BondHelpers } from "./_utils/BondHelpers.sol";
  *      both perp and the rollover have a mutual dependency on each other.
  *      None of the perp operations will work unless it's pointed to a valid vault.
  *
+ *      When computing the value of assets in the system, the code always over-values by
+ *      rounding up. When computing the value of incoming assets, the code rounds down.
  *
  */
 contract PerpetualTranche is
