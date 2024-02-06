@@ -5,7 +5,7 @@ import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/t
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeePolicy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
 import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/CommonTypes.sol";
-import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, UnacceptableDeposit, UnacceptableRedemption, UnacceptableParams, UnacceptableRollover, ExceededMaxSupply, ExceededMaxMintPerTranche } from "./_interfaces/ProtocolErrors.sol";
+import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, UnacceptableRedemption, UnacceptableParams, UnacceptableRollover, ExceededMaxSupply, ExceededMaxMintPerTranche } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -357,7 +357,7 @@ contract PerpetualTranche is
         // NOTE: This operation should precede any token transfers.
         uint256 perpAmtMint = _computeMintAmt(trancheIn, trancheInAmt);
         if (trancheInAmt <= 0 || perpAmtMint <= 0) {
-            revert UnacceptableDeposit();
+            return 0;
         }
 
         // transfers tranche tokens from the sender to the reserve
@@ -381,8 +381,8 @@ contract PerpetualTranche is
         uint256 perpSupply = totalSupply();
 
         // verifies if burn amount is acceptable
-        if (perpAmtBurnt <= 0 || perpAmtBurnt > perpSupply) {
-            revert UnacceptableRedemption();
+        if (perpAmtBurnt <= 0) {
+            return new TokenAmount[](0);
         }
 
         // Calculates the fee adjusted share of reserve tokens to be redeemed
@@ -419,7 +419,7 @@ contract PerpetualTranche is
 
         // Verifies if rollover amount is acceptable
         if (r.trancheInAmt <= 0 || r.tokenOutAmt <= 0) {
-            return r;
+            return RolloverData({ trancheInAmt: 0, tokenOutAmt: 0 });
         }
 
         // transfers tranche tokens from the sender to the reserve
