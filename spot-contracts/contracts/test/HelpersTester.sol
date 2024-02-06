@@ -5,6 +5,7 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { IPerpetualTranche } from "../_interfaces/IPerpetualTranche.sol";
+import { TokenAmount } from "../_interfaces/CommonTypes.sol";
 
 import { BondTranches, BondTranchesHelpers } from "../_utils/BondTranchesHelpers.sol";
 import { BondHelpers } from "../_utils/BondHelpers.sol";
@@ -36,10 +37,7 @@ contract HelpersTester {
         return b.getSeniorTrancheRatio();
     }
 
-    function previewDeposit(
-        IBondController b,
-        uint256 collateralAmount
-    ) public view returns (BondTranches memory, uint256[] memory) {
+    function previewDeposit(IBondController b, uint256 collateralAmount) public view returns (TokenAmount[] memory) {
         return b.previewDeposit(collateralAmount);
     }
 

@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
+import { TokenAmount } from "../_interfaces/CommonTypes.sol";
 
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
@@ -86,23 +87,21 @@ library BondHelpers {
     ///      This function assumes that the no fees are withheld for tranching.
     /// @param b The address of the bond contract.
     /// @return The tranche data, an array of tranche amounts.
-    function previewDeposit(
-        IBondController b,
-        uint256 collateralAmount
-    ) internal view returns (BondTranches memory, uint256[] memory) {
+    function previewDeposit(IBondController b, uint256 collateralAmount) internal view returns (TokenAmount[] memory) {
         BondTranches memory bt = getTranches(b);
-        uint256[] memory trancheAmts = new uint256[](bt.tranches.length);
+        TokenAmount[] memory tranchesOut = new TokenAmount[](bt.tranches.length);
 
         uint256 totalDebt = b.totalDebt();
         uint256 collateralBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(address(b));
 
         for (uint8 i = 0; i < bt.tranches.length; i++) {
-            trancheAmts[i] = collateralAmount.mulDiv(bt.trancheRatios[i], TRANCHE_RATIO_GRANULARITY);
+            uint256 trancheAmt = collateralAmount.mulDiv(bt.trancheRatios[i], TRANCHE_RATIO_GRANULARITY);
             if (collateralBalance > 0) {
-                trancheAmts[i] = trancheAmts[i].mulDiv(totalDebt, collateralBalance);
+                trancheAmt = trancheAmt.mulDiv(totalDebt, collateralBalance);
             }
+            tranchesOut[i] = TokenAmount({ token: bt.tranches[i], amount: trancheAmt });
         }
 
-        return (bt, trancheAmts);
+        return tranchesOut;
     }
 }
