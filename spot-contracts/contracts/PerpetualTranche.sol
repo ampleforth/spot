@@ -734,9 +734,10 @@ contract PerpetualTranche is
         uint256 reserveCount = _reserves.length();
         TokenAmount[] memory reserveTokens = new TokenAmount[](reserveCount);
         for (uint256 i = 0; i < reserveCount; i++) {
+            IERC20Upgradeable tokenOut = _reserveAt(i);
             reserveTokens[i] = TokenAmount({
-                token: _reserveAt(i),
-                amount: _reserveAt(i).balanceOf(address(this)).mulDiv(perpAmtBurnt, perpSupply)
+                token: tokenOut,
+                amount: tokenOut.balanceOf(address(this)).mulDiv(perpAmtBurnt, perpSupply)
             });
 
             // The burn fees are settled by simply redeeming for fewer tranches.
