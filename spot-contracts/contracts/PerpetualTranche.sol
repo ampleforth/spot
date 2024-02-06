@@ -157,7 +157,7 @@ contract PerpetualTranche is
     /// @notice The maximum supply of perps that can exist at any given time.
     uint256 public maxSupply;
 
-    /// @notice The max number of perps that can be minted for each tranche in the minting bond.
+    /// @notice The max number of perps that can be minted using the senior tranche in the minting bond.
     uint256 public maxMintAmtPerTranche;
 
     /// @notice The total number of perps that have been minted using a given tranche.
