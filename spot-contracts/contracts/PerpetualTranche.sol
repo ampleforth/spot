@@ -416,8 +416,8 @@ contract PerpetualTranche is
         RolloverData memory r = _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable, type(uint256).max);
 
         // Verifies if rollover amount is acceptable
-        if (r.trancheInAmt <= 0 || r.tokenOutAmt <= 0) {
-            return RolloverData({ trancheInAmt: 0, tokenOutAmt: 0 });
+        if (r.trancheInAmt <= 0) {
+            return r;
         }
 
         // transfers tranche tokens from the sender to the reserve
@@ -530,14 +530,12 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    /// @dev Set `tokenOutAmtRequested` to max(uint256) to use the reserve balance.
     function computeRolloverAmt(
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
-        uint256 trancheInAmtAvailable,
-        uint256 tokenOutAmtRequested
+        uint256 trancheInAmtAvailable
     ) external override afterStateUpdate returns (RolloverData memory) {
-        return _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable, tokenOutAmtRequested);
+        return _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable);
     }
 
     //--------------------------------------------------------------------------
@@ -745,8 +743,7 @@ contract PerpetualTranche is
     function _computeRolloverAmt(
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
-        uint256 trancheInAmtAvailable,
-        uint256 tokenOutAmtRequested
+        uint256 trancheInAmtAvailable
     ) private view returns (RolloverData memory) {
         //-----------------------------------------------------------------------------
         // The rollover fees are settled by, adjusting the exchange rate
@@ -777,8 +774,7 @@ contract PerpetualTranche is
         }
 
         uint256 tokenOutBalance = tokenOut.balanceOf(address(this));
-        tokenOutAmtRequested = MathUpgradeable.min(tokenOutAmtRequested, tokenOutBalance);
-        if (trancheInAmtAvailable <= 0 || trancheInPrice <= 0 || tokenOutPrice <= 0 || tokenOutAmtRequested <= 0) {
+        if (trancheInAmtAvailable <= 0 || trancheInPrice <= 0 || tokenOutPrice <= 0 || tokenOutBalance <= 0) {
             return RolloverData({ trancheInAmt: 0, tokenOutAmt: 0 });
         }
         //-----------------------------------------------------------------------------
@@ -807,10 +803,10 @@ contract PerpetualTranche is
         //-----------------------------------------------------------------------------
 
         // When the tokenOut balance is NOT covered:
-        // we fix tokenOutAmt = tokenOutAmtRequested and re-calculate other values
-        if (r.tokenOutAmt > tokenOutAmtRequested) {
+        // we fix tokenOutAmt = tokenOutBalance and re-calculate other values
+        if (r.tokenOutAmt > tokenOutBalance) {
             // Given the amount of tokens out, we compute the amount of tranches in
-            r.tokenOutAmt = tokenOutAmtRequested;
+            r.tokenOutAmt = tokenOutBalance;
             r.trancheInAmt = r.tokenOutAmt.mulDiv(tokenOutPrice, trancheInPrice, MathUpgradeable.Rounding.Up);
 
             // A postive fee percentage implies that perp charges rotators by
@@ -848,12 +844,10 @@ contract PerpetualTranche is
 
         // when rolling out a normal tranche
         ITranche trancheOut = ITranche(address(tokenOut));
-        return (
-            _inReserve(trancheOut) &&
-            _isDepositTranche(trancheIn) && 
-            !_isDepositTranche(trancheOut) && 
-            _isReadyForRollout(trancheOut)
-        );
+        return (_inReserve(trancheOut) &&
+            _isDepositTranche(trancheIn) &&
+            !_isDepositTranche(trancheOut) &&
+            _isReadyForRollout(trancheOut));
     }
 
     /// @dev Checks if the given bond is valid and can be accepted into the reserve.
@@ -865,7 +859,7 @@ contract PerpetualTranche is
     function _isValidDepositBond(IBondController bond) private view returns (bool) {
         return (bond.collateralToken() == address(_reserveAt(0)) &&
             bond.trancheCount() == 2 &&
-            bond.feeBps() == 0 && 
+            bond.feeBps() == 0 &&
             bond.duration() < maxTrancheMaturitySec);
     }
 
