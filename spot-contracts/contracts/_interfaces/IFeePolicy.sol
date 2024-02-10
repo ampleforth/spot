@@ -26,13 +26,15 @@ interface IFeePolicy {
     ///         example) 99 tranchesIn for 100 tranchesOut
     function computePerpRolloverFeePerc(uint256 dr) external view returns (int256);
 
+    /// @param dr The current system deviation ratio.
     /// @return The percentage of the mint vault note amount to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
-    function computeVaultMintFeePerc() external view returns (uint256);
+    function computeVaultMintFeePerc(uint256 dr) external view returns (uint256);
 
+    /// @param dr The current system deviation ratio.
     /// @return The percentage of the burnt vault note amount to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
-    function computeVaultBurnFeePerc() external view returns (uint256);
+    function computeVaultBurnFeePerc(uint256 dr) external view returns (uint256);
 
     /// @return The fixed amount fee charged by the vault during each deployment,
     ///         denominated in the underlying collateral asset.
@@ -68,7 +70,4 @@ interface IFeePolicy {
     /// @param seniorTR The tranche ratio of seniors accepted by perp.
     /// @return The deviation ratio given the system subscription parameters.
     function computeDeviationRatio(uint256 perpTVL, uint256 vaultTVL, uint256 seniorTR) external view returns (uint256);
-
-    /// @notice The target subscription ratio i.e) the normalization factor.
-    function targetSubscriptionRatio() external view returns (uint256);
 }
