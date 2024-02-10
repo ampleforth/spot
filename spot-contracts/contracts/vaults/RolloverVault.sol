@@ -491,6 +491,67 @@ contract RolloverVault is
     //--------------------------------------------------------------------------
     // External & Public methods
 
+    /// @inheritdoc IVault
+    function computeMintAmt(uint256 underlyingAmtIn) public returns (uint256) {
+        //-----------------------------------------------------------------------------
+        uint256 feePerc = feePolicy.computeVaultMintFeePerc(
+            feePolicy.computeDeviationRatio(_querySubscriptionState(perp))
+        );
+        //-----------------------------------------------------------------------------
+
+        // Compute mint amt
+        uint256 totalSupply_ = totalSupply();
+        uint256 notes = (totalSupply_ > 0)
+            ? totalSupply_.mulDiv(underlyingAmtIn, getTVL())
+            : (underlyingAmtIn * INITIAL_RATE);
+
+        // The mint fees are settled by simply minting fewer vault notes.
+        notes = notes.mulDiv(FEE_ONE - feePerc, FEE_ONE);
+        return notes;
+    }
+
+    /// @inheritdoc IVault
+    function computeRedemptionAmts(uint256 notes) public returns (TokenAmount[] memory) {
+        //-----------------------------------------------------------------------------
+        uint256 feePerc = feePolicy.computeVaultBurnFeePerc(
+            feePolicy.computeDeviationRatio(_querySubscriptionState(perp))
+        );
+        //-----------------------------------------------------------------------------
+
+        uint256 totalSupply_ = totalSupply();
+        uint8 assetCount_ = 1 + uint8(_deployed.length());
+
+        // aggregating vault assets to be redeemed
+        TokenAmount[] memory redemptions = new TokenAmount[](assetCount_);
+
+        // underlying share to be redeemed
+        IERC20Upgradeable underlying_ = underlying;
+        redemptions[0] = TokenAmount({
+            token: underlying_,
+            amount: underlying_.balanceOf(address(this)).mulDiv(notes, totalSupply_)
+        });
+        redemptions[0].amount = redemptions[0].amount.mulDiv(FEE_ONE - feePerc, FEE_ONE);
+
+        for (uint8 i = 1; i < assetCount_; i++) {
+            // tranche token share to be redeemed
+            IERC20Upgradeable token = IERC20Upgradeable(_deployed.at(i - 1));
+            redemptions[i] = TokenAmount({
+                token: token,
+                amount: token.balanceOf(address(this)).mulDiv(notes, totalSupply_)
+            });
+
+            // deduct redemption fee
+            redemptions[i].amount = redemptions[i].amount.mulDiv(FEE_ONE - feePerc, FEE_ONE);
+
+            // in case the redemption amount is just dust, we skip
+            if (redemptions[i].amount < TRANCHE_DUST_AMT) {
+                redemptions[i].amount = 0;
+            }
+        }
+
+        return redemptions;
+    }
+
     /// @inheritdoc IRolloverVault
     function computeUnderlyingToPerpSwapAmt(
         uint256 underlyingAmtIn
@@ -583,63 +644,6 @@ contract RolloverVault is
 
         // Not a vault asset, so returning zero
         return 0;
-    }
-
-    /// @inheritdoc IVault
-    function computeMintAmt(uint256 underlyingAmtIn) public view returns (uint256) {
-        //-----------------------------------------------------------------------------
-        uint256 feePerc = feePolicy.computeVaultMintFeePerc();
-        //-----------------------------------------------------------------------------
-
-        // Compute mint amt
-        uint256 totalSupply_ = totalSupply();
-        uint256 notes = (totalSupply_ > 0)
-            ? totalSupply_.mulDiv(underlyingAmtIn, getTVL())
-            : (underlyingAmtIn * INITIAL_RATE);
-
-        // The mint fees are settled by simply minting fewer vault notes.
-        notes = notes.mulDiv(FEE_ONE - feePerc, FEE_ONE);
-        return notes;
-    }
-
-    /// @inheritdoc IVault
-    function computeRedemptionAmts(uint256 notes) public view returns (TokenAmount[] memory) {
-        //-----------------------------------------------------------------------------
-        uint256 feePerc = feePolicy.computeVaultBurnFeePerc();
-        //-----------------------------------------------------------------------------
-
-        uint256 totalSupply_ = totalSupply();
-        uint8 assetCount_ = 1 + uint8(_deployed.length());
-
-        // aggregating vault assets to be redeemed
-        TokenAmount[] memory redemptions = new TokenAmount[](assetCount_);
-
-        // underlying share to be redeemed
-        IERC20Upgradeable underlying_ = underlying;
-        redemptions[0] = TokenAmount({
-            token: underlying_,
-            amount: underlying_.balanceOf(address(this)).mulDiv(notes, totalSupply_)
-        });
-        redemptions[0].amount = redemptions[0].amount.mulDiv(FEE_ONE - feePerc, FEE_ONE);
-
-        for (uint8 i = 1; i < assetCount_; i++) {
-            // tranche token share to be redeemed
-            IERC20Upgradeable token = IERC20Upgradeable(_deployed.at(i - 1));
-            redemptions[i] = TokenAmount({
-                token: token,
-                amount: token.balanceOf(address(this)).mulDiv(notes, totalSupply_)
-            });
-
-            // deduct redemption fee
-            redemptions[i].amount = redemptions[i].amount.mulDiv(FEE_ONE - feePerc, FEE_ONE);
-
-            // in case the redemption amount is just dust, we skip
-            if (redemptions[i].amount < TRANCHE_DUST_AMT) {
-                redemptions[i].amount = 0;
-            }
-        }
-
-        return redemptions;
     }
 
     /// @inheritdoc IVault
