@@ -523,9 +523,9 @@ contract RolloverVault is
         //-----------------------------------------------------------------------------
 
         // Compute mint amt
-        uint256 totalSupply_ = totalSupply();
-        uint256 notes = (totalSupply_ > 0)
-            ? totalSupply_.mulDiv(underlyingAmtIn, getTVL())
+        uint256 noteSupply = totalSupply();
+        uint256 notes = (noteSupply > 0)
+            ? noteSupply.mulDiv(underlyingAmtIn, getTVL())
             : (underlyingAmtIn * INITIAL_RATE);
 
         // The mint fees are settled by simply minting fewer vault notes.
@@ -541,7 +541,7 @@ contract RolloverVault is
         );
         //-----------------------------------------------------------------------------
 
-        uint256 totalSupply_ = totalSupply();
+        uint256 noteSupply = totalSupply();
         uint8 assetCount_ = 1 + uint8(_deployed.length());
 
         // aggregating vault assets to be redeemed
@@ -551,7 +551,7 @@ contract RolloverVault is
         IERC20Upgradeable underlying_ = underlying;
         redemptions[0] = TokenAmount({
             token: underlying_,
-            amount: underlying_.balanceOf(address(this)).mulDiv(notes, totalSupply_)
+            amount: underlying_.balanceOf(address(this)).mulDiv(notes, noteSupply)
         });
         redemptions[0].amount = redemptions[0].amount.mulDiv(FEE_ONE - feePerc, FEE_ONE);
 
@@ -560,7 +560,7 @@ contract RolloverVault is
             IERC20Upgradeable token = IERC20Upgradeable(_deployed.at(i - 1));
             redemptions[i] = TokenAmount({
                 token: token,
-                amount: token.balanceOf(address(this)).mulDiv(notes, totalSupply_)
+                amount: token.balanceOf(address(this)).mulDiv(notes, noteSupply)
             });
 
             // deduct redemption fee
