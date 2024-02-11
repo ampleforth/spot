@@ -452,7 +452,7 @@ contract RolloverVault is
         }
 
         // transfer remaining perps out to the user
-        perp_.transfer(_msgSender(), perpAmtOut);
+        IERC20Upgradeable(address(perp_)).safeTransfer(_msgSender(), perpAmtOut);
 
         // NOTE: In case this operation mints slightly more perps than that are required for the swap,
         // The vault continues to hold the perp dust until the subsequent `swapPerpsForUnderlying` or manual `recover(perp)`.
@@ -500,7 +500,7 @@ contract RolloverVault is
         _meldPerps(perp_);
 
         // transfer underlying out
-        underlying_.transfer(_msgSender(), underlyingAmtOut);
+        underlying_.safeTransfer(_msgSender(), underlyingAmtOut);
 
         // enforce vault composition
         _enforceVaultComposition(s.vaultTVL);
