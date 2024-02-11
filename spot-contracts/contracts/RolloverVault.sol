@@ -223,7 +223,7 @@ contract RolloverVault is
 
     /// @notice Updates the reference to the keeper.
     /// @param keeper_ The address of the new keeper.
-    function updateKeeper(address keeper_) public virtual onlyOwner {
+    function updateKeeper(address keeper_) public onlyOwner {
         keeper = keeper_;
     }
 
