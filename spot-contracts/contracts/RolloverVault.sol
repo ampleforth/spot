@@ -268,15 +268,15 @@ contract RolloverVault is
         if (usableBal <= minUnderlyingBal) {
             revert InsufficientDeployment();
         }
+        usableBal -= minUnderlyingBal;
 
         // We ensure that at-least `minDeploymentAmt` amount of underlying tokens are deployed
-        uint256 deployedAmt = usableBal - minUnderlyingBal;
-        if (deployedAmt <= minDeploymentAmt) {
+        if (usableBal <= minDeploymentAmt) {
             revert InsufficientDeployment();
         }
 
-        // We all the underlying held by the vault to create seniors and juniors
-        _tranche(perp_.getDepositBond(), underlying_, deployedAmt);
+        // We tranche all the underlying held by the vault to create seniors and juniors
+        _tranche(perp_.getDepositBond(), underlying_, usableBal);
 
         // Newly minted seniors are rolled into perp
         (bool rollover, ITranche trancheIntoPerp) = _rollover(perp_, underlying_);
