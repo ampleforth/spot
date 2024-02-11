@@ -462,9 +462,6 @@ contract RolloverVault is
             revert UnacceptableSwap();
         }
 
-        // enforce vault composition
-        _enforceVaultComposition(s.vaultTVL);
-
         // sync underlying
         _syncAsset(underlying_);
 
@@ -501,9 +498,6 @@ contract RolloverVault is
 
         // transfer underlying out
         underlying_.safeTransfer(_msgSender(), underlyingAmtOut);
-
-        // enforce vault composition
-        _enforceVaultComposition(s.vaultTVL);
 
         // sync underlying
         _syncAsset(underlying_);
@@ -965,15 +959,6 @@ contract RolloverVault is
 
     //--------------------------------------------------------------------------
     // Private methods
-
-    // @dev Enforces vault composition after swap and meld operations.
-    function _enforceVaultComposition(uint256 tvlBefore) private view {
-        // Assert that the vault's TVL does not decrease after this operation
-        uint256 tvlAfter = getTVL();
-        if (tvlAfter < tvlBefore) {
-            revert TVLDecreased();
-        }
-    }
 
     /// @dev Computes the value of the given amount of tranche tokens, based on it's current CDR.
     ///      Value is denominated in the underlying collateral.
