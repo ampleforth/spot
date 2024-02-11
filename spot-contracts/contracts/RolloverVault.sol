@@ -192,9 +192,6 @@ contract RolloverVault is
     /// @notice Update the reference to the fee policy contract.
     /// @param feePolicy_ New strategy address.
     function updateFeePolicy(IFeePolicy feePolicy_) public onlyOwner {
-        if (address(feePolicy_) == address(0)) {
-            revert UnacceptableReference();
-        }
         if (feePolicy_.decimals() != FEE_POLICY_DECIMALS) {
             revert UnexpectedDecimals();
         }
