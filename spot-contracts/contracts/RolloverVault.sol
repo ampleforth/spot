@@ -214,7 +214,7 @@ contract RolloverVault is
     /// @param token The token address.
     /// @param to The destination address.
     /// @param amount The amount of tokens to be transferred.
-    function transferERC20(IERC20Upgradeable token, address to, uint256 amount) external onlyOwner {
+    function transferERC20(IERC20Upgradeable token, address to, uint256 amount) external onlyOwner nonReentrant {
         if (isVaultAsset(token)) {
             revert UnauthorizedTransferOut();
         }
