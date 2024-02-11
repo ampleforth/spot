@@ -307,7 +307,7 @@ contract RolloverVault is
             uint256 trancheBalance = tranche.balanceOf(address(this));
 
             // if the vault has no tranche balance,
-            // we update our internal book-keeping and continue to the next one.
+            // we continue to the next one.
             if (trancheBalance <= 0) {
                 continue;
             }
