@@ -371,7 +371,7 @@ contract RolloverVault is
         // NOTE: This operation should precede any token transfers.
         uint256 notes = computeMintAmt(underlyingAmtIn);
         if (underlyingAmtIn <= 0 || notes <= 0) {
-            revert UnacceptableDeposit();
+            return 0;
         }
 
         // transfer user assets in
@@ -388,7 +388,7 @@ contract RolloverVault is
     /// @inheritdoc IVault
     function redeem(uint256 notes) public override nonReentrant whenNotPaused returns (TokenAmount[] memory) {
         if (notes <= 0) {
-            revert UnacceptableRedemption();
+            return new TokenAmount[](0);
         }
 
         // Calculates the fee adjusted share of vault tokens to be redeemed
