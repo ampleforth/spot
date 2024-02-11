@@ -84,11 +84,6 @@ contract RolloverVault is
     /// @dev The maximum number of deployed assets that can be held in this vault at any given time.
     uint8 public constant MAX_DEPLOYED_COUNT = 47;
 
-    /// @dev The enforced minimum number of perp or underlying tokens (in floating point units)
-    ///      that are required to be sent in during a swap.
-    ///      MIN_SWAP_UNITS = 100, means at least 100.0 perp or underlying tokens need to be swapped in.
-    uint256 public constant MIN_SWAP_UNITS = 100;
-
     /// @dev Immature redemption may result in some dust tranches when balances are not perfectly divisible by the tranche ratio.
     ///      Based on current the implementation of `computeRedeemableTrancheAmounts`,
     ///      the dust balances which remain after immature redemption will be at most {TRANCHE_RATIO_GRANULARITY} or 1000.
@@ -435,8 +430,7 @@ contract RolloverVault is
         );
 
         // Revert if insufficient tokens are swapped in or out
-        uint256 minAmtIn = MIN_SWAP_UNITS * (10 ** IERC20MetadataUpgradeable(address(underlying_)).decimals());
-        if (underlyingAmtIn < minAmtIn || perpAmtOut <= 0) {
+        if (perpAmtOut <= 0 || underlyingAmtIn <= 0) {
             revert UnacceptableSwap();
         }
 
@@ -480,8 +474,7 @@ contract RolloverVault is
         ) = computePerpToUnderlyingSwapAmt(perpAmtIn);
 
         // Revert if insufficient tokens are swapped in or out
-        uint256 minAmtIn = MIN_SWAP_UNITS * (10 ** IERC20MetadataUpgradeable(address(perp_)).decimals());
-        if (perpAmtIn < minAmtIn || underlyingAmtOut <= 0) {
+        if (underlyingAmtOut <= 0 || perpAmtIn <= 0) {
             revert UnacceptableSwap();
         }
 
