@@ -165,9 +165,6 @@ contract RolloverVault is
         __Pausable_init();
         __ReentrancyGuard_init();
 
-        // set keeper reference
-        keeper = owner();
-
         // setup underlying collateral
         underlying = perp_.underlying();
         _syncAsset(underlying);
@@ -177,6 +174,9 @@ contract RolloverVault is
 
         // set the reference to the fee policy
         updateFeePolicy(feePolicy_);
+
+        // set keeper reference
+        updateKeeper(owner());
 
         // setting initial parameter values
         minDeploymentAmt = 0;
