@@ -418,7 +418,7 @@ contract RolloverVault is
     }
 
     /// @inheritdoc IVault
-    function recoverAndRedeem(uint256 notes) external override whenNotPaused returns (TokenAmount[] memory) {
+    function recoverAndRedeem(uint256 notes) external override returns (TokenAmount[] memory) {
         recover();
         return redeem(notes);
     }
