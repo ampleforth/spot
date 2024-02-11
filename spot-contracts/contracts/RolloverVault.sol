@@ -874,8 +874,8 @@ contract RolloverVault is
                 _syncDeployedAsset(tokenOutOfPerp);
             }
 
-            // Recompute trancheIn available amount
-            trancheInAmtAvailable = trancheIntoPerp.balanceOf(address(this));
+            // Calculate trancheIn available amount
+            trancheInAmtAvailable -= r.trancheInAmt;
 
             // keep track if "at least" one rolled over operation occurred
             rollover = true;
