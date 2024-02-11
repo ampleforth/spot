@@ -851,7 +851,7 @@ contract RolloverVault is
             // Perform rollover
             RolloverData memory r = perp_.rollover(trancheIntoPerp, tokenOutOfPerp, trancheInAmtAvailable);
 
-            // no rollover occured, skip updating balances
+            // no rollover occurred, skip updating balances
             if (r.tokenOutAmt <= 0) {
                 continue;
             }
