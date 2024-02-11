@@ -285,14 +285,9 @@ contract RolloverVault is
         _tranche(perp_.getDepositBond(), underlying_, usableBal);
 
         // Newly minted seniors are rolled into perp
-        (bool rollover, ITranche trancheIntoPerp) = _rollover(perp_, underlying_);
-        if (!rollover) {
+        if (!_rollover(perp_, underlying_)) {
             revert InsufficientDeployment();
         }
-
-        // Cleanup rollover; In case that there remain excess seniors and juniors after a successful rollover,
-        // we recover back to underlying.
-        _redeemTranche(trancheIntoPerp);
 
         // sync underlying
         _syncAsset(underlying);
@@ -413,7 +408,7 @@ contract RolloverVault is
             redemptions[i].token.safeTransfer(_msgSender(), redemptions[i].amount);
 
             // sync balances, wkt i=0 is the underlying and remaining are tranches
-            if(i == 0){
+            if (i == 0) {
                 _syncAsset(redemptions[i].token);
             } else {
                 _syncDeployedAsset(redemptions[i].token);
@@ -830,9 +825,10 @@ contract RolloverVault is
     }
 
     /// @dev Rolls over freshly tranched tokens from the given bond for older tranches (close to maturity) from perp.
+    ///      Redeems intermediate tranches for underlying if possible.
     ///      And performs some book-keeping to keep track of the vault's assets.
     /// @return Flag indicating if any tokens were rolled over.
-    function _rollover(IPerpetualTranche perp_, IERC20Upgradeable underlying_) private returns (bool, ITranche) {
+    function _rollover(IPerpetualTranche perp_, IERC20Upgradeable underlying_) private returns (bool) {
         // NOTE: The first element of the list is the mature tranche,
         //       there after the list is NOT ordered by maturity.
         IERC20Upgradeable[] memory rolloverTokens = perp_.getReserveTokensUpForRollover();
@@ -872,6 +868,9 @@ contract RolloverVault is
             if (rolloverTokens[i] != underlying_) {
                 // sync deployed asset retrieved from perp
                 _syncDeployedAsset(tokenOutOfPerp);
+
+                // Clean up after rollover, merge seniors from perp with vault held juniors to recover more underlying.
+                _redeemTranche(ITranche(address(tokenOutOfPerp)));
             }
 
             // Calculate trancheIn available amount
@@ -884,7 +883,10 @@ contract RolloverVault is
         // sync deployed asset sent to perp
         _syncDeployedAsset(trancheIntoPerp);
 
-        return (rollover, trancheIntoPerp);
+        // Final cleanup, if there remain excess seniors we recover back to underlying.
+        _redeemTranche(trancheIntoPerp);
+
+        return (rollover);
     }
 
     /// @dev Low level method that redeems the given mature tranche for the underlying asset.
@@ -931,9 +933,7 @@ contract RolloverVault is
             if (_deployed.length() > MAX_DEPLOYED_COUNT) {
                 revert DeployedCountOverLimit();
             }
-        }
-
-        else if (balance <= 0 && inVault) {
+        } else if (balance <= 0 && inVault) {
             // Removes token into the deployed assets list.
             _deployed.remove(address(token));
         }
