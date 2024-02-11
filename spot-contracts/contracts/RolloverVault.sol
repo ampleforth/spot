@@ -131,6 +131,9 @@ contract RolloverVault is
 
     /// @notice The enforced minimum balance of underlying tokens to be held by the vault at all times.
     /// @dev On deployment only the delta greater than this balance is deployed.
+    ///      `minUnderlyingBal` is checked on deployment and swapping operations which reduce the underlying balance.
+    ///      This parameter ensures that the vault's tvl is never too low,
+    ///      which guards against the "share" manipulation attack.
     uint256 public minUnderlyingBal;
 
     //--------------------------------------------------------------------------
@@ -441,6 +444,11 @@ contract RolloverVault is
 
         // NOTE: In case this operation mints slightly more perps than that are required for the swap,
         // The vault continues to hold the perp dust until the subsequent `swapPerpsForUnderlying` or manual `recover(perp)`.
+
+        // Revert if swapping reduces the underlying balance of the vault below the bound.
+        if (underlying_.balanceOf(address(this)) <= minUnderlyingBal) {
+            revert UnacceptableSwap();
+        }
 
         // enforce vault composition
         _enforceVaultComposition(s.vaultTVL);
