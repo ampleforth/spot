@@ -40,6 +40,10 @@ import { PerpHelpers } from "./_utils/PerpHelpers.sol";
  * @dev When new tranches are added into the system, always double check if they are not malicious
  *      by only accepting one whitelisted by perp (ones part of perp's deposit bond or ones part of the perp reserve).
  *
+ *      We use `_syncAsset` and `_syncDeployedAsset` to keep track of tokens entering and leaving the system.
+ *      When ever a tranche token enters or leaves the system, we immediately invoke `_syncDeployedAsset` to update book-keeping.
+ *      We call `_syncAsset` at the very end of every external function which changes the vault's underlying or perp balance.
+ *
  */
 contract RolloverVault is
     ERC20BurnableUpgradeable,
@@ -170,7 +174,6 @@ contract RolloverVault is
 
         // setup underlying collateral
         underlying = perp_.underlying();
-        _syncAsset(underlying);
 
         // set reference to perp
         perp = perp_;
@@ -184,6 +187,9 @@ contract RolloverVault is
         // setting initial parameter values
         minDeploymentAmt = 0;
         minUnderlyingBal = 0;
+
+        // sync underlying
+        _syncAsset(underlying);
     }
 
     //--------------------------------------------------------------------------
@@ -287,6 +293,9 @@ contract RolloverVault is
         // Cleanup rollover; In case that there remain excess seniors and juniors after a successful rollover,
         // we recover back to underlying.
         _redeemTranche(trancheIntoPerp);
+
+        // sync underlying
+        _syncAsset(underlying);
     }
 
     /// @inheritdoc IVault
@@ -333,7 +342,7 @@ contract RolloverVault is
         //       as deletions involve swapping the deleted element to the
         //       end of the set and removing the last element.
         for (uint8 i = deployedCount_; i > 0; i--) {
-            _syncAndRemoveDeployedAsset(IERC20Upgradeable(_deployed.at(i - 1)));
+            _syncDeployedAsset(IERC20Upgradeable(_deployed.at(i - 1)));
         }
 
         // sync underlying
@@ -344,6 +353,7 @@ contract RolloverVault is
     function recover(IERC20Upgradeable token) public override nonReentrant whenNotPaused {
         if (_deployed.contains(address(token))) {
             _redeemTranche(ITranche(address(token)));
+            _syncAsset(underlying);
             return;
         }
 
@@ -353,6 +363,8 @@ contract RolloverVault is
             // anyone can execute this function to recover perps into tranches.
             // This is not part of the regular recovery flow.
             _meldPerps(perp_);
+            _syncAsset(perp_);
+            _syncAsset(underlying);
             return;
         }
         revert UnexpectedAsset();
@@ -369,10 +381,12 @@ contract RolloverVault is
 
         // transfer user assets in
         underlying.safeTransferFrom(_msgSender(), address(this), underlyingAmtIn);
-        _syncAsset(underlying);
 
         // mint notes
         _mint(_msgSender(), notes);
+
+        // sync underlying
+        _syncAsset(underlying);
         return notes;
     }
 
@@ -391,9 +405,18 @@ contract RolloverVault is
 
         // transfer assets out
         for (uint8 i = 0; i < redemptions.length; i++) {
-            if (redemptions[i].amount > 0) {
-                redemptions[i].token.safeTransfer(_msgSender(), redemptions[i].amount);
+            if (redemptions[i].amount == 0) {
+                continue;
+            }
+
+            // Transfer token share out
+            redemptions[i].token.safeTransfer(_msgSender(), redemptions[i].amount);
+
+            // sync balances, wkt i=0 is the underlying and remaining are tranches
+            if(i == 0){
                 _syncAsset(redemptions[i].token);
+            } else {
+                _syncDeployedAsset(redemptions[i].token);
             }
         }
         return redemptions;
@@ -425,9 +448,6 @@ contract RolloverVault is
         // transfer underlying in
         underlying_.safeTransferFrom(_msgSender(), address(this), underlyingAmtIn);
 
-        // sync underlying
-        _syncAsset(underlying_);
-
         // tranche and mint perps as needed
         _trancheAndMintPerps(perp_, underlying_, s.perpTVL, s.seniorTR, perpAmtOut + perpFeeAmtToBurn);
 
@@ -449,6 +469,9 @@ contract RolloverVault is
 
         // enforce vault composition
         _enforceVaultComposition(s.vaultTVL);
+
+        // sync underlying
+        _syncAsset(underlying_);
 
         return perpAmtOut;
     }
@@ -484,11 +507,11 @@ contract RolloverVault is
         // transfer underlying out
         underlying_.transfer(_msgSender(), underlyingAmtOut);
 
-        // sync underlying
-        _syncAsset(underlying_);
-
         // enforce vault composition
         _enforceVaultComposition(s.vaultTVL);
+
+        // sync underlying
+        _syncAsset(underlying_);
 
         return underlyingAmtOut;
     }
@@ -698,7 +721,7 @@ contract RolloverVault is
         // if the vault has no tranche balance,
         // we update our internal book-keeping and return.
         if (trancheBalance <= 0) {
-            _syncAndRemoveDeployedAsset(tranche);
+            _syncDeployedAsset(tranche);
             return;
         }
 
@@ -711,7 +734,7 @@ contract RolloverVault is
             _execMatureTrancheRedemption(bond, tranche, trancheBalance);
 
             // sync deployed asset
-            _syncAndRemoveDeployedAsset(tranche);
+            _syncDeployedAsset(tranche);
         }
         // if not redeem using proportional balances
         // redeems this tranche and it's siblings if the vault holds balances.
@@ -723,12 +746,9 @@ contract RolloverVault is
 
             // sync deployed asset, ie current tranche and all its siblings.
             for (uint8 j = 0; j < bt.tranches.length; j++) {
-                _syncAndRemoveDeployedAsset(bt.tranches[j]);
+                _syncDeployedAsset(bt.tranches[j]);
             }
         }
-
-        // sync underlying
-        _syncAsset(underlying);
     }
 
     /// @dev Redeems perp tokens held by the vault for tranches and them melds them with existing tranches to redeem more underlying tokens.
@@ -738,20 +758,14 @@ contract RolloverVault is
             // NOTE: When the vault redeems its perps, it pays no fees.
             TokenAmount[] memory tranchesRedeemed = perp_.redeem(perpBalance);
 
-            // sync underlying
-            _syncAsset(tranchesRedeemed[0].token);
-
             // sync and meld perp's tranches
             for (uint8 i = 1; i < tranchesRedeemed.length; i++) {
                 ITranche tranche = ITranche(address(tranchesRedeemed[i].token));
-                _syncAndAddDeployedAsset(tranche);
+                _syncDeployedAsset(tranche);
 
                 // if possible, meld redeemed tranche with existing tranches to redeem underlying.
                 _redeemTranche(tranche);
             }
-
-            // sync balances
-            _syncAsset(perp_);
         }
     }
 
@@ -790,8 +804,7 @@ contract RolloverVault is
         perp_.deposit(trancheIntoPerp, seniorAmtToDeposit);
 
         // sync holdings
-        _syncAndRemoveDeployedAsset(trancheIntoPerp);
-        _syncAsset(perp_);
+        _syncDeployedAsset(trancheIntoPerp);
     }
 
     /// @dev Given a bond and its tranche data, deposits the provided amount into the bond
@@ -812,9 +825,8 @@ contract RolloverVault is
 
         // sync holdings
         for (uint8 i = 0; i < bt.tranches.length; i++) {
-            _syncAndAddDeployedAsset(bt.tranches[i]);
+            _syncDeployedAsset(bt.tranches[i]);
         }
-        _syncAsset(underlying_);
     }
 
     /// @dev Rolls over freshly tranched tokens from the given bond for older tranches (close to maturity) from perp.
@@ -856,15 +868,10 @@ contract RolloverVault is
                 continue;
             }
 
-            // sync deployed asset sent to perp
-            _syncAndRemoveDeployedAsset(trancheIntoPerp);
-
             // skip insertion into the deployed list the case of the mature tranche, ie underlying
-            // NOTE: we know that `rolloverTokens[0]` points to the underlying asset so every other
-            // token in the list is a tranche which the vault needs to keep track of.
-            if (i > 0) {
+            if (rolloverTokens[i] != underlying_) {
                 // sync deployed asset retrieved from perp
-                _syncAndAddDeployedAsset(tokenOutOfPerp);
+                _syncDeployedAsset(tokenOutOfPerp);
             }
 
             // Recompute trancheIn available amount
@@ -874,8 +881,8 @@ contract RolloverVault is
             rollover = true;
         }
 
-        // sync underlying
-        _syncAsset(underlying_);
+        // sync deployed asset sent to perp
+        _syncDeployedAsset(trancheIntoPerp);
 
         return (rollover, trancheIntoPerp);
     }
@@ -912,26 +919,21 @@ contract RolloverVault is
         underlying_.safeTransfer(owner(), feePolicy.computeVaultDeploymentFee());
     }
 
-    /// @dev Syncs balance and adds the given asset into the deployed list if the vault has a balance.
-    function _syncAndAddDeployedAsset(IERC20Upgradeable token) private {
+    /// @dev Syncs balance and updates the deployed list based on the vault's token balance.
+    function _syncDeployedAsset(IERC20Upgradeable token) private {
         uint256 balance = token.balanceOf(address(this));
         emit AssetSynced(token, balance);
 
-        if (balance > 0 && !_deployed.contains(address(token))) {
+        bool inVault = _deployed.contains(address(token));
+        if (balance > 0 && !inVault) {
             // Inserts new token into the deployed assets list.
             _deployed.add(address(token));
             if (_deployed.length() > MAX_DEPLOYED_COUNT) {
                 revert DeployedCountOverLimit();
             }
         }
-    }
 
-    /// @dev Syncs balance and removes the given asset from the deployed list if the vault has no balance.
-    function _syncAndRemoveDeployedAsset(IERC20Upgradeable token) private {
-        uint256 balance = token.balanceOf(address(this));
-        emit AssetSynced(token, balance);
-
-        if (balance <= 0 && _deployed.contains(address(token))) {
+        else if (balance <= 0 && inVault) {
             // Removes token into the deployed assets list.
             _deployed.remove(address(token));
         }
