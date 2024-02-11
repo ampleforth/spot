@@ -82,7 +82,7 @@ contract RolloverVault is
     uint256 private constant INITIAL_RATE = 10 ** 6;
 
     /// @dev The maximum number of deployed assets that can be held in this vault at any given time.
-    uint256 public constant MAX_DEPLOYED_COUNT = 47;
+    uint8 public constant MAX_DEPLOYED_COUNT = 47;
 
     /// @dev The enforced minimum number of perp or underlying tokens (in floating point units)
     ///      that are required to be sent in during a swap.
