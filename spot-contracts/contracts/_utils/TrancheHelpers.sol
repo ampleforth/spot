@@ -42,7 +42,6 @@ library TrancheHelpers {
             revert UnacceptableTrancheLength();
         }
 
-        // When the parent bond has no deposits.
         uint256 bondCollateralBalance = collateralToken.balanceOf(address(bond));
 
         // For junior tranche
@@ -52,12 +51,9 @@ library TrancheHelpers {
             trancheClaim = bondCollateralBalance - seniorClaim;
         }
         // For senior tranche
-        else if (bond.trancheAt(0) == tranche) {
-            trancheClaim = MathUpgradeable.min(trancheSupply, bondCollateralBalance);
-        }
-        // When out of bounds
         else {
-            revert UnacceptableTrancheLength();
+            // require(bond.trancheAt(0) == tranche);
+            trancheClaim = MathUpgradeable.min(trancheSupply, bondCollateralBalance);
         }
 
         return (trancheClaim, trancheSupply);
