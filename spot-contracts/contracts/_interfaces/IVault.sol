@@ -79,13 +79,6 @@ interface IVault is IERC20Upgradeable {
     /// @return The vault's asset token balance.
     function vaultAssetBalance(IERC20Upgradeable token) external view returns (uint256);
 
-    /// @return Total count of deployed asset tokens held by the vault.
-    function deployedCount() external view returns (uint256);
-
-    /// @param i The index of a token.
-    /// @return The deployed token address by index.
-    function deployedAt(uint256 i) external view returns (IERC20Upgradeable);
-
     /// @param token The address of a token to check.
     /// @return If the given token is held by the vault.
     function isVaultAsset(IERC20Upgradeable token) external view returns (bool);
