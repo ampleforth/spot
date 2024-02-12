@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
 import { IERC20Upgradeable, IPerpetualTranche, IBondController, ITranche, IFeePolicy } from "./_interfaces/IPerpetualTranche.sol";
 import { IVault } from "./_interfaces/IVault.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
@@ -74,9 +73,14 @@ contract RolloverVault is
 
     //-------------------------------------------------------------------------
     // Constants
-    // Number of decimals for a multiplier of 1.0x (i.e. 100%)
+
+    /// @dev Number of decimals for a multiplier of 1.0x (i.e. 100%)
     uint8 public constant FEE_POLICY_DECIMALS = 8;
     uint256 public constant FEE_ONE = (10 ** FEE_POLICY_DECIMALS);
+
+    /// @dev Internal percentages are fixed point numbers with {PERC_DECIMALS} places.
+    uint8 public constant PERC_DECIMALS = 8;
+    uint256 public constant ONE = (10 ** PERC_DECIMALS); // 1.0 or 100%
 
     /// @dev Initial exchange rate between the underlying asset and notes.
     uint256 private constant INITIAL_RATE = 10 ** 6;
@@ -128,12 +132,16 @@ contract RolloverVault is
     /// @return The address of the keeper.
     address public keeper;
 
-    /// @notice The enforced minimum balance of underlying tokens to be held by the vault at all times.
+    /// @notice The enforced minimum absolute balance of underlying tokens to be held by the vault.
     /// @dev On deployment only the delta greater than this balance is deployed.
-    ///      `minUnderlyingBal` is checked on deployment and swapping operations which reduce the underlying balance.
-    ///      This parameter ensures that the vault's tvl is never too low,
-    ///      which guards against the "share" manipulation attack.
+    ///      `minUnderlyingBal` is enforced on deployment and swapping operations which reduce the underlying balance.
+    ///      This parameter ensures that the vault's tvl is never too low, which guards against the "share" manipulation attack.
     uint256 public minUnderlyingBal;
+
+    /// @notice The enforced minimum percentage of the vault's value to be held as underlying tokens.
+    /// @dev The percentage minimum is enforced after swaps which reduce the vault's underlying token liquidity.
+    ///      This ensures that the vault has sufficient liquid underlying tokens for upcoming rollovers.
+    uint256 public minUnderlyingPerc;
 
     //--------------------------------------------------------------------------
     // Modifiers
@@ -182,6 +190,7 @@ contract RolloverVault is
         // setting initial parameter values
         minDeploymentAmt = 0;
         minUnderlyingBal = 0;
+        minUnderlyingPerc = ONE / 3; // 33%
 
         // sync underlying
         _syncAsset(underlying);
@@ -205,10 +214,16 @@ contract RolloverVault is
         minDeploymentAmt = minDeploymentAmt_;
     }
 
-    /// @notice Updates the minimum underlying balance requirement.
+    /// @notice Updates the minimum underlying balance requirement (Absolute number of underlying tokens).
     /// @param minUnderlyingBal_ The new minimum underlying balance.
     function updateMinUnderlyingBal(uint256 minUnderlyingBal_) external onlyOwner {
         minUnderlyingBal = minUnderlyingBal_;
+    }
+
+    /// @notice Updates the minimum underlying percentage requirement (Expressed as a percentage).
+    /// @param minUnderlyingPerc_ The new minimum underlying percentage.
+    function updateMinUnderlyingPerc(uint256 minUnderlyingPerc_) external onlyOwner {
+        minUnderlyingPerc = minUnderlyingPerc_;
     }
 
     /// @notice Transfers a non-vault token out of the contract, which may have been added accidentally.
@@ -451,8 +466,12 @@ contract RolloverVault is
         // NOTE: In case this operation mints slightly more perps than that are required for the swap,
         // The vault continues to hold the perp dust until the subsequent `swapPerpsForUnderlying` or manual `recover(perp)`.
 
-        // Revert if swapping reduces the underlying balance of the vault below the bound.
-        if (underlying_.balanceOf(address(this)) <= minUnderlyingBal) {
+        // Revert if swapping reduces the underlying balance of the vault below the bounds.
+        uint256 underlyingBal = underlying_.balanceOf(address(this));
+        if (
+            underlyingBal <= minUnderlyingBal ||
+            underlyingBal.mulDiv(ONE, s.vaultTVL - underlyingAmtOut) <= minUnderlyingPerc
+        ) {
             revert UnacceptableSwap();
         }
 
@@ -566,8 +585,8 @@ contract RolloverVault is
     function computeUnderlyingToPerpSwapAmt(
         uint256 underlyingAmtIn
     ) public returns (uint256, uint256, SubscriptionParams memory) {
-        // Compute equal value perps to swap out to the user
         IPerpetualTranche perp_ = perp;
+        // Compute equal value perps to swap out to the user
         SubscriptionParams memory s = _querySubscriptionState(perp_);
         uint256 perpAmtOut = underlyingAmtIn.mulDiv(perp_.totalSupply(), s.perpTVL);
 
@@ -592,8 +611,8 @@ contract RolloverVault is
     function computePerpToUnderlyingSwapAmt(
         uint256 perpAmtIn
     ) public returns (uint256, uint256, SubscriptionParams memory) {
-        // Compute equal value underlying tokens to swap out
         IPerpetualTranche perp_ = perp;
+        // Compute equal value underlying tokens to swap out
         SubscriptionParams memory s = _querySubscriptionState(perp_);
         uint256 underlyingAmtOut = perpAmtIn.mulDiv(s.perpTVL, perp_.totalSupply());
 
