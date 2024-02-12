@@ -773,11 +773,11 @@ contract RolloverVault is
         }
 
         // Tranche as needed
-        IBondController depositBond = perp.getDepositBond();
-        ITranche trancheIntoPerp = perp.getDepositTranche();
+        IBondController depositBond = perp_.getDepositBond();
+        ITranche trancheIntoPerp = perp_.getDepositTranche();
         (uint256 underylingAmtToTranche, uint256 seniorAmtToDeposit) = PerpHelpers.estimateUnderlyingAmtToTranche(
             perpTVL,
-            perp.totalSupply(),
+            perp_.totalSupply(),
             underlying_.balanceOf(address(depositBond)),
             depositBond.totalDebt(),
             trancheIntoPerp.totalSupply(),
