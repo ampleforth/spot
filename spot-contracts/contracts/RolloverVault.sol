@@ -593,16 +593,16 @@ contract RolloverVault is
         //-----------------------------------------------------------------------------
         // When user swaps underlying for vault's perps -> perps are minted by the vault
         // We thus compute fees based on the post-mint subscription state.
-        (uint256 swapFeePerpSharePerc, uint256 swapFeeVaultSharePerc) = feePolicy.computeUnderlyingToPerpSwapFeePercs(
+        (uint256 perpFeePerc, uint256 vaultFeePerc) = feePolicy.computeUnderlyingToPerpSwapFeePercs(
             feePolicy.computeDeviationRatio(s.perpTVL + underlyingAmtIn, s.vaultTVL, s.seniorTR)
         );
         //-----------------------------------------------------------------------------
 
         // Calculate perp fee share to be paid by the vault
-        uint256 perpFeeAmtToBurn = perpAmtOut.mulDiv(swapFeePerpSharePerc, FEE_ONE, MathUpgradeable.Rounding.Up);
+        uint256 perpFeeAmtToBurn = perpAmtOut.mulDiv(perpFeePerc, FEE_ONE, MathUpgradeable.Rounding.Up);
 
         // We deduct fees by transferring out fewer perp tokens
-        perpAmtOut = perpAmtOut.mulDiv(FEE_ONE - (swapFeePerpSharePerc + swapFeeVaultSharePerc), FEE_ONE);
+        perpAmtOut = perpAmtOut.mulDiv(FEE_ONE - (perpFeePerc + vaultFeePerc), FEE_ONE);
 
         return (perpAmtOut, perpFeeAmtToBurn, s);
     }
@@ -619,16 +619,16 @@ contract RolloverVault is
         //-----------------------------------------------------------------------------
         // When user swaps perps for vault's underlying -> perps are redeemed by the vault
         // We thus compute fees based on the post-burn subscription state.
-        (uint256 swapFeePerpSharePerc, uint256 swapFeeVaultSharePerc) = feePolicy.computePerpToUnderlyingSwapFeePercs(
+        (uint256 perpFeePerc, uint256 vaultFeePerc) = feePolicy.computePerpToUnderlyingSwapFeePercs(
             feePolicy.computeDeviationRatio(s.perpTVL - underlyingAmtOut, s.vaultTVL, s.seniorTR)
         );
         //-----------------------------------------------------------------------------
 
         // Calculate perp fee share to be paid by the vault
-        uint256 perpFeeAmtToBurn = perpAmtIn.mulDiv(swapFeePerpSharePerc, FEE_ONE, MathUpgradeable.Rounding.Up);
+        uint256 perpFeeAmtToBurn = perpAmtIn.mulDiv(perpFeePerc, FEE_ONE, MathUpgradeable.Rounding.Up);
 
         // We deduct fees by transferring out fewer underlying tokens
-        underlyingAmtOut = underlyingAmtOut.mulDiv(FEE_ONE - (swapFeePerpSharePerc + swapFeeVaultSharePerc), FEE_ONE);
+        underlyingAmtOut = underlyingAmtOut.mulDiv(FEE_ONE - (perpFeePerc + vaultFeePerc), FEE_ONE);
 
         return (underlyingAmtOut, perpFeeAmtToBurn, s);
     }
