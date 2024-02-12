@@ -6,7 +6,7 @@ import { IVault } from "./_interfaces/IVault.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
 import { IERC20Burnable } from "./_interfaces/IERC20Burnable.sol";
 import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/CommonTypes.sol";
-import { UnauthorizedCall, UnauthorizedTransferOut, UnacceptableReference, UnexpectedDecimals, UnexpectedAsset, UnacceptableDeposit, UnacceptableRedemption, OutOfBounds, TVLDecreased, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit } from "./_interfaces/ProtocolErrors.sol";
+import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, OutOfBounds, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
