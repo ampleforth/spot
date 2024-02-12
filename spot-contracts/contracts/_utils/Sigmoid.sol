@@ -84,7 +84,7 @@ library Sigmoid {
         }
 
         int256 pow = twoPower(exponent, one); // 2^(Growth*Delta)
-        if (pow <= 0) {
+        if (pow == 0) {
             return lower;
         }
         int256 numerator = upper - lower; //(Upper-Lower)
