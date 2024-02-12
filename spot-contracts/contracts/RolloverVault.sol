@@ -694,16 +694,6 @@ contract RolloverVault is
     }
 
     /// @inheritdoc IVault
-    function deployedCount() external view override returns (uint256) {
-        return _deployed.length();
-    }
-
-    /// @inheritdoc IVault
-    function deployedAt(uint256 i) external view override returns (IERC20Upgradeable) {
-        return IERC20Upgradeable(_deployed.at(i));
-    }
-
-    /// @inheritdoc IVault
     function isVaultAsset(IERC20Upgradeable token) public view override returns (bool) {
         return token == underlying || _deployed.contains(address(token));
     }
