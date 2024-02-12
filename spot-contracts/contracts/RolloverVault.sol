@@ -742,18 +742,20 @@ contract RolloverVault is
     /// @dev Redeems perp tokens held by the vault for tranches and them melds them with existing tranches to redeem more underlying tokens.
     function _meldPerps(IPerpetualTranche perp_) private {
         uint256 perpBalance = perp_.balanceOf(address(this));
-        if (perpBalance > 0) {
-            // NOTE: When the vault redeems its perps, it pays no fees.
-            TokenAmount[] memory tranchesRedeemed = perp_.redeem(perpBalance);
+        if (perpBalance <= 0) {
+            return;
+        }
 
-            // sync and meld perp's tranches
-            for (uint8 i = 1; i < tranchesRedeemed.length; i++) {
-                ITranche tranche = ITranche(address(tranchesRedeemed[i].token));
-                _syncDeployedAsset(tranche);
+        // NOTE: When the vault redeems its perps, it pays no fees.
+        TokenAmount[] memory tranchesRedeemed = perp_.redeem(perpBalance);
 
-                // if possible, meld redeemed tranche with existing tranches to redeem underlying.
-                _redeemTranche(tranche);
-            }
+        // sync and meld perp's tranches
+        for (uint8 i = 1; i < tranchesRedeemed.length; i++) {
+            ITranche tranche = ITranche(address(tranchesRedeemed[i].token));
+            _syncDeployedAsset(tranche);
+
+            // if possible, meld redeemed tranche with existing tranches to redeem underlying.
+            _redeemTranche(tranche);
         }
     }
 
