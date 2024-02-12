@@ -885,7 +885,7 @@ contract RolloverVault is
 
     /// @dev Low level method that redeems the given mature tranche for the underlying asset.
     ///      It interacts with the button-wood bond contract.
-    ///      This function should NOT be called directly, use `recover()` or `recover(tranche)`
+    ///      This function should NOT be called directly, use `recover()` or `_redeemTranche(tranche)`
     ///      which wrap this function with the internal book-keeping necessary,
     ///      to keep track of the vault's assets.
     function _execMatureTrancheRedemption(IBondController bond, ITranche tranche, uint256 amount) private {
