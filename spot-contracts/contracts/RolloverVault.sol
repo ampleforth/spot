@@ -758,8 +758,7 @@ contract RolloverVault is
         }
     }
 
-    /// @dev Tranches the vault's underlying to mint perps.
-    ///      If the vault already holds required perps, it skips minting new ones.
+    /// @dev Tranches the vault's underlying to mint perps..
     ///      Additionally, performs some book-keeping to keep track of the vault's assets.
     function _trancheAndMintPerps(
         IPerpetualTranche perp_,
