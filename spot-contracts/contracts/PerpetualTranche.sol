@@ -846,12 +846,15 @@ contract PerpetualTranche is
     ///      * Expects the bond to have only two tranches.
     ///      * Expects the bond controller to not withhold any fees.
     ///      * Expects the bond's duration to be within the max safety bound.
+    ///      * Expects the bond's senior and junior tranches to point back to the bond.
     /// @return True if the bond is valid.
     function _isValidDepositBond(IBondController bond) private view returns (bool) {
         return (bond.collateralToken() == address(_reserveAt(0)) &&
             bond.trancheCount() == 2 &&
             bond.feeBps() == 0 &&
-            bond.secondsToMaturity() < maxTrancheMaturitySec);
+            bond.secondsToMaturity() < maxTrancheMaturitySec &&
+            (bond.trancheAt(0)).bond() == address(bond) &&
+            (bond.trancheAt(1)).bond() == address(bond));
     }
 
     /// @dev Checks if the given tranche's parent bond's time remaining to maturity is less than `minTrancheMaturitySec`.
@@ -864,9 +867,7 @@ contract PerpetualTranche is
     /// @dev Checks if the given tranche is the most senior tranche of the current deposit bond.
     /// @return True if the tranche is the deposit tranche.
     function _isDepositTranche(ITranche tranche) private view returns (bool) {
-        bool isDepositBondTranche = (_depositBond.trancheTokenAddresses(tranche) &&
-            address(_depositBond) == tranche.bond());
-        return (isDepositBondTranche && (_depositBond.getSeniorTranche() == tranche));
+        return (_depositBond.getSeniorTranche() == tranche);
     }
 
     /// @dev Enforces the total supply and per tranche mint cap. To be invoked AFTER the mint operation.
