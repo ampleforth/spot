@@ -746,7 +746,6 @@ contract RolloverVault is
             return;
         }
 
-        // NOTE: When the vault redeems its perps, it pays no fees.
         TokenAmount[] memory tranchesRedeemed = perp_.redeem(perpBalance);
 
         // sync and meld perp's tranches
@@ -790,7 +789,6 @@ contract RolloverVault is
 
         // Mint perps
         _checkAndApproveMax(trancheIntoPerp, address(perp_), seniorAmtToDeposit);
-        // NOTE: When the vault mints perps, it pays no fees.
         perp_.deposit(trancheIntoPerp, seniorAmtToDeposit);
 
         // sync holdings
