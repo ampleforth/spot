@@ -470,7 +470,7 @@ contract RolloverVault is
         uint256 underlyingBal = underlying_.balanceOf(address(this));
         if (
             underlyingBal <= minUnderlyingBal ||
-            underlyingBal.mulDiv(ONE, s.vaultTVL - underlyingAmtOut) <= minUnderlyingPerc
+            underlyingBal.mulDiv(ONE, s.vaultTVL) <= minUnderlyingPerc
         ) {
             revert UnacceptableSwap();
         }
@@ -489,7 +489,6 @@ contract RolloverVault is
         (
             uint256 underlyingAmtOut,
             uint256 perpFeeAmtToBurn,
-            SubscriptionParams memory s
         ) = computePerpToUnderlyingSwapAmt(perpAmtIn);
 
         // Revert if insufficient tokens are swapped in or out
