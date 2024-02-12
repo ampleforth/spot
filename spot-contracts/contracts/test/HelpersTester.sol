@@ -68,17 +68,18 @@ contract HelpersTester {
         uint256 perpAmtToMint
     ) public returns (uint256, uint256) {
         IBondController depositBond = perp.getDepositBond();
-        IERC20Upgradeable collateralToken = IERC20Upgradeable(depositBond.collateralToken());
-        ITranche tranche = depositBond.getSeniorTranche();
-        uint256 seniorTR = depositBond.getSeniorTrancheRatio();
         return
             PerpHelpers.estimateUnderlyingAmtToTranche(
-                perpTVL,
-                perp.totalSupply(),
-                collateralToken.balanceOf(address(depositBond)),
-                depositBond.totalDebt(),
-                tranche.totalSupply(),
-                seniorTR,
+                PerpHelpers.MintEstimationParams({
+                    perpTVL: perpTVL,
+                    perpSupply: perp.totalSupply(),
+                    depositBondCollateralBalance: (IERC20Upgradeable(depositBond.collateralToken())).balanceOf(
+                        address(depositBond)
+                    ),
+                    depositBondTotalDebt: depositBond.totalDebt(),
+                    depositTrancheSupply: (depositBond.getSeniorTranche()).totalSupply(),
+                    depositTrancheTR: depositBond.getSeniorTrancheRatio()
+                }),
                 perpAmtToMint
             );
     }
