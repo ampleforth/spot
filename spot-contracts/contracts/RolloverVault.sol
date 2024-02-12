@@ -639,10 +639,8 @@ contract RolloverVault is
     /// @inheritdoc IVault
     /// @dev The total value is denominated in the underlying asset.
     function getTVL() public view override returns (uint256) {
-        uint256 totalValue = 0;
-
         // The underlying balance
-        totalValue += underlying.balanceOf(address(this));
+        uint256 totalValue = underlying.balanceOf(address(this));
 
         // The deployed asset value denominated in the underlying
         for (uint8 i = 0; i < _deployed.length(); i++) {
