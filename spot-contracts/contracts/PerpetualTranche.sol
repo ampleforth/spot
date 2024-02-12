@@ -851,7 +851,7 @@ contract PerpetualTranche is
         return (bond.collateralToken() == address(_reserveAt(0)) &&
             bond.trancheCount() == 2 &&
             bond.feeBps() == 0 &&
-            bond.duration() < maxTrancheMaturitySec);
+            bond.secondsToMaturity() < maxTrancheMaturitySec);
     }
 
     /// @dev Checks if the given tranche's parent bond's time remaining to maturity is less than `minTrancheMaturitySec`.
