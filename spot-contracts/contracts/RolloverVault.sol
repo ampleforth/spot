@@ -90,10 +90,10 @@ contract RolloverVault is
 
     /// @dev Immature redemption may result in some dust tranches when balances are not perfectly divisible by the tranche ratio.
     ///      Based on current the implementation of `computeRedeemableTrancheAmounts`,
-    ///      the dust balances which remain after immature redemption will be at most {TRANCHE_RATIO_GRANULARITY} or 1000.
+    ///      the dust balances which remain after immature redemption will be *at most* {TRANCHE_RATIO_GRANULARITY} or 1000.
     ///      We exclude the vault's dust tranche balances from TVL computation, note redemption and
     ///      during recovery (through recurrent immature redemption).
-    uint256 public constant TRANCHE_DUST_AMT = 1000;
+    uint256 public constant TRANCHE_DUST_AMT = 10000000;
 
     //--------------------------------------------------------------------------
     // ASSETS
