@@ -5,6 +5,7 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { TokenAmount } from "../_interfaces/CommonTypes.sol";
+import { UnacceptableTrancheLength } from "../_interfaces/ProtocolErrors.sol";
 
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
@@ -41,18 +42,13 @@ library BondHelpers {
 
     /// @notice Given a bond, retrieves all of the bond's tranches.
     /// @param b The address of the bond contract.
-    /// @return The tranche data.
-    function getTranches(IBondController b) internal view returns (BondTranches memory) {
-        BondTranches memory bt;
-        uint8 trancheCount = b.trancheCount().toUint8();
-        bt.tranches = new ITranche[](trancheCount);
-        bt.trancheRatios = new uint256[](trancheCount);
-        // Max tranches per bond < 2**8 - 1
-        for (uint8 i = 0; i < trancheCount; i++) {
-            (ITranche t, uint256 ratio) = b.tranches(i);
-            bt.tranches[i] = t;
-            bt.trancheRatios[i] = ratio;
+    /// @return bt The bond's tranche data.
+    function getTranches(IBondController b) internal view returns (BondTranches memory bt) {
+        if (b.trancheCount() != 2) {
+            revert UnacceptableTrancheLength();
         }
+        (bt.tranches[0], bt.trancheRatios[0]) = b.tranches(0);
+        (bt.tranches[1], bt.trancheRatios[1]) = b.tranches(1);
         return bt;
     }
 
@@ -89,18 +85,22 @@ library BondHelpers {
     /// @return The tranche data, an array of tranche amounts.
     function previewDeposit(IBondController b, uint256 collateralAmount) internal view returns (TokenAmount[] memory) {
         BondTranches memory bt = getTranches(b);
-        TokenAmount[] memory tranchesOut = new TokenAmount[](bt.tranches.length);
+        TokenAmount[] memory tranchesOut = new TokenAmount[](2);
 
         uint256 totalDebt = b.totalDebt();
         uint256 collateralBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(address(b));
 
-        for (uint8 i = 0; i < bt.tranches.length; i++) {
-            uint256 trancheAmt = collateralAmount.mulDiv(bt.trancheRatios[i], TRANCHE_RATIO_GRANULARITY);
-            if (collateralBalance > 0) {
-                trancheAmt = trancheAmt.mulDiv(totalDebt, collateralBalance);
-            }
-            tranchesOut[i] = TokenAmount({ token: bt.tranches[i], amount: trancheAmt });
+        uint256 seniorAmt = collateralAmount.mulDiv(bt.trancheRatios[0], TRANCHE_RATIO_GRANULARITY);
+        if (collateralBalance > 0) {
+            seniorAmt = seniorAmt.mulDiv(totalDebt, collateralBalance);
         }
+        tranchesOut[0] = TokenAmount({ token: bt.tranches[0], amount: seniorAmt });
+
+        uint256 juniorAmt = collateralAmount.mulDiv(bt.trancheRatios[1], TRANCHE_RATIO_GRANULARITY);
+        if (collateralBalance > 0) {
+            juniorAmt = juniorAmt.mulDiv(totalDebt, collateralBalance);
+        }
+        tranchesOut[1] = TokenAmount({ token: bt.tranches[1], amount: juniorAmt });
 
         return tranchesOut;
     }

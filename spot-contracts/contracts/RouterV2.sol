@@ -6,7 +6,6 @@ import { ITranche } from "./_interfaces/buttonwood/ITranche.sol";
 import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
 import { IPerpetualTranche } from "./_interfaces/IPerpetualTranche.sol";
 import { TokenAmount } from "./_interfaces/CommonTypes.sol";
-import { UnacceptableTrancheLength } from "./_interfaces/ProtocolErrors.sol";
 
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
@@ -54,11 +53,6 @@ contract RouterV2 {
     /// @param collateralAmount The amount of collateral the user wants to tranche.
     function trancheAndDeposit(IPerpetualTranche perp, IBondController bond, uint256 collateralAmount) external {
         BondTranches memory bt = bond.getTranches();
-        // Expected bond to have only two tranches
-        if (bt.tranches.length != 2) {
-            revert UnacceptableTrancheLength();
-        }
-
         IERC20Upgradeable collateralToken = IERC20Upgradeable(bond.collateralToken());
 
         // transfers collateral & fees to router

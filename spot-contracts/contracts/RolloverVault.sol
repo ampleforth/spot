@@ -734,9 +734,8 @@ contract RolloverVault is
             _execImmatureTrancheRedemption(bond, bt);
 
             // sync deployed asset, ie current tranche and all its siblings.
-            for (uint8 j = 0; j < bt.tranches.length; j++) {
-                _syncDeployedAsset(bt.tranches[j]);
-            }
+            _syncDeployedAsset(bt.tranches[0]);
+            _syncDeployedAsset(bt.tranches[1]);
         }
     }
 
@@ -813,9 +812,8 @@ contract RolloverVault is
         bond.deposit(underlyingAmt);
 
         // sync holdings
-        for (uint8 i = 0; i < bt.tranches.length; i++) {
-            _syncDeployedAsset(bt.tranches[i]);
-        }
+        _syncDeployedAsset(bt.tranches[0]);
+        _syncDeployedAsset(bt.tranches[1]);
     }
 
     /// @dev Rolls over freshly tranched tokens from the given bond for older tranches (close to maturity) from perp.
