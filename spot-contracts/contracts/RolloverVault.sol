@@ -934,8 +934,7 @@ contract RolloverVault is
 
     /// @dev Logs the token balance held by the vault.
     function _syncAsset(IERC20Upgradeable token) private {
-        uint256 balance = token.balanceOf(address(this));
-        emit AssetSynced(token, balance);
+        emit AssetSynced(token, token.balanceOf(address(this)));
     }
 
     /// @dev Checks if the spender has sufficient allowance. If not, approves the maximum possible amount.
