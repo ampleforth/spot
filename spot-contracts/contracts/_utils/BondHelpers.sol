@@ -34,7 +34,6 @@ library BondHelpers {
     }
 
     /// @notice Given a bond, retrieves all of the bond's tranches.
-    /// @notice Given a bond, retrieves all of the bond's tranches.
     /// @param b The address of the bond contract.
     /// @return bt The bond's tranche data.
     function getTranches(IBondController b) internal view returns (BondTranches memory bt) {
