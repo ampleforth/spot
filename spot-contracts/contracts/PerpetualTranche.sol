@@ -495,7 +495,7 @@ contract PerpetualTranche is
         // Iterating through the reserve to find tranches that are no longer "acceptable"
         for (uint256 i = 1; i < reserveCount; i++) {
             IERC20Upgradeable token = _reserveAt(i);
-            if (_isReadyForRollout(ITranche(address(token)))) {
+            if (_isTimeForRollout(ITranche(address(token)))) {
                 rolloverTokens[i] = token;
             }
         }
@@ -835,17 +835,17 @@ contract PerpetualTranche is
 
         // when rolling out a normal tranche
         ITranche trancheOut = ITranche(address(tokenOut));
-        return (_inReserve(trancheOut) &&
-            _isDepositTranche(trancheIn) &&
+        return (_isDepositTranche(trancheIn) &&
+            _inReserve(trancheOut) &&
             !_isDepositTranche(trancheOut) &&
-            _isReadyForRollout(trancheOut));
+            _isTimeForRollout(trancheOut));
     }
 
     /// @dev Checks if the given bond is valid and can be accepted into the reserve.
     ///      * Expects the bond to to have the same collateral token as perp.
     ///      * Expects the bond to have only two tranches.
     ///      * Expects the bond controller to not withhold any fees.
-    ///      * Expects the bond's duration to be within the max safety bound.
+    ///      * Expects the bond's time to maturity to be within the max safety bound.
     ///      * Expects the bond's senior and junior tranches to point back to the bond.
     /// @return True if the bond is valid.
     function _isValidDepositBond(IBondController bond) private view returns (bool) {
@@ -859,7 +859,7 @@ contract PerpetualTranche is
 
     /// @dev Checks if the given tranche's parent bond's time remaining to maturity is less than `minTrancheMaturitySec`.
     /// @return True if the tranche can be rolled out of perp.
-    function _isReadyForRollout(ITranche tranche) private view returns (bool) {
+    function _isTimeForRollout(ITranche tranche) private view returns (bool) {
         // NOTE: `secondsToMaturity` will be 0 if the bond is past maturity.
         return (IBondController(tranche.bond()).secondsToMaturity() <= minTrancheMaturitySec);
     }
