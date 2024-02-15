@@ -909,7 +909,8 @@ contract PerpetualTranche is
     function _reserveValue() private view returns (uint256) {
         IERC20Upgradeable underlying_ = _reserveAt(0);
         uint256 totalVal = underlying_.balanceOf(address(this));
-        for (uint256 i = 1; i < _reserves.length(); i++) {
+        uint256 reserveCount = _reserves.length();
+        for (uint256 i = 1; i < reserveCount; i++) {
             ITranche tranche = ITranche(address(_reserveAt(i)));
             IBondController parentBond = IBondController(tranche.bond());
             totalVal += _computeReserveTrancheValue(
