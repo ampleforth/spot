@@ -31,6 +31,9 @@ error UnacceptableParams();
 /// @notice Storage array access out of bounds.
 error OutOfBounds();
 
+/// @notice Expected the number of reserve assets to be under the limit.
+error ReserveCountOverLimit();
+
 //-------------------------------------------------------------------------
 // Perp
 
