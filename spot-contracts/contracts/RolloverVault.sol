@@ -468,10 +468,7 @@ contract RolloverVault is
 
         // Revert if swapping reduces the underlying balance of the vault below the bounds.
         uint256 underlyingBal = underlying_.balanceOf(address(this));
-        if (
-            underlyingBal <= minUnderlyingBal ||
-            underlyingBal.mulDiv(ONE, s.vaultTVL) <= minUnderlyingPerc
-        ) {
+        if (underlyingBal <= minUnderlyingBal || underlyingBal.mulDiv(ONE, s.vaultTVL) <= minUnderlyingPerc) {
             revert UnacceptableSwap();
         }
 
@@ -486,10 +483,7 @@ contract RolloverVault is
         // Calculates the fee adjusted underlying amount to transfer to the user.
         IPerpetualTranche perp_ = perp;
         IERC20Upgradeable underlying_ = underlying;
-        (
-            uint256 underlyingAmtOut,
-            uint256 perpFeeAmtToBurn,
-        ) = computePerpToUnderlyingSwapAmt(perpAmtIn);
+        (uint256 underlyingAmtOut, uint256 perpFeeAmtToBurn, ) = computePerpToUnderlyingSwapAmt(perpAmtIn);
 
         // Revert if insufficient tokens are swapped in or out
         if (underlyingAmtOut <= 0 || perpAmtIn <= 0) {
@@ -844,9 +838,6 @@ contract RolloverVault is
         for (uint256 i = 0; (i < rolloverTokens.length && trancheInAmtAvailable > 0); i++) {
             // tokenOutOfPerp is the reserve token coming out of perp into the vault
             IERC20Upgradeable tokenOutOfPerp = rolloverTokens[i];
-            if (address(tokenOutOfPerp) == address(0)) {
-                continue;
-            }
 
             // Perform rollover
             RolloverData memory r = perp_.rollover(trancheIntoPerp, tokenOutOfPerp, trancheInAmtAvailable);

@@ -5,7 +5,7 @@ import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/t
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeePolicy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
 import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/CommonTypes.sol";
-import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, UnacceptableParams, UnacceptableRollover, ExceededMaxSupply, ExceededMaxMintPerTranche } from "./_interfaces/ProtocolErrors.sol";
+import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, UnacceptableParams, UnacceptableRollover, ExceededMaxSupply, ExceededMaxMintPerTranche, ReserveCountOverLimit } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -110,6 +110,9 @@ contract PerpetualTranche is
     // Number of decimals for a multiplier of 1.0x (i.e. 100%)
     uint8 public constant FEE_POLICY_DECIMALS = 8;
     uint256 public constant FEE_ONE = (10 ** FEE_POLICY_DECIMALS);
+
+    /// @dev The maximum number of reserve assets that can be held by perp.
+    uint8 public constant MAX_RESERVE_COUNT = 11;
 
     //-------------------------------------------------------------------------
     // Storage
@@ -390,7 +393,7 @@ contract PerpetualTranche is
         _burn(msg.sender, perpAmtBurnt);
 
         // transfers reserve tokens out
-        for (uint256 i = 0; i < tokensOut.length; i++) {
+        for (uint8 i = 0; i < tokensOut.length; i++) {
             if (tokensOut[i].amount > 0) {
                 _transferOutOfReserve(msg.sender, tokensOut[i].token, tokensOut[i].amount);
             }
@@ -481,22 +484,35 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    /// @dev Reserve tokens which are not up for rollover are marked by `address(0)`.
     function getReserveTokensUpForRollover() external override afterStateUpdate returns (IERC20Upgradeable[] memory) {
-        uint256 reserveCount = _reserves.length();
-        IERC20Upgradeable[] memory rolloverTokens = new IERC20Upgradeable[](reserveCount);
+        uint8 reserveCount = uint8(_reserves.length());
+        IERC20Upgradeable[] memory activeRolloverTokens = new IERC20Upgradeable[](reserveCount);
+
+        // We count the number of tokens up for rollover.
+        uint8 numTokensUpForRollover = 0;
 
         // If any underlying collateral exists it can be rolled over.
         IERC20Upgradeable underlying_ = _reserveAt(0);
         if (underlying_.balanceOf(address(this)) > 0) {
-            rolloverTokens[0] = underlying_;
+            activeRolloverTokens[0] = underlying_;
+            numTokensUpForRollover++;
         }
 
-        // Iterating through the reserve to find tranches that are no longer "acceptable"
-        for (uint256 i = 1; i < reserveCount; i++) {
+        // Iterating through the reserve to find tranches that are ready to be rolled out.
+        for (uint8 i = 1; i < reserveCount; i++) {
             IERC20Upgradeable token = _reserveAt(i);
             if (_isTimeForRollout(ITranche(address(token)))) {
-                rolloverTokens[i] = token;
+                activeRolloverTokens[i] = token;
+                numTokensUpForRollover++;
+            }
+        }
+
+        // We recreate a smaller array with just the tokens up for rollover.
+        IERC20Upgradeable[] memory rolloverTokens = new IERC20Upgradeable[](numTokensUpForRollover);
+        uint8 j = 0;
+        for (uint8 i = 0; i < reserveCount; i++) {
+            if (address(activeRolloverTokens[i]) != address(0)) {
+                rolloverTokens[j++] = activeRolloverTokens[i];
             }
         }
 
@@ -565,8 +581,8 @@ contract PerpetualTranche is
         //       end of the set and removing the last element.
         //       We also skip the `reserveAt(0)`, i.e) the underlying collateral,
         //       which is never removed.
-        uint256 reserveCount = _reserves.length();
-        for (uint256 i = reserveCount - 1; i > 0; i--) {
+        uint8 reserveCount = uint8(_reserves.length());
+        for (uint8 i = reserveCount - 1; i > 0; i--) {
             ITranche tranche = ITranche(address(_reserveAt(i)));
             IBondController bond = IBondController(tranche.bond());
 
@@ -640,6 +656,10 @@ contract PerpetualTranche is
         if (balance > 0 && !inReserve_) {
             // Inserts new tranche into reserve set.
             _reserves.add(address(token));
+
+            if (_reserves.length() > MAX_RESERVE_COUNT) {
+                revert ReserveCountOverLimit();
+            }
         } else if (balance <= 0 && inReserve_) {
             // Removes tranche from reserve set.
             _reserves.remove(address(token));
@@ -712,9 +732,9 @@ contract PerpetualTranche is
         //-----------------------------------------------------------------------------
 
         // Compute redemption amounts
-        uint256 reserveCount = _reserves.length();
+        uint8 reserveCount = uint8(_reserves.length());
         TokenAmount[] memory reserveTokens = new TokenAmount[](reserveCount);
-        for (uint256 i = 0; i < reserveCount; i++) {
+        for (uint8 i = 0; i < reserveCount; i++) {
             IERC20Upgradeable tokenOut = _reserveAt(i);
             reserveTokens[i] = TokenAmount({
                 token: tokenOut,
@@ -909,8 +929,8 @@ contract PerpetualTranche is
     function _reserveValue() private view returns (uint256) {
         IERC20Upgradeable underlying_ = _reserveAt(0);
         uint256 totalVal = underlying_.balanceOf(address(this));
-        uint256 reserveCount = _reserves.length();
-        for (uint256 i = 1; i < reserveCount; i++) {
+        uint8 reserveCount = uint8(_reserves.length());
+        for (uint8 i = 1; i < reserveCount; i++) {
             ITranche tranche = ITranche(address(_reserveAt(i)));
             IBondController parentBond = IBondController(tranche.bond());
             totalVal += _computeReserveTrancheValue(
