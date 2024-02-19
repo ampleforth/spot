@@ -3,23 +3,12 @@ pragma solidity ^0.8.20;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
 import { SubscriptionParams } from "./_interfaces/CommonTypes.sol";
+import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds, InvalidSigmoidAsymptotes } from "./_interfaces/ProtocolErrors.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { Sigmoid } from "./_utils/Sigmoid.sol";
-
-/// @notice Expected perc value to be at most (1 * 10**DECIMALS), i.e) 1.0 or 100%.
-error InvalidPerc();
-
-/// @notice Expected target subscription ratio to be within defined bounds.
-error InvalidTargetSRBounds();
-
-/// @notice Expected deviation ratio bounds to be valid.
-error InvalidDRBounds();
-
-/// @notice Expected sigmoid asymptotes to be within defined bounds.
-error InvalidSigmoidAsymptotes();
 
 /**
  *  @title FeePolicy
@@ -162,8 +151,8 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         perpRolloverFee.growth = 5 * int256(ONE); // 5.0
 
         targetSubscriptionRatio = (ONE * 133) / 100; // 1.33
-        deviationRatioBoundLower = 0; // 0
-        deviationRatioBoundUpper = 5 * ONE; // 5.0
+        deviationRatioBoundLower = (ONE * 75) / 100; // 0.75
+        deviationRatioBoundUpper = 2 * ONE; // 2.0
     }
 
     //-----------------------------------------------------------------------------
@@ -185,11 +174,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         uint256 deviationRatioBoundLower_,
         uint256 deviationRatioBoundUpper_
     ) external onlyOwner {
-        if (
-            deviationRatioBoundLower_ > ONE ||
-            deviationRatioBoundUpper_ < ONE ||
-            deviationRatioBoundLower_ > deviationRatioBoundUpper_
-        ) {
+        if (deviationRatioBoundLower_ > ONE || deviationRatioBoundUpper_ < ONE) {
             revert InvalidDRBounds();
         }
         deviationRatioBoundLower = deviationRatioBoundLower_;
@@ -278,7 +263,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @inheritdoc IFeePolicy
     function computePerpMintFeePerc(uint256 dr) public view override returns (uint256) {
-        // When the system is over-subscribed we charge a perp mint fee.
+        // When the system is under-subscribed we charge a perp mint fee.
         return (dr <= ONE) ? perpMintFeePerc : 0;
     }
 
@@ -302,7 +287,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @inheritdoc IFeePolicy
     function computeVaultMintFeePerc(uint256 dr) external view override returns (uint256) {
-        // When the system is over-subscribed the vault changes a mint fee.
+        // When the system is over-subscribed the vault charges a mint fee.
         return (dr > ONE) ? vaultMintFeePerc : 0;
     }
 
