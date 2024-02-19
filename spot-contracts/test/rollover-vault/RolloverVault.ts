@@ -5,6 +5,7 @@ import {
   setupCollateralToken,
   mintCollteralToken,
   toFixedPtAmt,
+  toPercFixedPtAmt,
   setupBondFactory,
   depositIntoBond,
   getTranches,
@@ -70,8 +71,13 @@ describe("RolloverVault", function () {
       expect(await vault.underlying()).to.eq(collateralToken.address);
     });
 
+    it("should set initial param values", async function () {
+      expect(await vault.minUnderlyingPerc()).to.eq(toPercFixedPtAmt("0.33333333"));
+      expect(await vault.minDeploymentAmt()).to.eq("0");
+      expect(await vault.minUnderlyingBal()).to.eq("0");
+    });
+
     it("should initialize lists", async function () {
-      expect(await vault.deployedCount()).to.eq(0);
       expect(await vault.assetCount()).to.eq(1);
       expect(await vault.assetAt(0)).to.eq(collateralToken.address);
       expect(await vault.isVaultAsset(collateralToken.address)).to.eq(true);
@@ -240,11 +246,11 @@ describe("RolloverVault", function () {
 
         await collateralToken.transfer(vault.address, toFixedPtAmt("1000"));
         await vault.deploy();
-        expect(await vault.deployedCount()).to.eq(1);
+        expect(await vault.assetCount()).to.eq(2);
       });
       it("should revert", async function () {
         await expect(
-          vault.transferERC20(await vault.deployedAt(0), toAddress, toFixedPtAmt("100")),
+          vault.transferERC20(await vault.assetAt(1), toAddress, toFixedPtAmt("100")),
         ).to.be.revertedWithCustomError(vault, "UnauthorizedTransferOut");
       });
     });
@@ -325,6 +331,31 @@ describe("RolloverVault", function () {
       });
       it("should update the min underlying balance", async function () {
         expect(await vault.minUnderlyingBal()).to.eq(toFixedPtAmt("1000"));
+      });
+    });
+  });
+
+  describe("#updateMinUnderlyingPerc", function () {
+    let tx: Transaction;
+    beforeEach(async function () {
+      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
+    });
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(vault.connect(deployer).updateMinUnderlyingPerc(0)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      beforeEach(async function () {
+        tx = await vault.connect(otherUser).updateMinUnderlyingPerc(toPercFixedPtAmt("0.1"));
+        await tx;
+      });
+      it("should update the min underlying balance", async function () {
+        expect(await vault.minUnderlyingPerc()).to.eq(toPercFixedPtAmt("0.1"));
       });
     });
   });

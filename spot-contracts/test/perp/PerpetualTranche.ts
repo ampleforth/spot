@@ -194,11 +194,6 @@ describe("PerpetualTranche", function () {
       it("should update reference", async function () {
         expect(await perp.keeper()).to.eq(await otherUser.getAddress());
       });
-      it("should emit event", async function () {
-        await expect(tx)
-          .to.emit(perp, "UpdatedKeeper")
-          .withArgs(constants.AddressZero, await otherUser.getAddress());
-      });
     });
   });
 
@@ -207,15 +202,6 @@ describe("PerpetualTranche", function () {
       it("should revert", async function () {
         await expect(perp.connect(otherUser).updateVault(constants.AddressZero)).to.be.revertedWith(
           "Ownable: caller is not the owner",
-        );
-      });
-    });
-
-    describe("when reference is reset", function () {
-      it("should not revert", async function () {
-        await expect(perp.connect(deployer).updateVault(constants.AddressZero)).to.be.revertedWithCustomError(
-          perp,
-          "UnacceptableReference",
         );
       });
     });
@@ -233,9 +219,6 @@ describe("PerpetualTranche", function () {
       it("should update vault reference", async function () {
         expect(await perp.vault()).to.eq(vault.address);
       });
-      it("should emit event", async function () {
-        await expect(tx).to.emit(perp, "UpdatedVault").withArgs(vault.address);
-      });
     });
   });
 
@@ -250,15 +233,6 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when set address is NOT valid", function () {
-      it("should revert", async function () {
-        await expect(perp.updateBondIssuer(constants.AddressZero)).to.be.revertedWithCustomError(
-          perp,
-          "UnacceptableReference",
-        );
-      });
-    });
-
     describe("when set address is valid", function () {
       beforeEach(async function () {
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
@@ -269,9 +243,6 @@ describe("PerpetualTranche", function () {
       });
       it("should update reference", async function () {
         expect(await perp.bondIssuer()).to.eq(newIssuer.address);
-      });
-      it("should emit event", async function () {
-        await expect(tx).to.emit(perp, "UpdatedBondIssuer").withArgs(newIssuer.address);
       });
     });
 
@@ -298,15 +269,6 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when set address is NOT valid", function () {
-      it("should revert", async function () {
-        await expect(perp.updateFeePolicy(constants.AddressZero)).to.be.revertedWithCustomError(
-          perp,
-          "UnacceptableReference",
-        );
-      });
-    });
-
     describe("when set strategy decimals dont match", function () {
       it("should revert", async function () {
         const FeePolicy = await ethers.getContractFactory("FeePolicy");
@@ -329,9 +291,6 @@ describe("PerpetualTranche", function () {
       });
       it("should update reference", async function () {
         expect(await perp.feePolicy()).to.eq(newFeePolicy.address);
-      });
-      it("should emit event", async function () {
-        await expect(tx).to.emit(perp, "UpdatedFeePolicy").withArgs(newFeePolicy.address);
       });
     });
   });
@@ -365,9 +324,6 @@ describe("PerpetualTranche", function () {
         expect(await perp.minTrancheMaturitySec()).to.eq(3600);
         expect(await perp.maxTrancheMaturitySec()).to.eq(86400);
       });
-      it("should emit event", async function () {
-        await expect(tx).to.emit(perp, "UpdatedTolerableTrancheMaturity").withArgs(3600, 86400);
-      });
     });
   });
 
@@ -390,9 +346,6 @@ describe("PerpetualTranche", function () {
       it("should update reference", async function () {
         expect(await perp.maxSupply()).to.eq(toFixedPtAmt("100"));
         expect(await perp.maxMintAmtPerTranche()).to.eq(toFixedPtAmt("20"));
-      });
-      it("should emit event", async function () {
-        await expect(tx).to.emit(perp, "UpdatedMintingLimits").withArgs(toFixedPtAmt("100"), toFixedPtAmt("20"));
       });
     });
   });
@@ -682,18 +635,6 @@ describe("PerpetualTranche", function () {
     });
 
     describe("when the deposit bond is not acceptable", function () {
-      describe("when deposit bond matures too soon", async function () {
-        beforeEach(async function () {
-          bond = await createBondWithFactory(bondFactory, collateralToken, [200, 800], 600);
-          await issuer.getLatestBond.returns(bond.address);
-          await perp.updateState();
-        });
-
-        it("should NOT update the deposit bond", async function () {
-          expect(await perp.callStatic.getDepositBond()).to.not.eq(bond.address);
-        });
-      });
-
       describe("when deposit bond matures too late", async function () {
         beforeEach(async function () {
           await perp.updateTolerableTrancheMaturity(1200, 7200);

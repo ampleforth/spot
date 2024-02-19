@@ -214,10 +214,7 @@ describe("PerpetualTranche", function () {
 
     describe("when tranche amount is zero", function () {
       it("should return without minting", async function () {
-        await expect(perp.deposit(depositTrancheA.address, "0")).to.revertedWithCustomError(
-          perp,
-          "UnacceptableDeposit",
-        );
+        expect(await perp.callStatic.deposit(depositTrancheA.address, "0")).to.eq("0");
       });
     });
 
