@@ -22,6 +22,8 @@ describe("FeePolicy", function () {
   describe("#init", function () {
     it("should return the initial parameters", async function () {
       expect(await feePolicy.targetSubscriptionRatio()).to.eq(toPercFixedPtAmt("1.33"));
+      expect(await feePolicy.deviationRatioBoundLower()).to.eq(toPercFixedPtAmt("0.75"));
+      expect(await feePolicy.deviationRatioBoundUpper()).to.eq(toPercFixedPtAmt("2"));
     });
     it("should return owner", async function () {
       expect(await feePolicy.owner()).to.eq(await deployer.getAddress());
@@ -61,6 +63,42 @@ describe("FeePolicy", function () {
         expect(await feePolicy.targetSubscriptionRatio()).to.eq(toPercFixedPtAmt("1.33"));
         await feePolicy.connect(deployer).updateTargetSubscriptionRatio(toPercFixedPtAmt("1.25"));
         expect(await feePolicy.targetSubscriptionRatio()).to.eq(toPercFixedPtAmt("1.25"));
+      });
+    });
+  });
+
+  describe("#updateDeviationRatioBounds", function () {
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(
+          feePolicy.connect(otherUser).updateDeviationRatioBounds(toPercFixedPtAmt("1"), toPercFixedPtAmt("1")),
+        ).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+    });
+
+    describe("when parameters are invalid", function () {
+      it("should revert", async function () {
+        await expect(
+          feePolicy.connect(deployer).updateDeviationRatioBounds(toPercFixedPtAmt("1.01"), toPercFixedPtAmt("2")),
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidDRBounds");
+      });
+    });
+
+    describe("when parameters are invalid", function () {
+      it("should revert", async function () {
+        await expect(
+          feePolicy.connect(deployer).updateDeviationRatioBounds(toPercFixedPtAmt("0.5"), toPercFixedPtAmt("0.99")),
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidDRBounds");
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      it("should update the target sr", async function () {
+        expect(await feePolicy.deviationRatioBoundLower()).to.eq(toPercFixedPtAmt("0.75"));
+        expect(await feePolicy.deviationRatioBoundUpper()).to.eq(toPercFixedPtAmt("2"));
+        await feePolicy.connect(deployer).updateDeviationRatioBounds(toPercFixedPtAmt("0.5"), toPercFixedPtAmt("1.5"));
+        expect(await feePolicy.deviationRatioBoundLower()).to.eq(toPercFixedPtAmt("0.5"));
+        expect(await feePolicy.deviationRatioBoundUpper()).to.eq(toPercFixedPtAmt("1.5"));
       });
     });
   });
@@ -202,9 +240,9 @@ describe("FeePolicy", function () {
     describe("when triggered by owner", function () {
       beforeEach(async function () {});
       it("should update the vault mint fees", async function () {
-        expect(await feePolicy.computeVaultMintFeePerc()).to.eq("0");
+        expect(await feePolicy.computeVaultMintFeePerc(toPercFixedPtAmt("1.01"))).to.eq("0");
         await feePolicy.connect(deployer).updateVaultMintFees(toPercFixedPtAmt("0.025"));
-        expect(await feePolicy.computeVaultMintFeePerc()).to.eq(toPercFixedPtAmt("0.025"));
+        expect(await feePolicy.computeVaultMintFeePerc(toPercFixedPtAmt("1.01"))).to.eq(toPercFixedPtAmt("0.025"));
       });
     });
   });
@@ -228,9 +266,9 @@ describe("FeePolicy", function () {
 
     describe("when triggered by owner", function () {
       it("should update the vault burn fees", async function () {
-        expect(await feePolicy.computeVaultBurnFeePerc()).to.eq("0");
+        expect(await feePolicy.computeVaultBurnFeePerc(toPercFixedPtAmt("0"))).to.eq("0");
         await feePolicy.connect(deployer).updateVaultBurnFees(toPercFixedPtAmt("0.025"));
-        expect(await feePolicy.computeVaultBurnFeePerc()).to.eq(toPercFixedPtAmt("0.025"));
+        expect(await feePolicy.computeVaultBurnFeePerc(toPercFixedPtAmt("0"))).to.eq(toPercFixedPtAmt("0.025"));
       });
     });
   });
@@ -326,33 +364,33 @@ describe("FeePolicy", function () {
       await feePolicy.updateVaultPerpToUnderlyingSwapFeePerc(toPercFixedPtAmt("0.15"));
     });
 
-    describe("when sr = 1", function () {
+    describe("when dr = 1", function () {
       it("should charge perp mint fees", async function () {
         expect(await feePolicy.computePerpMintFeePerc(toPercFixedPtAmt("1"))).to.eq(toPercFixedPtAmt("0.025"));
       });
-      it("should not charge perp burn fees", async function () {
+      it("should charge no perp burn fees", async function () {
         expect(await feePolicy.computePerpBurnFeePerc(toPercFixedPtAmt("1"))).to.eq("0");
       });
-      it("should not charge perp rollover fees", async function () {
+      it("should charge no perp rollover fees", async function () {
         expect(await feePolicy.computePerpRolloverFeePerc(toPercFixedPtAmt("1"))).to.eq("0");
       });
-      it("should charge 100% swap fee, swapping is disabled", async function () {
+      it("should charge perp mint fee and a swap fee", async function () {
         const f = await feePolicy.computeUnderlyingToPerpSwapFeePercs(toPercFixedPtAmt("1"));
-        expect(f[0]).to.eq("0");
-        expect(f[1]).to.eq(toPercFixedPtAmt("1"));
+        expect(f[0]).to.eq(toPercFixedPtAmt("0.025"));
+        expect(f[1]).to.eq(toPercFixedPtAmt("0.1"));
       });
-      it("should not charge perp burn fees while swapping and usual swap fees apply", async function () {
+      it("should charge no perp burn fees and a swap fee", async function () {
         const f = await feePolicy.computePerpToUnderlyingSwapFeePercs(toPercFixedPtAmt("1"));
         expect(f[0]).to.eq("0");
         expect(f[1]).to.eq(toPercFixedPtAmt("0.15"));
       });
     });
 
-    describe("when sr < 1", function () {
+    describe("when dr < 1 but higher than the lower bound", function () {
       it("should charge perp mint fees", async function () {
         expect(await feePolicy.computePerpMintFeePerc(toPercFixedPtAmt("0.99"))).to.eq(toPercFixedPtAmt("0.025"));
       });
-      it("should not charge perp burn fees", async function () {
+      it("should charge no perp burn fees", async function () {
         expect(await feePolicy.computePerpBurnFeePerc(toPercFixedPtAmt("0.99"))).to.eq("0");
       });
       it("should charge -ve perp rollover fees, debasement", async function () {
@@ -360,39 +398,87 @@ describe("FeePolicy", function () {
           toPercFixedPtAmt("-0.00004101"),
         );
       });
-      it("should charge 100% swap fee, swapping is disabled", async function () {
+      it("should charge perp mint fee and a swap fee", async function () {
         const f = await feePolicy.computeUnderlyingToPerpSwapFeePercs(toPercFixedPtAmt("0.99"));
-        expect(f[0]).to.eq("0");
-        expect(f[1]).to.eq(toPercFixedPtAmt("1"));
+        expect(f[0]).to.eq(toPercFixedPtAmt("0.025"));
+        expect(f[1]).to.eq(toPercFixedPtAmt("0.1"));
       });
-      it("should not charge perp burn fees while swapping and usual swap fees apply", async function () {
+      it("should charge no perp burn fees and a swap fee", async function () {
         const f = await feePolicy.computePerpToUnderlyingSwapFeePercs(toPercFixedPtAmt("0.99"));
         expect(f[0]).to.eq("0");
         expect(f[1]).to.eq(toPercFixedPtAmt("0.15"));
       });
     });
 
-    describe("when sr > 1", function () {
-      it("should charge not perp mint fees", async function () {
-        expect(await feePolicy.computePerpMintFeePerc(toPercFixedPtAmt("1.01"))).to.eq("0");
+    describe("when dr < lower than lower bound", function () {
+      it("should charge perp mint fees", async function () {
+        expect(await feePolicy.computePerpMintFeePerc(toPercFixedPtAmt("0.7"))).to.eq(toPercFixedPtAmt("0.025"));
       });
-      it("should charge perp burn fees", async function () {
-        expect(await feePolicy.computePerpBurnFeePerc(toPercFixedPtAmt("1.01"))).to.eq(toPercFixedPtAmt("0.035"));
+      it("should charge no perp burn fees", async function () {
+        expect(await feePolicy.computePerpBurnFeePerc(toPercFixedPtAmt("0.7"))).to.eq("0");
       });
-      it("should charge +ve perp rollover fees, enrichment", async function () {
-        expect(await feePolicy.computePerpRolloverFeePerc(toPercFixedPtAmt("1.01"))).to.eq(
-          toPercFixedPtAmt("0.00004146"),
+      it("should charge -ve perp rollover fees, debasement", async function () {
+        expect(await feePolicy.computePerpRolloverFeePerc(toPercFixedPtAmt("0.7"))).to.eq(
+          toPercFixedPtAmt("-0.00146510"),
         );
       });
-      it("should charge swapping fee but no perp mint fees", async function () {
-        const f = await feePolicy.computeUnderlyingToPerpSwapFeePercs(toPercFixedPtAmt("1.01"));
+      it("should charge mint fee and 100% swap fee", async function () {
+        const f = await feePolicy.computeUnderlyingToPerpSwapFeePercs(toPercFixedPtAmt("0.7"));
+        expect(f[0]).to.eq(toPercFixedPtAmt("0.025"));
+        expect(f[1]).to.eq(toPercFixedPtAmt("1"));
+      });
+      it("should charge no perp burn fees and a swap fee", async function () {
+        const f = await feePolicy.computePerpToUnderlyingSwapFeePercs(toPercFixedPtAmt("0.7"));
+        expect(f[0]).to.eq("0");
+        expect(f[1]).to.eq(toPercFixedPtAmt("0.15"));
+      });
+    });
+
+    describe("when dr > 1 but lower than higher bound", function () {
+      it("should charge NOT perp mint fees", async function () {
+        expect(await feePolicy.computePerpMintFeePerc(toPercFixedPtAmt("1.5"))).to.eq("0");
+      });
+      it("should charge perp burn fees", async function () {
+        expect(await feePolicy.computePerpBurnFeePerc(toPercFixedPtAmt("1.5"))).to.eq(toPercFixedPtAmt("0.035"));
+      });
+      it("should charge +ve perp rollover fees, enrichment", async function () {
+        expect(await feePolicy.computePerpRolloverFeePerc(toPercFixedPtAmt("1.5"))).to.eq(
+          toPercFixedPtAmt("0.00411794"),
+        );
+      });
+      it("should charge no perp mint fees and a swap fee", async function () {
+        const f = await feePolicy.computeUnderlyingToPerpSwapFeePercs(toPercFixedPtAmt("1.5"));
         expect(f[0]).to.eq("0");
         expect(f[1]).to.eq(toPercFixedPtAmt("0.1"));
       });
-      it("should charge swapping and perp burn fees", async function () {
-        const f = await feePolicy.computePerpToUnderlyingSwapFeePercs(toPercFixedPtAmt("1.01"));
+      it("should charge perp burn fees and a swap fee", async function () {
+        const f = await feePolicy.computePerpToUnderlyingSwapFeePercs(toPercFixedPtAmt("1.5"));
         expect(f[0]).to.eq(toPercFixedPtAmt("0.035"));
         expect(f[1]).to.eq(toPercFixedPtAmt("0.15"));
+      });
+    });
+
+    describe("when dr > higher than higher bound", function () {
+      it("should charge NOT perp mint fees", async function () {
+        expect(await feePolicy.computePerpMintFeePerc(toPercFixedPtAmt("2.01"))).to.eq("0");
+      });
+      it("should charge perp burn fees", async function () {
+        expect(await feePolicy.computePerpBurnFeePerc(toPercFixedPtAmt("2.01"))).to.eq(toPercFixedPtAmt("0.035"));
+      });
+      it("should charge +ve perp rollover fees, enrichment", async function () {
+        expect(await feePolicy.computePerpRolloverFeePerc(toPercFixedPtAmt("2.01"))).to.eq(
+          toPercFixedPtAmt("0.00682084"),
+        );
+      });
+      it("should charge no perp mint fees and a swap fee", async function () {
+        const f = await feePolicy.computeUnderlyingToPerpSwapFeePercs(toPercFixedPtAmt("2.01"));
+        expect(f[0]).to.eq("0");
+        expect(f[1]).to.eq(toPercFixedPtAmt("0.1"));
+      });
+      it("should charge perp burn fees and 100% swap fee", async function () {
+        const f = await feePolicy.computePerpToUnderlyingSwapFeePercs(toPercFixedPtAmt("2.01"));
+        expect(f[0]).to.eq(toPercFixedPtAmt("0.035"));
+        expect(f[1]).to.eq(toPercFixedPtAmt("1"));
       });
     });
   });
@@ -414,7 +500,7 @@ describe("FeePolicy", function () {
     });
 
     describe("when deviation > 1.0", function () {
-      it("should compute sr", async function () {
+      it("should compute dr", async function () {
         const r = await feePolicy["computeDeviationRatio((uint256,uint256,uint256))"]({
           perpTVL: toFixedPtAmt("100"),
           vaultTVL: toFixedPtAmt("1000"),
@@ -425,7 +511,7 @@ describe("FeePolicy", function () {
     });
 
     describe("when deviation < 1.0", function () {
-      it("should compute sr", async function () {
+      it("should compute dr", async function () {
         const r = await feePolicy["computeDeviationRatio((uint256,uint256,uint256))"]({
           perpTVL: toFixedPtAmt("100"),
           vaultTVL: toFixedPtAmt("250"),

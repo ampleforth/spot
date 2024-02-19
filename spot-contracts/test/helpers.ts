@@ -267,7 +267,7 @@ export const getReserveTokens = async (perp: Contract) => {
 export const logVaultAssets = async (vault: Contract) => {
   const ERC20 = await ethers.getContractFactory("MockERC20");
   const count = await vault.assetCount();
-  const deployedCount = await vault.deployedCount();
+  const assetCount = await vault.assetCount();
   console.log("Asset count", count);
 
   const underlying = await ERC20.attach(await vault.underlying());
@@ -276,8 +276,8 @@ export const logVaultAssets = async (vault: Contract) => {
     underlying.address,
     utils.formatUnits(await vault.vaultAssetBalance(underlying.address), await underlying.decimals()),
   );
-  for (let i = 0; i < deployedCount; i++) {
-    const token = await ERC20.attach(await vault.deployedAt(i));
+  for (let i = 1; i < assetCount; i++) {
+    const token = await ERC20.attach(await vault.assetAt(i));
     console.log(
       i + 1,
       token.address,
@@ -296,9 +296,8 @@ export const checkVaultAssetComposition = async (vault: Contract, tokens: Contra
 export const getVaultAssets = async (vault: Contract) => {
   const ERC20 = await ethers.getContractFactory("MockERC20");
   const assets: Contract[] = [];
-  assets.push(await ERC20.attach(await vault.underlying()));
-  for (let i = 0; i < (await vault.deployedCount()); i++) {
-    assets.push(await ERC20.attach(await vault.deployedAt(i)));
+  for (let i = 0; i < (await vault.assetCount()); i++) {
+    assets.push(await ERC20.attach(await vault.assetAt(i)));
   }
   return assets;
 };

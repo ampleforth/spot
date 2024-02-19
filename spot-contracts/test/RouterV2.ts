@@ -76,10 +76,10 @@ describe("RouterV2", function () {
     it("should compute the tranche amounts", async function () {
       const r = await router.callStatic.previewTranche(perp.address, toFixedPtAmt("1000"));
       expect(r[0]).to.eq(await perp.callStatic.getDepositBond());
-      expect(r[1][0]).to.eq(depositTranches[0].address);
-      expect(r[1][1]).to.eq(depositTranches[1].address);
-      expect(r[2][0]).to.eq(toFixedPtAmt("200"));
-      expect(r[2][1]).to.eq(toFixedPtAmt("800"));
+      expect(r[1][0].token).to.eq(depositTranches[0].address);
+      expect(r[1][0].amount).to.eq(toFixedPtAmt("200"));
+      expect(r[1][1].token).to.eq(depositTranches[1].address);
+      expect(r[1][1].amount).to.eq(toFixedPtAmt("800"));
     });
   });
 
