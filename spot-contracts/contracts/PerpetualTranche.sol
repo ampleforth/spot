@@ -418,7 +418,7 @@ contract PerpetualTranche is
         RolloverData memory r = _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable);
 
         // Verifies if rollover amount is acceptable
-        if (r.trancheInAmt <= 0) {
+        if (r.trancheInAmt <= 0 || r.tokenOutAmt <= 0) {
             return r;
         }
 
