@@ -6,7 +6,7 @@ import { IVault } from "./_interfaces/IVault.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
 import { IERC20Burnable } from "./_interfaces/IERC20Burnable.sol";
 import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/CommonTypes.sol";
-import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, OutOfBounds, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit } from "./_interfaces/ProtocolErrors.sol";
+import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, OutOfBounds, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit, InvalidPerc, InsufficientLiquidity } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -223,6 +223,9 @@ contract RolloverVault is
     /// @notice Updates the minimum underlying percentage requirement (Expressed as a percentage).
     /// @param minUnderlyingPerc_ The new minimum underlying percentage.
     function updateMinUnderlyingPerc(uint256 minUnderlyingPerc_) external onlyOwner {
+        if (minUnderlyingPerc_ > ONE) {
+            revert InvalidPerc();
+        }
         minUnderlyingPerc = minUnderlyingPerc_;
     }
 
@@ -282,7 +285,7 @@ contract RolloverVault is
         // `minUnderlyingBal` worth of underlying liquidity is excluded from the usable balance
         uint256 usableBal = underlying_.balanceOf(address(this));
         if (usableBal <= minUnderlyingBal) {
-            revert InsufficientDeployment();
+            revert InsufficientLiquidity();
         }
         usableBal -= minUnderlyingBal;
 
@@ -466,11 +469,8 @@ contract RolloverVault is
         // NOTE: In case this operation mints slightly more perps than that are required for the swap,
         // The vault continues to hold the perp dust until the subsequent `swapPerpsForUnderlying` or manual `recover(perp)`.
 
-        // Revert if swapping reduces the underlying balance of the vault below the bounds.
-        uint256 underlyingBal = underlying_.balanceOf(address(this));
-        if (underlyingBal <= minUnderlyingBal || underlyingBal.mulDiv(ONE, s.vaultTVL) <= minUnderlyingPerc) {
-            revert UnacceptableSwap();
-        }
+        // Revert if vault liquidity is too low.
+        _enforceUnderlyingBalAfterSwap(underlying_, s.vaultTVL);
 
         // sync underlying
         _syncAsset(underlying_);
@@ -483,7 +483,11 @@ contract RolloverVault is
         // Calculates the fee adjusted underlying amount to transfer to the user.
         IPerpetualTranche perp_ = perp;
         IERC20Upgradeable underlying_ = underlying;
-        (uint256 underlyingAmtOut, uint256 perpFeeAmtToBurn, ) = computePerpToUnderlyingSwapAmt(perpAmtIn);
+        (
+            uint256 underlyingAmtOut,
+            uint256 perpFeeAmtToBurn,
+            SubscriptionParams memory s
+        ) = computePerpToUnderlyingSwapAmt(perpAmtIn);
 
         // Revert if insufficient tokens are swapped in or out
         if (underlyingAmtOut <= 0 || perpAmtIn <= 0) {
@@ -503,6 +507,9 @@ contract RolloverVault is
 
         // transfer underlying out
         underlying_.safeTransfer(_msgSender(), underlyingAmtOut);
+
+        // Revert if vault liquidity is too low.
+        _enforceUnderlyingBalAfterSwap(underlying_, s.vaultTVL);
 
         // sync underlying
         _syncAsset(underlying_);
@@ -957,5 +964,16 @@ contract RolloverVault is
     ) private view returns (uint256) {
         (uint256 trancheClaim, uint256 trancheSupply) = tranche.getTrancheCollateralization(collateralToken);
         return trancheClaim.mulDiv(trancheAmt, trancheSupply, MathUpgradeable.Rounding.Up);
+    }
+
+    /// @dev Checks if the vault's underlying balance is above admin defined constraints.
+    ///      - Absolute balance is strictly greater than `minUnderlyingBal`.
+    ///      - Ratio of the balance to the vault's TVL is strictly greater than `minUnderlyingPerc`.
+    ///      NOTE: We assume the vault TVL and the underlying to have the same base denomination.
+    function _enforceUnderlyingBalAfterSwap(IERC20Upgradeable underlying_, uint256 vaultTVL) private view {
+        uint256 underlyingBal = underlying_.balanceOf(address(this));
+        if (underlyingBal <= minUnderlyingBal || underlyingBal.mulDiv(ONE, vaultTVL) <= minUnderlyingPerc) {
+            revert InsufficientLiquidity();
+        }
     }
 }
