@@ -49,8 +49,8 @@ error ExceededMaxMintPerTranche();
 //-------------------------------------------------------------------------
 // Vault
 
-/// @notice Expected the operation not to decrease the system's tvl.
-error TVLDecreased();
+/// @notice Expected more underlying token liquidity to perform operation.
+error InsufficientLiquidity();
 
 /// @notice Expected to swap non-zero assets.
 error UnacceptableSwap();
