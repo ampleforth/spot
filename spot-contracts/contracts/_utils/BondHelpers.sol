@@ -59,7 +59,7 @@ library BondHelpers {
     /// @return t The senior tranche address.
     function getSeniorTranche(IBondController b) internal view returns (ITranche t) {
         (t, ) = b.tranches(0);
-        return (t);
+        return t;
     }
 
     /// @notice Given a bond, returns the tranche ratio of the most senior tranche.
