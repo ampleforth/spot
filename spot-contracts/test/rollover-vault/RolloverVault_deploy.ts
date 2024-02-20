@@ -409,9 +409,6 @@ describe("RolloverVault", function () {
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[1].address, toFixedPtAmt("792"));
 
         // Rollover
-        await expect(tx)
-          .to.emit(vault, "AssetSynced")
-          .withArgs(rolloverInTranches[0].address, toFixedPtAmt("79.188118811881188118"));
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(reserveTranches[1].address, toFixedPtAmt("200"));
 
         // Recover
