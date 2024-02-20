@@ -9,6 +9,7 @@ import {
   getTranches,
   toFixedPtAmt,
   advancePerpQueue,
+  advanceTime,
   mintCollteralToken,
 } from "./helpers";
 use(smock.matchers);
@@ -98,6 +99,18 @@ describe("RouterV2", function () {
         await expect(
           router.trancheAndDeposit(perp.address, depositBond.address, toFixedPtAmt("1000")),
         ).to.revertedWithCustomError(perp, "UnexpectedAsset");
+      });
+    });
+
+    describe("when deposit bond is not issued", function () {
+      beforeEach(async function () {
+        await collateralToken.approve(router.address, constants.MaxUint256);
+        await advanceTime(7200);
+      });
+      it("should not revert", async function () {
+        const depositBond = await bondAt(await perp.callStatic.getDepositBond());
+        await expect(router.trancheAndDeposit(perp.address, depositBond.address, toFixedPtAmt("1000"))).not.to.be
+          .reverted;
       });
     });
 

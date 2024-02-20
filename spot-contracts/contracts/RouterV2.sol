@@ -52,6 +52,11 @@ contract RouterV2 {
     /// @param bond Address of the deposit bond.
     /// @param collateralAmount The amount of collateral the user wants to tranche.
     function trancheAndDeposit(IPerpetualTranche perp, IBondController bond, uint256 collateralAmount) external {
+        // If deposit bond does not exist, we first issue it.
+        if (address(bond).code.length <= 0) {
+            perp.updateState();
+        }
+
         BondTranches memory bt = bond.getTranches();
         IERC20Upgradeable collateralToken = IERC20Upgradeable(bond.collateralToken());
 
