@@ -680,10 +680,9 @@ contract PerpetualTranche is
         uint256 feePerc = 0;
         uint256 perpTVL = 0;
         if (!_isProtocolCaller()) {
-            // Minting more perps reduces the subscription ratio,
-            // We check the post-mint subscription state to account for fees accordingly.
             SubscriptionParams memory s = _querySubscriptionState();
             feePerc = feePolicy.computePerpMintFeePerc(
+                feePolicy.computeDeviationRatio(s),
                 feePolicy.computeDeviationRatio(s.perpTVL + valueIn, s.vaultTVL, s.seniorTR)
             );
             perpTVL = s.perpTVL;
@@ -716,12 +715,9 @@ contract PerpetualTranche is
         uint256 feePerc = 0;
 
         if (!_isProtocolCaller()) {
-            // Burning perps increases the subscription ratio,
-            // We check the post-burn subscription state to account for fees accordingly.
-            // We calculate the perp post-burn TVL, by multiplying the current TVL by
-            // the fraction of supply remaining.
             SubscriptionParams memory s = _querySubscriptionState();
             feePerc = feePolicy.computePerpBurnFeePerc(
+                feePolicy.computeDeviationRatio(s),
                 feePolicy.computeDeviationRatio(
                     s.perpTVL.mulDiv(perpSupply - perpAmtBurnt, perpSupply),
                     s.vaultTVL,
