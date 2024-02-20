@@ -523,8 +523,10 @@ contract RolloverVault is
     /// @inheritdoc IVault
     function computeMintAmt(uint256 underlyingAmtIn) public returns (uint256) {
         //-----------------------------------------------------------------------------
+        SubscriptionParams memory s = _querySubscriptionState(perp);
         uint256 feePerc = feePolicy.computeVaultMintFeePerc(
-            feePolicy.computeDeviationRatio(_querySubscriptionState(perp))
+            feePolicy.computeDeviationRatio(s),
+            feePolicy.computeDeviationRatio(s.perpTVL, s.vaultTVL + underlyingAmtIn, s.seniorTR)
         );
         //-----------------------------------------------------------------------------
 
@@ -540,14 +542,20 @@ contract RolloverVault is
     }
 
     /// @inheritdoc IVault
-    function computeRedemptionAmts(uint256 notes) public returns (TokenAmount[] memory) {
+    function computeRedemptionAmts(uint256 noteAmtBurnt) public returns (TokenAmount[] memory) {
+        uint256 noteSupply = totalSupply();
+
         //-----------------------------------------------------------------------------
+        SubscriptionParams memory s = _querySubscriptionState(perp);
         uint256 feePerc = feePolicy.computeVaultBurnFeePerc(
-            feePolicy.computeDeviationRatio(_querySubscriptionState(perp))
+            feePolicy.computeDeviationRatio(s),
+            feePolicy.computeDeviationRatio(
+                s.perpTVL,
+                s.vaultTVL.mulDiv(noteSupply - noteAmtBurnt, noteSupply),
+                s.seniorTR
+            )
         );
         //-----------------------------------------------------------------------------
-
-        uint256 noteSupply = totalSupply();
         uint8 assetCount_ = 1 + uint8(_deployed.length());
 
         // aggregating vault assets to be redeemed
@@ -557,7 +565,7 @@ contract RolloverVault is
         IERC20Upgradeable underlying_ = underlying;
         redemptions[0] = TokenAmount({
             token: underlying_,
-            amount: underlying_.balanceOf(address(this)).mulDiv(notes, noteSupply)
+            amount: underlying_.balanceOf(address(this)).mulDiv(noteAmtBurnt, noteSupply)
         });
         redemptions[0].amount = redemptions[0].amount.mulDiv(FEE_ONE - feePerc, FEE_ONE);
 
@@ -566,7 +574,7 @@ contract RolloverVault is
             IERC20Upgradeable token = IERC20Upgradeable(_deployed.at(i - 1));
             redemptions[i] = TokenAmount({
                 token: token,
-                amount: token.balanceOf(address(this)).mulDiv(notes, noteSupply)
+                amount: token.balanceOf(address(this)).mulDiv(noteAmtBurnt, noteSupply)
             });
 
             // deduct redemption fee
@@ -594,6 +602,7 @@ contract RolloverVault is
         // When user swaps underlying for vault's perps -> perps are minted by the vault
         // We thus compute fees based on the post-mint subscription state.
         (uint256 perpFeePerc, uint256 vaultFeePerc) = feePolicy.computeUnderlyingToPerpSwapFeePercs(
+            feePolicy.computeDeviationRatio(s),
             feePolicy.computeDeviationRatio(s.perpTVL + underlyingAmtIn, s.vaultTVL, s.seniorTR)
         );
         //-----------------------------------------------------------------------------
@@ -620,6 +629,7 @@ contract RolloverVault is
         // When user swaps perps for vault's underlying -> perps are redeemed by the vault
         // We thus compute fees based on the post-burn subscription state.
         (uint256 perpFeePerc, uint256 vaultFeePerc) = feePolicy.computePerpToUnderlyingSwapFeePercs(
+            feePolicy.computeDeviationRatio(s),
             feePolicy.computeDeviationRatio(s.perpTVL - underlyingAmtOut, s.vaultTVL, s.seniorTR)
         );
         //-----------------------------------------------------------------------------
