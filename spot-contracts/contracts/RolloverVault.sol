@@ -702,8 +702,8 @@ contract RolloverVault is
     // Private write methods
 
     /// @dev Redeems tranche tokens held by the vault, for underlying.
-    ///      NOTE: Reverts when attempting to recover a tranche which is not part of the deployed list.
     ///      In the case of immature redemption, this method will recover other sibling tranches as well.
+    ///      Performs some book-keeping to keep track of the vault's assets.
     function _redeemTranche(ITranche tranche) private {
         uint256 trancheBalance = tranche.balanceOf(address(this));
 
@@ -733,13 +733,17 @@ contract RolloverVault is
             BondTranches memory bt = bond.getTranches();
             _execImmatureTrancheRedemption(bond, bt);
 
-            // sync deployed asset, ie current tranche and all its siblings.
+            // sync deployed asset, i.e) current tranche and its sibling.
             _syncDeployedAsset(bt.tranches[0]);
             _syncDeployedAsset(bt.tranches[1]);
+        } else {
+            _syncDeployedAsset(tranche);
         }
     }
 
-    /// @dev Redeems perp tokens held by the vault for tranches and them melds them with existing tranches to redeem more underlying tokens.
+    /// @dev Redeems perp tokens held by the vault for tranches and
+    ///      melds them with existing tranches to redeem more underlying tokens.
+    ///      Performs some book-keeping to keep track of the vault's assets.
     function _meldPerps(IPerpetualTranche perp_) private {
         uint256 perpBalance = perp_.balanceOf(address(this));
         if (perpBalance <= 0) {
@@ -751,15 +755,15 @@ contract RolloverVault is
         // sync and meld perp's tranches
         for (uint8 i = 1; i < tranchesRedeemed.length; i++) {
             ITranche tranche = ITranche(address(tranchesRedeemed[i].token));
-            _syncDeployedAsset(tranche);
 
-            // if possible, meld redeemed tranche with existing tranches to redeem underlying.
+            // if possible, meld redeemed tranche with
+            // existing tranches to redeem underlying.
             _redeemTranche(tranche);
         }
     }
 
     /// @dev Tranches the vault's underlying to mint perps..
-    ///      Additionally, performs some book-keeping to keep track of the vault's assets.
+    ///      Performs some book-keeping to keep track of the vault's assets.
     function _trancheAndMintPerps(
         IPerpetualTranche perp_,
         IERC20Upgradeable underlying_,
@@ -798,7 +802,7 @@ contract RolloverVault is
 
     /// @dev Given a bond and its tranche data, deposits the provided amount into the bond
     ///      and receives tranche tokens in return.
-    ///      Additionally, performs some book-keeping to keep track of the vault's assets.
+    ///      Performs some book-keeping to keep track of the vault's assets.
     function _tranche(IBondController bond, IERC20Upgradeable underlying_, uint256 underlyingAmt) private {
         // Skip if amount is zero
         if (underlyingAmt <= 0) {
@@ -819,7 +823,7 @@ contract RolloverVault is
 
     /// @dev Rolls over freshly tranched tokens from the given bond for older tranches (close to maturity) from perp.
     ///      Redeems intermediate tranches for underlying if possible.
-    ///      And performs some book-keeping to keep track of the vault's assets.
+    ///      Performs some book-keeping to keep track of the vault's assets.
     /// @return Flag indicating if any tokens were rolled over.
     function _rollover(IPerpetualTranche perp_, IERC20Upgradeable underlying_) private returns (bool) {
         // NOTE: The first element of the list is the mature tranche,
@@ -856,10 +860,8 @@ contract RolloverVault is
 
             // skip insertion into the deployed list the case of the mature tranche, ie underlying
             if (rolloverTokens[i] != underlying_) {
-                // sync deployed asset retrieved from perp
-                _syncDeployedAsset(tokenOutOfPerp);
-
-                // Clean up after rollover, merge seniors from perp with vault held juniors to recover more underlying.
+                // Clean up after rollover, merge seniors from perp
+                // with vault held juniors to recover more underlying.
                 _redeemTranche(ITranche(address(tokenOutOfPerp)));
             }
 
@@ -869,9 +871,6 @@ contract RolloverVault is
             // keep track if "at least" one rolled over operation occurred
             rollover = true;
         }
-
-        // sync deployed asset sent to perp
-        _syncDeployedAsset(trancheIntoPerp);
 
         // Final cleanup, if there remain excess seniors we recover back to underlying.
         _redeemTranche(trancheIntoPerp);
