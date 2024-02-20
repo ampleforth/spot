@@ -185,6 +185,10 @@ export const getDepositBond = async (perp: Contract): Contract => {
   return bondAt(await perp.callStatic.getDepositBond());
 };
 
+export const advanceTime = async (time: number): Promise<Transaction> => {
+  return TimeHelpers.increaseTime(time);
+};
+
 export const advancePerpQueue = async (perp: Contract, time: number): Promise<Transaction> => {
   await TimeHelpers.increaseTime(time);
   return perp.updateState();
