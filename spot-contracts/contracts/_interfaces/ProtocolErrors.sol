@@ -31,6 +31,9 @@ error UnacceptableParams();
 /// @notice Storage array access out of bounds.
 error OutOfBounds();
 
+/// @notice Expected the number of reserve assets to be under the limit.
+error ReserveCountOverLimit();
+
 //-------------------------------------------------------------------------
 // Perp
 
@@ -46,8 +49,8 @@ error ExceededMaxMintPerTranche();
 //-------------------------------------------------------------------------
 // Vault
 
-/// @notice Expected the operation not to decrease the system's tvl.
-error TVLDecreased();
+/// @notice Expected more underlying token liquidity to perform operation.
+error InsufficientLiquidity();
 
 /// @notice Expected to swap non-zero assets.
 error UnacceptableSwap();
@@ -60,3 +63,18 @@ error DeployedCountOverLimit();
 
 /// @notice Expected parent bond to have only 2 children tranches.
 error UnacceptableTrancheLength();
+
+//-------------------------------------------------------------------------
+// Fee Policy
+
+/// @notice Expected perc value to be at most (1 * 10**DECIMALS), i.e) 1.0 or 100%.
+error InvalidPerc();
+
+/// @notice Expected target subscription ratio to be within defined bounds.
+error InvalidTargetSRBounds();
+
+/// @notice Expected deviation ratio bounds to be valid.
+error InvalidDRBounds();
+
+/// @notice Expected sigmoid asymptotes to be within defined bounds.
+error InvalidSigmoidAsymptotes();

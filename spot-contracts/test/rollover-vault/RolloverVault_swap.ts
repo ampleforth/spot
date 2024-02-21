@@ -92,7 +92,7 @@ describe("RolloverVault", function () {
       [toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
     );
     await checkVaultAssetComposition(vault, [collateralToken], ["0"]);
-    expect(await vault.deployedCount()).to.eq(0);
+    expect(await vault.assetCount()).to.eq(1);
 
     await mintCollteralToken(collateralToken, toFixedPtAmt("100000"), deployer);
     currentBondIn = await bondAt(await perp.callStatic.getDepositBond());
@@ -106,7 +106,7 @@ describe("RolloverVault", function () {
       [collateralToken, currentTranchesIn[1]],
       [toFixedPtAmt("1200"), toFixedPtAmt("800")],
     );
-    expect(await vault.deployedCount()).to.eq(1);
+    expect(await vault.assetCount()).to.eq(2);
 
     await collateralToken.approve(vault.address, toFixedPtAmt("1000"));
     await perp.approve(vault.address, toFixedPtAmt("1000"));
@@ -131,12 +131,29 @@ describe("RolloverVault", function () {
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2000"));
           expect(s[2].seniorTR).to.eq("200");
         });
+
+        it("should update vault after swap", async function () {
+          await checkVaultAssetComposition(
+            vault,
+            [collateralToken, currentTranchesIn[1]],
+            [toFixedPtAmt("1200"), toFixedPtAmt("800")],
+          );
+
+          await vault.swapUnderlyingForPerps(toFixedPtAmt("100"));
+
+          await checkVaultAssetComposition(
+            vault,
+            [collateralToken, currentTranchesIn[1]],
+            [toFixedPtAmt("800"), toFixedPtAmt("1200")],
+          );
+        });
       });
 
       describe("when perp price > 1", function () {
         beforeEach(async function () {
           await collateralToken.transfer(perp.address, toFixedPtAmt("800"));
         });
+
         it("should compute swap amount", async function () {
           const s = await vault.callStatic.computeUnderlyingToPerpSwapAmt(toFixedPtAmt("100"));
           expect(s[0]).to.eq(toFixedPtAmt("50"));
@@ -144,6 +161,22 @@ describe("RolloverVault", function () {
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("1600"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2000"));
           expect(s[2].seniorTR).to.eq("200");
+        });
+
+        it("should update vault after swap", async function () {
+          await checkVaultAssetComposition(
+            vault,
+            [collateralToken, currentTranchesIn[1]],
+            [toFixedPtAmt("1200"), toFixedPtAmt("800")],
+          );
+
+          await vault.swapUnderlyingForPerps(toFixedPtAmt("100"));
+
+          await checkVaultAssetComposition(
+            vault,
+            [collateralToken, currentTranchesIn[1]],
+            [toFixedPtAmt("800"), toFixedPtAmt("1200")],
+          );
         });
       });
 
@@ -158,6 +191,83 @@ describe("RolloverVault", function () {
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("400"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("120"));
           expect(s[2].seniorTR).to.eq("200");
+        });
+        it("should update vault after swap", async function () {
+          await checkVaultAssetComposition(
+            vault,
+            [collateralToken, currentTranchesIn[1]],
+            [toFixedPtAmt("120"), toFixedPtAmt("800")],
+          );
+
+          await vault.swapUnderlyingForPerps(toFixedPtAmt("100"));
+
+          await checkVaultAssetComposition(
+            vault,
+            [collateralToken, currentTranchesIn[1]],
+            [toFixedPtAmt("120"), toFixedPtAmt("1600")],
+          );
+        });
+      });
+
+      describe("when perp price is 1 but deposit bond has rebased down", function () {
+        beforeEach(async function () {
+          await rebase(collateralToken, rebaseOracle, -0.1);
+        });
+
+        it("should compute swap amount", async function () {
+          const s = await vault.callStatic.computeUnderlyingToPerpSwapAmt(toFixedPtAmt("100"));
+          expect(s[0]).to.eq(toFixedPtAmt("100"));
+          expect(s[1]).to.eq("0");
+          expect(s[2].perpTVL).to.eq(toFixedPtAmt("800"));
+          expect(s[2].vaultTVL).to.eq(toFixedPtAmt("1780"));
+          expect(s[2].seniorTR).to.eq("200");
+        });
+
+        it("should update vault after swap", async function () {
+          await checkVaultAssetComposition(
+            vault,
+            [collateralToken, currentTranchesIn[1]],
+            [toFixedPtAmt("1080"), toFixedPtAmt("800")],
+          );
+
+          await vault.swapUnderlyingForPerps(toFixedPtAmt("100"));
+
+          await checkVaultAssetComposition(
+            vault,
+            [collateralToken, currentTranchesIn[1]],
+            [toFixedPtAmt("730"), toFixedPtAmt("1200")],
+          );
+        });
+      });
+
+      describe("when perp price is 1 but deposit bond has rebased up", function () {
+        beforeEach(async function () {
+          await rebase(collateralToken, rebaseOracle, 0.1);
+        });
+
+        it("should compute swap amount", async function () {
+          const s = await vault.callStatic.computeUnderlyingToPerpSwapAmt(toFixedPtAmt("100"));
+          expect(s[0]).to.eq(toFixedPtAmt("100"));
+          expect(s[1]).to.eq("0");
+          expect(s[2].perpTVL).to.eq(toFixedPtAmt("800"));
+          expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2220"));
+          expect(s[2].seniorTR).to.eq("200");
+        });
+
+        it("should update vault after swap", async function () {
+          await checkVaultAssetComposition(
+            vault,
+            [collateralToken, currentTranchesIn[1]],
+            [toFixedPtAmt("1320"), toFixedPtAmt("800")],
+          );
+
+          await vault.swapUnderlyingForPerps(toFixedPtAmt("100"));
+
+          await checkVaultAssetComposition(
+            vault,
+            [collateralToken, currentTranchesIn[1]],
+            [toFixedPtAmt("870"), toFixedPtAmt("1200")],
+          );
         });
       });
     });
@@ -186,12 +296,31 @@ describe("RolloverVault", function () {
       });
     });
 
-    describe("when swap amount is low", function () {
+    describe("when absolute liquidity is too low", function () {
+      beforeEach(async function () {
+        await vault.updateMinUnderlyingBal(toFixedPtAmt("1000"));
+        await vault.updateMinUnderlyingPerc("0");
+      });
       it("should be reverted", async function () {
-        await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("99"))).to.be.revertedWithCustomError(
+        await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("50"))).to.be.revertedWithCustomError(
           vault,
-          "UnacceptableSwap",
+          "InsufficientLiquidity",
         );
+        await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("1"))).not.to.be.reverted;
+      });
+    });
+
+    describe("when percentage of liquidity is too low", function () {
+      beforeEach(async function () {
+        await vault.updateMinUnderlyingBal("0");
+        await vault.updateMinUnderlyingPerc(toPercFixedPtAmt("0.40"));
+      });
+      it("should be reverted", async function () {
+        await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("100"))).to.be.revertedWithCustomError(
+          vault,
+          "InsufficientLiquidity",
+        );
+        await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("99"))).not.to.be.reverted;
       });
     });
 
@@ -625,15 +754,6 @@ describe("RolloverVault", function () {
     describe("when swap amount is zero", function () {
       it("should be reverted", async function () {
         await expect(vault.swapPerpsForUnderlying("0")).to.be.revertedWithCustomError(vault, "UnacceptableSwap");
-      });
-    });
-
-    describe("when swap amount is low", function () {
-      it("should be reverted", async function () {
-        await expect(vault.swapPerpsForUnderlying(toFixedPtAmt("99"))).to.be.revertedWithCustomError(
-          vault,
-          "UnacceptableSwap",
-        );
       });
     });
 
@@ -1109,10 +1229,21 @@ describe("RolloverVault", function () {
 
         await checkVaultAssetComposition(
           vault,
-          [collateralToken, currentTranchesIn[1], ...reserveTranches.slice(-3), currentTranchesIn[0]],
           [
-            toFixedPtAmt("1973.076923076923076000"),
-            toFixedPtAmt("615.384615384615384800"),
+            collateralToken,
+            currentTranchesIn[1],
+            remainingJuniorTranches[1],
+            remainingJuniorTranches[2],
+            remainingJuniorTranches[3],
+            ...reserveTranches.slice(-3),
+            currentTranchesIn[0],
+          ],
+          [
+            toFixedPtAmt("1973.076923076923076"),
+            toFixedPtAmt("615.3846153846153848"),
+            toFixedPtAmt("615.3846153846153848"),
+            toFixedPtAmt("615.3846153846153848"),
+            toFixedPtAmt("615.3846153846153848"),
             toFixedPtAmt("0.000000000000000046"),
             toFixedPtAmt("0.000000000000000046"),
             toFixedPtAmt("0.000000000000000046"),
@@ -1122,9 +1253,9 @@ describe("RolloverVault", function () {
       });
 
       it("should update the vault tvl", async function () {
-        expect(await vault.callStatic.getTVL()).to.eq(toFixedPtAmt("2000"));
+        expect(await vault.callStatic.getTVL()).to.eq(toFixedPtAmt("2000")); // + 2400 transferred in
         await txFn();
-        expect(await vault.callStatic.getTVL()).to.eq(toFixedPtAmt("2588.461538461538460800"));
+        expect(await vault.callStatic.getTVL()).to.eq(toFixedPtAmt("4434.6153846153846152"));
       });
     });
   });

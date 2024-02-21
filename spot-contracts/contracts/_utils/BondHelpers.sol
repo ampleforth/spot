@@ -34,7 +34,6 @@ library BondHelpers {
     }
 
     /// @notice Given a bond, retrieves all of the bond's tranches.
-    /// @notice Given a bond, retrieves all of the bond's tranches.
     /// @param b The address of the bond contract.
     /// @return bt The bond's tranche data.
     function getTranches(IBondController b) internal view returns (BondTranches memory bt) {
@@ -43,7 +42,6 @@ library BondHelpers {
         }
         (bt.tranches[0], bt.trancheRatios[0]) = b.tranches(0);
         (bt.tranches[1], bt.trancheRatios[1]) = b.tranches(1);
-        return bt;
     }
 
     /// @notice Given a bond, returns the tranche at the specified index.
@@ -52,7 +50,6 @@ library BondHelpers {
     /// @return t The tranche address.
     function trancheAt(IBondController b, uint8 i) internal view returns (ITranche t) {
         (t, ) = b.tranches(i);
-        return t;
     }
 
     /// @notice Given a bond, returns the address of the most senior tranche.
@@ -60,15 +57,13 @@ library BondHelpers {
     /// @return t The senior tranche address.
     function getSeniorTranche(IBondController b) internal view returns (ITranche t) {
         (t, ) = b.tranches(0);
-        return (t);
     }
 
     /// @notice Given a bond, returns the tranche ratio of the most senior tranche.
     /// @param b The address of the bond contract.
-    /// @return seniorRatio The tranche ratio of the senior most tranche.
-    function getSeniorTrancheRatio(IBondController b) internal view returns (uint256) {
-        (, uint256 r) = b.tranches(0);
-        return r;
+    /// @return r The tranche ratio of the senior most tranche.
+    function getSeniorTrancheRatio(IBondController b) internal view returns (uint256 r) {
+        (, r) = b.tranches(0);
     }
 
     /// @notice Helper function to estimate the amount of tranches minted when a given amount of collateral

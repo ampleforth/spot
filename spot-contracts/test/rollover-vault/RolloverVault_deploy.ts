@@ -94,7 +94,7 @@ describe("RolloverVault", function () {
     await collateralToken.approve(vault.address, toFixedPtAmt("1"));
 
     await checkVaultAssetComposition(vault, [collateralToken], ["0"]);
-    expect(await vault.deployedCount()).to.eq(0);
+    expect(await vault.assetCount()).to.eq(1);
   });
 
   afterEach(async function () {
@@ -104,7 +104,7 @@ describe("RolloverVault", function () {
   describe("#deploy", function () {
     describe("when usable balance is zero", function () {
       it("should revert", async function () {
-        await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "InsufficientDeployment");
+        await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "InsufficientLiquidity");
       });
     });
 
@@ -145,7 +145,7 @@ describe("RolloverVault", function () {
           await vault.updateMinDeploymentAmt(toFixedPtAmt("1"));
         });
         it("should revert", async function () {
-          await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "InsufficientDeployment");
+          await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "InsufficientLiquidity");
         });
       });
 
@@ -240,8 +240,8 @@ describe("RolloverVault", function () {
           await expect(vault.deploy()).not.to.be.reverted;
           await checkVaultAssetComposition(
             vault,
-            [collateralToken, newTranchesIn[0], newTranchesIn[1], curTranchesIn[0], curTranchesIn[1]],
-            [toFixedPtAmt("2600"), "0", toFixedPtAmt("3200"), toFixedPtAmt("800"), toFixedPtAmt("3200")],
+            [collateralToken, newTranchesIn[1], reserveTranches[3]],
+            [toFixedPtAmt("6600"), toFixedPtAmt("3200"), toFixedPtAmt("200")],
           );
           await checkReserveComposition(perp, [collateralToken, newTranchesIn[0]], ["0", toFixedPtAmt("800")]);
         });
@@ -255,14 +255,8 @@ describe("RolloverVault", function () {
           await expect(vault.deploy()).not.to.be.reverted;
           await checkVaultAssetComposition(
             vault,
-            [collateralToken, reserveTranches[3], newTranchesIn[1], curTranchesIn[0], curTranchesIn[1]],
-            [
-              toFixedPtAmt("11100"),
-              toFixedPtAmt("200"),
-              toFixedPtAmt("3200"),
-              toFixedPtAmt("800"),
-              toFixedPtAmt("3200"),
-            ],
+            [collateralToken, reserveTranches[3], newTranchesIn[1]],
+            [toFixedPtAmt("15100"), toFixedPtAmt("200"), toFixedPtAmt("3200")],
           );
           await checkReserveComposition(perp, [collateralToken, newTranchesIn[0]], ["0", toFixedPtAmt("800")]);
         });
@@ -413,14 +407,9 @@ describe("RolloverVault", function () {
         // Tranche
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[0].address, toFixedPtAmt("198"));
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[1].address, toFixedPtAmt("792"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, "0");
 
         // Rollover
-        await expect(tx)
-          .to.emit(vault, "AssetSynced")
-          .withArgs(rolloverInTranches[0].address, toFixedPtAmt("79.188118811881188118"));
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(reserveTranches[1].address, toFixedPtAmt("200"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("20"));
 
         // Recover
         await expect(tx)
@@ -429,6 +418,11 @@ describe("RolloverVault", function () {
         await expect(tx)
           .to.emit(vault, "AssetSynced")
           .withArgs(rolloverInTranches[1].address, toFixedPtAmt("475.247524752475248"));
+
+        // Final
+        await expect(tx)
+          .to.emit(vault, "AssetSynced")
+          .withArgs(collateralToken.address, toFixedPtAmt("415.94059405940594"));
       });
 
       it("should update the list of deployed assets", async function () {
@@ -469,7 +463,7 @@ describe("RolloverVault", function () {
     });
 
     it("should revert after limit is reached", async function () {
-      expect(await vault.deployedCount()).to.eq(46);
+      expect(await vault.assetCount()).to.eq(47);
       await setupDeployment();
       await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "DeployedCountOverLimit");
     });

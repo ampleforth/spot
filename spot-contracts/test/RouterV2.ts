@@ -9,6 +9,7 @@ import {
   getTranches,
   toFixedPtAmt,
   advancePerpQueue,
+  advanceTime,
   mintCollteralToken,
 } from "./helpers";
 use(smock.matchers);
@@ -76,10 +77,10 @@ describe("RouterV2", function () {
     it("should compute the tranche amounts", async function () {
       const r = await router.callStatic.previewTranche(perp.address, toFixedPtAmt("1000"));
       expect(r[0]).to.eq(await perp.callStatic.getDepositBond());
-      expect(r[1][0]).to.eq(depositTranches[0].address);
-      expect(r[1][1]).to.eq(depositTranches[1].address);
-      expect(r[2][0]).to.eq(toFixedPtAmt("200"));
-      expect(r[2][1]).to.eq(toFixedPtAmt("800"));
+      expect(r[1][0].token).to.eq(depositTranches[0].address);
+      expect(r[1][0].amount).to.eq(toFixedPtAmt("200"));
+      expect(r[1][1].token).to.eq(depositTranches[1].address);
+      expect(r[1][1].amount).to.eq(toFixedPtAmt("800"));
     });
   });
 
@@ -98,6 +99,18 @@ describe("RouterV2", function () {
         await expect(
           router.trancheAndDeposit(perp.address, depositBond.address, toFixedPtAmt("1000")),
         ).to.revertedWithCustomError(perp, "UnexpectedAsset");
+      });
+    });
+
+    describe("when deposit bond is not issued", function () {
+      beforeEach(async function () {
+        await collateralToken.approve(router.address, constants.MaxUint256);
+        await advanceTime(7200);
+      });
+      it("should not revert", async function () {
+        const depositBond = await bondAt(await perp.callStatic.getDepositBond());
+        await expect(router.trancheAndDeposit(perp.address, depositBond.address, toFixedPtAmt("1000"))).not.to.be
+          .reverted;
       });
     });
 
