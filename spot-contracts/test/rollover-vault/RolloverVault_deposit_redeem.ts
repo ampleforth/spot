@@ -101,7 +101,7 @@ describe("RolloverVault", function () {
     await mintCollteralToken(collateralToken, toFixedPtAmt("100000"), deployer);
     await collateralToken.approve(vault.address, toFixedPtAmt("1"));
 
-    expect(await vault.deployedCount()).to.eq(0);
+    expect(await vault.assetCount()).to.eq(1);
     expect(await vault.vaultAssetBalance(await vault.underlying())).to.eq(0);
   });
 
@@ -132,7 +132,7 @@ describe("RolloverVault", function () {
         await collateralToken.transfer(vault.address, toFixedPtAmt("100"));
         await vault.deploy();
         expect(await vault.vaultAssetBalance(await vault.underlying())).to.eq(0);
-        expect(await vault.deployedCount()).to.eq(2);
+        expect(await vault.assetCount()).to.eq(3);
       });
       it("should return tvl", async function () {
         expect(await vault.callStatic.getTVL()).to.eq(toFixedPtAmt("100"));
@@ -275,6 +275,12 @@ describe("RolloverVault", function () {
 
   describe("#deposit", function () {
     let noteAmt: BigNumber;
+
+    describe("when deposit amount is zero", async function () {
+      it("should return zero", async function () {
+        expect(await vault.callStatic.deposit("0")).to.eq("0");
+      });
+    });
 
     describe("when total supply = 0", async function () {
       beforeEach(async function () {
@@ -480,9 +486,21 @@ describe("RolloverVault", function () {
 
   describe("#redeem", function () {
     let bal: BigNumber;
+
     describe("when vault is empty", function () {
       it("should revert", async function () {
         await expect(vault.redeem("1")).to.be.reverted;
+      });
+    });
+
+    describe("when redeem amount is zero", async function () {
+      beforeEach(async function () {
+        await collateralToken.approve(vault.address, toFixedPtAmt("100"));
+        await vault.deposit(toFixedPtAmt("100"));
+      });
+
+      it("should return []", async function () {
+        expect(await vault.callStatic.redeem("0")).to.deep.eq([]);
       });
     });
 
@@ -552,7 +570,7 @@ describe("RolloverVault", function () {
         bal = await vault.balanceOf(deployerAddress);
 
         expect(await vault.vaultAssetBalance(await vault.underlying())).to.eq(0);
-        expect(await vault.deployedCount()).to.eq(2);
+        expect(await vault.assetCount()).to.eq(3);
       });
 
       it("should transfer assets", async function () {
@@ -595,10 +613,10 @@ describe("RolloverVault", function () {
         expect(redemptionAmts.length).to.eq(3);
         expect(redemptionAmts[0].token).to.eq(collateralToken.address);
         expect(redemptionAmts[0].amount).to.eq(0);
-        expect(redemptionAmts[1].token).to.eq(rolloverInTranches[1].address);
-        expect(redemptionAmts[1].amount).to.eq(toFixedPtAmt("80"));
-        expect(redemptionAmts[2].token).to.eq(reserveTranches[0].address);
-        expect(redemptionAmts[2].amount).to.eq(toFixedPtAmt("20"));
+        expect(redemptionAmts[1].token).to.eq(reserveTranches[0].address);
+        expect(redemptionAmts[1].amount).to.eq(toFixedPtAmt("20"));
+        expect(redemptionAmts[2].token).to.eq(rolloverInTranches[1].address);
+        expect(redemptionAmts[2].amount).to.eq(toFixedPtAmt("80"));
       });
     });
 
@@ -666,10 +684,10 @@ describe("RolloverVault", function () {
         expect(redemptionAmts.length).to.eq(3);
         expect(redemptionAmts[0].token).to.eq(collateralToken.address);
         expect(redemptionAmts[0].amount).to.eq(toFixedPtAmt("10"));
-        expect(redemptionAmts[1].token).to.eq(rolloverInTranches[1].address);
-        expect(redemptionAmts[1].amount).to.eq(toFixedPtAmt("80"));
-        expect(redemptionAmts[2].token).to.eq(reserveTranches[0].address);
-        expect(redemptionAmts[2].amount).to.eq(toFixedPtAmt("20"));
+        expect(redemptionAmts[1].token).to.eq(reserveTranches[0].address);
+        expect(redemptionAmts[1].amount).to.eq(toFixedPtAmt("20"));
+        expect(redemptionAmts[2].token).to.eq(rolloverInTranches[1].address);
+        expect(redemptionAmts[2].amount).to.eq(toFixedPtAmt("80"));
       });
     });
 
@@ -736,10 +754,10 @@ describe("RolloverVault", function () {
         expect(redemptionAmts.length).to.eq(3);
         expect(redemptionAmts[0].token).to.eq(collateralToken.address);
         expect(redemptionAmts[0].amount).to.eq(toFixedPtAmt("5"));
-        expect(redemptionAmts[1].token).to.eq(rolloverInTranches[1].address);
-        expect(redemptionAmts[1].amount).to.eq(toFixedPtAmt("40"));
-        expect(redemptionAmts[2].token).to.eq(reserveTranches[0].address);
-        expect(redemptionAmts[2].amount).to.eq(toFixedPtAmt("10"));
+        expect(redemptionAmts[1].token).to.eq(reserveTranches[0].address);
+        expect(redemptionAmts[1].amount).to.eq(toFixedPtAmt("10"));
+        expect(redemptionAmts[2].token).to.eq(rolloverInTranches[1].address);
+        expect(redemptionAmts[2].amount).to.eq(toFixedPtAmt("40"));
       });
     });
 
@@ -808,10 +826,10 @@ describe("RolloverVault", function () {
         expect(redemptionAmts.length).to.eq(3);
         expect(redemptionAmts[0].token).to.eq(collateralToken.address);
         expect(redemptionAmts[0].amount).to.eq(toFixedPtAmt("4.5"));
-        expect(redemptionAmts[1].token).to.eq(rolloverInTranches[1].address);
-        expect(redemptionAmts[1].amount).to.eq(toFixedPtAmt("36"));
-        expect(redemptionAmts[2].token).to.eq(reserveTranches[0].address);
-        expect(redemptionAmts[2].amount).to.eq(toFixedPtAmt("9"));
+        expect(redemptionAmts[1].token).to.eq(reserveTranches[0].address);
+        expect(redemptionAmts[1].amount).to.eq(toFixedPtAmt("9"));
+        expect(redemptionAmts[2].token).to.eq(rolloverInTranches[1].address);
+        expect(redemptionAmts[2].amount).to.eq(toFixedPtAmt("36"));
       });
     });
   });

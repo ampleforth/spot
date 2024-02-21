@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { UnacceptableTrancheLength } from "../_interfaces/ProtocolErrors.sol";
 
-import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
-import { BondTranches, BondTranchesHelpers } from "./BondTranchesHelpers.sol";
 import { BondHelpers } from "./BondHelpers.sol";
 
 /**
@@ -24,11 +22,10 @@ library TrancheHelpers {
     /// @param tranche Address of the tranche token.
     /// @param collateralToken Address of the tranche's underlying collateral token.
     /// @return The collateral balance and the tranche token supply.
-    function getTrancheCollateralization(ITranche tranche, IERC20Upgradeable collateralToken)
-        internal
-        view
-        returns (uint256, uint256)
-    {
+    function getTrancheCollateralization(
+        ITranche tranche,
+        IERC20Upgradeable collateralToken
+    ) internal view returns (uint256, uint256) {
         IBondController bond = IBondController(tranche.bond());
 
         uint256 trancheSupply = tranche.totalSupply();
@@ -45,7 +42,6 @@ library TrancheHelpers {
             revert UnacceptableTrancheLength();
         }
 
-        // When the parent bond has no deposits.
         uint256 bondCollateralBalance = collateralToken.balanceOf(address(bond));
 
         // For junior tranche
@@ -55,28 +51,11 @@ library TrancheHelpers {
             trancheClaim = bondCollateralBalance - seniorClaim;
         }
         // For senior tranche
-        else if (bond.trancheAt(0) == tranche) {
-            trancheClaim = MathUpgradeable.min(trancheSupply, bondCollateralBalance);
-        }
-        // When out of bounds
         else {
-            revert UnacceptableTrancheLength();
+            // require(bond.trancheAt(0) == tranche);
+            trancheClaim = MathUpgradeable.min(trancheSupply, bondCollateralBalance);
         }
 
         return (trancheClaim, trancheSupply);
-    }
-
-    /// @notice Given a senior immature tranche, calculates the claimable collateral balance backing the tranche supply.
-    /// @param seniorTranche Address of the tranche token.
-    /// @param parentBondCollateralBalance The total amount of collateral backing the given tranche's parent bond.
-    /// @return The collateral balance and the tranche token supply.
-    function getImmatureSeniorTrancheCollateralization(ITranche seniorTranche, uint256 parentBondCollateralBalance)
-        internal
-        view
-        returns (uint256, uint256)
-    {
-        uint256 seniorSupply = seniorTranche.totalSupply();
-        uint256 seniorClaim = MathUpgradeable.min(seniorSupply, parentBondCollateralBalance);
-        return (seniorClaim, seniorSupply);
     }
 }

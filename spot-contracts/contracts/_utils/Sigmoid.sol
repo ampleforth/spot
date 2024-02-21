@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // https://github.com/ampleforth/ampleforth-contracts/blob/master/contracts/UFragmentsPolicy.sol
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
@@ -48,7 +48,7 @@ library Sigmoid {
         for (uint256 i = 0; i < 5; i++) {
             if (remaining >= current) {
                 remaining = remaining - current;
-                result = (result * ks[i]) / 10**18; // 10**18 to match hardcoded ks values
+                result = (result * ks[i]) / 10 ** 18; // 10**18 to match hardcoded ks values
             }
             current = current / 2;
         }
@@ -66,13 +66,7 @@ library Sigmoid {
     /// @param growth The growth parameter.
     /// @param one 1.0 as a fixed-point.
     /// @return The computed value of sigmoid(x) as fixed-point number.
-    function compute(
-        int256 x,
-        int256 lower,
-        int256 upper,
-        int256 growth,
-        int256 one
-    ) internal pure returns (int256) {
+    function compute(int256 x, int256 lower, int256 upper, int256 growth, int256 one) internal pure returns (int256) {
         int256 delta;
 
         delta = x - one;
@@ -90,7 +84,7 @@ library Sigmoid {
         }
 
         int256 pow = twoPower(exponent, one); // 2^(Growth*Delta)
-        if (pow <= 0) {
+        if (pow == 0) {
             return lower;
         }
         int256 numerator = upper - lower; //(Upper-Lower)

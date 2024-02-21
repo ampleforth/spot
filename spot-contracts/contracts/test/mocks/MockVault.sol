@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import { IPerpetualTranche, IERC20Upgradeable, ITranche } from "../../_interfaces/IPerpetualTranche.sol";
 import { TokenAmount, RolloverData } from "../../_interfaces/CommonTypes.sol";
@@ -9,11 +9,7 @@ contract MockVault {
         return 0;
     }
 
-    function mintPerps(
-        IPerpetualTranche perp,
-        ITranche trancheIn,
-        uint256 trancheInAmt
-    ) public {
+    function mintPerps(IPerpetualTranche perp, ITranche trancheIn, uint256 trancheInAmt) public {
         trancheIn.transferFrom(msg.sender, address(this), trancheInAmt);
 
         trancheIn.approve(address(perp), trancheInAmt);

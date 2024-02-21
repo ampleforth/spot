@@ -1,22 +1,14 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
 import { SubscriptionParams } from "./_interfaces/CommonTypes.sol";
+import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds, InvalidSigmoidAsymptotes } from "./_interfaces/ProtocolErrors.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { Sigmoid } from "./_utils/Sigmoid.sol";
-
-/// @notice Expected perc value to be at most (1 * 10**DECIMALS), i.e) 1.0 or 100%.
-error InvalidPerc();
-
-/// @notice Expected target subscription ratio to be within defined bounds.
-error InvalidTargetSRBounds();
-
-/// @notice Expected sigmoid asymptotes to be within defined bounds.
-error InvalidSigmoidAsymptotes();
 
 /**
  *  @title FeePolicy
@@ -71,19 +63,25 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     ///      The decimals should line up with value expected by consumer (perp, vault).
     ///      NOTE: 10**DECIMALS => 100% or 1.0
     uint8 public constant DECIMALS = 8;
-    uint256 public constant ONE = (1 * 10**DECIMALS); // 1.0 or 100%
+    uint256 public constant ONE = (1 * 10 ** DECIMALS); // 1.0 or 100%
 
     /// @dev SIGMOID_BOUND is set to 1%, i.e) the rollover fee can be at most 1% on either direction.
     uint256 public constant SIGMOID_BOUND = ONE / 100; // 0.01 or 1%
 
-    uint256 public constant SR_LOWER_BOUND = (ONE * 75) / 100; // 0.75 or 75%
-    uint256 public constant SR_UPPER_BOUND = 2 * ONE; // 2.0 or 200%
+    uint256 public constant TARGET_SR_LOWER_BOUND = (ONE * 75) / 100; // 0.75 or 75%
+    uint256 public constant TARGET_SR_UPPER_BOUND = 2 * ONE; // 2.0 or 200%
 
     //-----------------------------------------------------------------------------
-    /// @inheritdoc IFeePolicy
+    /// @notice The target subscription ratio i.e) the normalization factor.
     /// @dev The ratio under which the system is considered "under-subscribed".
     ///      Adds a safety buffer to ensure that rollovers are better sustained.
-    uint256 public override targetSubscriptionRatio;
+    uint256 public targetSubscriptionRatio;
+
+    /// @notice The lower bound of deviation ratio, below which some operations (which decrease the dr) are disabled.
+    uint256 public deviationRatioBoundLower;
+
+    /// @notice The upper bound of deviation ratio, above which some operations (which increase the dr) are disabled.
+    uint256 public deviationRatioBoundUpper;
 
     //-----------------------------------------------------------------------------
 
@@ -141,6 +139,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         perpBurnFeePerc = 0;
         vaultMintFeePerc = 0;
         vaultBurnFeePerc = 0;
+        vaultDeploymentFee = 0;
 
         // initializing swap fees to 100%, to disable swapping initially
         vaultUnderlyingToPerpSwapFeePerc = ONE;
@@ -152,6 +151,8 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         perpRolloverFee.growth = 5 * int256(ONE); // 5.0
 
         targetSubscriptionRatio = (ONE * 133) / 100; // 1.33
+        deviationRatioBoundLower = (ONE * 75) / 100; // 0.75
+        deviationRatioBoundUpper = 2 * ONE; // 2.0
     }
 
     //-----------------------------------------------------------------------------
@@ -160,10 +161,24 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Updates the target subscription ratio.
     /// @param targetSubscriptionRatio_ The new target subscription ratio as a fixed point number with {DECIMALS} places.
     function updateTargetSubscriptionRatio(uint256 targetSubscriptionRatio_) external onlyOwner {
-        if (targetSubscriptionRatio_ < SR_LOWER_BOUND || targetSubscriptionRatio_ > SR_UPPER_BOUND) {
+        if (targetSubscriptionRatio_ < TARGET_SR_LOWER_BOUND || targetSubscriptionRatio_ > TARGET_SR_UPPER_BOUND) {
             revert InvalidTargetSRBounds();
         }
         targetSubscriptionRatio = targetSubscriptionRatio_;
+    }
+
+    /// @notice Updates the deviation ratio bounds.
+    /// @param deviationRatioBoundLower_ The new lower deviation ratio bound as fixed point number with {DECIMALS} places.
+    /// @param deviationRatioBoundUpper_ The new upper deviation ratio bound as fixed point number with {DECIMALS} places.
+    function updateDeviationRatioBounds(
+        uint256 deviationRatioBoundLower_,
+        uint256 deviationRatioBoundUpper_
+    ) external onlyOwner {
+        if (deviationRatioBoundLower_ > ONE || deviationRatioBoundUpper_ < ONE) {
+            revert InvalidDRBounds();
+        }
+        deviationRatioBoundLower = deviationRatioBoundLower_;
+        deviationRatioBoundUpper = deviationRatioBoundUpper_;
     }
 
     /// @notice Updates the perp mint fee parameters.
@@ -247,14 +262,14 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     // Public methods
 
     /// @inheritdoc IFeePolicy
-    function computePerpMintFeePerc(uint256 dr) external view override returns (uint256) {
-        // When the vault is under-subscribed there exists an active mint fee
+    function computePerpMintFeePerc(uint256 dr) public view override returns (uint256) {
+        // When the system is under-subscribed we charge a perp mint fee.
         return (dr <= ONE) ? perpMintFeePerc : 0;
     }
 
     /// @inheritdoc IFeePolicy
-    function computePerpBurnFeePerc(uint256 dr) external view override returns (uint256) {
-        // When the system is over-subscribed there exists an active redemption fee
+    function computePerpBurnFeePerc(uint256 dr) public view override returns (uint256) {
+        // When the system is over-subscribed we charge a perp redemption fee.
         return (dr > ONE) ? perpBurnFeePerc : 0;
     }
 
@@ -271,12 +286,13 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computeVaultMintFeePerc() external view override returns (uint256) {
-        return vaultMintFeePerc;
+    function computeVaultMintFeePerc(uint256 dr) external view override returns (uint256) {
+        // When the system is over-subscribed the vault charges a mint fee.
+        return (dr > ONE) ? vaultMintFeePerc : 0;
     }
 
     /// @inheritdoc IFeePolicy
-    function computeVaultBurnFeePerc() external view override returns (uint256) {
+    function computeVaultBurnFeePerc(uint256 /*dr*/) external view override returns (uint256) {
         return vaultBurnFeePerc;
     }
 
@@ -287,23 +303,14 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @inheritdoc IFeePolicy
     function computeUnderlyingToPerpSwapFeePercs(uint256 dr) external view override returns (uint256, uint256) {
-        // If the system is under-subscribed, swapping is NOT allowed.
-        if (dr <= ONE) {
-            return (0, ONE);
-        }
-
-        // When the system is over-subscribed, perp share of fees is zero.
-        return (0, vaultUnderlyingToPerpSwapFeePerc);
+        // When the deviation ratio is below the bound, swapping is disabled. (fees are set to 100%)
+        return (computePerpMintFeePerc(dr), (dr < deviationRatioBoundLower) ? ONE : vaultUnderlyingToPerpSwapFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
     function computePerpToUnderlyingSwapFeePercs(uint256 dr) external view override returns (uint256, uint256) {
-        // When the system is under-subscribed, perp share of fees is zero.
-        if (dr <= ONE) {
-            return (0, vaultPerpToUnderlyingSwapFeePerc);
-        }
-
-        return (perpBurnFeePerc, vaultPerpToUnderlyingSwapFeePerc);
+        // When the deviation ratio is above the bound, swapping is disabled. (fees are set to 100%)
+        return (computePerpBurnFeePerc(dr), (dr > deviationRatioBoundUpper) ? ONE : vaultPerpToUnderlyingSwapFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
@@ -317,11 +324,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computeDeviationRatio(
-        uint256 perpTVL,
-        uint256 vaultTVL,
-        uint256 seniorTR
-    ) public view returns (uint256) {
+    function computeDeviationRatio(uint256 perpTVL, uint256 vaultTVL, uint256 seniorTR) public view returns (uint256) {
         // NOTE: We assume that perp's TVL and vault's TVL values have the same base denomination.
         uint256 juniorTR = TRANCHE_RATIO_GRANULARITY - seniorTR;
         return (vaultTVL * seniorTR).mulDiv(ONE, (perpTVL * juniorTR)).mulDiv(ONE, targetSubscriptionRatio);

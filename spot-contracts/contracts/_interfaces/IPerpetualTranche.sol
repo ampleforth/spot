@@ -75,12 +75,6 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @return The tranche ratio of the current deposit tranche.
     function getDepositTrancheRatio() external returns (uint256);
 
-    /// @notice Checks if the given `trancheIn` can be rolled out for `tokenOut`.
-    /// @param trancheIn The tranche token deposited.
-    /// @param tokenOut The reserve token to be redeemed.
-    /// @return If the given pair is a valid rollover.
-    function isAcceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut) external returns (bool);
-
     /// @notice The policy contract with the fee computation logic for the perp and vault systems.
     /// @return Address of the policy contract.
     function feePolicy() external view returns (IFeePolicy);
@@ -135,13 +129,11 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @param trancheIn The tranche token rolled in.
     /// @param tokenOut The reserve token to be rolled out.
     /// @param trancheInAmtAvailable The amount of trancheIn tokens rolled in.
-    /// @param tokenOutAmtRequested The amount of tokenOut tokens requested to be rolled out.
     /// @return r The rollover amounts in various denominations.
     function computeRolloverAmt(
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
-        uint256 trancheInAmtAvailable,
-        uint256 tokenOutAmtRequested
+        uint256 trancheInAmtAvailable
     ) external returns (RolloverData memory r);
 
     /// @notice Updates time dependent storage state.

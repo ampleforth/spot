@@ -107,7 +107,7 @@ describe("PerpetualTranche", function () {
       });
 
       it("should revert", async function () {
-        await expect(perp.redeem(toFixedPtAmt("500"))).to.revertedWith("Pausable: paused");
+        await expect(perp.redeem(toFixedPtAmt("500"))).to.be.revertedWith("Pausable: paused");
       });
     });
 
@@ -118,13 +118,13 @@ describe("PerpetualTranche", function () {
 
       it("should revert", async function () {
         expect(await perp.balanceOf(deployerAddress)).to.lte(toFixedPtAmt("500"));
-        await expect(perp.redeem(toFixedPtAmt("500"))).to.revertedWithCustomError(perp, "UnacceptableRedemption");
+        await expect(perp.redeem(toFixedPtAmt("500"))).to.be.reverted;
       });
     });
 
     describe("when requested amount is zero", function () {
-      it("should revert", async function () {
-        await expect(perp.redeem("0")).to.revertedWithCustomError(perp, "UnacceptableRedemption");
+      it("should return without redeeming", async function () {
+        expect(await perp.callStatic.redeem("0")).to.deep.eq([]);
       });
     });
 
@@ -134,14 +134,11 @@ describe("PerpetualTranche", function () {
       });
 
       it("should revert", async function () {
-        await expect(perp.redeem(toFixedPtAmt("100"))).to.revertedWithCustomError(perp, "UnacceptableRedemption");
+        await expect(perp.redeem(toFixedPtAmt("100"))).to.be.reverted;
       });
 
-      it("should return revert", async function () {
-        await expect(perp.callStatic.computeRedemptionAmts(toFixedPtAmt("100"))).to.revertedWithCustomError(
-          perp,
-          "UnacceptableRedemption",
-        );
+      it("should revert", async function () {
+        await expect(perp.callStatic.computeRedemptionAmts(toFixedPtAmt("100"))).to.be.reverted;
       });
     });
 
