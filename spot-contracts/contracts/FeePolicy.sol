@@ -262,15 +262,15 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     // Public methods
 
     /// @inheritdoc IFeePolicy
-    /// @dev Minting perps reduces system dr, i.e) dr2 < dr1.
-    function computePerpMintFeePerc(uint256 dr1, uint256 dr2) public view override returns (uint256) {
-        return _stepFnFeePerc(dr2, dr1, perpMintFeePerc, 0);
+    /// @dev Minting perps reduces system dr, i.e) drPost < drPre.
+    function computePerpMintFeePerc(uint256 drPre, uint256 drPost) public view override returns (uint256) {
+        return _stepFnFeePerc(drPost, drPre, perpMintFeePerc, 0);
     }
 
     /// @inheritdoc IFeePolicy
-    /// @dev Burning perps increases system dr, i.e) dr2 > dr1.
-    function computePerpBurnFeePerc(uint256 dr1, uint256 dr2) public view override returns (uint256) {
-        return _stepFnFeePerc(dr1, dr2, 0, perpBurnFeePerc);
+    /// @dev Burning perps increases system dr, i.e) drPost > drPre.
+    function computePerpBurnFeePerc(uint256 drPre, uint256 drPost) public view override returns (uint256) {
+        return _stepFnFeePerc(drPre, drPost, 0, perpBurnFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
@@ -286,13 +286,13 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    /// @dev Minting vault notes increases system dr, i.e) dr2 > dr1.
-    function computeVaultMintFeePerc(uint256 dr1, uint256 dr2) external view override returns (uint256) {
-        return _stepFnFeePerc(dr1, dr2, 0, vaultMintFeePerc);
+    /// @dev Minting vault notes increases system dr, i.e) drPost > drPre.
+    function computeVaultMintFeePerc(uint256 drPre, uint256 drPost) external view override returns (uint256) {
+        return _stepFnFeePerc(drPre, drPost, 0, vaultMintFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
-    function computeVaultBurnFeePerc(uint256 /*dr1*/, uint256 /*dr2*/) external view override returns (uint256) {
+    function computeVaultBurnFeePerc(uint256 /*drPre*/, uint256 /*drPost*/) external view override returns (uint256) {
         return vaultBurnFeePerc;
     }
 
@@ -302,30 +302,30 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    /// @dev Swapping by minting perps reduces system dr, i.e) dr2 < dr1.
+    /// @dev Swapping by minting perps reduces system dr, i.e) drPost < drPre.
     function computeUnderlyingToPerpSwapFeePercs(
-        uint256 dr1,
-        uint256 dr2
+        uint256 drPre,
+        uint256 drPost
     ) external view override returns (uint256, uint256) {
         // When the after op deviation ratio is below the bound,
         // swapping is disabled. (fees are set to 100%)
         return (
-            computePerpMintFeePerc(dr1, dr2),
-            (dr2 < deviationRatioBoundLower ? ONE : vaultUnderlyingToPerpSwapFeePerc)
+            computePerpMintFeePerc(drPre, drPost),
+            (drPost < deviationRatioBoundLower ? ONE : vaultUnderlyingToPerpSwapFeePerc)
         );
     }
 
     /// @inheritdoc IFeePolicy
-    /// @dev Swapping by burning perps increases system dr, i.e) dr2 > dr1.
+    /// @dev Swapping by burning perps increases system dr, i.e) drPost > drPre.
     function computePerpToUnderlyingSwapFeePercs(
-        uint256 dr1,
-        uint256 dr2
+        uint256 drPre,
+        uint256 drPost
     ) external view override returns (uint256, uint256) {
         // When the after op deviation ratio is above the bound,
         // swapping is disabled. (fees are set to 100%)
         return (
-            computePerpBurnFeePerc(dr1, dr2),
-            (dr2 > deviationRatioBoundUpper ? ONE : vaultPerpToUnderlyingSwapFeePerc)
+            computePerpBurnFeePerc(drPre, drPost),
+            (drPost > deviationRatioBoundUpper ? ONE : vaultPerpToUnderlyingSwapFeePerc)
         );
     }
 
