@@ -5,14 +5,16 @@ import { SubscriptionParams } from "./CommonTypes.sol";
 
 interface IFeePolicy {
     /// @param dr The current system deviation ratio.
+    /// @param dr_ The deviation ratio of the system after the operation is complete.
     /// @return The percentage of the mint perp tokens to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
-    function computePerpMintFeePerc(uint256 dr) external view returns (uint256);
+    function computePerpMintFeePerc(uint256 dr, uint256 dr_) external view returns (uint256);
 
     /// @param dr The current system deviation ratio.
+    /// @param dr_ The deviation ratio of the system after the operation is complete.
     /// @return The percentage of the burnt perp tokens to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
-    function computePerpBurnFeePerc(uint256 dr) external view returns (uint256);
+    function computePerpBurnFeePerc(uint256 dr, uint256 dr_) external view returns (uint256);
 
     /// @param dr The current system deviation ratio.
     /// @return The applied exchange rate adjustment between tranches into perp and
@@ -27,35 +29,41 @@ interface IFeePolicy {
     function computePerpRolloverFeePerc(uint256 dr) external view returns (int256);
 
     /// @param dr The current system deviation ratio.
+    /// @param dr_ The deviation ratio of the system after the operation is complete.
     /// @return The percentage of the mint vault note amount to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
-    function computeVaultMintFeePerc(uint256 dr) external view returns (uint256);
+    function computeVaultMintFeePerc(uint256 dr, uint256 dr_) external view returns (uint256);
 
     /// @param dr The current system deviation ratio.
+    /// @param dr_ The deviation ratio of the system after the operation is complete.
     /// @return The percentage of the burnt vault note amount to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
-    function computeVaultBurnFeePerc(uint256 dr) external view returns (uint256);
+    function computeVaultBurnFeePerc(uint256 dr, uint256 dr_) external view returns (uint256);
 
     /// @return The fixed amount fee charged by the vault during each deployment,
     ///         denominated in the underlying collateral asset.
     function computeVaultDeploymentFee() external view returns (uint256);
 
     /// @param dr The current system deviation ratio.
+    /// @param dr_ The deviation ratio of the system after the operation is complete.
     /// @return perpFeePerc The percentage of perp tokens out to be charged as swap fees by perp,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
     /// @return vaultFeePerc The percentage of perp tokens out to be charged as swap fees by the vault,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
     function computeUnderlyingToPerpSwapFeePercs(
-        uint256 dr
+        uint256 dr,
+        uint256 dr_
     ) external view returns (uint256 perpFeePerc, uint256 vaultFeePerc);
 
     /// @param dr The current system deviation ratio.
+    /// @param dr_ The deviation ratio of the system after the operation is complete.
     /// @return perpFeePerc The percentage of underlying tokens out to be charged as swap fees by perp,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
     /// @return vaultFeePerc The percentage of underlying tokens out to be charged as swap fees by the vault,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
     function computePerpToUnderlyingSwapFeePercs(
-        uint256 dr
+        uint256 dr,
+        uint256 dr_
     ) external view returns (uint256 perpFeePerc, uint256 vaultFeePerc);
 
     /// @return Number of decimals representing a multiplier of 1.0. So, 100% = 1*10**decimals.
