@@ -1,5 +1,6 @@
 import { task, types } from "hardhat/config";
 import { TaskArguments } from "hardhat/types";
+import { getImplementationAddress } from "@openzeppelin/upgrades-core";
 import { sleep } from "../helpers";
 
 task("deploy:BondIssuer")
@@ -10,6 +11,7 @@ task("deploy:BondIssuer")
   .addParam("collateralTokenAddress", "address of the collateral token", undefined, types.string, false)
   .addParam("trancheRatios", "list of tranche ratios", undefined, types.json, false)
   .addParam("verify", "flag to set false for local deployments", true, types.boolean)
+  .addParam("issue", "flag to set true to issue first bond", false, types.boolean)
   .setAction(async function (args: TaskArguments, hre) {
     const {
       bondFactoryAddress,
@@ -19,6 +21,7 @@ task("deploy:BondIssuer")
       collateralTokenAddress,
       trancheRatios,
       verify,
+      issue,
     } = args;
     console.log("Signer", await (await hre.ethers.getSigners())[0].getAddress());
 
@@ -27,7 +30,9 @@ task("deploy:BondIssuer")
     await bondIssuer.deployed();
 
     await (await bondIssuer.init(bondDuration, trancheRatios, issueFrequency, issueWindowOffset)).wait();
-    // await (await bondIssuer.issue()).wait();
+    if (issue) {
+      await (await bondIssuer.issue()).wait();
+    }
 
     if (verify) {
       await sleep(15);
@@ -42,108 +47,74 @@ task("deploy:BondIssuer")
     console.log("Bond issuer", bondIssuer.address);
   });
 
-task("deploy:PerpetualTranche")
+task("deploy:PerpSystem")
   .addParam("bondIssuerAddress", "the address of the bond issuer", undefined, types.string, false)
   .addParam("collateralTokenAddress", "the address of the collateral token", undefined, types.string, false)
-  .addParam("name", "the ERC20 name", undefined, types.string, false)
-  .addParam("symbol", "the ERC20 symbol", undefined, types.string, false)
-  .addParam("pricingStrategyRef", "the pricing strategy to be used", "CDRPricingStrategy", types.string)
+  .addParam("perpName", "the ERC20 name of the perp token", undefined, types.string, false)
+  .addParam("perpSymbol", "the ERC20 symbol of the perp token", undefined, types.string, false)
+  .addParam("vaultName", "the ERC20 name of the vault token", undefined, types.string, false)
+  .addParam("vaultSymbol", "the ERC20 symbol of the vault token", undefined, types.string, false)
   .addParam("verify", "flag to set false for local deployments", true, types.boolean)
-
   .setAction(async function (args: TaskArguments, hre) {
-    const { bondIssuerAddress, collateralTokenAddress, name, symbol, pricingStrategyRef, verify } = args;
+    const { bondIssuerAddress, collateralTokenAddress, perpName, perpSymbol, vaultName, vaultSymbol, verify } = args;
     const deployer = (await hre.ethers.getSigners())[0];
     console.log("Signer", await deployer.getAddress());
+
+    const FeePolicy = await hre.ethers.getContractFactory("FeePolicy");
+    const feePolicy = await hre.upgrades.deployProxy(FeePolicy.connect(deployer));
+    await feePolicy.deployed();
 
     const PerpetualTranche = await hre.ethers.getContractFactory("PerpetualTranche");
     const perp = await hre.upgrades.deployProxy(PerpetualTranche.connect(deployer));
     await perp.deployed();
 
-    const FeeStrategy = await hre.ethers.getContractFactory("FeeStrategy");
-    const feeStrategy = await FeeStrategy.deploy(perp.address, perp.address);
-    await feeStrategy.deployed();
-    await (await feeStrategy.init("0", "0", "0")).wait();
-
-    const PricingStrategy = await hre.ethers.getContractFactory(pricingStrategyRef);
-    const pricingStrategy = await PricingStrategy.deploy();
-    await pricingStrategy.deployed();
-
-    const TrancheClassDiscountStrategy = await hre.ethers.getContractFactory("TrancheClassDiscountStrategy");
-    const discountStrategy = await TrancheClassDiscountStrategy.deploy();
-    await discountStrategy.deployed();
-    await (await discountStrategy.init()).wait();
+    const RolloverVault = await hre.ethers.getContractFactory("RolloverVault");
+    const vault = await hre.upgrades.deployProxy(RolloverVault.connect(deployer));
+    await vault.deployed();
 
     console.log("perp", perp.address);
-    console.log("feeStrategy", feeStrategy.address);
-    console.log("pricingStrategy", pricingStrategy.address);
-    console.log("discountStrategy", discountStrategy.address);
+    console.log("vault", vault.address);
+    console.log("feePolicy", feePolicy.address);
 
-    const initTx = await perp.init(
-      name,
-      symbol,
+    console.log("fee policy init");
+    await (await feePolicy.init()).wait();
+
+    console.log("perp init");
+    const perpInitTx = await perp.init(
+      perpName,
+      perpSymbol,
       collateralTokenAddress,
       bondIssuerAddress,
-      feeStrategy.address,
-      pricingStrategy.address,
-      discountStrategy.address,
+      feePolicy.address,
     );
-    await initTx.wait();
+    await perpInitTx.wait();
+
+    console.log("vault init");
+    const vaultInitTx = await vault.init(vaultName, vaultSymbol, perp.address, feePolicy.address);
+    await vaultInitTx.wait();
+
+    console.log("point perp to vault");
+    await (await perp.updateVault(vault.address)).wait();
 
     if (verify) {
       await sleep(15);
+      // We just need to verify the proxy once
       await hre.run("verify:contract", {
-        address: feeStrategy.address,
-        constructorArguments: [perp.address, perp.address, "1000000", "1000000", "0"],
+        address: feePolicy.address,
       });
-
+      // Verifying implementations
       await hre.run("verify:contract", {
-        address: pricingStrategy.address,
+        address: await getImplementationAddress(hre.ethers.provider, feePolicy.address),
       });
-
       await hre.run("verify:contract", {
-        address: discountStrategy.address,
+        address: await getImplementationAddress(hre.ethers.provider, perp.address),
       });
-
       await hre.run("verify:contract", {
-        address: perp.address,
+        address: await getImplementationAddress(hre.ethers.provider, vault.address),
       });
     } else {
       console.log("Skipping verification");
     }
-  });
-
-task("deploy:DiscountStrategy:computeDiscountHash")
-  .addParam("collateralTokenAddress", "the address of the collateral token", undefined, types.string, false)
-  .addParam("trancheRatios", "the bond's tranche ratios", undefined, types.json, false)
-  .addParam("trancheIndex", "the tranche's index", undefined, types.string, false)
-  .setAction(async function (args: TaskArguments, hre) {
-    const { collateralTokenAddress, trancheRatios, trancheIndex } = args;
-    const abiCoder = new hre.ethers.utils.AbiCoder();
-    const hash = hre.ethers.utils.keccak256(
-      abiCoder.encode(["address", "uint256[]", "uint256"], [collateralTokenAddress, trancheRatios, trancheIndex]),
-    );
-    console.log(hash);
-  });
-
-task("deploy:DiscountStrategy:setDiscount")
-  .addParam("discountStrategyAddress", "the address of the discount strategy contract", undefined, types.string, false)
-  .addParam("collateralTokenAddress", "the address of the collateral token", undefined, types.string, false)
-  .addParam("trancheRatios", "the bond's tranche ratios", undefined, types.json, false)
-  .addParam("trancheIndex", "the tranche's index", undefined, types.string, false)
-  .addParam("trancheDiscount", "the discounts to be set in float", undefined, types.string, false)
-  .setAction(async function (args: TaskArguments, hre) {
-    const { discountStrategyAddress, collateralTokenAddress, trancheRatios, trancheIndex, trancheDiscount } = args;
-    const discountStrategy = await hre.ethers.getContractAt("TrancheClassDiscountStrategy", discountStrategyAddress);
-    const abiCoder = new hre.ethers.utils.AbiCoder();
-    const hash = hre.ethers.utils.keccak256(
-      abiCoder.encode(["address", "uint256[]", "uint8"], [collateralTokenAddress, trancheRatios, trancheIndex]),
-    );
-    const tx = await discountStrategy.updateDefinedDiscount(
-      hash,
-      hre.ethers.utils.parseUnits(trancheDiscount, await discountStrategy.decimals()),
-    );
-    console.log(tx.hash);
-    await tx.wait();
   });
 
 task("deploy:Router")
@@ -151,8 +122,8 @@ task("deploy:Router")
   .setAction(async function (args: TaskArguments, hre) {
     console.log("Signer", await (await hre.ethers.getSigners())[0].getAddress());
 
-    const RouterV1 = await hre.ethers.getContractFactory("RouterV1");
-    const router = await RouterV1.deploy();
+    const RouterV2 = await hre.ethers.getContractFactory("RouterV2");
+    const router = await RouterV2.deploy();
     await router.deployed();
     console.log("router", router.address);
 
