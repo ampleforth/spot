@@ -8,87 +8,84 @@
 # https://docs.prl.one/buttonwood/developers/deployed-contracts/goerli-testnet
 
 yarn hardhat --network goerli deploy:BondIssuer \
-  --bond-factory-address "0xdDe914EfBF5C472a590e61658d8E342d17E3AAB7" \
+  --bond-factory-address "0x98babbD6B3CfD2542B3401B376880E8b078B8091" \
   --bond-duration "3600" \
   --issue-frequency "1200" \
   --issue-window-offset "0" \
   --collateral-token-address "0x08c5b39F000705ebeC8427C1d64D6262392944EE" \
-  --tranche-ratios "[500,500]"
+  --tranche-ratios "[333,667]" \
+  --issue true
 
-yarn hardhat --network goerli deploy:PerpetualTranche \
-  --bond-issuer-address "0xbC060a1EbEC5eC869C4D51d4563244d4a223D307" \
-  --collateral-token-address "0x74567107828843070087F1c6ec8322A3e8450725" \
-  --name "SPOT" \
-  --symbol "SPOT" \
-  --pricing-strategy-ref "CDRPricingStrategy"
-
-yarn hardhat --network goerli deploy:DiscountStrategy:setDiscount \
-  --discount-strategy-address "0xEDB171C18cE90B633DB442f2A6F72874093b49Ef" \
+yarn hardhat --network goerli deploy:PerpSystem \
+  --bond-issuer-address "0x2844757Aa3f942b11B9290Ce044fba1663E7c322" \
   --collateral-token-address "0x08c5b39F000705ebeC8427C1d64D6262392944EE" \
-  --tranche-ratios "[500,500]" \
-  --tranche-index "0" \
-  --tranche-discount "1.0"
+  --perp-name "SPOT" \
+  --perp-symbol "SPOT" \
+  --vault-name "Staked Ampleforth" \
+  --vault-symbol "stAMPL"
 
 yarn hardhat --network goerli deploy:Router
 
-yarn hardhat --network goerli deploy:RolloverVault \
-    --name "SPOT Rollover Vault Note" \
-    --symbol "SPOT-RV-NOTE" \
-    --perp-address "0x95014Bc18F82a98CFAA3253fbD3184125A01f848"
+yarn hardhat --network goerli ops:perp:updateTolerableTrancheMaturity \
+  --address 0x941AcD21154052357302c667cfdf69a2Af0914E5 \
+  --minimum 600 \
+  --maximum 3600
 
+yarn hardhat --network goerli ops:fee:setSwapFees \
+  --address "0x89d619Cf7d3988cC36E96172A4227F9b5588B6BC" \
+  --fee-perc "0.05"
 
 ########################################################################
 ## OPS
-yarn hardhat --network goerli ops:perp:info 0x95014Bc18F82a98CFAA3253fbD3184125A01f848
-
-yarn hardhat --network goerli ops:updateState 0x95014Bc18F82a98CFAA3253fbD3184125A01f848
-
-yarn hardhat --network goerli ops:trancheAndDeposit \
-  --router-address 0x8be9cC958680A6b0AE8609150B489a161baD3dCd \
-  --perp-address 0x6Da15e0ab0524841Ac5e55a77CFC3F5CB040a7B7 \
-  --collateral-amount 250
-
-yarn hardhat --network goerli ops:redeem \
-  --router-address 0x8be9cC958680A6b0AE8609150B489a161baD3dCd \
-  --perp-address 0x6Da15e0ab0524841Ac5e55a77CFC3F5CB040a7B7 \
-  --amount 10
-
-yarn hardhat --network goerli ops:redeemTranches \
-  --bond-issuer-address 0xbC060a1EbEC5eC869C4D51d4563244d4a223D307
-
-yarn hardhat --network goerli ops:redeemTranches \
-  --bond-issuer-address 0xAb7d17864463dEdA6c19060Ad6556e1B218c5Ba0 
-
-yarn hardhat --network goerli ops:preview_tx:trancheAndRollover \
-  --wallet-address [INSERT_WALLET_ADDRESS] \
-  --router-address 0x5e902bdCC408550b4BD612678bE2d57677664Dc9 \
-  --perp-address 0x95014Bc18F82a98CFAA3253fbD3184125A01f848
-
-yarn hardhat --network goerli ops:trancheAndRollover \
-  --router-address 0x8be9cC958680A6b0AE8609150B489a161baD3dCd \
-  --perp-address 0x6Da15e0ab0524841Ac5e55a77CFC3F5CB040a7B7 \
-  --collateral-amount 200
+yarn hardhat --network goerli ops:perp:info 0x941AcD21154052357302c667cfdf69a2Af0914E5
+yarn hardhat --network goerli ops:vault:info 0xc2f58c538D5440e54195b444B45C790316C41e32
+yarn hardhat --network goerli ops:perp:updateState 0x941AcD21154052357302c667cfdf69a2Af0914E5
+yarn hardhat --network goerli ops:vault:recoverAndRedeploy \
+  --vault-address 0xc2f58c538D5440e54195b444B45C790316C41e32
+yarn hardhat --network goerli ops:vault:deploy \
+  --vault-address 0xc2f58c538D5440e54195b444B45C790316C41e32
+yarn hardhat --network goerli ops:vault:recover \
+  --vault-address 0xc2f58c538D5440e54195b444B45C790316C41e32
 
 yarn hardhat --network goerli ops:rebase:MockAMPL \
-  --ampl-address "0x74567107828843070087F1c6ec8322A3e8450725" \
+  --ampl-address "0x08c5b39F000705ebeC8427C1d64D6262392944EE" \
   --rebase-perc 0.1
 
-yarn hardhat --network goerli ops:vault:info 0xca36B64BEbdf141623911987b93767dcA4bF6F1f
+# Perp
+yarn hardhat --network goerli ops:perp:trancheAndDeposit \
+  --router-address 0x175a6256562b13D3A41d0C702Af7E3859E5b53bf \
+  --perp-address 0x941AcD21154052357302c667cfdf69a2Af0914E5 \
+  --collateral-amount 250
 
+yarn hardhat --network goerli ops:perp:redeem \
+  --router-address 0x175a6256562b13D3A41d0C702Af7E3859E5b53bf \
+  --perp-address 0x941AcD21154052357302c667cfdf69a2Af0914E5 \
+  --amount 10
+
+## Vault
 yarn hardhat --network goerli ops:vault:deposit \
-  --vault-address 0xca36B64BEbdf141623911987b93767dcA4bF6F1f \
-  --underlying-amount 1
+  --vault-address 0xc2f58c538D5440e54195b444B45C790316C41e32 \
+  --underlying-amount 250
 
 yarn hardhat --network goerli ops:vault:redeem \
-  --vault-address 0xca36B64BEbdf141623911987b93767dcA4bF6F1f \
-  --amount 1
+  --vault-address 0xc2f58c538D5440e54195b444B45C790316C41e32 \
+  --amount "0.001"
 
-yarn hardhat --network goerli ops:vault:recoverAndRedeploy \
-  --vault-address 0xca36B64BEbdf141623911987b93767dcA4bF6F1f
+yarn hardhat --network goerli ops:vault:swapUnderlyingForPerps \
+  --vault-address 0xc2f58c538D5440e54195b444B45C790316C41e32 \
+  --underlying-amount 10
+
+yarn hardhat --network goerli ops:vault:swapPerpsForUnderlying \
+  --vault-address 0xc2f58c538D5440e54195b444B45C790316C41e32 \
+  --perp-amount 10
+
+## Tranches
+yarn hardhat --network goerli ops:redeemTranches \
+  --bond-issuer-address 0x2844757Aa3f942b11B9290Ce044fba1663E7c322
 
 ########################################################################
 ## upgrade
 
-yarn hardhat --network goerli upgrade:perp:testnet 0x95014Bc18F82a98CFAA3253fbD3184125A01f848
+yarn hardhat --network goerli upgrade:perp:testnet 0x941AcD21154052357302c667cfdf69a2Af0914E5
 
 yarn hardhat --network goerli upgrade:rolloverVault:testnet 0xca36B64BEbdf141623911987b93767dcA4bF6F1f
