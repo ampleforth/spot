@@ -32,10 +32,6 @@ interface IFeePolicy {
     ///         as a fixed-point number with {DECIMALS} decimal places.
     function computeVaultBurnFeePerc() external view returns (uint256);
 
-    /// @return The fixed amount fee charged by the vault during each deployment,
-    ///         denominated in the underlying collateral asset.
-    function computeVaultDeploymentFee() external view returns (uint256);
-
     /// @param dr The current system deviation ratio.
     /// @param dr_ The deviation ratio of the system after the operation is complete.
     /// @return The percentage of perp tokens out to be charged as swap fees by the vault,

@@ -279,9 +279,6 @@ contract RolloverVault is
         IERC20Upgradeable underlying_ = underlying;
         IPerpetualTranche perp_ = perp;
 
-        // We first pay the protocol
-        _deductProtocolFee(underlying_);
-
         // `minUnderlyingBal` worth of underlying liquidity is excluded from the usable balance
         uint256 usableBal = underlying_.balanceOf(address(this));
         if (usableBal <= minUnderlyingBal) {
@@ -893,11 +890,6 @@ contract RolloverVault is
         if (trancheAmts[0] > 0) {
             bond.redeem(trancheAmts);
         }
-    }
-
-    // @dev Transfers a the set fixed fee amount of underlying tokens to the owner.
-    function _deductProtocolFee(IERC20Upgradeable underlying_) private {
-        underlying_.safeTransfer(owner(), feePolicy.computeVaultDeploymentFee());
     }
 
     /// @dev Syncs balance and updates the deployed list based on the vault's token balance.

@@ -277,24 +277,6 @@ describe("FeePolicy", function () {
     });
   });
 
-  describe("#updateVaultDeploymentFees", function () {
-    describe("when triggered by non-owner", function () {
-      it("should revert", async function () {
-        await expect(feePolicy.connect(otherUser).updateVaultDeploymentFees(toAmt("25"))).to.be.revertedWith(
-          "Ownable: caller is not the owner",
-        );
-      });
-    });
-
-    describe("when triggered by owner", function () {
-      it("should update the vault deployment fee", async function () {
-        expect(await feePolicy.computeVaultDeploymentFee()).to.eq("0");
-        await feePolicy.connect(deployer).updateVaultDeploymentFees(toAmt("25"));
-        expect(await feePolicy.computeVaultDeploymentFee()).to.eq(toAmt("25"));
-      });
-    });
-  });
-
   describe("#updateVaultUnderlyingToPerpSwapFeePerc", function () {
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
@@ -365,7 +347,6 @@ describe("FeePolicy", function () {
       await feePolicy.updateVaultMintFees(toPerc("0.05"));
       await feePolicy.updateVaultBurnFees(toPerc("0.075"));
       await feePolicy.updateDeviationRatioBounds(toPerc("0.85"), toPerc("1.15"));
-      await feePolicy.updateVaultDeploymentFees(toAmt("25"));
     });
 
     describe("when dr is decreasing", function () {
@@ -515,12 +496,6 @@ describe("FeePolicy", function () {
         expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.75"))).to.eq(toPerc("0.00580663"));
         expect(await feePolicy.computePerpRolloverFeePerc(toPerc("2"))).to.eq(toPerc("0.00680345"));
         expect(await feePolicy.computePerpRolloverFeePerc(toPerc("5"))).to.eq(toPerc("0.00768997"));
-      });
-    });
-
-    describe("deployment fee", function () {
-      it("should compute fees as expected", async function () {
-        expect(await feePolicy.computeVaultDeploymentFee()).to.eq(toAmt("25"));
       });
     });
   });

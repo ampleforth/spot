@@ -111,11 +111,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     //-----------------------------------------------------------------------------
     // Vault fee parameters
 
-    /// @notice The fixed amount vault fee charged during each deployment.
-    /// @dev Denominated in the underlying collateral asset and
-    ///      Paid by the vault note holders to the system owner.
-    uint256 public vaultDeploymentFee;
-
     /// @notice The percentage fee charged on minting vault notes.
     uint256 public vaultMintFeePerc;
 
@@ -139,7 +134,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         perpBurnFeePerc = 0;
         vaultMintFeePerc = 0;
         vaultBurnFeePerc = 0;
-        vaultDeploymentFee = 0;
 
         // initializing swap fees to 100%, to disable swapping initially
         vaultUnderlyingToPerpSwapFeePerc = ONE;
@@ -234,12 +228,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         vaultBurnFeePerc = vaultBurnFeePerc_;
     }
 
-    /// @notice Updates the vault's deployment fee parameters.
-    /// @param vaultDeploymentFee_ The new deployment fee denominated in the underlying tokens.
-    function updateVaultDeploymentFees(uint256 vaultDeploymentFee_) external onlyOwner {
-        vaultDeploymentFee = vaultDeploymentFee_;
-    }
-
     /// @notice Updates the vault's share of the underlying to perp swap fee.
     /// @param feePerc The new fee percentage.
     function updateVaultUnderlyingToPerpSwapFeePerc(uint256 feePerc) external onlyOwner {
@@ -294,11 +282,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @inheritdoc IFeePolicy
     function computeVaultBurnFeePerc() external view override returns (uint256) {
         return vaultBurnFeePerc;
-    }
-
-    /// @inheritdoc IFeePolicy
-    function computeVaultDeploymentFee() external view override returns (uint256) {
-        return vaultDeploymentFee;
     }
 
     /// @inheritdoc IFeePolicy

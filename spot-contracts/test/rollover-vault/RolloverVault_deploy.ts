@@ -386,27 +386,22 @@ describe("RolloverVault", function () {
       });
     });
 
-    describe("typical deploy with deployment fee", function () {
+    describe("typical deploy", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
         await rebase(collateralToken, rebaseOracle, -0.9);
-        await feePolicy.computeVaultDeploymentFee.returns(toFixedPtAmt("10"));
         await feePolicy.computePerpRolloverFeePerc.returns(toPercFixedPtAmt("-0.01"));
         await collateralToken.transfer(vault.address, toFixedPtAmt("1000"));
 
         txFn = () => vault.deploy();
       });
 
-      it("should transfer deployment fee to owner", async function () {
-        await expect(txFn).to.changeTokenBalances(collateralToken, [deployer], [toFixedPtAmt("10")]);
-      });
-
       it("should tranche and rollover", async function () {
         const tx = txFn();
 
         // Tranche
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[0].address, toFixedPtAmt("198"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[1].address, toFixedPtAmt("792"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[0].address, toFixedPtAmt("200"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(rolloverInTranches[1].address, toFixedPtAmt("800"));
 
         // Rollover
         await expect(tx).to.emit(vault, "AssetSynced").withArgs(reserveTranches[1].address, toFixedPtAmt("200"));
@@ -422,7 +417,7 @@ describe("RolloverVault", function () {
         // Final
         await expect(tx)
           .to.emit(vault, "AssetSynced")
-          .withArgs(collateralToken.address, toFixedPtAmt("415.94059405940594"));
+          .withArgs(collateralToken.address, toFixedPtAmt("425.940594059405940000"));
       });
 
       it("should update the list of deployed assets", async function () {
@@ -432,7 +427,7 @@ describe("RolloverVault", function () {
           vault,
           [collateralToken, reserveTranches[1], rolloverInTranches[0], rolloverInTranches[1]],
           [
-            toFixedPtAmt("415.94059405940594"),
+            toFixedPtAmt("425.940594059405940000"),
             toFixedPtAmt("200"),
             toFixedPtAmt("0.000000000000000118"),
             toFixedPtAmt("475.247524752475248"),
