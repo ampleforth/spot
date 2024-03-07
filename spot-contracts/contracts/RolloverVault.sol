@@ -771,11 +771,6 @@ contract RolloverVault is
         uint256 seniorTR,
         uint256 perpAmtToMint
     ) private {
-        // Skip if mint amount is zero
-        if (perpAmtToMint <= 0) {
-            return;
-        }
-
         // Tranche as needed
         IBondController depositBond = perp_.getDepositBond();
         ITranche trancheIntoPerp = perp_.getDepositTranche();
@@ -804,11 +799,6 @@ contract RolloverVault is
     ///      and receives tranche tokens in return.
     ///      Performs some book-keeping to keep track of the vault's assets.
     function _tranche(IBondController bond, IERC20Upgradeable underlying_, uint256 underlyingAmt) private {
-        // Skip if amount is zero
-        if (underlyingAmt <= 0) {
-            return;
-        }
-
         // Get bond tranches
         BondTranches memory bt = bond.getTranches();
 
