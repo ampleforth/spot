@@ -530,6 +530,9 @@ contract PerpetualTranche is
         ITranche trancheIn,
         uint256 trancheInAmt
     ) external override afterStateUpdate returns (uint256) {
+        if (!_isDepositTranche(trancheIn)) {
+            revert UnexpectedAsset();
+        }
         return _computeMintAmt(trancheIn, trancheInAmt);
     }
 
@@ -546,6 +549,9 @@ contract PerpetualTranche is
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable
     ) external override afterStateUpdate returns (RolloverData memory) {
+        if (!_isAcceptableRollover(trancheIn, tokenOut)) {
+            revert UnacceptableRollover();
+        }
         return _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable);
     }
 
@@ -677,25 +683,14 @@ contract PerpetualTranche is
 
         //-----------------------------------------------------------------------------
         // We charge no mint fee when interacting with other callers within the system.
-        uint256 feePerc = 0;
-        uint256 perpTVL = 0;
-        if (!_isProtocolCaller()) {
-            SubscriptionParams memory s = _querySubscriptionState();
-            feePerc = feePolicy.computePerpMintFeePerc(
-                feePolicy.computeDeviationRatio(s),
-                feePolicy.computeDeviationRatio(s.perpTVL + valueIn, s.vaultTVL, s.seniorTR)
-            );
-            perpTVL = s.perpTVL;
-        } else {
-            perpTVL = _reserveValue();
-        }
+        uint256 feePerc = _isProtocolCaller() ? 0 : feePolicy.computePerpMintFeePerc();
         //-----------------------------------------------------------------------------
 
         // Compute mint amt
         uint256 perpSupply = totalSupply();
         uint256 perpAmtMint = valueIn;
         if (perpSupply > 0) {
-            perpAmtMint = perpAmtMint.mulDiv(perpSupply, perpTVL);
+            perpAmtMint = perpAmtMint.mulDiv(perpSupply, _reserveValue());
         }
 
         // The mint fees are settled by simply minting fewer perps.
@@ -712,19 +707,7 @@ contract PerpetualTranche is
 
         //-----------------------------------------------------------------------------
         // We charge no burn fee when interacting with other parts of the system.
-        uint256 feePerc = 0;
-
-        if (!_isProtocolCaller()) {
-            SubscriptionParams memory s = _querySubscriptionState();
-            feePerc = feePolicy.computePerpBurnFeePerc(
-                feePolicy.computeDeviationRatio(s),
-                feePolicy.computeDeviationRatio(
-                    s.perpTVL.mulDiv(perpSupply - perpAmtBurnt, perpSupply),
-                    s.vaultTVL,
-                    s.seniorTR
-                )
-            );
-        }
+        uint256 feePerc = _isProtocolCaller() ? 0 : feePolicy.computePerpBurnFeePerc();
         //-----------------------------------------------------------------------------
 
         // Compute redemption amounts
@@ -758,7 +741,13 @@ contract PerpetualTranche is
         // between `trancheInAmt` and `tokenOutAmt`.
         //
         int256 feePerc = feePolicy.computePerpRolloverFeePerc(
-            feePolicy.computeDeviationRatio(_querySubscriptionState())
+            feePolicy.computeDeviationRatio(
+                SubscriptionParams({
+                    perpTVL: _reserveValue(),
+                    vaultTVL: IRolloverVault(vault).getTVL(),
+                    seniorTR: _depositBond.getSeniorTrancheRatio()
+                })
+            )
         );
         //-----------------------------------------------------------------------------
 
@@ -908,16 +897,6 @@ contract PerpetualTranche is
     /// @dev Checks if the given token is in the reserve.
     function _inReserve(IERC20Upgradeable token) private view returns (bool) {
         return _reserves.contains(address(token));
-    }
-
-    /// @dev Queries the current subscription state of the perp and vault systems.
-    function _querySubscriptionState() private view returns (SubscriptionParams memory) {
-        return
-            SubscriptionParams({
-                perpTVL: _reserveValue(),
-                vaultTVL: IRolloverVault(vault).getTVL(),
-                seniorTR: _depositBond.getSeniorTrancheRatio()
-            });
     }
 
     /// @dev Calculates the total value of all the tranches in the reserve.

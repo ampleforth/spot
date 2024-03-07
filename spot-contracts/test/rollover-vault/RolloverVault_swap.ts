@@ -50,9 +50,9 @@ describe("RolloverVault", function () {
     const FeePolicy = await ethers.getContractFactory("FeePolicy");
     feePolicy = await smock.fake(FeePolicy);
     await feePolicy.decimals.returns(8);
-    await feePolicy.computePerpMintFeePerc.returns("0");
-    await feePolicy.computePerpBurnFeePerc.returns("0");
-    await feePolicy.computePerpRolloverFeePerc.returns("0");
+    await feePolicy.computePerpMintFeePerc.returns(0);
+    await feePolicy.computePerpBurnFeePerc.returns(0);
+    await feePolicy.computePerpRolloverFeePerc.returns(0);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -91,7 +91,7 @@ describe("RolloverVault", function () {
       [collateralToken, ...reserveTranches.slice(-3)],
       [toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
     );
-    await checkVaultAssetComposition(vault, [collateralToken], ["0"]);
+    await checkVaultAssetComposition(vault, [collateralToken], [0]);
     expect(await vault.assetCount()).to.eq(1);
 
     await mintCollteralToken(collateralToken, toFixedPtAmt("100000"), deployer);
@@ -119,14 +119,15 @@ describe("RolloverVault", function () {
   describe("#swapUnderlyingForPerps", function () {
     describe("when fee is zero", function () {
       beforeEach(async function () {
-        await feePolicy.computeUnderlyingToPerpSwapFeePercs.returns([0, 0]);
+        await feePolicy.computePerpMintFeePerc.returns(0);
+        await feePolicy.computeUnderlyingToPerpVaultSwapFeePerc.returns(0);
       });
 
       describe("when perp price is 1", function () {
         it("should compute swap amount", async function () {
           const s = await vault.callStatic.computeUnderlyingToPerpSwapAmt(toFixedPtAmt("100"));
           expect(s[0]).to.eq(toFixedPtAmt("100"));
-          expect(s[1]).to.eq("0");
+          expect(s[1]).to.eq(0);
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("800"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2000"));
           expect(s[2].seniorTR).to.eq("200");
@@ -157,7 +158,7 @@ describe("RolloverVault", function () {
         it("should compute swap amount", async function () {
           const s = await vault.callStatic.computeUnderlyingToPerpSwapAmt(toFixedPtAmt("100"));
           expect(s[0]).to.eq(toFixedPtAmt("50"));
-          expect(s[1]).to.eq("0");
+          expect(s[1]).to.eq(0);
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("1600"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2000"));
           expect(s[2].seniorTR).to.eq("200");
@@ -187,7 +188,7 @@ describe("RolloverVault", function () {
         it("should compute swap amount", async function () {
           const s = await vault.callStatic.computeUnderlyingToPerpSwapAmt(toFixedPtAmt("100"));
           expect(s[0]).to.eq(toFixedPtAmt("200"));
-          expect(s[1]).to.eq("0");
+          expect(s[1]).to.eq(0);
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("400"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("120"));
           expect(s[2].seniorTR).to.eq("200");
@@ -217,7 +218,7 @@ describe("RolloverVault", function () {
         it("should compute swap amount", async function () {
           const s = await vault.callStatic.computeUnderlyingToPerpSwapAmt(toFixedPtAmt("100"));
           expect(s[0]).to.eq(toFixedPtAmt("100"));
-          expect(s[1]).to.eq("0");
+          expect(s[1]).to.eq(0);
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("800"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("1780"));
           expect(s[2].seniorTR).to.eq("200");
@@ -248,7 +249,7 @@ describe("RolloverVault", function () {
         it("should compute swap amount", async function () {
           const s = await vault.callStatic.computeUnderlyingToPerpSwapAmt(toFixedPtAmt("100"));
           expect(s[0]).to.eq(toFixedPtAmt("100"));
-          expect(s[1]).to.eq("0");
+          expect(s[1]).to.eq(0);
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("800"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2220"));
           expect(s[2].seniorTR).to.eq("200");
@@ -274,10 +275,8 @@ describe("RolloverVault", function () {
 
     describe("when fee is not zero", function () {
       beforeEach(async function () {
-        await feePolicy.computeUnderlyingToPerpSwapFeePercs.returns([
-          toPercFixedPtAmt("0.05"),
-          toPercFixedPtAmt("0.1"),
-        ]);
+        await feePolicy.computePerpMintFeePerc.returns(toPercFixedPtAmt("0.05"));
+        await feePolicy.computeUnderlyingToPerpVaultSwapFeePerc.returns(toPercFixedPtAmt("0.1"));
       });
 
       it("should compute swap amount", async function () {
@@ -292,14 +291,14 @@ describe("RolloverVault", function () {
 
     describe("when swap amount is zero", function () {
       it("should be reverted", async function () {
-        await expect(vault.swapUnderlyingForPerps("0")).to.be.revertedWithCustomError(vault, "UnacceptableSwap");
+        await expect(vault.swapUnderlyingForPerps(0)).to.be.revertedWithCustomError(vault, "UnacceptableSwap");
       });
     });
 
     describe("when absolute liquidity is too low", function () {
       beforeEach(async function () {
         await vault.updateMinUnderlyingBal(toFixedPtAmt("1000"));
-        await vault.updateMinUnderlyingPerc("0");
+        await vault.updateMinUnderlyingPerc(0);
       });
       it("should be reverted", async function () {
         await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("50"))).to.be.revertedWithCustomError(
@@ -312,7 +311,7 @@ describe("RolloverVault", function () {
 
     describe("when percentage of liquidity is too low", function () {
       beforeEach(async function () {
-        await vault.updateMinUnderlyingBal("0");
+        await vault.updateMinUnderlyingBal(0);
         await vault.updateMinUnderlyingPerc(toPercFixedPtAmt("0.40"));
       });
       it("should be reverted", async function () {
@@ -326,7 +325,8 @@ describe("RolloverVault", function () {
 
     describe("when fee is 100%", function () {
       it("should be reverted", async function () {
-        await feePolicy.computeUnderlyingToPerpSwapFeePercs.returns([0, toPercFixedPtAmt("1")]);
+        await feePolicy.computePerpMintFeePerc.returns(0);
+        await feePolicy.computeUnderlyingToPerpVaultSwapFeePerc.returns(toPercFixedPtAmt("1"));
         await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("100"))).to.be.revertedWithCustomError(
           vault,
           "UnacceptableSwap",
@@ -336,7 +336,8 @@ describe("RolloverVault", function () {
 
     describe("when fee is greater than 100%", function () {
       it("should be reverted", async function () {
-        await feePolicy.computeUnderlyingToPerpSwapFeePercs.returns([toPercFixedPtAmt("0.05"), toPercFixedPtAmt("1")]);
+        await feePolicy.computePerpMintFeePerc.returns(toPercFixedPtAmt("0.05"));
+        await feePolicy.computeUnderlyingToPerpVaultSwapFeePerc.returns(toPercFixedPtAmt("1"));
         await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("100"))).to.be.reverted;
       });
     });
@@ -344,7 +345,8 @@ describe("RolloverVault", function () {
     describe("on successful swap with zero fees", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.computeUnderlyingToPerpSwapFeePercs.returns([0, 0]);
+        await feePolicy.computePerpMintFeePerc.returns(0);
+        await feePolicy.computeUnderlyingToPerpVaultSwapFeePerc.returns(0);
         txFn = () => vault.swapUnderlyingForPerps(toFixedPtAmt("100"));
       });
 
@@ -354,7 +356,7 @@ describe("RolloverVault", function () {
           .to.emit(perp, "Transfer")
           .withArgs(constants.AddressZero, vault.address, toFixedPtAmt("100"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("900"));
-        expect(await perp.balanceOf(vault.address)).to.eq("0");
+        expect(await perp.balanceOf(vault.address)).to.eq(0);
       });
 
       it("should return the perp amt", async function () {
@@ -373,7 +375,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          ["0", toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
+          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
         );
 
         await checkVaultAssetComposition(
@@ -387,7 +389,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          ["0", toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("300")],
+          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("300")],
         );
 
         await checkVaultAssetComposition(
@@ -407,7 +409,8 @@ describe("RolloverVault", function () {
     describe("on successful swap with zero perp fees", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.computeUnderlyingToPerpSwapFeePercs.returns([0, toPercFixedPtAmt("0.1")]);
+        await feePolicy.computePerpMintFeePerc.returns(0);
+        await feePolicy.computeUnderlyingToPerpVaultSwapFeePerc.returns(toPercFixedPtAmt("0.1"));
         txFn = () => vault.swapUnderlyingForPerps(toFixedPtAmt("100"));
       });
 
@@ -417,7 +420,7 @@ describe("RolloverVault", function () {
           .to.emit(perp, "Transfer")
           .withArgs(constants.AddressZero, vault.address, toFixedPtAmt("90"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("890"));
-        expect(await perp.balanceOf(vault.address)).to.eq("0");
+        expect(await perp.balanceOf(vault.address)).to.eq(0);
       });
 
       it("should return the perp amt", async function () {
@@ -436,7 +439,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          ["0", toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
+          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
         );
 
         await checkVaultAssetComposition(
@@ -450,7 +453,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          ["0", toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("290")],
+          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("290")],
         );
 
         await checkVaultAssetComposition(
@@ -470,11 +473,8 @@ describe("RolloverVault", function () {
     describe("on successful swap", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.computePerpMintFeePerc.returns(toPercFixedPtAmt("1")); // though perp fee is set, it should ignore
-        await feePolicy.computeUnderlyingToPerpSwapFeePercs.returns([
-          toPercFixedPtAmt("0.05"),
-          toPercFixedPtAmt("0.1"),
-        ]);
+        await feePolicy.computePerpMintFeePerc.returns(toPercFixedPtAmt("0.05"));
+        await feePolicy.computeUnderlyingToPerpVaultSwapFeePerc.returns(toPercFixedPtAmt("0.1"));
         txFn = () => vault.swapUnderlyingForPerps(toFixedPtAmt("100"));
       });
 
@@ -484,7 +484,7 @@ describe("RolloverVault", function () {
           .to.emit(perp, "Transfer")
           .withArgs(constants.AddressZero, vault.address, toFixedPtAmt("90"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("885"));
-        expect(await perp.balanceOf(vault.address)).to.eq("0");
+        expect(await perp.balanceOf(vault.address)).to.eq(0);
       });
 
       it("should burn perps as fee", async function () {
@@ -509,7 +509,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          ["0", toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
+          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
         );
 
         await checkVaultAssetComposition(
@@ -523,7 +523,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          ["0", toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("290")],
+          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("290")],
         );
 
         await checkVaultAssetComposition(
@@ -543,7 +543,8 @@ describe("RolloverVault", function () {
     describe("on successful swap with imperfect rounding", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.computeUnderlyingToPerpSwapFeePercs.returns([toPercFixedPtAmt("0.1"), toPercFixedPtAmt("0.1")]);
+        await feePolicy.computePerpMintFeePerc.returns(toPercFixedPtAmt("0.1"));
+        await feePolicy.computeUnderlyingToPerpVaultSwapFeePerc.returns(toPercFixedPtAmt("0.1"));
         txFn = () => vault.swapUnderlyingForPerps(toFixedPtAmt("100.999999999999999999"));
       });
 
@@ -553,7 +554,7 @@ describe("RolloverVault", function () {
           .to.emit(perp, "Transfer")
           .withArgs(constants.AddressZero, vault.address, toFixedPtAmt("90.899999999999999999"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("880.799999999999999999"));
-        expect(await perp.balanceOf(vault.address)).to.eq("0");
+        expect(await perp.balanceOf(vault.address)).to.eq(0);
       });
 
       it("should burn perps as fee", async function () {
@@ -584,7 +585,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          ["0", toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
+          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
         );
 
         await checkVaultAssetComposition(
@@ -598,7 +599,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          ["0", toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("290.899999999999999999")],
+          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("290.899999999999999999")],
         );
 
         await checkVaultAssetComposition(
@@ -619,10 +620,8 @@ describe("RolloverVault", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
         await advancePerpQueueToBondMaturity(perp, await getDepositBond(perp));
-        await feePolicy.computeUnderlyingToPerpSwapFeePercs.returns([
-          toPercFixedPtAmt("0.05"),
-          toPercFixedPtAmt("0.1"),
-        ]);
+        await feePolicy.computePerpMintFeePerc.returns(toPercFixedPtAmt("0.05"));
+        await feePolicy.computeUnderlyingToPerpVaultSwapFeePerc.returns(toPercFixedPtAmt("0.1"));
         txFn = () => vault.swapUnderlyingForPerps(toFixedPtAmt("100"));
       });
 
@@ -632,7 +631,7 @@ describe("RolloverVault", function () {
           .to.emit(perp, "Transfer")
           .withArgs(constants.AddressZero, vault.address, toFixedPtAmt("90"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("885"));
-        expect(await perp.balanceOf(vault.address)).to.eq("0");
+        expect(await perp.balanceOf(vault.address)).to.eq(0);
       });
 
       it("should burn perps as fee", async function () {
@@ -690,14 +689,15 @@ describe("RolloverVault", function () {
   describe("#swapPerpsForUnderlying", function () {
     describe("when fee is zero", function () {
       beforeEach(async function () {
-        await feePolicy.computePerpToUnderlyingSwapFeePercs.returns([0, 0]);
+        await feePolicy.computePerpBurnFeePerc.returns(0);
+        await feePolicy.computePerpToUnderlyingVaultSwapFeePerc.returns(0);
       });
 
       describe("when perp price is 1", function () {
         it("should compute swap amount", async function () {
           const s = await vault.callStatic.computePerpToUnderlyingSwapAmt(toFixedPtAmt("100"));
           expect(s[0]).to.eq(toFixedPtAmt("100"));
-          expect(s[1]).to.eq("0");
+          expect(s[1]).to.eq(0);
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("800"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2000"));
           expect(s[2].seniorTR).to.eq("200");
@@ -711,7 +711,7 @@ describe("RolloverVault", function () {
         it("should compute swap amount", async function () {
           const s = await vault.callStatic.computePerpToUnderlyingSwapAmt(toFixedPtAmt("100"));
           expect(s[0]).to.eq(toFixedPtAmt("200"));
-          expect(s[1]).to.eq("0");
+          expect(s[1]).to.eq(0);
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("1600"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2000"));
           expect(s[2].seniorTR).to.eq("200");
@@ -725,7 +725,7 @@ describe("RolloverVault", function () {
         it("should compute swap amount", async function () {
           const s = await vault.callStatic.computePerpToUnderlyingSwapAmt(toFixedPtAmt("100"));
           expect(s[0]).to.eq(toFixedPtAmt("50"));
-          expect(s[1]).to.eq("0");
+          expect(s[1]).to.eq(0);
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("400"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("120"));
           expect(s[2].seniorTR).to.eq("200");
@@ -735,10 +735,8 @@ describe("RolloverVault", function () {
 
     describe("when fee is not zero", function () {
       beforeEach(async function () {
-        await feePolicy.computePerpToUnderlyingSwapFeePercs.returns([
-          toPercFixedPtAmt("0.05"),
-          toPercFixedPtAmt("0.15"),
-        ]);
+        await feePolicy.computePerpBurnFeePerc.returns(toPercFixedPtAmt("0.05"));
+        await feePolicy.computePerpToUnderlyingVaultSwapFeePerc.returns(toPercFixedPtAmt("0.15"));
       });
 
       it("should compute swap amount", async function () {
@@ -753,13 +751,14 @@ describe("RolloverVault", function () {
 
     describe("when swap amount is zero", function () {
       it("should be reverted", async function () {
-        await expect(vault.swapPerpsForUnderlying("0")).to.be.revertedWithCustomError(vault, "UnacceptableSwap");
+        await expect(vault.swapPerpsForUnderlying(0)).to.be.revertedWithCustomError(vault, "UnacceptableSwap");
       });
     });
 
     describe("when fee is 100%", function () {
       it("should be reverted", async function () {
-        await feePolicy.computePerpToUnderlyingSwapFeePercs.returns([0, toPercFixedPtAmt("1")]);
+        await feePolicy.computePerpBurnFeePerc.returns(0);
+        await feePolicy.computePerpToUnderlyingVaultSwapFeePerc.returns(toPercFixedPtAmt("1"));
         await expect(vault.swapPerpsForUnderlying(toFixedPtAmt("100"))).to.be.revertedWithCustomError(
           vault,
           "UnacceptableSwap",
@@ -769,7 +768,8 @@ describe("RolloverVault", function () {
 
     describe("when fee is greater than 100%", function () {
       it("should be reverted", async function () {
-        await feePolicy.computePerpToUnderlyingSwapFeePercs.returns([toPercFixedPtAmt("0.05"), toPercFixedPtAmt("1")]);
+        await feePolicy.computePerpBurnFeePerc.returns(toPercFixedPtAmt("0.05"));
+        await feePolicy.computePerpToUnderlyingVaultSwapFeePerc.returns(toPercFixedPtAmt("1"));
         await expect(vault.swapPerpsForUnderlying(toFixedPtAmt("100"))).to.be.reverted;
       });
     });
@@ -777,7 +777,8 @@ describe("RolloverVault", function () {
     describe("on successful swap with zero fees", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.computePerpToUnderlyingSwapFeePercs.returns([toPercFixedPtAmt("0"), toPercFixedPtAmt("0")]);
+        await feePolicy.computePerpBurnFeePerc.returns(0);
+        await feePolicy.computePerpToUnderlyingVaultSwapFeePerc.returns(0);
         txFn = () => vault.swapPerpsForUnderlying(toFixedPtAmt("100"));
       });
 
@@ -787,7 +788,7 @@ describe("RolloverVault", function () {
           .to.emit(perp, "Transfer")
           .withArgs(vault.address, constants.AddressZero, toFixedPtAmt("100"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("700"));
-        expect(await perp.balanceOf(vault.address)).to.eq("0");
+        expect(await perp.balanceOf(vault.address)).to.eq(0);
       });
 
       it("should return the underlying amt", async function () {
@@ -806,7 +807,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          ["0", toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
+          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
         );
 
         await checkVaultAssetComposition(
@@ -820,7 +821,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          ["0", toFixedPtAmt("175"), toFixedPtAmt("175"), toFixedPtAmt("175"), toFixedPtAmt("175")],
+          [0, toFixedPtAmt("175"), toFixedPtAmt("175"), toFixedPtAmt("175"), toFixedPtAmt("175")],
         );
 
         await checkVaultAssetComposition(
@@ -840,7 +841,8 @@ describe("RolloverVault", function () {
     describe("on successful swap with zero perp fees", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.computePerpToUnderlyingSwapFeePercs.returns([toPercFixedPtAmt("0"), toPercFixedPtAmt("0.1")]);
+        await feePolicy.computePerpBurnFeePerc.returns(0);
+        await feePolicy.computePerpToUnderlyingVaultSwapFeePerc.returns(toPercFixedPtAmt("0.1"));
         txFn = () => vault.swapPerpsForUnderlying(toFixedPtAmt("100"));
       });
 
@@ -850,7 +852,7 @@ describe("RolloverVault", function () {
           .to.emit(perp, "Transfer")
           .withArgs(vault.address, constants.AddressZero, toFixedPtAmt("100"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("700"));
-        expect(await perp.balanceOf(vault.address)).to.eq("0");
+        expect(await perp.balanceOf(vault.address)).to.eq(0);
       });
 
       it("should return the underlying amt", async function () {
@@ -869,7 +871,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          ["0", toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
+          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
         );
 
         await checkVaultAssetComposition(
@@ -883,7 +885,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          ["0", toFixedPtAmt("175"), toFixedPtAmt("175"), toFixedPtAmt("175"), toFixedPtAmt("175")],
+          [0, toFixedPtAmt("175"), toFixedPtAmt("175"), toFixedPtAmt("175"), toFixedPtAmt("175")],
         );
 
         await checkVaultAssetComposition(
@@ -903,11 +905,8 @@ describe("RolloverVault", function () {
     describe("on successful swap", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.computePerpBurnFeePerc.returns(toPercFixedPtAmt("1")); // though perp fee is set, it should ignore
-        await feePolicy.computePerpToUnderlyingSwapFeePercs.returns([
-          toPercFixedPtAmt("0.1"),
-          toPercFixedPtAmt("0.15"),
-        ]);
+        await feePolicy.computePerpBurnFeePerc.returns(toPercFixedPtAmt("0.1"));
+        await feePolicy.computePerpToUnderlyingVaultSwapFeePerc.returns(toPercFixedPtAmt("0.15"));
         txFn = () => vault.swapPerpsForUnderlying(toFixedPtAmt("100"));
       });
 
@@ -917,7 +916,7 @@ describe("RolloverVault", function () {
           .to.emit(perp, "Transfer")
           .withArgs(vault.address, constants.AddressZero, toFixedPtAmt("90"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("700"));
-        expect(await perp.balanceOf(vault.address)).to.eq("0");
+        expect(await perp.balanceOf(vault.address)).to.eq(0);
       });
 
       it("should burn perps as fee", async function () {
@@ -942,7 +941,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          ["0", toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
+          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
         );
 
         await checkVaultAssetComposition(
@@ -957,7 +956,7 @@ describe("RolloverVault", function () {
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
           [
-            "0",
+            0,
             toFixedPtAmt("177.215189873417721519"),
             toFixedPtAmt("177.215189873417721519"),
             toFixedPtAmt("177.215189873417721519"),
@@ -989,7 +988,8 @@ describe("RolloverVault", function () {
     describe("on successful swap with imperfect rounding", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.computePerpToUnderlyingSwapFeePercs.returns([toPercFixedPtAmt("0.1"), toPercFixedPtAmt("0.1")]);
+        await feePolicy.computePerpBurnFeePerc.returns(toPercFixedPtAmt("0.1"));
+        await feePolicy.computePerpToUnderlyingVaultSwapFeePerc.returns(toPercFixedPtAmt("0.1"));
         txFn = () => vault.swapPerpsForUnderlying(toFixedPtAmt("100.999999999999999999"));
       });
 
@@ -999,7 +999,7 @@ describe("RolloverVault", function () {
           .to.emit(perp, "Transfer")
           .withArgs(vault.address, constants.AddressZero, toFixedPtAmt("90.899999999999999999"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("699.000000000000000001"));
-        expect(await perp.balanceOf(vault.address)).to.eq("0");
+        expect(await perp.balanceOf(vault.address)).to.eq(0);
       });
 
       it("should burn perps as fee", async function () {
@@ -1026,7 +1026,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          ["0", toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
+          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
         );
 
         await checkVaultAssetComposition(
@@ -1041,7 +1041,7 @@ describe("RolloverVault", function () {
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
           [
-            "0",
+            0,
             toFixedPtAmt("176.984428408659323966"),
             toFixedPtAmt("176.984428408659323966"),
             toFixedPtAmt("176.984428408659323966"),
@@ -1073,10 +1073,8 @@ describe("RolloverVault", function () {
     describe("on successful swap with some the juniors in the vault", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.computePerpToUnderlyingSwapFeePercs.returns([
-          toPercFixedPtAmt("0.1"),
-          toPercFixedPtAmt("0.15"),
-        ]);
+        await feePolicy.computePerpBurnFeePerc.returns(toPercFixedPtAmt("0.1"));
+        await feePolicy.computePerpToUnderlyingVaultSwapFeePerc.returns(toPercFixedPtAmt("0.15"));
         remainingJuniorTranches[1].transfer(vault.address, toFixedPtAmt("100"));
         remainingJuniorTranches[2].transfer(vault.address, toFixedPtAmt("100"));
         remainingJuniorTranches[3].transfer(vault.address, toFixedPtAmt("100"));
@@ -1089,7 +1087,7 @@ describe("RolloverVault", function () {
           .to.emit(perp, "Transfer")
           .withArgs(vault.address, constants.AddressZero, toFixedPtAmt("180"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("600"));
-        expect(await perp.balanceOf(vault.address)).to.eq("0");
+        expect(await perp.balanceOf(vault.address)).to.eq(0);
       });
 
       it("should burn perps as fee", async function () {
@@ -1114,7 +1112,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          ["0", toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
+          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
         );
 
         await checkVaultAssetComposition(
@@ -1129,7 +1127,7 @@ describe("RolloverVault", function () {
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
           [
-            "0",
+            0,
             toFixedPtAmt("153.846153846153846154"),
             toFixedPtAmt("153.846153846153846154"),
             toFixedPtAmt("153.846153846153846154"),
@@ -1161,10 +1159,8 @@ describe("RolloverVault", function () {
     describe("on successful swap with all the juniors in the vault", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.computePerpToUnderlyingSwapFeePercs.returns([
-          toPercFixedPtAmt("0.1"),
-          toPercFixedPtAmt("0.15"),
-        ]);
+        await feePolicy.computePerpBurnFeePerc.returns(toPercFixedPtAmt("0.1"));
+        await feePolicy.computePerpToUnderlyingVaultSwapFeePerc.returns(toPercFixedPtAmt("0.15"));
 
         remainingJuniorTranches[1].transfer(vault.address, toFixedPtAmt("800"));
         remainingJuniorTranches[2].transfer(vault.address, toFixedPtAmt("800"));
@@ -1179,7 +1175,7 @@ describe("RolloverVault", function () {
           .to.emit(perp, "Transfer")
           .withArgs(vault.address, constants.AddressZero, toFixedPtAmt("180"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("600"));
-        expect(await perp.balanceOf(vault.address)).to.eq("0");
+        expect(await perp.balanceOf(vault.address)).to.eq(0);
       });
 
       it("should burn perps as fee", async function () {
@@ -1204,7 +1200,7 @@ describe("RolloverVault", function () {
         await checkReserveComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          ["0", toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
+          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
         );
 
         await checkVaultAssetComposition(
@@ -1219,7 +1215,7 @@ describe("RolloverVault", function () {
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
           [
-            "0",
+            0,
             toFixedPtAmt("153.846153846153846154"),
             toFixedPtAmt("153.846153846153846154"),
             toFixedPtAmt("153.846153846153846154"),

@@ -70,6 +70,7 @@ export default {
     apiKey: process.env.ETHERSCAN_API_KEY,
   },
   mocha: {
-    bail: true,
+    bail: false,
+    timeout: 100000000,
   },
 } as HardhatUserConfig;

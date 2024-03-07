@@ -4,17 +4,13 @@ pragma solidity ^0.8.0;
 import { SubscriptionParams } from "./CommonTypes.sol";
 
 interface IFeePolicy {
-    /// @param dr The current system deviation ratio.
-    /// @param dr_ The deviation ratio of the system after the operation is complete.
     /// @return The percentage of the mint perp tokens to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
-    function computePerpMintFeePerc(uint256 dr, uint256 dr_) external view returns (uint256);
+    function computePerpMintFeePerc() external view returns (uint256);
 
-    /// @param dr The current system deviation ratio.
-    /// @param dr_ The deviation ratio of the system after the operation is complete.
     /// @return The percentage of the burnt perp tokens to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
-    function computePerpBurnFeePerc(uint256 dr, uint256 dr_) external view returns (uint256);
+    function computePerpBurnFeePerc() external view returns (uint256);
 
     /// @param dr The current system deviation ratio.
     /// @return The applied exchange rate adjustment between tranches into perp and
@@ -28,17 +24,13 @@ interface IFeePolicy {
     ///         example) 99 tranchesIn for 100 tranchesOut
     function computePerpRolloverFeePerc(uint256 dr) external view returns (int256);
 
-    /// @param dr The current system deviation ratio.
-    /// @param dr_ The deviation ratio of the system after the operation is complete.
     /// @return The percentage of the mint vault note amount to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
-    function computeVaultMintFeePerc(uint256 dr, uint256 dr_) external view returns (uint256);
+    function computeVaultMintFeePerc() external view returns (uint256);
 
-    /// @param dr The current system deviation ratio.
-    /// @param dr_ The deviation ratio of the system after the operation is complete.
     /// @return The percentage of the burnt vault note amount to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
-    function computeVaultBurnFeePerc(uint256 dr, uint256 dr_) external view returns (uint256);
+    function computeVaultBurnFeePerc() external view returns (uint256);
 
     /// @return The fixed amount fee charged by the vault during each deployment,
     ///         denominated in the underlying collateral asset.
@@ -46,25 +38,15 @@ interface IFeePolicy {
 
     /// @param dr The current system deviation ratio.
     /// @param dr_ The deviation ratio of the system after the operation is complete.
-    /// @return perpFeePerc The percentage of perp tokens out to be charged as swap fees by perp,
+    /// @return The percentage of perp tokens out to be charged as swap fees by the vault,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
-    /// @return vaultFeePerc The percentage of perp tokens out to be charged as swap fees by the vault,
-    ///         as a fixed-point numbers with {DECIMALS} decimal places.
-    function computeUnderlyingToPerpSwapFeePercs(
-        uint256 dr,
-        uint256 dr_
-    ) external view returns (uint256 perpFeePerc, uint256 vaultFeePerc);
+    function computeUnderlyingToPerpVaultSwapFeePerc(uint256 dr, uint256 dr_) external view returns (uint256);
 
     /// @param dr The current system deviation ratio.
     /// @param dr_ The deviation ratio of the system after the operation is complete.
-    /// @return perpFeePerc The percentage of underlying tokens out to be charged as swap fees by perp,
+    /// @return The percentage of underlying tokens out to be charged as swap fees by the vault,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
-    /// @return vaultFeePerc The percentage of underlying tokens out to be charged as swap fees by the vault,
-    ///         as a fixed-point numbers with {DECIMALS} decimal places.
-    function computePerpToUnderlyingSwapFeePercs(
-        uint256 dr,
-        uint256 dr_
-    ) external view returns (uint256 perpFeePerc, uint256 vaultFeePerc);
+    function computePerpToUnderlyingVaultSwapFeePerc(uint256 dr, uint256 dr_) external view returns (uint256);
 
     /// @return Number of decimals representing a multiplier of 1.0. So, 100% = 1*10**decimals.
     function decimals() external view returns (uint8);

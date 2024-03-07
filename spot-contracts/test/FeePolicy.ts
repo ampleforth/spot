@@ -125,9 +125,9 @@ describe("FeePolicy", function () {
 
     describe("when triggered by owner", function () {
       it("should update the mint fees", async function () {
-        expect(await feePolicy.computePerpMintFeePerc(toPerc("1"), toPerc("1"))).to.eq("0");
+        expect(await feePolicy.computePerpMintFeePerc()).to.eq("0");
         await feePolicy.connect(deployer).updatePerpMintFees(toPerc("0.01"));
-        expect(await feePolicy.computePerpMintFeePerc(toPerc("1"), toPerc("1"))).to.eq(toPerc("0.01"));
+        expect(await feePolicy.computePerpMintFeePerc()).to.eq(toPerc("0.01"));
       });
     });
   });
@@ -152,9 +152,9 @@ describe("FeePolicy", function () {
 
     describe("when triggered by owner", function () {
       it("should update the burn fees", async function () {
-        expect(await feePolicy.computePerpBurnFeePerc(toPerc("1.01"), toPerc("1.01"))).to.eq("0");
+        expect(await feePolicy.computePerpBurnFeePerc()).to.eq("0");
         await feePolicy.connect(deployer).updatePerpBurnFees(toPerc("0.01"));
-        expect(await feePolicy.computePerpBurnFeePerc(toPerc("1.01"), toPerc("1.01"))).to.eq(toPerc("0.01"));
+        expect(await feePolicy.computePerpBurnFeePerc()).to.eq(toPerc("0.01"));
       });
     });
   });
@@ -243,9 +243,9 @@ describe("FeePolicy", function () {
     describe("when triggered by owner", function () {
       beforeEach(async function () {});
       it("should update the vault mint fees", async function () {
-        expect(await feePolicy.computeVaultMintFeePerc(toPerc("1.01"), toPerc("1.01"))).to.eq("0");
+        expect(await feePolicy.computeVaultMintFeePerc()).to.eq("0");
         await feePolicy.connect(deployer).updateVaultMintFees(toPerc("0.025"));
-        expect(await feePolicy.computeVaultMintFeePerc(toPerc("1.01"), toPerc("1.01"))).to.eq(toPerc("0.025"));
+        expect(await feePolicy.computeVaultMintFeePerc()).to.eq(toPerc("0.025"));
       });
     });
   });
@@ -270,9 +270,9 @@ describe("FeePolicy", function () {
 
     describe("when triggered by owner", function () {
       it("should update the vault burn fees", async function () {
-        expect(await feePolicy.computeVaultBurnFeePerc(toPerc("0"), toPerc("0"))).to.eq("0");
+        expect(await feePolicy.computeVaultBurnFeePerc()).to.eq("0");
         await feePolicy.connect(deployer).updateVaultBurnFees(toPerc("0.025"));
-        expect(await feePolicy.computeVaultBurnFeePerc(toPerc("0"), toPerc("0"))).to.eq(toPerc("0.025"));
+        expect(await feePolicy.computeVaultBurnFeePerc()).to.eq(toPerc("0.025"));
       });
     });
   });
@@ -314,13 +314,13 @@ describe("FeePolicy", function () {
 
     describe("when triggered by owner", function () {
       it("should update the vault burn fees", async function () {
-        const _f = await feePolicy.computeUnderlyingToPerpSwapFeePercs(toPerc("1.01"), toPerc("1.01"));
-        expect(_f[0]).to.eq("0");
-        expect(_f[1]).to.eq(toPerc("1"));
+        expect(await feePolicy.computeUnderlyingToPerpVaultSwapFeePerc(toPerc("1.01"), toPerc("1.01"))).to.eq(
+          toPerc("1"),
+        );
         await feePolicy.connect(deployer).updateVaultUnderlyingToPerpSwapFeePerc(toPerc("0.1"));
-        const f = await feePolicy.computeUnderlyingToPerpSwapFeePercs(toPerc("1.01"), toPerc("1.01"));
-        expect(f[0]).to.eq("0");
-        expect(f[1]).to.eq(toPerc("0.1"));
+        expect(await feePolicy.computeUnderlyingToPerpVaultSwapFeePerc(toPerc("1.01"), toPerc("1.01"))).to.eq(
+          toPerc("0.1"),
+        );
       });
     });
   });
@@ -344,13 +344,9 @@ describe("FeePolicy", function () {
 
     describe("when triggered by owner", function () {
       it("should update the vault burn fees", async function () {
-        const _f = await feePolicy.computePerpToUnderlyingSwapFeePercs(toPerc("1"), toPerc("1"));
-        expect(_f[0]).to.eq("0");
-        expect(_f[1]).to.eq(toPerc("1"));
-        await feePolicy.connect(deployer).updateVaultPerpToUnderlyingSwapFeePerc(toPerc("0.1"));
-        const f = await feePolicy.computePerpToUnderlyingSwapFeePercs(toPerc("1"), toPerc("1"));
-        expect(f[0]).to.eq("0");
-        expect(f[1]).to.eq(toPerc("0.1"));
+        expect(await feePolicy.computePerpToUnderlyingVaultSwapFeePerc(toPerc("1"), toPerc("1"))).to.eq(toPerc("1"));
+        await feePolicy.connect(deployer).updateVaultPerpToUnderlyingSwapFeePerc(toPerc("0.2"));
+        expect(await feePolicy.computePerpToUnderlyingVaultSwapFeePerc(toPerc("1"), toPerc("1"))).to.eq(toPerc("0.2"));
       });
     });
   });
@@ -375,40 +371,40 @@ describe("FeePolicy", function () {
     describe("when dr is decreasing", function () {
       async function cmpFees(dr1, dr2, fees) {
         // perp mint, vault burn and swap u2p
-        expect(await feePolicy.computePerpMintFeePerc(toPerc(dr1), toPerc(dr2))).to.eq(toPerc(fees[0]));
-        expect(await feePolicy.computeVaultBurnFeePerc(toPerc(dr1), toPerc(dr2))).to.eq(toPerc(fees[1]));
-        const s = await feePolicy.computeUnderlyingToPerpSwapFeePercs(toPerc(dr1), toPerc(dr2));
-        expect(s[0]).to.eq(toPerc(fees[0]));
-        expect(s[1]).to.eq(toPerc(fees[2]));
+        expect(await feePolicy.computePerpMintFeePerc()).to.eq(toPerc(fees[0]));
+        expect(await feePolicy.computeVaultBurnFeePerc()).to.eq(toPerc(fees[1]));
+        expect(await feePolicy.computeUnderlyingToPerpVaultSwapFeePerc(toPerc(dr1), toPerc(dr2))).to.eq(
+          toPerc(fees[2]),
+        );
       }
 
       describe("when ONE < dr2, dr1", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("1.1", "1.01", ["0", "0.075", "0.1"]);
+          await cmpFees("1.1", "1.01", ["0.025", "0.075", "0.1"]);
         });
       });
 
       describe("when ONE <= dr2, dr1", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("1.01", "1", ["0", "0.075", "0.1"]);
+          await cmpFees("1.01", "1", ["0.025", "0.075", "0.1"]);
         });
       });
 
       describe("when dr2 < ONE < dr1", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("1.05", "0.95", ["0.0125", "0.075", "0.1"]);
+          await cmpFees("1.05", "0.95", ["0.025", "0.075", "0.1"]);
         });
       });
 
       describe("when dr2 < ONE < dr1", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("1.01", "0.96", ["0.02", "0.075", "0.1"]);
+          await cmpFees("1.01", "0.96", ["0.025", "0.075", "0.1"]);
         });
       });
 
       describe("when dr2 < ONE < dr1", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("1.1", "0.99", ["0.00227273", "0.075", "0.1"]);
+          await cmpFees("1.1", "0.99", ["0.025", "0.075", "0.1"]);
         });
       });
 
@@ -426,7 +422,7 @@ describe("FeePolicy", function () {
 
       describe("when dr2 < lower < ONE < dr1", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("1.2", "0.8", ["0.0125", "0.075", "1"]);
+          await cmpFees("1.2", "0.8", ["0.025", "0.075", "1"]);
         });
       });
 
@@ -440,40 +436,40 @@ describe("FeePolicy", function () {
     describe("when dr is increasing", function () {
       async function cmpFees(dr1, dr2, fees) {
         // perp burn, vault mint and swap p2u
-        expect(await feePolicy.computePerpBurnFeePerc(toPerc(dr1), toPerc(dr2))).to.eq(toPerc(fees[0]));
-        expect(await feePolicy.computeVaultMintFeePerc(toPerc(dr1), toPerc(dr2))).to.eq(toPerc(fees[1]));
-        const s = await feePolicy.computePerpToUnderlyingSwapFeePercs(toPerc(dr1), toPerc(dr2));
-        expect(s[0]).to.eq(toPerc(fees[0]));
-        expect(s[1]).to.eq(toPerc(fees[2]));
+        expect(await feePolicy.computePerpBurnFeePerc()).to.eq(toPerc(fees[0]));
+        expect(await feePolicy.computeVaultMintFeePerc()).to.eq(toPerc(fees[1]));
+        expect(await feePolicy.computePerpToUnderlyingVaultSwapFeePerc(toPerc(dr1), toPerc(dr2))).to.eq(
+          toPerc(fees[2]),
+        );
       }
 
       describe("when dr1, dr2 < ONE", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("0.9", "0.99", ["0", "0", "0.15"]);
+          await cmpFees("0.9", "0.99", ["0.035", "0.05", "0.15"]);
         });
       });
 
       describe("when dr1, dr2 <= ONE", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("0.9", "1", ["0", "0", "0.15"]);
+          await cmpFees("0.9", "1", ["0.035", "0.05", "0.15"]);
         });
       });
 
       describe("when dr1 < ONE < dr2", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("0.95", "1.05", ["0.0175", "0.025", "0.15"]);
+          await cmpFees("0.95", "1.05", ["0.035", "0.05", "0.15"]);
         });
       });
 
       describe("when dr1 < ONE < dr2", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("0.99", "1.04", ["0.028", "0.04", "0.15"]);
+          await cmpFees("0.99", "1.04", ["0.035", "0.05", "0.15"]);
         });
       });
 
       describe("when dr1 < ONE < dr2", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("0.99", "1.1", ["0.03181819", "0.04545455", "0.15"]);
+          await cmpFees("0.99", "1.1", ["0.035", "0.05", "0.15"]);
         });
       });
 

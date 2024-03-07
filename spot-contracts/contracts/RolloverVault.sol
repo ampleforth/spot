@@ -520,14 +520,69 @@ contract RolloverVault is
     //--------------------------------------------------------------------------
     // External & Public methods
 
-    /// @inheritdoc IVault
-    function computeMintAmt(uint256 underlyingAmtIn) public returns (uint256) {
+    /// @inheritdoc IRolloverVault
+    function computeUnderlyingToPerpSwapAmt(
+        uint256 underlyingAmtIn
+    ) public returns (uint256, uint256, SubscriptionParams memory) {
+        IPerpetualTranche perp_ = perp;
+        // Compute equal value perps to swap out to the user
+        SubscriptionParams memory s = _querySubscriptionState(perp_);
+        uint256 perpAmtOut = underlyingAmtIn.mulDiv(perp_.totalSupply(), s.perpTVL);
+
         //-----------------------------------------------------------------------------
-        SubscriptionParams memory s = _querySubscriptionState(perp);
-        uint256 feePerc = feePolicy.computeVaultMintFeePerc(
+        // When user swaps underlying for vault's perps -> perps are minted by the vault
+        // We thus compute fees based on the post-mint subscription state.
+        uint256 perpFeePerc = feePolicy.computePerpMintFeePerc();
+        uint256 vaultFeePerc = feePolicy.computeUnderlyingToPerpVaultSwapFeePerc(
             feePolicy.computeDeviationRatio(s),
-            feePolicy.computeDeviationRatio(s.perpTVL, s.vaultTVL + underlyingAmtIn, s.seniorTR)
+            feePolicy.computeDeviationRatio(s.perpTVL + underlyingAmtIn, s.vaultTVL, s.seniorTR)
         );
+        //-----------------------------------------------------------------------------
+
+        // Calculate perp fee share to be paid by the vault
+        uint256 perpFeeAmtToBurn = perpAmtOut.mulDiv(perpFeePerc, FEE_ONE, MathUpgradeable.Rounding.Up);
+
+        // We deduct fees by transferring out fewer perp tokens
+        perpAmtOut = perpAmtOut.mulDiv(FEE_ONE - (perpFeePerc + vaultFeePerc), FEE_ONE);
+
+        return (perpAmtOut, perpFeeAmtToBurn, s);
+    }
+
+    /// @inheritdoc IRolloverVault
+    function computePerpToUnderlyingSwapAmt(
+        uint256 perpAmtIn
+    ) public returns (uint256, uint256, SubscriptionParams memory) {
+        IPerpetualTranche perp_ = perp;
+        // Compute equal value underlying tokens to swap out
+        SubscriptionParams memory s = _querySubscriptionState(perp_);
+        uint256 underlyingAmtOut = perpAmtIn.mulDiv(s.perpTVL, perp_.totalSupply());
+
+        //-----------------------------------------------------------------------------
+        // When user swaps perps for vault's underlying -> perps are redeemed by the vault
+        // We thus compute fees based on the post-burn subscription state.
+        uint256 perpFeePerc = feePolicy.computePerpBurnFeePerc();
+        uint256 vaultFeePerc = feePolicy.computePerpToUnderlyingVaultSwapFeePerc(
+            feePolicy.computeDeviationRatio(s),
+            feePolicy.computeDeviationRatio(s.perpTVL - underlyingAmtOut, s.vaultTVL, s.seniorTR)
+        );
+        //-----------------------------------------------------------------------------
+
+        // Calculate perp fee share to be paid by the vault
+        uint256 perpFeeAmtToBurn = perpAmtIn.mulDiv(perpFeePerc, FEE_ONE, MathUpgradeable.Rounding.Up);
+
+        // We deduct fees by transferring out fewer underlying tokens
+        underlyingAmtOut = underlyingAmtOut.mulDiv(FEE_ONE - (perpFeePerc + vaultFeePerc), FEE_ONE);
+
+        return (underlyingAmtOut, perpFeeAmtToBurn, s);
+    }
+
+    //--------------------------------------------------------------------------
+    // External & Public read methods
+
+    /// @inheritdoc IVault
+    function computeMintAmt(uint256 underlyingAmtIn) public view returns (uint256) {
+        //-----------------------------------------------------------------------------
+        uint256 feePerc = feePolicy.computeVaultMintFeePerc();
         //-----------------------------------------------------------------------------
 
         // Compute mint amt
@@ -542,19 +597,11 @@ contract RolloverVault is
     }
 
     /// @inheritdoc IVault
-    function computeRedemptionAmts(uint256 noteAmtBurnt) public returns (TokenAmount[] memory) {
+    function computeRedemptionAmts(uint256 noteAmtBurnt) public view returns (TokenAmount[] memory) {
         uint256 noteSupply = totalSupply();
 
         //-----------------------------------------------------------------------------
-        SubscriptionParams memory s = _querySubscriptionState(perp);
-        uint256 feePerc = feePolicy.computeVaultBurnFeePerc(
-            feePolicy.computeDeviationRatio(s),
-            feePolicy.computeDeviationRatio(
-                s.perpTVL,
-                s.vaultTVL.mulDiv(noteSupply - noteAmtBurnt, noteSupply),
-                s.seniorTR
-            )
-        );
+        uint256 feePerc = feePolicy.computeVaultBurnFeePerc();
         //-----------------------------------------------------------------------------
         uint8 assetCount_ = 1 + uint8(_deployed.length());
 
@@ -588,63 +635,6 @@ contract RolloverVault is
 
         return redemptions;
     }
-
-    /// @inheritdoc IRolloverVault
-    function computeUnderlyingToPerpSwapAmt(
-        uint256 underlyingAmtIn
-    ) public returns (uint256, uint256, SubscriptionParams memory) {
-        IPerpetualTranche perp_ = perp;
-        // Compute equal value perps to swap out to the user
-        SubscriptionParams memory s = _querySubscriptionState(perp_);
-        uint256 perpAmtOut = underlyingAmtIn.mulDiv(perp_.totalSupply(), s.perpTVL);
-
-        //-----------------------------------------------------------------------------
-        // When user swaps underlying for vault's perps -> perps are minted by the vault
-        // We thus compute fees based on the post-mint subscription state.
-        (uint256 perpFeePerc, uint256 vaultFeePerc) = feePolicy.computeUnderlyingToPerpSwapFeePercs(
-            feePolicy.computeDeviationRatio(s),
-            feePolicy.computeDeviationRatio(s.perpTVL + underlyingAmtIn, s.vaultTVL, s.seniorTR)
-        );
-        //-----------------------------------------------------------------------------
-
-        // Calculate perp fee share to be paid by the vault
-        uint256 perpFeeAmtToBurn = perpAmtOut.mulDiv(perpFeePerc, FEE_ONE, MathUpgradeable.Rounding.Up);
-
-        // We deduct fees by transferring out fewer perp tokens
-        perpAmtOut = perpAmtOut.mulDiv(FEE_ONE - (perpFeePerc + vaultFeePerc), FEE_ONE);
-
-        return (perpAmtOut, perpFeeAmtToBurn, s);
-    }
-
-    /// @inheritdoc IRolloverVault
-    function computePerpToUnderlyingSwapAmt(
-        uint256 perpAmtIn
-    ) public returns (uint256, uint256, SubscriptionParams memory) {
-        IPerpetualTranche perp_ = perp;
-        // Compute equal value underlying tokens to swap out
-        SubscriptionParams memory s = _querySubscriptionState(perp_);
-        uint256 underlyingAmtOut = perpAmtIn.mulDiv(s.perpTVL, perp_.totalSupply());
-
-        //-----------------------------------------------------------------------------
-        // When user swaps perps for vault's underlying -> perps are redeemed by the vault
-        // We thus compute fees based on the post-burn subscription state.
-        (uint256 perpFeePerc, uint256 vaultFeePerc) = feePolicy.computePerpToUnderlyingSwapFeePercs(
-            feePolicy.computeDeviationRatio(s),
-            feePolicy.computeDeviationRatio(s.perpTVL - underlyingAmtOut, s.vaultTVL, s.seniorTR)
-        );
-        //-----------------------------------------------------------------------------
-
-        // Calculate perp fee share to be paid by the vault
-        uint256 perpFeeAmtToBurn = perpAmtIn.mulDiv(perpFeePerc, FEE_ONE, MathUpgradeable.Rounding.Up);
-
-        // We deduct fees by transferring out fewer underlying tokens
-        underlyingAmtOut = underlyingAmtOut.mulDiv(FEE_ONE - (perpFeePerc + vaultFeePerc), FEE_ONE);
-
-        return (underlyingAmtOut, perpFeeAmtToBurn, s);
-    }
-
-    //--------------------------------------------------------------------------
-    // External & Public read methods
 
     /// @inheritdoc IVault
     /// @dev The total value is denominated in the underlying asset.

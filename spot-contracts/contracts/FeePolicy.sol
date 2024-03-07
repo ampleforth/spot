@@ -263,14 +263,14 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @inheritdoc IFeePolicy
     /// @dev Minting perps reduces system dr, i.e) drPost < drPre.
-    function computePerpMintFeePerc(uint256 drPre, uint256 drPost) public view override returns (uint256) {
-        return _stepFnFeePerc(drPost, drPre, perpMintFeePerc, 0);
+    function computePerpMintFeePerc() public view override returns (uint256) {
+        return perpMintFeePerc;
     }
 
     /// @inheritdoc IFeePolicy
     /// @dev Burning perps increases system dr, i.e) drPost > drPre.
-    function computePerpBurnFeePerc(uint256 drPre, uint256 drPost) public view override returns (uint256) {
-        return _stepFnFeePerc(drPre, drPost, 0, perpBurnFeePerc);
+    function computePerpBurnFeePerc() public view override returns (uint256) {
+        return perpBurnFeePerc;
     }
 
     /// @inheritdoc IFeePolicy
@@ -287,12 +287,12 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @inheritdoc IFeePolicy
     /// @dev Minting vault notes increases system dr, i.e) drPost > drPre.
-    function computeVaultMintFeePerc(uint256 drPre, uint256 drPost) external view override returns (uint256) {
-        return _stepFnFeePerc(drPre, drPost, 0, vaultMintFeePerc);
+    function computeVaultMintFeePerc() external view override returns (uint256) {
+        return vaultMintFeePerc;
     }
 
     /// @inheritdoc IFeePolicy
-    function computeVaultBurnFeePerc(uint256 /*drPre*/, uint256 /*drPost*/) external view override returns (uint256) {
+    function computeVaultBurnFeePerc() external view override returns (uint256) {
         return vaultBurnFeePerc;
     }
 
@@ -303,30 +303,24 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @inheritdoc IFeePolicy
     /// @dev Swapping by minting perps reduces system dr, i.e) drPost < drPre.
-    function computeUnderlyingToPerpSwapFeePercs(
-        uint256 drPre,
+    function computeUnderlyingToPerpVaultSwapFeePerc(
+        uint256 /*drPre*/,
         uint256 drPost
-    ) external view override returns (uint256, uint256) {
+    ) external view override returns (uint256) {
         // When the after op deviation ratio is below the bound,
         // swapping is disabled. (fees are set to 100%)
-        return (
-            computePerpMintFeePerc(drPre, drPost),
-            (drPost < deviationRatioBoundLower ? ONE : vaultUnderlyingToPerpSwapFeePerc)
-        );
+        return (drPost < deviationRatioBoundLower ? ONE : vaultUnderlyingToPerpSwapFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
     /// @dev Swapping by burning perps increases system dr, i.e) drPost > drPre.
-    function computePerpToUnderlyingSwapFeePercs(
-        uint256 drPre,
+    function computePerpToUnderlyingVaultSwapFeePerc(
+        uint256 /*drPre*/,
         uint256 drPost
-    ) external view override returns (uint256, uint256) {
+    ) external view override returns (uint256) {
         // When the after op deviation ratio is above the bound,
         // swapping is disabled. (fees are set to 100%)
-        return (
-            computePerpBurnFeePerc(drPre, drPost),
-            (drPost > deviationRatioBoundUpper ? ONE : vaultPerpToUnderlyingSwapFeePerc)
-        );
+        return (drPost > deviationRatioBoundUpper ? ONE : vaultPerpToUnderlyingSwapFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
@@ -344,23 +338,5 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         // NOTE: We assume that perp's TVL and vault's TVL values have the same base denomination.
         uint256 juniorTR = TRANCHE_RATIO_GRANULARITY - seniorTR;
         return (vaultTVL * seniorTR).mulDiv(ONE, (perpTVL * juniorTR)).mulDiv(ONE, targetSubscriptionRatio);
-    }
-
-    /// @dev Computes step function fee perc, with a dr cutoff at 1.0. Expects drL < drU.
-    function _stepFnFeePerc(uint256 drL, uint256 drU, uint256 f1, uint256 f2) private pure returns (uint256) {
-        // When drU is below the cutoff, we use f1.
-        if (drU <= ONE) {
-            return f1;
-        }
-        // When drL is above the cutoff, we use f2.
-        else if (drL > ONE) {
-            return f2;
-        }
-        // Otherwise we use f1 and f2 partially.
-        else {
-            uint256 deltaDR = drU - drL;
-            return (f1.mulDiv(ONE - drL, deltaDR, MathUpgradeable.Rounding.Up) +
-                f2.mulDiv(drU - ONE, deltaDR, MathUpgradeable.Rounding.Up));
-        }
     }
 }
