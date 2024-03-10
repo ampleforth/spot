@@ -148,7 +148,7 @@ contract RolloverVault is
 
     /// @dev Throws if called by any account other than the keeper.
     modifier onlyKeeper() {
-        if (_msgSender() != keeper) {
+        if (msg.sender != keeper) {
             revert UnauthorizedCall();
         }
         _;
@@ -385,10 +385,10 @@ contract RolloverVault is
         }
 
         // transfer user assets in
-        underlying.safeTransferFrom(_msgSender(), address(this), underlyingAmtIn);
+        underlying.safeTransferFrom(msg.sender, address(this), underlyingAmtIn);
 
         // mint notes
-        _mint(_msgSender(), notes);
+        _mint(msg.sender, notes);
 
         // sync underlying
         _syncAsset(underlying);
@@ -406,7 +406,7 @@ contract RolloverVault is
         TokenAmount[] memory redemptions = computeRedemptionAmts(notes);
 
         // burn notes
-        _burn(_msgSender(), notes);
+        _burn(msg.sender, notes);
 
         // transfer assets out
         for (uint8 i = 0; i < redemptions.length; i++) {
@@ -415,7 +415,7 @@ contract RolloverVault is
             }
 
             // Transfer token share out
-            redemptions[i].token.safeTransfer(_msgSender(), redemptions[i].amount);
+            redemptions[i].token.safeTransfer(msg.sender, redemptions[i].amount);
 
             // sync balances, wkt i=0 is the underlying and remaining are tranches
             if (i == 0) {
@@ -450,7 +450,7 @@ contract RolloverVault is
         }
 
         // transfer underlying in
-        underlying_.safeTransferFrom(_msgSender(), address(this), underlyingAmtIn);
+        underlying_.safeTransferFrom(msg.sender, address(this), underlyingAmtIn);
 
         // tranche and mint perps as needed
         _trancheAndMintPerps(perp_, underlying_, s.perpTVL, s.seniorTR, perpAmtOut + perpFeeAmtToBurn);
@@ -461,7 +461,7 @@ contract RolloverVault is
         }
 
         // transfer remaining perps out to the user
-        IERC20Upgradeable(address(perp_)).safeTransfer(_msgSender(), perpAmtOut);
+        IERC20Upgradeable(address(perp_)).safeTransfer(msg.sender, perpAmtOut);
 
         // NOTE: In case this operation mints slightly more perps than that are required for the swap,
         // The vault continues to hold the perp dust until the subsequent `swapPerpsForUnderlying` or manual `recover(perp)`.
@@ -492,7 +492,7 @@ contract RolloverVault is
         }
 
         // transfer perps in
-        IERC20Upgradeable(perp_).safeTransferFrom(_msgSender(), address(this), perpAmtIn);
+        IERC20Upgradeable(perp_).safeTransferFrom(msg.sender, address(this), perpAmtIn);
 
         // Pay perp's fee share by burning some of the transferred perps
         if (perpFeeAmtToBurn > 0) {
@@ -503,7 +503,7 @@ contract RolloverVault is
         _meldPerps(perp_);
 
         // transfer underlying out
-        underlying_.safeTransfer(_msgSender(), underlyingAmtOut);
+        underlying_.safeTransfer(msg.sender, underlyingAmtOut);
 
         // Revert if vault liquidity is too low.
         _enforceUnderlyingBalAfterSwap(underlying_, s.vaultTVL);

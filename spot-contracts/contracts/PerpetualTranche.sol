@@ -209,7 +209,7 @@ contract PerpetualTranche is
 
     /// @dev Throws if called by any account other than the keeper.
     modifier onlyKeeper() {
-        if (keeper != _msgSender()) {
+        if (keeper != msg.sender) {
             revert UnauthorizedCall();
         }
         _;
@@ -217,7 +217,7 @@ contract PerpetualTranche is
 
     /// @dev Throws if called not called by vault.
     modifier onlyVault() {
-        if (address(vault) != _msgSender()) {
+        if (address(vault) != msg.sender) {
             revert UnauthorizedCall();
         }
         _;
@@ -364,7 +364,7 @@ contract PerpetualTranche is
         }
 
         // transfers tranche tokens from the sender to the reserve
-        _transferIntoReserve(msg.sender, trancheIn, trancheInAmt);
+        _transferIntoReserve(trancheIn, trancheInAmt);
 
         // mints perp tokens to the sender
         _mint(msg.sender, perpAmtMint);
@@ -395,7 +395,7 @@ contract PerpetualTranche is
         // transfers reserve tokens out
         for (uint8 i = 0; i < tokensOut.length; i++) {
             if (tokensOut[i].amount > 0) {
-                _transferOutOfReserve(msg.sender, tokensOut[i].token, tokensOut[i].amount);
+                _transferOutOfReserve(tokensOut[i].token, tokensOut[i].amount);
             }
         }
 
@@ -423,10 +423,10 @@ contract PerpetualTranche is
         }
 
         // transfers tranche tokens from the sender to the reserve
-        _transferIntoReserve(msg.sender, trancheIn, r.trancheInAmt);
+        _transferIntoReserve(trancheIn, r.trancheInAmt);
 
         // transfers tranche from the reserve to the sender
-        _transferOutOfReserve(msg.sender, tokenOut, r.tokenOutAmt);
+        _transferOutOfReserve(tokenOut, r.tokenOutAmt);
 
         return r;
     }
@@ -632,17 +632,17 @@ contract PerpetualTranche is
     //--------------------------------------------------------------------------
     // Private methods
 
-    /// @dev Transfers tokens from the given address to self and updates the reserve set.
+    /// @dev Transfers tokens from the caller (msg.sender) and updates the reserve set.
     /// @return Reserve's token balance after transfer in.
-    function _transferIntoReserve(address from, IERC20Upgradeable token, uint256 trancheAmt) private returns (uint256) {
-        token.safeTransferFrom(from, address(this), trancheAmt);
+    function _transferIntoReserve(IERC20Upgradeable token, uint256 trancheAmt) private returns (uint256) {
+        token.safeTransferFrom(msg.sender, address(this), trancheAmt);
         return _syncReserve(token);
     }
 
-    /// @dev Transfers tokens from self into the given address and updates the reserve set.
+    /// @dev Transfers tokens from self into the caller (msg.sender) and updates the reserve set.
     /// @return Reserve's token balance after transfer out.
-    function _transferOutOfReserve(address to, IERC20Upgradeable token, uint256 tokenAmt) private returns (uint256) {
-        token.safeTransfer(to, tokenAmt);
+    function _transferOutOfReserve(IERC20Upgradeable token, uint256 tokenAmt) private returns (uint256) {
+        token.safeTransfer(msg.sender, tokenAmt);
         return _syncReserve(token);
     }
 
@@ -953,6 +953,6 @@ contract PerpetualTranche is
     /// @dev Checks if caller is another module within the protocol.
     ///      If so, we do not charge mint/burn for internal operations.
     function _isProtocolCaller() private view returns (bool) {
-        return (_msgSender() == address(vault));
+        return (msg.sender == address(vault));
     }
 }
