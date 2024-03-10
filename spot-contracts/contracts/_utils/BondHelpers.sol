@@ -73,7 +73,7 @@ library BondHelpers {
     /// @param b The address of the bond contract.
     /// @return The tranche data, an array of tranche amounts.
     function previewDeposit(IBondController b, uint256 collateralAmount) internal view returns (TokenAmount[] memory) {
-        if(b.isMature()){
+        if (b.isMature()) {
             revert UnacceptableDeposit();
         }
 

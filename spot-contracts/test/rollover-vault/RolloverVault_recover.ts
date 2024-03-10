@@ -474,25 +474,31 @@ describe("RolloverVault", function () {
 
           it("should sync assets", async function () {
             const tx = vault["recover(address)"](newTranchesIn[1].address);
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("6808.000000000001"));
+            await expect(tx)
+              .to.emit(vault, "AssetSynced")
+              .withArgs(collateralToken.address, toFixedPtAmt("6808.000000000001"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[0].address, toFixedPtAmt("0"));
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[1].address, toFixedPtAmt("3199.9999999999992"));
+            await expect(tx)
+              .to.emit(vault, "AssetSynced")
+              .withArgs(newTranchesIn[1].address, toFixedPtAmt("3199.9999999999992"));
           });
 
-          it("should not recover dust when triggered again", async function(){
+          it("should not recover dust when triggered again", async function () {
             await depositIntoBond(newBondIn, toFixedPtAmt("10000"), deployer);
             await newTranchesIn[0].transfer(vault.address, toFixedPtAmt("799.999999999999"));
             await vault["recover(address)"](newTranchesIn[1].address);
-            const tx = vault["recover(address)"](newTranchesIn[1].address)
-            await tx
+            const tx = vault["recover(address)"](newTranchesIn[1].address);
+            await tx;
             await checkVaultAssetComposition(
               vault,
               [collateralToken, newTranchesIn[1]],
               [toFixedPtAmt("10807.999999999996"), "3200000"],
             );
-            await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("10807.999999999996"));
+            await expect(tx)
+              .to.emit(vault, "AssetSynced")
+              .withArgs(collateralToken.address, toFixedPtAmt("10807.999999999996"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[1].address, "3200000");
-          })
+          });
         });
       });
     });
