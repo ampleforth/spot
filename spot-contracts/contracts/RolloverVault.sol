@@ -157,6 +157,11 @@ contract RolloverVault is
     //--------------------------------------------------------------------------
     // Construction & Initialization
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     /// @notice Contract state initialization.
     /// @param name ERC-20 Name of the vault token.
     /// @param symbol ERC-20 Symbol of the vault token.

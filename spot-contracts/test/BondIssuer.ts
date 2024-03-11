@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ethers, network } from "hardhat";
+import { ethers, network, upgrades } from "hardhat";
 import { Contract, Transaction, Signer } from "ethers";
 
 import { TimeHelpers, setupBondFactory, bondAt } from "./helpers";
@@ -18,8 +18,13 @@ describe("BondIssuer", function () {
     token = await Token.deploy();
     await token.init("Test token", "TEST");
     const BondIssuer = await ethers.getContractFactory("BondIssuer");
-    issuer = await BondIssuer.deploy(bondFactory.address, token.address);
-    await issuer.init(86400, [200, 300, 500], 3600, 900);
+    issuer = await upgrades.deployProxy(
+      BondIssuer.connect(deployer),
+      [bondFactory.address, token.address, 86400, [200, 300, 500], 3600, 900],
+      {
+        initializer: "init(address,address,uint256,uint256[],uint256,uint256)",
+      },
+    );
     await TimeHelpers.setNextBlockTimestamp(mockTime(0));
   });
 

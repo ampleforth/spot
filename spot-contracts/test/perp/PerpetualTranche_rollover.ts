@@ -46,9 +46,15 @@ describe("PerpetualTranche", function () {
 
     bondFactory = await setupBondFactory();
     ({ collateralToken, rebaseOracle } = await setupCollateralToken("Bitcoin", "BTC"));
+
     const BondIssuer = await ethers.getContractFactory("BondIssuer");
-    issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
-    await issuer.init(10800, [500, 500], 1200, 0);
+    issuer = await upgrades.deployProxy(
+      BondIssuer.connect(deployer),
+      [bondFactory.address, collateralToken.address, 10800, [500, 500], 1200, 0],
+      {
+        initializer: "init(address,address,uint256,uint256[],uint256,uint256)",
+      },
+    );
 
     const FeePolicy = await ethers.getContractFactory("FeePolicy");
     feePolicy = await smock.fake(FeePolicy);

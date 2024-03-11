@@ -125,6 +125,11 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     //-----------------------------------------------------------------------------
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     /// @notice Contract initializer.
     function init() public initializer {
         __Ownable_init();

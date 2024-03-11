@@ -1,5 +1,5 @@
 import { expect, use } from "chai";
-import { ethers } from "hardhat";
+import { ethers, upgrades } from "hardhat";
 import { Contract, Signer } from "ethers";
 import { smock } from "@defi-wonderland/smock";
 
@@ -16,9 +16,10 @@ describe("FeePolicy", function () {
     deployer = accounts[0];
     otherUser = accounts[1];
 
-    const factory = await ethers.getContractFactory("FeePolicy");
-    feePolicy = await factory.deploy();
-    await feePolicy.init();
+    const FeePolicy = await ethers.getContractFactory("FeePolicy");
+    feePolicy = await upgrades.deployProxy(FeePolicy.connect(deployer), [], {
+      initializer: "init()",
+    });
   });
 
   describe("#init", function () {
