@@ -109,8 +109,7 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
         for (uint8 i = 0; i < trancheRatios_.length; i++) {
             ratioSum += trancheRatios_[i];
         }
-
-        if (ratioSum > TRANCHE_RATIO_GRANULARITY) {
+        if (ratioSum != TRANCHE_RATIO_GRANULARITY) {
             revert UnacceptableTrancheRatios();
         }
     }

@@ -77,6 +77,10 @@ describe("BondIssuer", function () {
 
     describe("when tranche ratios are improper", function () {
       it("should revert", async function () {
+        await expect(issuer.updateTrancheRatios([200, 300, 499])).to.be.revertedWithCustomError(
+          issuer,
+          "UnacceptableTrancheRatios",
+        );
         await expect(issuer.updateTrancheRatios([200, 300, 501])).to.be.revertedWithCustomError(
           issuer,
           "UnacceptableTrancheRatios",
