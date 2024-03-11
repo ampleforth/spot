@@ -45,7 +45,7 @@ library Sigmoid {
         int256 remaining = exp - (whole * one);
 
         int256 current = one / 2;
-        for (uint256 i = 0; i < 5; i++) {
+        for (uint256 i = 0; i < 5; ++i) {
             if (remaining >= current) {
                 remaining = remaining - current;
                 result = (result * ks[i]) / 10 ** 18; // 10**18 to match hardcoded ks values

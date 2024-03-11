@@ -172,7 +172,7 @@ contract RolloverVault is
         string memory symbol,
         IPerpetualTranche perp_,
         IFeePolicy feePolicy_
-    ) public initializer {
+    ) external initializer {
         // initialize dependencies
         __ERC20_init(name, symbol);
         __ERC20Burnable_init();
@@ -317,7 +317,7 @@ contract RolloverVault is
         }
 
         // execute redemption on each deployed asset
-        for (uint8 i = 0; i < deployedCount_; i++) {
+        for (uint8 i = 0; i < deployedCount_; ++i) {
             ITranche tranche = ITranche(_deployed.at(i));
             uint256 trancheBalance = tranche.balanceOf(address(this));
 
@@ -414,7 +414,8 @@ contract RolloverVault is
         _burn(msg.sender, notes);
 
         // transfer assets out
-        for (uint8 i = 0; i < redemptions.length; i++) {
+        uint8 redemptionsCount = uint8(redemptions.length);
+        for (uint8 i = 0; i < redemptionsCount; ++i) {
             if (redemptions[i].amount == 0) {
                 continue;
             }
@@ -626,7 +627,7 @@ contract RolloverVault is
         });
         redemptions[0].amount = redemptions[0].amount.mulDiv(FEE_ONE - feePerc, FEE_ONE);
 
-        for (uint8 i = 1; i < assetCount_; i++) {
+        for (uint8 i = 1; i < assetCount_; ++i) {
             // tranche token share to be redeemed
             IERC20Upgradeable token = IERC20Upgradeable(_deployed.at(i - 1));
             redemptions[i] = TokenAmount({
@@ -653,7 +654,8 @@ contract RolloverVault is
         uint256 totalValue = underlying.balanceOf(address(this));
 
         // The deployed asset value denominated in the underlying
-        for (uint8 i = 0; i < _deployed.length(); i++) {
+        uint8 deployedCount_ = uint8(_deployed.length());
+        for (uint8 i = 0; i < deployedCount_; ++i) {
             ITranche tranche = ITranche(_deployed.at(i));
             uint256 balance = tranche.balanceOf(address(this));
             if (balance > TRANCHE_DUST_AMT) {
@@ -763,7 +765,8 @@ contract RolloverVault is
         TokenAmount[] memory tranchesRedeemed = perp_.redeem(perpBalance);
 
         // sync and meld perp's tranches
-        for (uint8 i = 1; i < tranchesRedeemed.length; i++) {
+        uint8 tranchesRedeemedCount = uint8(tranchesRedeemed.length);
+        for (uint8 i = 1; i < tranchesRedeemedCount; ++i) {
             ITranche tranche = ITranche(address(tranchesRedeemed[i].token));
 
             // if possible, meld redeemed tranche with
@@ -846,7 +849,8 @@ contract RolloverVault is
         // with each of the perp's tokens available for rollovers and execute a rollover.
         // We continue to rollover till either the vault's senior tranche balance is exhausted or
         // there are no more tokens in perp available to be rolled-over.
-        for (uint256 i = 0; (i < rolloverTokens.length && trancheInAmtAvailable > 0); i++) {
+        uint8 rolloverTokensCount = uint8(rolloverTokens.length);
+        for (uint8 i = 0; (i < rolloverTokensCount && trancheInAmtAvailable > 0); ++i) {
             // tokenOutOfPerp is the reserve token coming out of perp into the vault
             IERC20Upgradeable tokenOutOfPerp = rolloverTokens[i];
 

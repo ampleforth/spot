@@ -243,7 +243,7 @@ contract PerpetualTranche is
         IERC20Upgradeable collateral_,
         IBondIssuer bondIssuer_,
         IFeePolicy feePolicy_
-    ) public initializer {
+    ) external initializer {
         __ERC20_init(name, symbol);
         __ERC20Burnable_init();
         __Ownable_init();
@@ -267,16 +267,16 @@ contract PerpetualTranche is
     //--------------------------------------------------------------------------
     // ADMIN only methods
 
+    /// @notice Updates the reference to the rollover vault.
+    /// @param vault_ The address of the new vault.
+    function updateVault(IRolloverVault vault_) external onlyOwner {
+        vault = vault_;
+    }
+
     /// @notice Updates the reference to the keeper.
     /// @param keeper_ The address of the new keeper.
     function updateKeeper(address keeper_) public onlyOwner {
         keeper = keeper_;
-    }
-
-    /// @notice Updates the reference to the rollover vault.
-    /// @param vault_ The address of the new vault.
-    function updateVault(IRolloverVault vault_) public onlyOwner {
-        vault = vault_;
     }
 
     /// @notice Update the reference to the bond issuer contract.
@@ -339,13 +339,13 @@ contract PerpetualTranche is
 
     /// @notice Pauses deposits, withdrawals and rollovers.
     /// @dev ERC-20 functions, like transfers will always remain operational.
-    function pause() public onlyKeeper {
+    function pause() external onlyKeeper {
         _pause();
     }
 
     /// @notice Unpauses deposits, withdrawals and rollovers.
     /// @dev ERC-20 functions, like transfers will always remain operational.
-    function unpause() public onlyKeeper {
+    function unpause() external onlyKeeper {
         _unpause();
     }
 
@@ -398,7 +398,8 @@ contract PerpetualTranche is
         _burn(msg.sender, perpAmtBurnt);
 
         // transfers reserve tokens out
-        for (uint8 i = 0; i < tokensOut.length; i++) {
+        uint8 tokensOutCount = uint8(tokensOut.length);
+        for (uint8 i = 0; i < tokensOutCount; ++i) {
             if (tokensOut[i].amount > 0) {
                 _transferOutOfReserve(tokensOut[i].token, tokensOut[i].amount);
             }
@@ -504,7 +505,7 @@ contract PerpetualTranche is
         }
 
         // Iterating through the reserve to find tranches that are ready to be rolled out.
-        for (uint8 i = 1; i < reserveCount; i++) {
+        for (uint8 i = 1; i < reserveCount; ++i) {
             IERC20Upgradeable token = _reserveAt(i);
             if (_isTimeForRollout(ITranche(address(token)))) {
                 activeRolloverTokens[i] = token;
@@ -515,7 +516,7 @@ contract PerpetualTranche is
         // We recreate a smaller array with just the tokens up for rollover.
         IERC20Upgradeable[] memory rolloverTokens = new IERC20Upgradeable[](numTokensUpForRollover);
         uint8 j = 0;
-        for (uint8 i = 0; i < reserveCount; i++) {
+        for (uint8 i = 0; i < reserveCount; ++i) {
             if (address(activeRolloverTokens[i]) != address(0)) {
                 rolloverTokens[j++] = activeRolloverTokens[i];
             }
@@ -718,7 +719,7 @@ contract PerpetualTranche is
         // Compute redemption amounts
         uint8 reserveCount = uint8(_reserves.length());
         TokenAmount[] memory reserveTokens = new TokenAmount[](reserveCount);
-        for (uint8 i = 0; i < reserveCount; i++) {
+        for (uint8 i = 0; i < reserveCount; ++i) {
             IERC20Upgradeable tokenOut = _reserveAt(i);
             reserveTokens[i] = TokenAmount({
                 token: tokenOut,
@@ -749,7 +750,7 @@ contract PerpetualTranche is
             feePolicy.computeDeviationRatio(
                 SubscriptionParams({
                     perpTVL: _reserveValue(),
-                    vaultTVL: IRolloverVault(vault).getTVL(),
+                    vaultTVL: vault.getTVL(),
                     seniorTR: _depositBond.getSeniorTrancheRatio()
                 })
             )
@@ -910,7 +911,7 @@ contract PerpetualTranche is
         IERC20Upgradeable underlying_ = _reserveAt(0);
         uint256 totalVal = underlying_.balanceOf(address(this));
         uint8 reserveCount = uint8(_reserves.length());
-        for (uint8 i = 1; i < reserveCount; i++) {
+        for (uint8 i = 1; i < reserveCount; ++i) {
             ITranche tranche = ITranche(address(_reserveAt(i)));
             IBondController parentBond = IBondController(tranche.bond());
             totalVal += _computeReserveTrancheValue(

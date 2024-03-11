@@ -21,15 +21,15 @@ contract HelpersTester {
         return b.secondsToMaturity();
     }
 
-    function getTranches(IBondController b) public view returns (BondTranches memory bt) {
+    function getTranches(IBondController b) public view returns (BondTranches memory) {
         return b.getTranches();
     }
 
-    function trancheAt(IBondController b, uint8 index) public view returns (ITranche t) {
+    function trancheAt(IBondController b, uint8 index) public view returns (ITranche) {
         return b.trancheAt(index);
     }
 
-    function getSeniorTranche(IBondController b) public view returns (ITranche t) {
+    function getSeniorTranche(IBondController b) public view returns (ITranche) {
         return b.getSeniorTranche();
     }
 

@@ -86,7 +86,7 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
         uint256[] memory trancheRatios_,
         uint256 minIssueTimeIntervalSec_,
         uint256 issueWindowOffsetSec_
-    ) public initializer {
+    ) external initializer {
         __Ownable_init();
         bondFactory = bondFactory_;
         collateral = collateral_;
@@ -106,7 +106,8 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     function updateTrancheRatios(uint256[] memory trancheRatios_) public onlyOwner {
         trancheRatios = trancheRatios_;
         uint256 ratioSum;
-        for (uint8 i = 0; i < trancheRatios_.length; i++) {
+        uint8 numTranches = uint8(trancheRatios_.length);
+        for (uint8 i = 0; i < numTranches; ++i) {
             ratioSum += trancheRatios_[i];
         }
         if (ratioSum != TRANCHE_RATIO_GRANULARITY) {

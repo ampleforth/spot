@@ -59,17 +59,23 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     // https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
     uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
 
-    /// @dev The returned fee percentages are fixed point numbers with {DECIMALS} places.
-    ///      The decimals should line up with value expected by consumer (perp, vault).
+    /// @notice The returned fee percentages are fixed point numbers with {DECIMALS} places.
+    /// @dev The decimals should line up with value expected by consumer (perp, vault).
     ///      NOTE: 10**DECIMALS => 100% or 1.0
     uint8 public constant DECIMALS = 8;
-    uint256 public constant ONE = (1 * 10 ** DECIMALS); // 1.0 or 100%
 
-    /// @dev SIGMOID_BOUND is set to 1%, i.e) the rollover fee can be at most 1% on either direction.
-    uint256 public constant SIGMOID_BOUND = ONE / 100; // 0.01 or 1%
+    /// @notice Fixed point representation of 1.0 or 100%.
+    uint256 public constant ONE = (1 * 10 ** DECIMALS);
 
-    uint256 public constant TARGET_SR_LOWER_BOUND = (ONE * 75) / 100; // 0.75 or 75%
-    uint256 public constant TARGET_SR_UPPER_BOUND = 2 * ONE; // 2.0 or 200%
+    /// @notice Sigmoid asymptote bound.
+    /// @dev Set to 0.01 or 1%, i.e) the rollover fee can be at most 1% on either direction.
+    uint256 public constant SIGMOID_BOUND = ONE / 100;
+
+    /// @notice Target subscription ratio lower bound, 0.75 or 75%.
+    uint256 public constant TARGET_SR_LOWER_BOUND = (ONE * 75) / 100;
+
+    /// @notice Target subscription ratio higher bound, 2.0 or 200%.
+    uint256 public constant TARGET_SR_UPPER_BOUND = 2 * ONE;
 
     //-----------------------------------------------------------------------------
     /// @notice The target subscription ratio i.e) the normalization factor.
@@ -131,7 +137,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @notice Contract initializer.
-    function init() public initializer {
+    function init() external initializer {
         __Ownable_init();
 
         // initializing mint/burn fees to zero
