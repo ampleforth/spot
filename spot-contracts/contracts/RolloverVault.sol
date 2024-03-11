@@ -537,7 +537,9 @@ contract RolloverVault is
         uint256 perpFeePerc = feePolicy.computePerpMintFeePerc();
         uint256 vaultFeePerc = feePolicy.computeUnderlyingToPerpVaultSwapFeePerc(
             feePolicy.computeDeviationRatio(s),
-            feePolicy.computeDeviationRatio(s.perpTVL + underlyingAmtIn, s.vaultTVL, s.seniorTR)
+            feePolicy.computeDeviationRatio(
+                SubscriptionParams({ perpTVL: s.perpTVL + underlyingAmtIn, vaultTVL: s.vaultTVL, seniorTR: s.seniorTR })
+            )
         );
         //-----------------------------------------------------------------------------
 
@@ -565,7 +567,13 @@ contract RolloverVault is
         uint256 perpFeePerc = feePolicy.computePerpBurnFeePerc();
         uint256 vaultFeePerc = feePolicy.computePerpToUnderlyingVaultSwapFeePerc(
             feePolicy.computeDeviationRatio(s),
-            feePolicy.computeDeviationRatio(s.perpTVL - underlyingAmtOut, s.vaultTVL, s.seniorTR)
+            feePolicy.computeDeviationRatio(
+                SubscriptionParams({
+                    perpTVL: s.perpTVL - underlyingAmtOut,
+                    vaultTVL: s.vaultTVL,
+                    seniorTR: s.seniorTR
+                })
+            )
         );
         //-----------------------------------------------------------------------------
 

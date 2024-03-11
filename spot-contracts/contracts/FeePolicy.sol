@@ -318,13 +318,8 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @inheritdoc IFeePolicy
     function computeDeviationRatio(SubscriptionParams memory s) public view returns (uint256) {
-        return computeDeviationRatio(s.perpTVL, s.vaultTVL, s.seniorTR);
-    }
-
-    /// @inheritdoc IFeePolicy
-    function computeDeviationRatio(uint256 perpTVL, uint256 vaultTVL, uint256 seniorTR) public view returns (uint256) {
         // NOTE: We assume that perp's TVL and vault's TVL values have the same base denomination.
-        uint256 juniorTR = TRANCHE_RATIO_GRANULARITY - seniorTR;
-        return (vaultTVL * seniorTR).mulDiv(ONE, (perpTVL * juniorTR)).mulDiv(ONE, targetSubscriptionRatio);
+        uint256 juniorTR = TRANCHE_RATIO_GRANULARITY - s.seniorTR;
+        return (s.vaultTVL * s.seniorTR).mulDiv(ONE, (s.perpTVL * juniorTR)).mulDiv(ONE, targetSubscriptionRatio);
     }
 }

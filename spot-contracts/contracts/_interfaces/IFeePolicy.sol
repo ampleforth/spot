@@ -50,10 +50,4 @@ interface IFeePolicy {
     /// @param s The subscription parameters of both the perp and vault systems.
     /// @return The deviation ratio given the system subscription parameters.
     function computeDeviationRatio(SubscriptionParams memory s) external view returns (uint256);
-
-    /// @param perpTVL  The current TVL of perp denominated in the underlying.
-    /// @param vaultTVL The current TVL of the vault denominated in the underlying.
-    /// @param seniorTR The tranche ratio of seniors accepted by perp.
-    /// @return The deviation ratio given the system subscription parameters.
-    function computeDeviationRatio(uint256 perpTVL, uint256 vaultTVL, uint256 seniorTR) external view returns (uint256);
 }
