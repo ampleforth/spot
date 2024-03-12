@@ -103,7 +103,7 @@ describe("RouterV2", function () {
       it("should revert", async function () {
         await expect(
           router.trancheAndDeposit(perp.address, depositBond.address, toFixedPtAmt("1000")),
-        ).to.revertedWithCustomError(router, "UnacceptableDeposit");
+        ).to.revertedWithCustomError(perp, "UnexpectedAsset");
       });
     });
 

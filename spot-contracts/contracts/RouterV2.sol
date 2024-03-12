@@ -6,7 +6,6 @@ import { ITranche } from "./_interfaces/buttonwood/ITranche.sol";
 import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
 import { IPerpetualTranche } from "./_interfaces/IPerpetualTranche.sol";
 import { TokenAmount } from "./_interfaces/CommonTypes.sol";
-import { UnacceptableDeposit } from "./_interfaces/ProtocolErrors.sol";
 
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
@@ -56,10 +55,6 @@ contract RouterV2 {
         // If deposit bond does not exist, we first issue it.
         if (address(bond).code.length <= 0) {
             perp.updateState();
-        }
-
-        if (bond != perp.getDepositBond()) {
-            revert UnacceptableDeposit();
         }
 
         BondTranches memory bt = bond.getTranches();
