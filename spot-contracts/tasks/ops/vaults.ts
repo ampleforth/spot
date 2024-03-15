@@ -101,7 +101,7 @@ task("ops:vault:info")
     console.log(
       "deviationRatio:",
       utils.formatUnits(
-        await feePolicy["computeDeviationRatio(uint256,uint256,uint256)"](perpTVL, vaultTVL, seniorTR),
+        await feePolicy["computeDeviationRatio((uint256,uint256,uint256))"]([perpTVL, vaultTVL, seniorTR]),
         feeDecimals,
       ),
     );
