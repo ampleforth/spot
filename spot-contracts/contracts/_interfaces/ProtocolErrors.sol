@@ -49,9 +49,6 @@ error ExceededMaxMintPerTranche();
 //-------------------------------------------------------------------------
 // Vault
 
-/// @notice Expected more underlying token liquidity to perform operation.
-error InsufficientLiquidity();
-
 /// @notice Expected to swap non-zero assets.
 error UnacceptableSwap();
 
@@ -64,8 +61,11 @@ error DeployedCountOverLimit();
 /// @notice Expected parent bond to have only 2 children tranches.
 error UnacceptableTrancheLength();
 
+/// @notice Expected more underlying token liquidity to perform operation.
+error InsufficientLiquidity();
+
 //-------------------------------------------------------------------------
-// Fee Policy
+// Balancer
 
 /// @notice Expected perc value to be at most (1 * 10**DECIMALS), i.e) 1.0 or 100%.
 error InvalidPerc();
@@ -78,3 +78,6 @@ error InvalidDRBounds();
 
 /// @notice Expected sigmoid asymptotes to be within defined bounds.
 error InvalidSigmoidAsymptotes();
+
+/// @notice Expected DR to be within defined bounds.
+error DROutsideBound();

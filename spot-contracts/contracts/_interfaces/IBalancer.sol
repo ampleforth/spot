@@ -116,17 +116,13 @@ interface IBalancer {
     ///         as a fixed-point number with {DECIMALS} decimal places.
     function computeVaultBurnFeePerc() external view returns (uint256);
 
-    /// @param dr The current system deviation ratio.
-    /// @param dr_ The deviation ratio of the system after the operation is complete.
     /// @return The percentage of perp tokens out to be charged as swap fees by the vault and the protocol,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
-    function computeUnderlyingToPerpSwapFeePerc(uint256 dr, uint256 dr_) external view returns (uint256, uint256);
+    function computeUnderlyingToPerpSwapFeePerc() external view returns (uint256, uint256);
 
-    /// @param dr The current system deviation ratio.
-    /// @param dr_ The deviation ratio of the system after the operation is complete.
     /// @return The percentage of underlying tokens out to be charged as swap fees by the vault and the protocol,
     ///         as a fixed-point numbers with {DECIMALS} decimal places.
-    function computePerpToUnderlyingSwapFeePerc(uint256 dr, uint256 dr_) external view returns (uint256, uint256);
+    function computePerpToUnderlyingSwapFeePerc() external view returns (uint256, uint256);
 
     /// @param s The subscription parameters of both the perp and vault systems.
     /// @return The deviation ratio given the system subscription parameters.

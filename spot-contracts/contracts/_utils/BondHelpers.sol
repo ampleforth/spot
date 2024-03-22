@@ -55,14 +55,14 @@ library BondHelpers {
     /// @notice Given a bond, returns the address of the most senior tranche.
     /// @param b The address of the bond contract.
     /// @return t The senior tranche address.
-    function getSeniorTranche(IBondController b) internal view returns (ITranche t) {
+    function seniorTranche(IBondController b) internal view returns (ITranche t) {
         (t, ) = b.tranches(0);
     }
 
     /// @notice Given a bond, returns the tranche ratio of the most senior tranche.
     /// @param b The address of the bond contract.
     /// @return r The tranche ratio of the senior most tranche.
-    function getSeniorTrancheRatio(IBondController b) internal view returns (uint256 r) {
+    function seniorTrancheRatio(IBondController b) internal view returns (uint256 r) {
         (, r) = b.tranches(0);
     }
 

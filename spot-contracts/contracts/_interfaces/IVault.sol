@@ -53,17 +53,12 @@ interface IVault is IERC20Upgradeable {
     /// @return The list of asset tokens and amounts redeemed.
     function redeem(uint256 notes) external returns (TokenAmount[] memory);
 
-    /// @notice Batches the recover and redeem functions.
-    /// @param notes The amount of notes to be burnt.
-    /// @return The list of asset tokens and amounts redeemed.
-    function recoverAndRedeem(uint256 notes) external returns (TokenAmount[] memory);
-
     /// @return The total value of assets currently held by the vault, denominated in a standard unit of account.
     function getTVL() external view returns (uint256);
 
     /// @param token The address of the asset ERC-20 token held by the vault.
     /// @return The vault's asset token value, denominated in a standard unit of account.
-    function getVaultAssetValue(IERC20Upgradeable token) external view returns (uint256);
+    function vaultAssetValue(IERC20Upgradeable token) external view returns (uint256);
 
     /// @notice The ERC20 token that can be deposited into this vault.
     function underlying() external view returns (IERC20Upgradeable);
