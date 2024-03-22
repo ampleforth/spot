@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import { IERC20Upgradeable, IPerpetualTranche, IBondController, ITranche, IFeePolicy } from "./_interfaces/IPerpetualTranche.sol";
-import { IVault } from "./_interfaces/IVault.sol";
-import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
-import { IERC20Burnable } from "./_interfaces/IERC20Burnable.sol";
-import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/CommonTypes.sol";
-import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, OutOfBounds, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit, InvalidPerc, InsufficientLiquidity } from "./_interfaces/ProtocolErrors.sol";
+import { IERC20Upgradeable, IPerpetualTranche, IBondController, ITranche, IBalancer } from "./_interfaces/IPerpetualTranche.sol";
+import { IRolloverVault, IVault } from "./_interfaces/IRolloverVault.sol";
+import { TokenAmount, RolloverData } from "./_interfaces/CommonTypes.sol";
+import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedAsset, OutOfBounds, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit, InsufficientLiquidity } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -59,6 +57,7 @@ contract RolloverVault is
 
     // ERC20 operations
     using SafeERC20Upgradeable for IERC20Upgradeable;
+    using SafeERC20Upgradeable for ITranche;
 
     // math
     using MathUpgradeable for uint256;
@@ -72,15 +71,7 @@ contract RolloverVault is
     event AssetSynced(IERC20Upgradeable token, uint256 balance);
 
     //-------------------------------------------------------------------------
-    // Constants
-
-    /// @dev Number of decimals for a multiplier of 1.0x (i.e. 100%)
-    uint8 public constant FEE_POLICY_DECIMALS = 8;
-    uint256 public constant FEE_ONE = (10 ** FEE_POLICY_DECIMALS);
-
-    /// @dev Internal percentages are fixed point numbers with {PERC_DECIMALS} places.
-    uint8 public constant PERC_DECIMALS = 8;
-    uint256 public constant ONE = (10 ** PERC_DECIMALS); // 1.0 or 100%
+    // Constants & Immutables
 
     /// @dev Initial exchange rate between the underlying asset and notes.
     uint256 private constant INITIAL_RATE = 10 ** 6;
@@ -124,8 +115,8 @@ contract RolloverVault is
     //--------------------------------------------------------------------------
     // v2.0.0 STORAGE ADDITION
 
-    /// @notice External contract that orchestrates fees across the spot protocol.
-    IFeePolicy public feePolicy;
+    /// @notice External contract that orchestrates external interactions with the spot protocol.
+    IBalancer public balancer;
 
     /// @notice Reference to the address that has the ability to pause/unpause operations.
     /// @dev The keeper is meant for time-sensitive operations, and may be different from the owner address.
@@ -138,10 +129,11 @@ contract RolloverVault is
     ///      This parameter ensures that the vault's tvl is never too low, which guards against the "share" manipulation attack.
     uint256 public minUnderlyingBal;
 
-    /// @notice The enforced minimum percentage of the vault's value to be held as underlying tokens.
-    /// @dev The percentage minimum is enforced after swaps which reduce the vault's underlying token liquidity.
-    ///      This ensures that the vault has sufficient liquid underlying tokens for upcoming rollovers.
-    uint256 public minUnderlyingPerc;
+    /// @notice DEPRECATED
+    /// @dev The was used to enforce minimum percentage of the vault's value to be held as underlying tokens.
+    ///      This check has been moved to the balancer.
+    // solhint-disable-next-line var-name-mixedcase
+    uint256 private _minUnderlyingPerc_DEPRECATED;
 
     //--------------------------------------------------------------------------
     // Modifiers
@@ -151,6 +143,20 @@ contract RolloverVault is
         if (msg.sender != keeper) {
             revert UnauthorizedCall();
         }
+        _;
+    }
+
+    /// @dev Throws if called not called by the balancer.
+    modifier onlyBalancer() {
+        if (address(balancer) != _msgSender()) {
+            revert UnauthorizedCall();
+        }
+        _;
+    }
+
+    /// @dev Redeem intermediate tranches if possible.
+    modifier onAfterRecover() {
+        recover();
         _;
     }
 
@@ -166,13 +172,7 @@ contract RolloverVault is
     /// @param name ERC-20 Name of the vault token.
     /// @param symbol ERC-20 Symbol of the vault token.
     /// @param perp_ ERC-20 address of the perpetual tranche rolled over.
-    /// @param feePolicy_ Address of the fee policy contract.
-    function init(
-        string memory name,
-        string memory symbol,
-        IPerpetualTranche perp_,
-        IFeePolicy feePolicy_
-    ) external initializer {
+    function init(string memory name, string memory symbol, IPerpetualTranche perp_) external initializer {
         // initialize dependencies
         __ERC20_init(name, symbol);
         __ERC20Burnable_init();
@@ -186,16 +186,12 @@ contract RolloverVault is
         // set reference to perp
         perp = perp_;
 
-        // set the reference to the fee policy
-        updateFeePolicy(feePolicy_);
-
         // set keeper reference
         updateKeeper(owner());
 
         // setting initial parameter values
         minDeploymentAmt = 0;
         minUnderlyingBal = 0;
-        minUnderlyingPerc = ONE / 3; // 33%
 
         // sync underlying
         _syncAsset(underlying);
@@ -205,12 +201,9 @@ contract RolloverVault is
     // Owner only methods
 
     /// @notice Update the reference to the fee policy contract.
-    /// @param feePolicy_ New strategy address.
-    function updateFeePolicy(IFeePolicy feePolicy_) public onlyOwner {
-        if (feePolicy_.decimals() != FEE_POLICY_DECIMALS) {
-            revert UnexpectedDecimals();
-        }
-        feePolicy = feePolicy_;
+    /// @param balancer_ New strategy address.
+    function updateBalancer(IBalancer balancer_) external onlyOwner {
+        balancer = balancer_;
     }
 
     /// @notice Transfers a non-vault token out of the contract, which may have been added accidentally.
@@ -257,13 +250,159 @@ contract RolloverVault is
         minUnderlyingBal = minUnderlyingBal_;
     }
 
-    /// @notice Updates the minimum underlying percentage requirement (Expressed as a percentage).
-    /// @param minUnderlyingPerc_ The new minimum underlying percentage.
-    function updateMinUnderlyingPerc(uint256 minUnderlyingPerc_) external onlyKeeper {
-        if (minUnderlyingPerc_ > ONE) {
-            revert InvalidPerc();
+    //--------------------------------------------------------------------------
+    // Balancer only methods
+
+    /// @inheritdoc IVault
+    function deposit(
+        uint256 underlyingAmtIn
+    ) external override onlyBalancer nonReentrant whenNotPaused returns (uint256) {
+        uint256 notes = computeMintAmt(underlyingAmtIn);
+        if (underlyingAmtIn <= 0 || notes <= 0) {
+            return 0;
         }
-        minUnderlyingPerc = minUnderlyingPerc_;
+
+        // transfer underlying tokens in
+        underlying.safeTransferFrom(_msgSender(), address(this), underlyingAmtIn);
+
+        // mint notes
+        _mint(_msgSender(), notes);
+
+        // sync underlying
+        _syncAsset(underlying);
+        return notes;
+    }
+
+    /// @inheritdoc IRolloverVault
+    function deposit(
+        ITranche trancheIn,
+        uint256 trancheInAmt
+    ) external override onlyBalancer nonReentrant whenNotPaused returns (uint256) {
+        uint256 notes = computeMintAmt(trancheIn, trancheInAmt);
+        if (trancheInAmt <= 0 || notes <= 0) {
+            return 0;
+        }
+
+        // transfer tranches in
+        trancheIn.safeTransferFrom(_msgSender(), address(this), trancheInAmt);
+
+        // mint notes
+        _mint(_msgSender(), notes);
+
+        // sync underlying
+        _syncAsset(underlying);
+        return notes;
+    }
+
+    /// @inheritdoc IVault
+    function redeem(
+        uint256 notes
+    ) external override onlyBalancer onAfterRecover nonReentrant whenNotPaused returns (TokenAmount[] memory) {
+        if (notes <= 0) {
+            return new TokenAmount[](0);
+        }
+
+        TokenAmount[] memory redemptions = computeRedemptionAmts(notes);
+
+        // burn notes
+        _burn(_msgSender(), notes);
+
+        // transfer assets out
+        for (uint8 i = 0; i < redemptions.length; i++) {
+            if (redemptions[i].amount == 0) {
+                continue;
+            }
+
+            // Transfer token share out
+            redemptions[i].token.safeTransfer(_msgSender(), redemptions[i].amount);
+
+            // sync balances, wkt i=0 is the underlying and remaining are tranches
+            if (i == 0) {
+                _syncAsset(redemptions[i].token);
+            } else {
+                _syncDeployedAsset(redemptions[i].token);
+            }
+        }
+        return redemptions;
+    }
+
+    /// @notice Allows users to swap their underlying tokens for perps held by the vault.
+    /// @param underlyingAmtIn The amount of underlying tokens swapped in.
+    /// @return The amount of perp tokens swapped out.
+    /// @dev Callers should call `recover` before executing `swapUnderlyingForPerps` to maximize vault liquidity.
+    function swapUnderlyingForPerps(
+        uint256 underlyingAmtIn
+    ) external onlyBalancer nonReentrant whenNotPaused returns (uint256) {
+        IERC20Upgradeable underlying_ = underlying;
+        IPerpetualTranche perp_ = perp;
+
+        uint256 perpSupply = perp_.totalSupply();
+        uint256 perpTVL = perp_.getTVL();
+        uint256 perpAmtOut = underlyingAmtIn.mulDiv(perpSupply, perpTVL);
+
+        // Revert if insufficient tokens are swapped in or out
+        if (perpAmtOut <= 0 || underlyingAmtIn <= 0) {
+            revert UnacceptableSwap();
+        }
+
+        // transfer underlying in
+        underlying_.safeTransferFrom(_msgSender(), address(this), underlyingAmtIn);
+
+        // tranche and mint perps as needed
+        _trancheAndMintPerps(perp_, underlying_, perpTVL, perpSupply, perpAmtOut);
+
+        // transfer remaining perps out to the user
+        IERC20Upgradeable(address(perp_)).safeTransfer(_msgSender(), perpAmtOut);
+
+        // NOTE: In case this operation mints slightly more perps than that are required for the swap,
+        // The vault continues to hold the perp dust until the subsequent `swapPerpsForUnderlying` or manual `recover(perp)`.
+
+        // Revert if vault liquidity is too low.
+        if (underlying_.balanceOf(address(this)) <= minUnderlyingBal) {
+            revert InsufficientLiquidity();
+        }
+
+        // sync underlying
+        _syncAsset(underlying_);
+
+        return perpAmtOut;
+    }
+
+    /// @notice Allows users to swap their perp tokens for underlying tokens held by the vault.
+    /// @param perpAmtIn The amount of perp tokens swapped in.
+    /// @return The amount of underlying tokens swapped out.
+    function swapPerpsForUnderlying(
+        uint256 perpAmtIn
+    ) external onlyBalancer nonReentrant whenNotPaused returns (uint256) {
+        // Calculates the fee adjusted underlying amount to transfer to the user.
+        IPerpetualTranche perp_ = perp;
+        IERC20Upgradeable underlying_ = underlying;
+
+        uint256 underlyingAmtOut = perpAmtIn.mulDiv(perp_.getTVL(), perp_.totalSupply());
+
+        // Revert if insufficient tokens are swapped in or out
+        if (underlyingAmtOut <= 0 || perpAmtIn <= 0) {
+            revert UnacceptableSwap();
+        }
+
+        // transfer perps in
+        IERC20Upgradeable(perp_).safeTransferFrom(_msgSender(), address(this), perpAmtIn);
+
+        // Meld incoming perps
+        _meldPerps(perp_);
+
+        // transfer underlying out
+        underlying_.safeTransfer(_msgSender(), underlyingAmtOut);
+
+        // Revert if vault liquidity is too low.
+        if (underlying_.balanceOf(address(this)) <= minUnderlyingBal) {
+            revert InsufficientLiquidity();
+        }
+
+        // sync underlying
+        _syncAsset(underlying_);
+
+        return underlyingAmtOut;
     }
 
     //--------------------------------------------------------------------------
@@ -297,7 +436,7 @@ contract RolloverVault is
         }
 
         // We tranche all the underlying held by the vault to create seniors and juniors
-        _tranche(perp_.getDepositBond(), underlying_, usableBal);
+        _tranche(perp_.depositBond(), underlying_, usableBal);
 
         // Newly minted seniors are rolled into perp
         if (!_rollover(perp_, underlying_)) {
@@ -380,295 +519,12 @@ contract RolloverVault is
         revert UnexpectedAsset();
     }
 
-    /// @inheritdoc IVault
-    function deposit(uint256 underlyingAmtIn) external override nonReentrant whenNotPaused returns (uint256) {
-        // Calculates the fee adjusted amount of notes minted when depositing `underlyingAmtIn` of underlying tokens.
-        // NOTE: This operation should precede any token transfers.
-        uint256 notes = computeMintAmt(underlyingAmtIn);
-        if (underlyingAmtIn <= 0 || notes <= 0) {
-            return 0;
-        }
-
-        // transfer user assets in
-        underlying.safeTransferFrom(msg.sender, address(this), underlyingAmtIn);
-
-        // mint notes
-        _mint(msg.sender, notes);
-
-        // sync underlying
-        _syncAsset(underlying);
-        return notes;
-    }
-
-    /// @inheritdoc IVault
-    function redeem(uint256 notes) public override nonReentrant whenNotPaused returns (TokenAmount[] memory) {
-        if (notes <= 0) {
-            return new TokenAmount[](0);
-        }
-
-        // Calculates the fee adjusted share of vault tokens to be redeemed
-        // NOTE: This operation should precede any token transfers.
-        TokenAmount[] memory redemptions = computeRedemptionAmts(notes);
-
-        // burn notes
-        _burn(msg.sender, notes);
-
-        // transfer assets out
-        uint8 redemptionsCount = uint8(redemptions.length);
-        for (uint8 i = 0; i < redemptionsCount; ++i) {
-            if (redemptions[i].amount == 0) {
-                continue;
-            }
-
-            // Transfer token share out
-            redemptions[i].token.safeTransfer(msg.sender, redemptions[i].amount);
-
-            // sync balances, wkt i=0 is the underlying and remaining are tranches
-            if (i == 0) {
-                _syncAsset(redemptions[i].token);
-            } else {
-                _syncDeployedAsset(redemptions[i].token);
-            }
-        }
-        return redemptions;
-    }
-
-    /// @inheritdoc IVault
-    function recoverAndRedeem(uint256 notes) external override returns (TokenAmount[] memory) {
-        recover();
-        return redeem(notes);
-    }
-
-    /// @inheritdoc IRolloverVault
-    /// @dev Callers should call `recover` before executing `swapUnderlyingForPerps` to maximize vault liquidity.
-    function swapUnderlyingForPerps(uint256 underlyingAmtIn) external nonReentrant whenNotPaused returns (uint256) {
-        // Calculates the fee adjusted perp amount to transfer to the user.
-        // NOTE: This operation should precede any token transfers.
-        IERC20Upgradeable underlying_ = underlying;
-        IPerpetualTranche perp_ = perp;
-        (uint256 perpAmtOut, uint256 perpFeeAmtToBurn, SubscriptionParams memory s) = computeUnderlyingToPerpSwapAmt(
-            underlyingAmtIn
-        );
-
-        // Revert if insufficient tokens are swapped in or out
-        if (perpAmtOut <= 0 || underlyingAmtIn <= 0) {
-            revert UnacceptableSwap();
-        }
-
-        // transfer underlying in
-        underlying_.safeTransferFrom(msg.sender, address(this), underlyingAmtIn);
-
-        // tranche and mint perps as needed
-        _trancheAndMintPerps(perp_, underlying_, s.perpTVL, s.seniorTR, perpAmtOut + perpFeeAmtToBurn);
-
-        // Pay perp's fee share by burning some of the minted perps
-        if (perpFeeAmtToBurn > 0) {
-            IERC20Burnable(address(perp_)).burn(perpFeeAmtToBurn);
-        }
-
-        // transfer remaining perps out to the user
-        IERC20Upgradeable(address(perp_)).safeTransfer(msg.sender, perpAmtOut);
-
-        // NOTE: In case this operation mints slightly more perps than that are required for the swap,
-        // The vault continues to hold the perp dust until the subsequent `swapPerpsForUnderlying` or manual `recover(perp)`.
-
-        // Revert if vault liquidity is too low.
-        _enforceUnderlyingBalAfterSwap(underlying_, s.vaultTVL);
-
-        // sync underlying
-        _syncAsset(underlying_);
-
-        return perpAmtOut;
-    }
-
-    /// @inheritdoc IRolloverVault
-    function swapPerpsForUnderlying(uint256 perpAmtIn) external nonReentrant whenNotPaused returns (uint256) {
-        // Calculates the fee adjusted underlying amount to transfer to the user.
-        IPerpetualTranche perp_ = perp;
-        IERC20Upgradeable underlying_ = underlying;
-        (
-            uint256 underlyingAmtOut,
-            uint256 perpFeeAmtToBurn,
-            SubscriptionParams memory s
-        ) = computePerpToUnderlyingSwapAmt(perpAmtIn);
-
-        // Revert if insufficient tokens are swapped in or out
-        if (underlyingAmtOut <= 0 || perpAmtIn <= 0) {
-            revert UnacceptableSwap();
-        }
-
-        // transfer perps in
-        IERC20Upgradeable(perp_).safeTransferFrom(msg.sender, address(this), perpAmtIn);
-
-        // Pay perp's fee share by burning some of the transferred perps
-        if (perpFeeAmtToBurn > 0) {
-            IERC20Burnable(address(perp_)).burn(perpFeeAmtToBurn);
-        }
-
-        // Meld incoming perps
-        _meldPerps(perp_);
-
-        // transfer underlying out
-        underlying_.safeTransfer(msg.sender, underlyingAmtOut);
-
-        // Revert if vault liquidity is too low.
-        _enforceUnderlyingBalAfterSwap(underlying_, s.vaultTVL);
-
-        // sync underlying
-        _syncAsset(underlying_);
-
-        return underlyingAmtOut;
-    }
-
-    //--------------------------------------------------------------------------
-    // External & Public methods
-
-    /// @inheritdoc IRolloverVault
-    function computeUnderlyingToPerpSwapAmt(
-        uint256 underlyingAmtIn
-    ) public returns (uint256, uint256, SubscriptionParams memory) {
-        IPerpetualTranche perp_ = perp;
-        // Compute equal value perps to swap out to the user
-        SubscriptionParams memory s = _querySubscriptionState(perp_);
-        uint256 perpAmtOut = underlyingAmtIn.mulDiv(perp_.totalSupply(), s.perpTVL);
-
-        //-----------------------------------------------------------------------------
-        // When user swaps underlying for vault's perps -> perps are minted by the vault
-        // We thus compute fees based on the post-mint subscription state.
-        uint256 perpFeePerc = feePolicy.computePerpMintFeePerc();
-        uint256 vaultFeePerc = feePolicy.computeUnderlyingToPerpVaultSwapFeePerc(
-            feePolicy.computeDeviationRatio(s),
-            feePolicy.computeDeviationRatio(
-                SubscriptionParams({ perpTVL: s.perpTVL + underlyingAmtIn, vaultTVL: s.vaultTVL, seniorTR: s.seniorTR })
-            )
-        );
-        //-----------------------------------------------------------------------------
-
-        // Calculate perp fee share to be paid by the vault
-        uint256 perpFeeAmtToBurn = perpAmtOut.mulDiv(perpFeePerc, FEE_ONE, MathUpgradeable.Rounding.Up);
-
-        // We deduct fees by transferring out fewer perp tokens
-        perpAmtOut = perpAmtOut.mulDiv(FEE_ONE - (perpFeePerc + vaultFeePerc), FEE_ONE);
-
-        return (perpAmtOut, perpFeeAmtToBurn, s);
-    }
-
-    /// @inheritdoc IRolloverVault
-    function computePerpToUnderlyingSwapAmt(
-        uint256 perpAmtIn
-    ) public returns (uint256, uint256, SubscriptionParams memory) {
-        IPerpetualTranche perp_ = perp;
-        // Compute equal value underlying tokens to swap out
-        SubscriptionParams memory s = _querySubscriptionState(perp_);
-        uint256 underlyingAmtOut = perpAmtIn.mulDiv(s.perpTVL, perp_.totalSupply());
-
-        //-----------------------------------------------------------------------------
-        // When user swaps perps for vault's underlying -> perps are redeemed by the vault
-        // We thus compute fees based on the post-burn subscription state.
-        uint256 perpFeePerc = feePolicy.computePerpBurnFeePerc();
-        uint256 vaultFeePerc = feePolicy.computePerpToUnderlyingVaultSwapFeePerc(
-            feePolicy.computeDeviationRatio(s),
-            feePolicy.computeDeviationRatio(
-                SubscriptionParams({
-                    perpTVL: s.perpTVL - underlyingAmtOut,
-                    vaultTVL: s.vaultTVL,
-                    seniorTR: s.seniorTR
-                })
-            )
-        );
-        //-----------------------------------------------------------------------------
-
-        // Calculate perp fee share to be paid by the vault
-        uint256 perpFeeAmtToBurn = perpAmtIn.mulDiv(perpFeePerc, FEE_ONE, MathUpgradeable.Rounding.Up);
-
-        // We deduct fees by transferring out fewer underlying tokens
-        underlyingAmtOut = underlyingAmtOut.mulDiv(FEE_ONE - (perpFeePerc + vaultFeePerc), FEE_ONE);
-
-        return (underlyingAmtOut, perpFeeAmtToBurn, s);
-    }
-
     //--------------------------------------------------------------------------
     // External & Public read methods
 
     /// @inheritdoc IVault
-    function computeMintAmt(uint256 underlyingAmtIn) public view returns (uint256) {
-        //-----------------------------------------------------------------------------
-        uint256 feePerc = feePolicy.computeVaultMintFeePerc();
-        //-----------------------------------------------------------------------------
-
-        // Compute mint amt
-        uint256 noteSupply = totalSupply();
-        uint256 notes = (noteSupply > 0)
-            ? noteSupply.mulDiv(underlyingAmtIn, getTVL())
-            : (underlyingAmtIn * INITIAL_RATE);
-
-        // The mint fees are settled by simply minting fewer vault notes.
-        notes = notes.mulDiv(FEE_ONE - feePerc, FEE_ONE);
-        return notes;
-    }
-
-    /// @inheritdoc IVault
-    function computeRedemptionAmts(uint256 noteAmtBurnt) public view returns (TokenAmount[] memory) {
-        uint256 noteSupply = totalSupply();
-
-        //-----------------------------------------------------------------------------
-        uint256 feePerc = feePolicy.computeVaultBurnFeePerc();
-        //-----------------------------------------------------------------------------
-        uint8 assetCount_ = 1 + uint8(_deployed.length());
-
-        // aggregating vault assets to be redeemed
-        TokenAmount[] memory redemptions = new TokenAmount[](assetCount_);
-
-        // underlying share to be redeemed
-        IERC20Upgradeable underlying_ = underlying;
-        redemptions[0] = TokenAmount({
-            token: underlying_,
-            amount: underlying_.balanceOf(address(this)).mulDiv(noteAmtBurnt, noteSupply)
-        });
-        redemptions[0].amount = redemptions[0].amount.mulDiv(FEE_ONE - feePerc, FEE_ONE);
-
-        for (uint8 i = 1; i < assetCount_; ++i) {
-            // tranche token share to be redeemed
-            IERC20Upgradeable token = IERC20Upgradeable(_deployed.at(i - 1));
-            redemptions[i] = TokenAmount({
-                token: token,
-                amount: token.balanceOf(address(this)).mulDiv(noteAmtBurnt, noteSupply)
-            });
-
-            // deduct redemption fee
-            redemptions[i].amount = redemptions[i].amount.mulDiv(FEE_ONE - feePerc, FEE_ONE);
-
-            // in case the redemption amount is just dust, we skip
-            if (redemptions[i].amount < TRANCHE_DUST_AMT) {
-                redemptions[i].amount = 0;
-            }
-        }
-
-        return redemptions;
-    }
-
-    /// @inheritdoc IVault
-    /// @dev The total value is denominated in the underlying asset.
-    function getTVL() public view override returns (uint256) {
-        // The underlying balance
-        uint256 totalValue = underlying.balanceOf(address(this));
-
-        // The deployed asset value denominated in the underlying
-        uint8 deployedCount_ = uint8(_deployed.length());
-        for (uint8 i = 0; i < deployedCount_; ++i) {
-            ITranche tranche = ITranche(_deployed.at(i));
-            uint256 balance = tranche.balanceOf(address(this));
-            if (balance > TRANCHE_DUST_AMT) {
-                totalValue += _computeVaultTrancheValue(tranche, underlying, balance);
-            }
-        }
-
-        return totalValue;
-    }
-
-    /// @inheritdoc IVault
     /// @dev The asset value is denominated in the underlying asset.
-    function getVaultAssetValue(IERC20Upgradeable token) external view override returns (uint256) {
+    function vaultAssetValue(IERC20Upgradeable token) external view override returns (uint256) {
         uint256 balance = token.balanceOf(address(this));
 
         // Underlying asset
@@ -706,8 +562,84 @@ contract RolloverVault is
     }
 
     /// @inheritdoc IVault
+    function computeMintAmt(uint256 underlyingAmtIn) public view override returns (uint256) {
+        uint256 noteSupply = totalSupply();
+        uint256 notes = (noteSupply > 0)
+            ? noteSupply.mulDiv(underlyingAmtIn, getTVL())
+            : (underlyingAmtIn * INITIAL_RATE);
+        return notes;
+    }
+
+    /// @inheritdoc IRolloverVault
+    function computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) public view override returns (uint256) {
+        uint256 noteSupply = totalSupply();
+        uint256 valueIn = _computeVaultTrancheValue(trancheIn, underlying, trancheInAmt);
+        return noteSupply.mulDiv(valueIn, getTVL());
+    }
+
+    /// @inheritdoc IVault
+    function computeRedemptionAmts(uint256 noteAmtBurnt) public view override returns (TokenAmount[] memory) {
+        uint256 noteSupply = totalSupply();
+        uint8 assetCount_ = 1 + uint8(_deployed.length());
+
+        // aggregating vault assets to be redeemed
+        TokenAmount[] memory redemptions = new TokenAmount[](assetCount_);
+
+        // underlying share to be redeemed
+        IERC20Upgradeable underlying_ = underlying;
+        redemptions[0] = TokenAmount({
+            token: underlying_,
+            amount: underlying_.balanceOf(address(this)).mulDiv(noteAmtBurnt, noteSupply)
+        });
+
+        for (uint8 i = 1; i < assetCount_; i++) {
+            // tranche token share to be redeemed
+            IERC20Upgradeable token = IERC20Upgradeable(_deployed.at(i - 1));
+            redemptions[i] = TokenAmount({
+                token: token,
+                amount: token.balanceOf(address(this)).mulDiv(noteAmtBurnt, noteSupply)
+            });
+
+            // in case the redemption amount is just dust, we skip
+            if (redemptions[i].amount < TRANCHE_DUST_AMT) {
+                redemptions[i].amount = 0;
+            }
+        }
+
+        return redemptions;
+    }
+
+    /// @inheritdoc IVault
+    /// @dev The total value is denominated in the underlying asset.
+    function getTVL() public view override returns (uint256) {
+        // The underlying balance
+        uint256 totalValue = underlying.balanceOf(address(this));
+
+        // The deployed asset value denominated in the underlying
+        for (uint8 i = 0; i < _deployed.length(); i++) {
+            ITranche tranche = ITranche(_deployed.at(i));
+            uint256 balance = tranche.balanceOf(address(this));
+            if (balance > TRANCHE_DUST_AMT) {
+                totalValue += _computeVaultTrancheValue(tranche, underlying, balance);
+            }
+        }
+
+        return totalValue;
+    }
+
+    /// @inheritdoc IVault
     function isVaultAsset(IERC20Upgradeable token) public view override returns (bool) {
         return token == underlying || _deployed.contains(address(token));
+    }
+
+    /// @inheritdoc IRolloverVault
+    function computeUnderlyingToPerpSwapAmt(uint256 underlyingAmtIn) public view override returns (uint256) {
+        return underlyingAmtIn.mulDiv(perp.totalSupply(), perp.getTVL());
+    }
+
+    /// @inheritdoc IRolloverVault
+    function computePerpToUnderlyingSwapAmt(uint256 perpAmtIn) public view override returns (uint256) {
+        return perpAmtIn.mulDiv(perp.getTVL(), perp.totalSupply());
     }
 
     //--------------------------------------------------------------------------
@@ -775,26 +707,26 @@ contract RolloverVault is
         }
     }
 
-    /// @dev Tranches the vault's underlying to mint perps..
+    /// @dev Tranches the vault's underlying to mint perps.
     ///      Performs some book-keeping to keep track of the vault's assets.
     function _trancheAndMintPerps(
         IPerpetualTranche perp_,
         IERC20Upgradeable underlying_,
         uint256 perpTVL,
-        uint256 seniorTR,
+        uint256 perpSupply,
         uint256 perpAmtToMint
     ) private {
         // Tranche as needed
-        IBondController depositBond = perp_.getDepositBond();
-        ITranche trancheIntoPerp = perp_.getDepositTranche();
+        IBondController depositBond = perp_.depositBond();
+        ITranche trancheIntoPerp = perp_.depositTranche();
         (uint256 underylingAmtToTranche, uint256 seniorAmtToDeposit) = PerpHelpers.estimateUnderlyingAmtToTranche(
             PerpHelpers.MintEstimationParams({
                 perpTVL: perpTVL,
-                perpSupply: perp_.totalSupply(),
+                perpSupply: perpSupply,
                 depositBondCollateralBalance: underlying_.balanceOf(address(depositBond)),
                 depositBondTotalDebt: depositBond.totalDebt(),
                 depositTrancheSupply: trancheIntoPerp.totalSupply(),
-                depositTrancheTR: seniorTR
+                depositTrancheTR: perp.depositTrancheRatio()
             }),
             perpAmtToMint
         );
@@ -831,13 +763,13 @@ contract RolloverVault is
     function _rollover(IPerpetualTranche perp_, IERC20Upgradeable underlying_) private returns (bool) {
         // NOTE: The first element of the list is the mature tranche,
         //       there after the list is NOT ordered by maturity.
-        IERC20Upgradeable[] memory rolloverTokens = perp_.getReserveTokensUpForRollover();
+        IERC20Upgradeable[] memory rolloverTokens = perp_.reserveTokensUpForRollover();
 
         // Batch rollover
         bool rollover = false;
 
         // We query perp's current deposit tranche
-        ITranche trancheIntoPerp = perp_.getDepositTranche();
+        ITranche trancheIntoPerp = perp_.depositTranche();
 
         // Compute available tranche in to rollover
         uint256 trancheInAmtAvailable = trancheIntoPerp.balanceOf(address(this));
@@ -940,16 +872,6 @@ contract RolloverVault is
         }
     }
 
-    /// @dev Queries the current subscription state of the perp and vault systems.
-    function _querySubscriptionState(IPerpetualTranche perp_) private returns (SubscriptionParams memory) {
-        return
-            SubscriptionParams({
-                perpTVL: perp_.getTVL(),
-                vaultTVL: getTVL(),
-                seniorTR: perp_.getDepositTrancheRatio()
-            });
-    }
-
     //--------------------------------------------------------------------------
     // Private methods
 
@@ -962,16 +884,5 @@ contract RolloverVault is
     ) private view returns (uint256) {
         (uint256 trancheClaim, uint256 trancheSupply) = tranche.getTrancheCollateralization(collateralToken);
         return trancheClaim.mulDiv(trancheAmt, trancheSupply, MathUpgradeable.Rounding.Up);
-    }
-
-    /// @dev Checks if the vault's underlying balance is above admin defined constraints.
-    ///      - Absolute balance is strictly greater than `minUnderlyingBal`.
-    ///      - Ratio of the balance to the vault's TVL is strictly greater than `minUnderlyingPerc`.
-    ///      NOTE: We assume the vault TVL and the underlying to have the same base denomination.
-    function _enforceUnderlyingBalAfterSwap(IERC20Upgradeable underlying_, uint256 vaultTVL) private view {
-        uint256 underlyingBal = underlying_.balanceOf(address(this));
-        if (underlyingBal <= minUnderlyingBal || underlyingBal.mulDiv(ONE, vaultTVL) <= minUnderlyingPerc) {
-            revert InsufficientLiquidity();
-        }
     }
 }
