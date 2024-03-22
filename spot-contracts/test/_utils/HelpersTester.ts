@@ -1,8 +1,6 @@
-import { expect, use } from "chai";
+import { expect } from "chai";
 import { network, ethers } from "hardhat";
 import { Contract, Signer } from "ethers";
-import { smock } from "@defi-wonderland/smock";
-
 import {
   TimeHelpers,
   setupCollateralToken,
@@ -15,8 +13,8 @@ import {
   getTranches,
   getContractFactoryFromExternalArtifacts,
   mintCollteralToken,
+  DMock,
 } from "../helpers";
-use(smock.matchers);
 
 let bondFactory: Contract,
   collateralToken: Contract,
@@ -37,13 +35,10 @@ async function setupContracts() {
   deployerAddress = await deployer.getAddress();
   user = accounts[1];
   userAddress = await user.getAddress();
-
   bondFactory = await setupBondFactory();
   ({ collateralToken, rebaseOracle } = await setupCollateralToken("Bitcoin", "BTC"));
-
   const HelpersTester = await ethers.getContractFactory("HelpersTester");
   helper = await HelpersTester.deploy();
-  await helper.deployed();
 }
 
 describe("HelpersTester", function () {
@@ -52,28 +47,28 @@ describe("HelpersTester", function () {
   });
 
   after(async function () {
-    await network.provider.send("hardhat_reset");
+    await network.provider.request({ method: "hardhat_reset" });
   });
 
   describe("#timeToMatirity", function () {
-    let maturityDate: number, bondLength: number, bond: Contract;
+    let maturityDate: BigInt, bondLength: BigInt, bond: Contract;
     beforeEach(async function () {
       bondLength = 86400;
       bond = await createBondWithFactory(bondFactory, collateralToken, [1000], bondLength);
-      maturityDate = (await bond.maturityDate()).toNumber();
+      maturityDate = await bond.maturityDate();
     });
 
     describe("when bond is NOT mature", function () {
       it("should return the time to maturity", async function () {
-        await TimeHelpers.setNextBlockTimestamp(maturityDate - bondLength / 2);
-        expect(await helper.secondsToMaturity(bond.address)).to.eq(bondLength / 2);
+        await TimeHelpers.setNextBlockTimestamp(Number(maturityDate) - bondLength / 2);
+        expect(await helper.secondsToMaturity(bond.target)).to.eq(bondLength / 2);
       });
     });
 
     describe("when bond is mature", function () {
       it("should return the time to maturity", async function () {
-        await TimeHelpers.setNextBlockTimestamp(maturityDate + 1);
-        expect(await helper.secondsToMaturity(bond.address)).to.eq(0);
+        await TimeHelpers.setNextBlockTimestamp(Number(maturityDate) + 1);
+        expect(await helper.secondsToMaturity(bond.target)).to.eq(0);
       });
     });
   });
@@ -85,7 +80,7 @@ describe("HelpersTester", function () {
     });
 
     it("should return the tranche data", async function () {
-      const td = await helper.getTranches(bond.address);
+      const td = await helper.getTranches(bond.target);
       expect(td.tranches.length).to.eq(2);
       expect(td.trancheRatios.length).to.eq(2);
       expect(td.trancheRatios[0]).to.eq(498);
@@ -99,24 +94,24 @@ describe("HelpersTester", function () {
     it("should return the tranche when given index", async function () {
       const bond = await createBondWithFactory(bondFactory, collateralToken, [100, 100, 100, 100, 100, 500], 86400);
       for (let i = 0; i < 6; i++) {
-        expect(await helper.trancheAt(bond.address, i)).to.eq((await bond.tranches(i))[0]);
+        expect(await helper.trancheAt(bond.target, i)).to.eq((await bond.tranches(i))[0]);
       }
-      await expect(helper.trancheAt(bond.address, 7)).to.be.reverted;
+      await expect(helper.trancheAt(bond.target, 7)).to.be.reverted;
     });
   });
 
-  describe("#getSeniorTranche", function () {
+  describe("#seniorTranche", function () {
     it("should return the tranche when given index", async function () {
       const bond = await createBondWithFactory(bondFactory, collateralToken, [300, 700], 86400);
-      const td = await helper.getTranches(bond.address);
-      expect(await helper.getSeniorTranche(bond.address)).to.eq(td.tranches[0]);
+      const td = await helper.getTranches(bond.target);
+      expect(await helper.seniorTranche(bond.target)).to.eq(td.tranches[0]);
     });
   });
 
-  describe("#getSeniorTrancheRatio", function () {
+  describe("#seniorTrancheRatio", function () {
     it("should return the tranche when given index", async function () {
       const bond = await createBondWithFactory(bondFactory, collateralToken, [50, 950], 86400);
-      const ratio = await helper.getSeniorTrancheRatio(bond.address);
+      const ratio = await helper.seniorTrancheRatio(bond.target);
       expect(ratio).to.eq(50);
     });
   });
@@ -129,7 +124,7 @@ describe("HelpersTester", function () {
 
     describe("first deposit", function () {
       it("should calculate the tranche balances after deposit", async function () {
-        const d = await helper.previewDeposit(bond.address, toFixedPtAmt("1000"));
+        const d = await helper.previewDeposit(bond.target, toFixedPtAmt("1000"));
         expect(d[0].amount).to.eq(toFixedPtAmt("500"));
         expect(d[1].amount).to.eq(toFixedPtAmt("500"));
       });
@@ -152,7 +147,7 @@ describe("HelpersTester", function () {
           await rebase(collateralToken, rebaseOracle, 0);
         });
         it("should calculate the tranche balances after deposit", async function () {
-          const d = await helper.previewDeposit(bond.address, toFixedPtAmt("1000"));
+          const d = await helper.previewDeposit(bond.target, toFixedPtAmt("1000"));
           expect(d[0].amount).to.eq(toFixedPtAmt("500"));
           expect(d[1].amount).to.eq(toFixedPtAmt("500"));
         });
@@ -170,7 +165,7 @@ describe("HelpersTester", function () {
           await rebase(collateralToken, rebaseOracle, +0.25);
         });
         it("should calculate the tranche balances after deposit", async function () {
-          const d = await helper.previewDeposit(bond.address, toFixedPtAmt("1000"));
+          const d = await helper.previewDeposit(bond.target, toFixedPtAmt("1000"));
           expect(d[0].amount).to.eq(toFixedPtAmt("400"));
           expect(d[1].amount).to.eq(toFixedPtAmt("400"));
         });
@@ -188,7 +183,7 @@ describe("HelpersTester", function () {
           await rebase(collateralToken, rebaseOracle, -0.5);
         });
         it("should calculate the tranche balances after deposit", async function () {
-          const d = await helper.previewDeposit(bond.address, toFixedPtAmt("1000"));
+          const d = await helper.previewDeposit(bond.target, toFixedPtAmt("1000"));
           expect(d[0].amount).to.eq(toFixedPtAmt("1000"));
           expect(d[1].amount).to.eq(toFixedPtAmt("1000"));
         });
@@ -209,7 +204,7 @@ describe("BondTranchesHelpers", function () {
   });
 
   after(async function () {
-    await network.provider.send("hardhat_reset");
+    await network.provider.request({ method: "hardhat_reset" });
   });
 
   describe("#computeRedeemableTrancheAmounts", function () {
@@ -226,12 +221,12 @@ describe("BondTranchesHelpers", function () {
         for (const a in amounts) {
           await tranches[a].transfer(userAddress, toFixedPtAmt(amounts[a]));
         }
-        const b = await helper["computeRedeemableTrancheAmounts(address,address)"](bond.address, userAddress);
+        const b = await helper["computeRedeemableTrancheAmounts(address,address)"](bond.target, userAddress);
         for (const a in redemptionAmts) {
           expect(b[1][a]).to.eq(toFixedPtAmt(redemptionAmts[a]));
         }
-        if (b[1][0].gt("0")) {
-          await bond.connect(user).redeem(b[1]);
+        if (b[1][0] > 0n) {
+          await bond.connect(user).redeem([b[1][0], b[1][1]]);
         }
       }
 
@@ -254,26 +249,26 @@ describe("BondTranchesHelpers", function () {
 
     describe("when the user does not have tranches right proportions", function () {
       async function checkRedeemableAmts(
-        trancheRatios: number[] = [],
+        trancheRatios: BigInt[] = [],
         amounts: string[] = [],
         redemptionAmts: string[] = [],
       ) {
         const bond = await createBondWithFactory(bondFactory, collateralToken, trancheRatios, 86400);
         const amt = amounts
-          .map((a, i) => toFixedPtAmt(a).mul("1000").div(trancheRatios[i]))
-          .reduce((m, a) => (m.gt(a) ? m : a), toFixedPtAmt("0"));
-        await depositIntoBond(bond, amt.add(toFixedPtAmt("1")), deployer);
+          .map((a, i) => (toFixedPtAmt(a) * BigInt("1000")) / BigInt(trancheRatios[i]))
+          .reduce((m, a) => (m > a ? m : a), 0n);
+        await depositIntoBond(bond, amt + toFixedPtAmt("1"), deployer);
 
         const tranches = await getTranches(bond);
         for (const a in amounts) {
           await tranches[a].transfer(userAddress, toFixedPtAmt(amounts[a]));
         }
-        const b = await helper["computeRedeemableTrancheAmounts(address,address)"](bond.address, userAddress);
+        const b = await helper["computeRedeemableTrancheAmounts(address,address)"](bond.target, userAddress);
         for (const a in redemptionAmts) {
           expect(b[1][a]).to.eq(toFixedPtAmt(redemptionAmts[a]));
         }
-        if (b[1][0].gt("0")) {
-          await bond.connect(user).redeem(b[1]);
+        if (b[1][0] > 0n) {
+          await bond.connect(user).redeem([b[1][0], b[1][1]]);
         }
       }
 
@@ -391,7 +386,7 @@ describe("BondTranchesHelpers", function () {
       ) {
         bond = await createBondWithFactory(bondFactory, collateralToken, trancheRatios, 86400);
         const b = await helper["computeRedeemableTrancheAmounts(address,uint256[])"](
-          bond.address,
+          bond.target,
           amounts.map(toFixedPtAmt),
         );
         for (const a in redemptionAmts) {
@@ -436,12 +431,12 @@ describe("BondTranchesHelpers", function () {
       ) {
         const bond = await createBondWithFactory(bondFactory, collateralToken, trancheRatios, 86400);
         const amt = amounts
-          .map((a, i) => toFixedPtAmt(a).mul("1000").div(trancheRatios[i]))
-          .reduce((m, a) => (m.gt(a) ? m : a), toFixedPtAmt("0"));
-        await depositIntoBond(bond, amt.add(toFixedPtAmt("1")), deployer);
+          .map((a, i) => (toFixedPtAmt(a) * BigInt("1000")) / BigInt(trancheRatios[i]))
+          .reduce((m, a) => (m > a ? m : a), 0n);
+        await depositIntoBond(bond, amt + toFixedPtAmt("1"), deployer);
 
         const b = await helper["computeRedeemableTrancheAmounts(address,uint256[])"](
-          bond.address,
+          bond.target,
           amounts.map(toFixedPtAmt),
         );
         for (const a in redemptionAmts) {
@@ -560,11 +555,11 @@ describe("TrancheHelpers", function () {
   });
 
   after(async function () {
-    await network.provider.send("hardhat_reset");
+    await network.provider.request({ method: "hardhat_reset" });
   });
 
   describe("#getTrancheCollateralizations", function () {
-    let bond: Contract, bondLength: number, tranches: Contract[];
+    let bond: Contract, bondLength: BigInt, tranches: Contract[];
     beforeEach(async function () {
       bondLength = 86400;
       bond = await createBondWithFactory(bondFactory, collateralToken, [250, 750], bondLength);
@@ -576,7 +571,7 @@ describe("TrancheHelpers", function () {
       it("should return 0", async function () {
         const bond = await createBondWithFactory(bondFactory, collateralToken, [1000], bondLength);
         const tranches = await getTranches(bond);
-        await expect(helper.getTrancheCollateralizations(tranches[0].address)).to.be.revertedWithCustomError(
+        await expect(helper.getTrancheCollateralizations(tranches[0].target)).to.be.revertedWithCustomError(
           helper,
           "UnacceptableTrancheLength",
         );
@@ -587,7 +582,7 @@ describe("TrancheHelpers", function () {
       it("should return 0", async function () {
         const bond = await createBondWithFactory(bondFactory, collateralToken, [100, 200, 700], bondLength);
         const tranches = await getTranches(bond);
-        await expect(helper.getTrancheCollateralizations(tranches[0].address)).to.be.revertedWithCustomError(
+        await expect(helper.getTrancheCollateralizations(tranches[0].target)).to.be.revertedWithCustomError(
           helper,
           "UnacceptableTrancheLength",
         );
@@ -599,11 +594,11 @@ describe("TrancheHelpers", function () {
         const bond = await createBondWithFactory(bondFactory, collateralToken, [333, 667], bondLength);
         const tranches = await getTranches(bond);
 
-        const t0 = await helper.getTrancheCollateralizations(tranches[0].address);
+        const t0 = await helper.getTrancheCollateralizations(tranches[0].target);
         expect(t0[0]).to.eq("0");
         expect(t0[1]).to.eq("0");
 
-        const t1 = await helper.getTrancheCollateralizations(tranches[1].address);
+        const t1 = await helper.getTrancheCollateralizations(tranches[1].target);
         expect(t1[0]).to.eq("0");
         expect(t1[1]).to.eq("0");
       });
@@ -612,11 +607,11 @@ describe("TrancheHelpers", function () {
     describe("when bond not mature", function () {
       describe("when no change in supply", function () {
         it("should calculate the balances", async function () {
-          const t0 = await helper.getTrancheCollateralizations(tranches[0].address);
+          const t0 = await helper.getTrancheCollateralizations(tranches[0].target);
           expect(t0[0]).to.eq(toFixedPtAmt("250"));
           expect(t0[1]).to.eq(toFixedPtAmt("250"));
 
-          const t1 = await helper.getTrancheCollateralizations(tranches[1].address);
+          const t1 = await helper.getTrancheCollateralizations(tranches[1].target);
           expect(t1[0]).to.eq(toFixedPtAmt("750"));
           expect(t1[1]).to.eq(toFixedPtAmt("750"));
         });
@@ -625,10 +620,10 @@ describe("TrancheHelpers", function () {
       describe("when supply increases above bond threshold", function () {
         it("should calculate the balances", async function () {
           await rebase(collateralToken, rebaseOracle, 0.1);
-          const t0 = await helper.getTrancheCollateralizations(tranches[0].address);
+          const t0 = await helper.getTrancheCollateralizations(tranches[0].target);
           expect(t0[0]).to.eq(toFixedPtAmt("250"));
           expect(t0[1]).to.eq(toFixedPtAmt("250"));
-          const t1 = await helper.getTrancheCollateralizations(tranches[1].address);
+          const t1 = await helper.getTrancheCollateralizations(tranches[1].target);
           expect(t1[0]).to.eq(toFixedPtAmt("850"));
           expect(t1[1]).to.eq(toFixedPtAmt("750"));
         });
@@ -637,10 +632,10 @@ describe("TrancheHelpers", function () {
       describe("when supply decreases below bond threshold", function () {
         it("should calculate the balances", async function () {
           await rebase(collateralToken, rebaseOracle, -0.1);
-          const t0 = await helper.getTrancheCollateralizations(tranches[0].address);
+          const t0 = await helper.getTrancheCollateralizations(tranches[0].target);
           expect(t0[0]).to.eq(toFixedPtAmt("250"));
           expect(t0[1]).to.eq(toFixedPtAmt("250"));
-          const t1 = await helper.getTrancheCollateralizations(tranches[1].address);
+          const t1 = await helper.getTrancheCollateralizations(tranches[1].target);
           expect(t1[0]).to.eq(toFixedPtAmt("650"));
           expect(t1[1]).to.eq(toFixedPtAmt("750"));
         });
@@ -649,10 +644,10 @@ describe("TrancheHelpers", function () {
       describe("when supply decreases below junior threshold", function () {
         it("should calculate the balances", async function () {
           await rebase(collateralToken, rebaseOracle, -0.8);
-          const t0 = await helper.getTrancheCollateralizations(tranches[0].address);
+          const t0 = await helper.getTrancheCollateralizations(tranches[0].target);
           expect(t0[0]).to.eq(toFixedPtAmt("200"));
           expect(t0[1]).to.eq(toFixedPtAmt("250"));
-          const t1 = await helper.getTrancheCollateralizations(tranches[1].address);
+          const t1 = await helper.getTrancheCollateralizations(tranches[1].target);
           expect(t1[0]).to.eq("0");
           expect(t1[1]).to.eq(toFixedPtAmt("750"));
         });
@@ -661,16 +656,16 @@ describe("TrancheHelpers", function () {
 
     describe("when bond is mature", function () {
       beforeEach(async function () {
-        await TimeHelpers.increaseTime(bondLength);
+        await TimeHelpers.increaseTime(Number(bondLength));
         await bond.mature(); // NOTE: Any rebase after maturity goes directly to the tranches
       });
 
       describe("when no change in supply", function () {
         it("should calculate the balances", async function () {
-          const t0 = await helper.getTrancheCollateralizations(tranches[0].address);
+          const t0 = await helper.getTrancheCollateralizations(tranches[0].target);
           expect(t0[0]).to.eq(toFixedPtAmt("250"));
           expect(t0[1]).to.eq(toFixedPtAmt("250"));
-          const t1 = await helper.getTrancheCollateralizations(tranches[1].address);
+          const t1 = await helper.getTrancheCollateralizations(tranches[1].target);
           expect(t1[0]).to.eq(toFixedPtAmt("750"));
           expect(t1[1]).to.eq(toFixedPtAmt("750"));
         });
@@ -679,10 +674,10 @@ describe("TrancheHelpers", function () {
       describe("when supply increases", function () {
         it("should calculate the balances", async function () {
           await rebase(collateralToken, rebaseOracle, 0.1);
-          const t0 = await helper.getTrancheCollateralizations(tranches[0].address);
+          const t0 = await helper.getTrancheCollateralizations(tranches[0].target);
           expect(t0[0]).to.eq(toFixedPtAmt("275"));
           expect(t0[1]).to.eq(toFixedPtAmt("250"));
-          const t1 = await helper.getTrancheCollateralizations(tranches[1].address);
+          const t1 = await helper.getTrancheCollateralizations(tranches[1].target);
           expect(t1[0]).to.eq(toFixedPtAmt("825"));
           expect(t1[1]).to.eq(toFixedPtAmt("750"));
         });
@@ -691,10 +686,10 @@ describe("TrancheHelpers", function () {
       describe("when supply decreases", function () {
         it("should calculate the balances", async function () {
           await rebase(collateralToken, rebaseOracle, -0.1);
-          const t0 = await helper.getTrancheCollateralizations(tranches[0].address);
+          const t0 = await helper.getTrancheCollateralizations(tranches[0].target);
           expect(t0[0]).to.eq(toFixedPtAmt("225"));
           expect(t0[1]).to.eq(toFixedPtAmt("250"));
-          const t1 = await helper.getTrancheCollateralizations(tranches[1].address);
+          const t1 = await helper.getTrancheCollateralizations(tranches[1].target);
           expect(t1[0]).to.eq(toFixedPtAmt("675"));
           expect(t1[1]).to.eq(toFixedPtAmt("750"));
         });
@@ -707,35 +702,32 @@ describe("PerpHelpers", function () {
   beforeEach(async () => {
     await setupContracts();
 
-    const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
-    perp = await smock.fake(PerpetualTranche);
+    perp = new DMock(await ethers.getContractFactory("PerpetualTranche"));
+    await perp.deploy();
+    depositBond = new DMock(await getContractFactoryFromExternalArtifacts("BondController"));
+    await depositBond.deploy();
+    depositTranche = new DMock(await getContractFactoryFromExternalArtifacts("Tranche"));
+    await depositTranche.deploy();
 
-    const BondController = await getContractFactoryFromExternalArtifacts("BondController");
-    depositBond = await smock.fake(BondController);
-
-    const Tranche = await getContractFactoryFromExternalArtifacts("Tranche");
-    depositTranche = await smock.fake(Tranche);
-
-    await perp.getDepositBond.returns(depositBond.address);
-    await perp.totalSupply.returns(toFixedPtAmt("100"));
-
+    await perp.mockMethod("depositBond()", [depositBond.target]);
+    await perp.mockMethod("totalSupply()", [toFixedPtAmt("100")]);
     await mintCollteralToken(collateralToken, toFixedPtAmt("500"), deployer);
-    await collateralToken.transfer(depositBond.address, toFixedPtAmt("500"));
-    await depositBond.collateralToken.returns(collateralToken.address);
-    await depositBond.tranches.whenCalledWith(0).returns([depositTranche.address, 200]);
-    await depositBond.totalDebt.returns(toFixedPtAmt("500"));
-    await depositTranche.totalSupply.returns(toFixedPtAmt("100"));
+    await collateralToken.transfer(depositBond.target, toFixedPtAmt("500"));
+    await depositBond.mockMethod("collateralToken()", [collateralToken.target]);
+    await depositBond.mockMethod("tranches(uint256)", [depositTranche.target, 200]);
+    await depositBond.mockMethod("totalDebt()", [toFixedPtAmt("500")]);
+    await depositTranche.mockMethod("totalSupply()", [toFixedPtAmt("100")]);
   });
 
   after(async function () {
-    await network.provider.send("hardhat_reset");
+    await network.provider.request({ method: "hardhat_reset" });
   });
 
   describe("when perp price = 1", async function () {
     describe("when bond cdr = 1", async function () {
       it("should compute the underlying amount", async function () {
-        const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-          perp.address,
+        const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+          perp.target,
           toFixedPtAmt("100"),
           toFixedPtAmt("10"),
         );
@@ -749,8 +741,8 @@ describe("PerpHelpers", function () {
         await rebase(collateralToken, rebaseOracle, 0.1);
       });
       it("should compute the underlying amount", async function () {
-        const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-          perp.address,
+        const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+          perp.target,
           toFixedPtAmt("100"),
           toFixedPtAmt("10"),
         );
@@ -764,8 +756,8 @@ describe("PerpHelpers", function () {
         await rebase(collateralToken, rebaseOracle, -0.1);
       });
       it("should compute the underlying amount", async function () {
-        const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-          perp.address,
+        const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+          perp.target,
           toFixedPtAmt("100"),
           toFixedPtAmt("10"),
         );
@@ -779,8 +771,8 @@ describe("PerpHelpers", function () {
         await rebase(collateralToken, rebaseOracle, -0.9);
       });
       it("should compute the underlying amount", async function () {
-        const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-          perp.address,
+        const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+          perp.target,
           toFixedPtAmt("100"),
           toFixedPtAmt("10"),
         );
@@ -793,8 +785,8 @@ describe("PerpHelpers", function () {
   describe("when perp price > 1", async function () {
     describe("when bond cdr = 1", async function () {
       it("should compute the underlying amount", async function () {
-        const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-          perp.address,
+        const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+          perp.target,
           toFixedPtAmt("200"),
           toFixedPtAmt("10"),
         );
@@ -808,8 +800,8 @@ describe("PerpHelpers", function () {
         await rebase(collateralToken, rebaseOracle, 0.1);
       });
       it("should compute the underlying amount", async function () {
-        const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-          perp.address,
+        const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+          perp.target,
           toFixedPtAmt("200"),
           toFixedPtAmt("10"),
         );
@@ -823,8 +815,8 @@ describe("PerpHelpers", function () {
         await rebase(collateralToken, rebaseOracle, -0.1);
       });
       it("should compute the underlying amount", async function () {
-        const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-          perp.address,
+        const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+          perp.target,
           toFixedPtAmt("200"),
           toFixedPtAmt("10"),
         );
@@ -838,8 +830,8 @@ describe("PerpHelpers", function () {
         await rebase(collateralToken, rebaseOracle, -0.9);
       });
       it("should compute the underlying amount", async function () {
-        const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-          perp.address,
+        const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+          perp.target,
           toFixedPtAmt("200"),
           toFixedPtAmt("10"),
         );
@@ -852,8 +844,8 @@ describe("PerpHelpers", function () {
   describe("when perp price < 1", async function () {
     describe("when bond cdr = 1", async function () {
       it("should compute the underlying amount", async function () {
-        const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-          perp.address,
+        const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+          perp.target,
           toFixedPtAmt("50"),
           toFixedPtAmt("10"),
         );
@@ -867,8 +859,8 @@ describe("PerpHelpers", function () {
         await rebase(collateralToken, rebaseOracle, 0.1);
       });
       it("should compute the underlying amount", async function () {
-        const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-          perp.address,
+        const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+          perp.target,
           toFixedPtAmt("50"),
           toFixedPtAmt("10"),
         );
@@ -882,8 +874,8 @@ describe("PerpHelpers", function () {
         await rebase(collateralToken, rebaseOracle, -0.1);
       });
       it("should compute the underlying amount", async function () {
-        const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-          perp.address,
+        const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+          perp.target,
           toFixedPtAmt("50"),
           toFixedPtAmt("10"),
         );
@@ -897,8 +889,8 @@ describe("PerpHelpers", function () {
         await rebase(collateralToken, rebaseOracle, -0.9);
       });
       it("should compute the underlying amount", async function () {
-        const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-          perp.address,
+        const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+          perp.target,
           toFixedPtAmt("50"),
           toFixedPtAmt("10"),
         );
@@ -910,8 +902,8 @@ describe("PerpHelpers", function () {
 
   describe("imperfect rounding", async function () {
     it("should compute the underlying amount", async function () {
-      const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-        perp.address,
+      const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+        perp.target,
         toFixedPtAmt("100"),
         toFixedPtAmt("0.999999999999999999"),
       );
@@ -922,13 +914,13 @@ describe("PerpHelpers", function () {
 
   describe("when perp supply is zero", function () {
     beforeEach(async function () {
-      await perp.totalSupply.returns("0");
+      await perp.mockMethod("totalSupply()", [0n]);
     });
 
     describe("when bond cdr = 1", async function () {
       it("should compute the underlying amount", async function () {
-        const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-          perp.address,
+        const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+          perp.target,
           toFixedPtAmt("100"),
           toFixedPtAmt("10"),
         );
@@ -942,8 +934,8 @@ describe("PerpHelpers", function () {
         await rebase(collateralToken, rebaseOracle, 0.1);
       });
       it("should compute the underlying amount", async function () {
-        const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-          perp.address,
+        const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+          perp.target,
           toFixedPtAmt("100"),
           toFixedPtAmt("10"),
         );
@@ -957,8 +949,8 @@ describe("PerpHelpers", function () {
         await rebase(collateralToken, rebaseOracle, -0.1);
       });
       it("should compute the underlying amount", async function () {
-        const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-          perp.address,
+        const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+          perp.target,
           toFixedPtAmt("100"),
           toFixedPtAmt("10"),
         );
@@ -972,8 +964,8 @@ describe("PerpHelpers", function () {
         await rebase(collateralToken, rebaseOracle, -0.9);
       });
       it("should compute the underlying amount", async function () {
-        const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-          perp.address,
+        const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+          perp.target,
           toFixedPtAmt("100"),
           toFixedPtAmt("10"),
         );
@@ -985,13 +977,13 @@ describe("PerpHelpers", function () {
 
   describe("when deposit bond has no deposits yet", function () {
     beforeEach(async function () {
-      await depositBond.totalDebt.returns("0");
-      await depositTranche.totalSupply.returns("0");
+      await depositBond.mockMethod("totalDebt()", [0n]);
+      await depositTranche.mockMethod("totalSupply()", [0n]);
     });
 
     it("should compute the underlying amount", async function () {
-      const r = await helper.callStatic.estimateUnderlyingAmtToTranche(
-        perp.address,
+      const r = await helper.estimateUnderlyingAmtToTranche.staticCall(
+        perp.target,
         toFixedPtAmt("100"),
         toFixedPtAmt("10"),
       );

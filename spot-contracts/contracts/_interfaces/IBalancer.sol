@@ -14,7 +14,7 @@ interface IBalancer {
     /// @notice Emits the component and the token denomination and amount of fees collected.
     /// @param collector Address of fee recipient.
     /// @param token Address of fee token.
-    /// @param balance The amount tokens paid as fees.
+    /// @param amount The amount tokens paid as fees.
     event Fee(address collector, IERC20Upgradeable token, uint256 amount);
 
     //--------------------------------------------------------------------------
