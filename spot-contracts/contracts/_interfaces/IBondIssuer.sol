@@ -3,9 +3,6 @@ pragma solidity ^0.8.0;
 
 import { IBondController } from "./buttonwood/IBondController.sol";
 
-/// @notice Expected at least one matured bond.
-error NoMaturedBonds();
-
 interface IBondIssuer {
     /// @notice Event emitted when a new bond is issued by the issuer.
     /// @param bond The newly issued bond.

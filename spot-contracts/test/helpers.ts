@@ -9,25 +9,25 @@ use(smock.matchers);
 const TOKEN_DECIMALS = 18;
 const PRICE_DECIMALS = 8;
 const DISCOUNT_DECIMALS = 18;
+const PERC_DECIMALS = 8;
 
 const sciParseFloat = (a: string): BigNumber => (a.includes("e") ? parseFloat(a).toFixed(18) : a);
 export const toFixedPtAmt = (a: string): BigNumber => utils.parseUnits(sciParseFloat(a), TOKEN_DECIMALS);
 export const toPriceFixedPtAmt = (a: string): BigNumber => utils.parseUnits(sciParseFloat(a), PRICE_DECIMALS);
 export const toDiscountFixedPtAmt = (a: string): BigNumber => utils.parseUnits(sciParseFloat(a), DISCOUNT_DECIMALS);
+export const toPercFixedPtAmt = (a: string): BigNumber => utils.parseUnits(sciParseFloat(a), PERC_DECIMALS);
 
 const ORACLE_BASE_PRICE = toPriceFixedPtAmt("1");
 
 const EXTERNAL_ARTIFACTS_PATH = path.join(__dirname, "/../external-artifacts");
-async function getContractFactoryFromExternalArtifacts(name: string): Promise<ContractFactory> {
+export const getContractFactoryFromExternalArtifacts = (name: string): Promise<ContractFactory> => {
   const artifact = JSON.parse(fs.readFileSync(`${EXTERNAL_ARTIFACTS_PATH}/${name}.json`).toString());
   return ethers.getContractFactoryFromArtifact(artifact);
-}
+};
 
 export const TimeHelpers = {
   secondsFromNow: async (secondsFromNow: number): Promise<number> => {
-    const res = await hre.network.provider.send("eth_getBlockByNumber", ["latest", false]);
-    const timestamp = parseInt(res.timestamp, 16);
-    return timestamp + secondsFromNow;
+    return (await TimeHelpers.currentTime()) + secondsFromNow;
   },
 
   increaseTime: async (seconds: number): Promise<void> => {
@@ -38,6 +38,12 @@ export const TimeHelpers = {
   setNextBlockTimestamp: async (timestamp: number): Promise<void> => {
     await ethers.provider.send("evm_setNextBlockTimestamp", [timestamp]);
     await hre.network.provider.send("evm_mine");
+  },
+
+  currentTime: async (): Promise<number> => {
+    const res = await hre.network.provider.send("eth_getBlockByNumber", ["latest", false]);
+    const timestamp = parseInt(res.timestamp, 16);
+    return timestamp;
   },
 };
 
@@ -171,8 +177,16 @@ export const getTrancheBalances = async (bond: Contract, user: string): Promise<
   return balances;
 };
 
+export const timeToMaturity = async (bond: Contract): Promise<number> => {
+  return (await bond.maturityDate()).toNumber() - (await TimeHelpers.currentTime());
+};
+
 export const getDepositBond = async (perp: Contract): Contract => {
   return bondAt(await perp.callStatic.getDepositBond());
+};
+
+export const advanceTime = async (time: number): Promise<Transaction> => {
+  return TimeHelpers.increaseTime(time);
 };
 
 export const advancePerpQueue = async (perp: Contract, time: number): Promise<Transaction> => {
@@ -208,13 +222,15 @@ export const logReserveComposition = async (perp: Contract) => {
   console.log("Reserve count", count);
   for (let i = 0; i < count; i++) {
     const token = await ERC20.attach(await perp.callStatic.getReserveAt(i));
+    const ONE = BigNumber.from(`${10 ** (await perp.decimals())}`);
+    const tokenVal = await perp.callStatic.getReserveTokenValue(token.address);
+    const tokenBal = await perp.callStatic.getReserveTokenBalance(token.address);
+    const tokenPrice = tokenBal.gt("0") ? tokenVal.mul(ONE).div(tokenBal) : BigNumber.from(0);
     console.log(
       i,
       token.address,
-      utils.formatUnits(await token.balanceOf(await perp.reserve()), await perp.decimals()),
-      utils.formatUnits(await perp.callStatic.getReserveTrancheBalance(token.address), await perp.decimals()),
-      utils.formatUnits(await perp.computeDiscount(token.address), await perp.DISCOUNT_DECIMALS()),
-      utils.formatUnits(await perp.computePrice(token.address), await perp.PRICE_DECIMALS()),
+      utils.formatUnits(await token.balanceOf(perp.address), await perp.decimals()),
+      utils.formatUnits(tokenPrice, await perp.decimals()),
     );
   }
 };
@@ -237,7 +253,7 @@ export const checkReserveComposition = async (perp: Contract, tokens: Contract[]
     const reserveToken = ERC20.attach(await perp.callStatic.getReserveAt(j));
     expect(tokenMap[reserveToken.address]).to.eq(true);
     if (checkBalances) {
-      expect(await reserveToken.balanceOf(await perp.reserve())).to.eq(tokenBalanceMap[reserveToken.address]);
+      expect(await reserveToken.balanceOf(perp.address)).to.eq(tokenBalanceMap[reserveToken.address]);
     }
   }
   await expect(perp.callStatic.getReserveAt(tokens.length)).to.be.reverted;
@@ -254,9 +270,8 @@ export const getReserveTokens = async (perp: Contract) => {
 
 export const logVaultAssets = async (vault: Contract) => {
   const ERC20 = await ethers.getContractFactory("MockERC20");
-  const deployedCount = (await vault.deployedCount()).toNumber();
-  const earnedCount = (await vault.earnedCount()).toNumber();
-  const count = 1 + deployedCount + earnedCount;
+  const count = await vault.assetCount();
+  const assetCount = await vault.assetCount();
   console.log("Asset count", count);
 
   const underlying = await ERC20.attach(await vault.underlying());
@@ -265,18 +280,10 @@ export const logVaultAssets = async (vault: Contract) => {
     underlying.address,
     utils.formatUnits(await vault.vaultAssetBalance(underlying.address), await underlying.decimals()),
   );
-  for (let i = 0; i < deployedCount; i++) {
-    const token = await ERC20.attach(await vault.deployedAt(i));
+  for (let i = 1; i < assetCount; i++) {
+    const token = await ERC20.attach(await vault.assetAt(i));
     console.log(
       i + 1,
-      token.address,
-      utils.formatUnits(await vault.vaultAssetBalance(token.address), await token.decimals()),
-    );
-  }
-  for (let j = 0; j < earnedCount; j++) {
-    const token = await ERC20.attach(await vault.earnedAt(j));
-    console.log(
-      j + 1 + deployedCount,
       token.address,
       utils.formatUnits(await vault.vaultAssetBalance(token.address), await token.decimals()),
     );
@@ -284,7 +291,7 @@ export const logVaultAssets = async (vault: Contract) => {
 };
 
 export const checkVaultAssetComposition = async (vault: Contract, tokens: Contract[], balances: BigNumber[] = []) => {
-  expect(1 + (await vault.deployedCount()).toNumber() + (await vault.earnedCount()).toNumber()).to.eq(tokens.length);
+  expect(await vault.assetCount()).to.eq(tokens.length);
   for (const i in tokens) {
     expect(await vault.vaultAssetBalance(tokens[i].address)).to.eq(balances[i]);
   }
@@ -293,12 +300,8 @@ export const checkVaultAssetComposition = async (vault: Contract, tokens: Contra
 export const getVaultAssets = async (vault: Contract) => {
   const ERC20 = await ethers.getContractFactory("MockERC20");
   const assets: Contract[] = [];
-  assets.push(await ERC20.attach(await vault.underlying()));
-  for (let i = 0; i < (await vault.deployedCount()); i++) {
-    assets.push(await ERC20.attach(await vault.deployedAt(i)));
-  }
-  for (let i = 0; i < (await vault.earnedCount()); i++) {
-    assets.push(await ERC20.attach(await vault.earnedAt(i)));
+  for (let i = 0; i < (await vault.assetCount()); i++) {
+    assets.push(await ERC20.attach(await vault.assetAt(i)));
   }
   return assets;
 };
