@@ -67,7 +67,7 @@ contract BillBroker {
         updateOracle(oracle_);
 
         minUSDLiquidityAmt = 0;
-        minDiscountFactor = ONE / 3; // 0.33, i.e) A minimum discount factor of 33% or a maximum discount of 66%
+        minDiscountFactor = ONE / 3; // 0.33, i.e) A minimum discount factor of 33% or a maximum discount rate of 66%
 
         arHardBound = Range({
             lower: ((ONE * 3) / 4), // 0.75
@@ -90,54 +90,22 @@ contract BillBroker {
     }
 
     function deposit(uint256 usdAmtAvailable, uint256 perpAmtAvailable) external returns (uint256) {
-        uint256 usdReserveBal_ = usdReserveBal();
-        uint256 perpReserveBal_ = perpReserveBal();
-
-        (uint256 usdAmtIn, uint256 perpAmtIn, uint256 mintAmt) = _computeDepositAndMintAmt(
+        (uint256 notes, uint256 usdAmtIn, uint256 perpAmtIn) = computeMintAmt(
             usdAmtAvailable,
             perpAmtAvailable,
-            usdReserveBal_,
-            perpReserveBal_
+            reserveState()
         );
+        if (notes <= 0) {
+            return 0;
+        }
 
         // Transfer perp and usd tokens from the user
         usd.safeTransferFrom(msg.sender, address(this), usdAmtIn);
         perp.safeTransferFrom(msg.sender, address(this), perpAmtIn);
 
-        // mint LP tokens
-        _mint(_msgSender(), mintAmt);
-        return mintAmt;
-    }
-
-    function depositUSD(uint256 usdAmtIn) external returns (uint256) {
-        uint256 usdReserveBal_ = usdReserveBal();
-        uint256 perpReserveBal_ = perpReserveBal();
-        uint256 usdPrice = getUSDPrice();
-        uint256 perpPrice = getPerpPrice();
-
-        uint256 arPre = computeAssetRatio(usdReserveBal_, perpReserveBal_, usdPrice, perpPrice);
-        uint256 arPost = computeAssetRatio(usdReserveBal_ + usdAmtIn, perpReserveBal_, usdPrice, perpPrice);
-        if (arPost > ONE) {
-            revert UnacceptableDeposit();
-        }
-
-        // deposit logic
-    }
-
-    function depositPerps(uint256 perpAmtIn) external returns (uint256) {
-        uint256 usdReserveBal_ = usdReserveBal();
-        uint256 perpReserveBal_ = perpReserveBal();
-        uint256 usdPrice = getUSDPrice();
-        uint256 perpPrice = getPerpPrice();
-
-        uint256 arPre = computeAssetRatio(usdReserveBal_, perpReserveBal_, usdPrice, perpPrice);
-        uint256 arPost = computeAssetRatio(usdReserveBal_, perpReserveBal_ + perpAmtIn, usdPrice, perpPrice);
-        if (arPost < ONE) {
-            revert UnacceptableDeposit();
-        }
-
-        (perpAmtIn * perpPrice) * ONE / getTVL()
-        // deposit logic
+        // mint notes
+        _mint(_msgSender(), notes);
+        return notes;
     }
 
     function redeem(uint256 notes) external returns (uint256, uint256) {
@@ -146,13 +114,13 @@ contract BillBroker {
         }
 
         uint256 noteSupply = totalSupply();
-        uint256 usdAmtOut = notes.mulDiv(usdReserveBal(), noteSupply);
-        uint256 perpAmtOut = notes.mulDiv(perpReserveBal(), noteSupply);
+        uint256 usdAmtOut = notes.mulDiv(usdReserve(), noteSupply);
+        uint256 perpAmtOut = notes.mulDiv(perpReserve(), noteSupply);
 
         // withhold fees
         usdAmtOut -= usdAmtOut.mulDiv(fees.burnFeePerc, ONE, MathUpgradable.Rounding.Up);
         perpAmtOut -= perpAmtOut.mulDiv(fees.burnFeePerc, ONE, MathUpgradable.Rounding.Up);
-        
+
         // burn notes
         _burn(_msgSender(), notes);
 
@@ -169,21 +137,25 @@ contract BillBroker {
         // Transfer perp tokens from user
         perp.safeTransferFrom(msg.sender, address(this), perpAmtIn);
 
-        // compute USD amount out
-        uint256 usdReserveBal_ = usdReserveBal();
-        uint256 perpReserveBal_ = perpReserveBal();
-        uint256 usdPrice = getUSDPrice();
-        uint256 perpPrice = getPerpPrice();
-        perpPrice -= perpPrice.mulDiv(discountFactor(), ONE, MathUpgradable.Rounding.Up); // apply discount
-        uint256 usdAmtOut = perpAmtIn.mulDiv(perpPrice, usdPrice).mulDiv(10 ** usdDecimals, 10 ** perpDecimals);
+        // compute USD amount out, after discount is applied
+        ReserveState memory s = reserveState();
+        uint256 usdAmtOut = perpAmtIn.mulDiv(s.perpPrice, s.usdPrice).mulDiv(s.usdUnitAmt, s.perpUnitAmt).mulDiv(
+            computeDiscountFactor(),
+            ONE,
+            MathUpgradable.Rounding.Up
+        );
 
         // compute fees
-        uint256 arPre = computeAssetRatio(usdReserveBal_, perpReserveBal_, usdPrice, perpPrice);
+        uint256 arPre = computeAssetRatio(s);
         uint256 arPost = computeAssetRatio(
-            usdReserveBal_ - usdAmtOut,
-            perpReserveBal_ + perpAmtIn,
-            usdPrice,
-            perpPrice
+            ReserveState({
+                usdReserve: s.usdReserve - usdAmtOut,
+                perpReserve: s.perpReserve + perpAmtIn,
+                usdPrice: s.usdPrice,
+                perpPrice: s.perpPrice,
+                usdUnitAmt: s.usdUnitAmt,
+                perpUnitAmt: s.perpUnitAmt
+            })
         );
         (uint256 lpFeePerc, uint256 protocolFeePerc) = computePerpToUSDSwapFeePercs(arPre, arPost);
         if (arPost > arHardBound.upper) {
@@ -195,8 +167,13 @@ contract BillBroker {
             underlying.safeTransfer(onwer(), usdAmtOut.mulDiv(protocolFeePerc, ONE, MathUpgradable.Rounding.Up));
         }
 
+        if (usdAmtOut <= 0) {
+            revert UnacceptableSwap();
+        }
+
         // withhold fees and transfer remaining out
         usdAmtOut -= usdAmtOut.mulDiv(lpFeePerc + protocolFeePerc, ONE, MathUpgradable.Rounding.Up);
+
         usd.safeTransfer(msg.sender, usdAmtOut);
         return usdAmtOut;
     }
@@ -209,19 +186,20 @@ contract BillBroker {
         usd.safeTransferFrom(msg.sender, address(this), usdAmtIn);
 
         // compute perp amount out
-        uint256 usdReserveBal_ = usdReserveBal();
-        uint256 perpReserveBal_ = perpReserveBal();
-        uint256 usdPrice = getUSDPrice();
-        uint256 perpPrice = getPerpPrice();
-        uint256 perpAmtOut = usdAmtIn.mulDiv(usdPrice, perpPrice).mulDiv(10 ** perpDecimals, 10 ** usdDecimals);
+        ReserveState memory s = reserveState();
+        uint256 perpAmtOut = usdAmtIn.mulDiv(usdPrice, perpPrice).mulDiv(s.perpUnitAmt, s.usdUnitAmt);
 
         // compute fees
-        uint256 arPre = computeAssetRatio(usdReserveBal_, perpReserveBal_, usdPrice, perpPrice);
+        uint256 arPre = computeAssetRatio(s);
         uint256 arPost = computeAssetRatio(
-            usdReserveBal_ + usdAmtIn,
-            perpReserveBal_ - perpAmtOut,
-            usdPrice,
-            perpPrice
+            ReserveState({
+                usdReserve: s.usdReserve + usdAmtIn,
+                perpReserve: s.perpReserve - perpAmtOut,
+                usdPrice: s.usdPrice,
+                perpPrice: s.perpPrice,
+                usdUnitAmt: s.usdUnitAmt,
+                perpUnitAmt: s.perpUnitAmt
+            })
         );
         (uint256 lpFeePerc, uint256 protocolFeePerc) = computeUSDToPerpSwapFeePercs(arPre, arPost);
         if (arPost < arHardBound.lower) {
@@ -233,32 +211,33 @@ contract BillBroker {
             perp.safeTransfer(owner(), perpAmtOut.mulDiv(protocolFeePerc, ONE, MathUpgradable.Rounding.Up));
         }
 
+        if (perpAmtOut <= 0) {
+            revert UnacceptableSwap();
+        }
+
         // withhold fees and transfer remaining out
         perpAmtOut -= perpAmtOut.mulDiv(lpFeePerc + protocolFeePerc, ONE, MathUpgradable.Rounding.Up);
         perp.safeTransfer(msg.sender, perpAmtOut);
         return perpAmtOut;
     }
 
-    // deposit, redeem()
-    // single sided deposit
-
     // ar = 1, balance
     // ar < 1 more perps, less dollars
     // ar > 1 less perps, more dollars
     function assetRatio() public returns (uint256) {
-        return computeAssetRatio(usdReserveBal(), perpReserveBal(), getUSDPrice(), getPerpPrice());
+        return computeAssetRatio(reserveState());
     }
 
     function getTVL() public returns (uint256) {
-        return (getUSDValue(usdReserveBal()) + getPerpValue(perpReserveBal()));
+        return (getUSDValue(usdReserve()) + getPerpValue(perpReserve()));
     }
 
     function getUSDValue(uint256 usdAmt) public returns (uint256) {
-        return usdAmt.mulDiv(getUSDPrice(), ONE).mulDiv(ONE, 10 ** usdDecimals);
+        return usdAmt.mulDiv(getUSDPrice(), s.usdUnitAmt);
     }
 
     function getPerpValue(uint256 perpAmt) public returns (uint256) {
-        return perpAmt.mulDiv(getPerpPrice(), ONE).mulDiv(ONE, 10 ** perpDecimals);
+        return perpAmt.mulDiv(getPerpPrice(), s.perpUnitAmt);
     }
 
     function getUSDPrice() public returns (uint256) {
@@ -277,20 +256,47 @@ contract BillBroker {
         return p.mulDiv(perp.getTVL(), perp.totalSupply());
     }
 
-    function computeAssetRatio(
-        uint256 usdReserveBal,
-        uint256 perpReserveBal,
-        uint256 usdPrice,
-        uint256 perpPrice
-    ) public view returns (uint256) {
-        return
-            usdPrice.mulDiv(usdReserveBal, 10 ** usdDecimals).mulDiv(
-                ONE,
-                perpPrice.mulDiv(perpReserveBal, 10 ** perpDecimals)
-            );
+    function computeMintAmt(
+        uint256 usdAmtAvailable,
+        uint256 perpAmtAvailable,
+        ReserveState memory s
+    ) public returns (uint256, uint256, uint256) {
+        uint256 usdAmtIn = usdAmtAvailable;
+        uint256 perpAmtIn = usdAmtAvailable.mulDiv(s.perpReserve, s.usdReserve);
+        if (perpAmtIn > perpAmtAvailable) {
+            perpAmtIn = perpAmtAvailable;
+            usdAmtIn = perpAmtAvailable.mulDiv(s.usdReserve, s.perpReserve);
+        }
+
+        uint256 valueIn = (usdAmtIn.mulDiv(s.usdPrice, ONE).mulDiv(ONE, s.usdUnitAmt) +
+            perpAmtIn.mulDiv(s.perpPrice, ONE).mulDiv(ONE, s.perpUnitAmt));
+        uint256 tvl = (s.usdReserve.mulDiv(s.usdPrice, ONE).mulDiv(ONE, s.usdUnitAmt) +
+            s.perpReserve.mulDiv(s.perpPrice, ONE).mulDiv(ONE, s.perpUnitAmt));
+
+        uint256 totalSupply_ = totalSupply();
+        uint256 mintAmt = (totalSupply_ > 0) ? totalSupply_.mulDiv(valueIn, tvl) : valueIn;
+
+        return (mintAmt, usdAmtIn, perpAmtIn);
     }
 
-    function discountFactor() public view returns (uint256) {
+    function reserveState() returns (ReserveState memory) {
+        return
+            ReserveState({
+                usdReserve: usdReserve(),
+                perpReserve: perpReserve(),
+                usdPrice: getUSDPrice(),
+                perpPrice: getPerpPrice(),
+                usdUnitAmt: (10 ** usdDecimals),
+                perpUnitAmt: (10 ** perpDecimals)
+            });
+    }
+
+    function computeAssetRatio(ReserveState memory s) public view returns (uint256) {
+        return
+            s.usdReserve.mulDiv(s.usdPrice, s.usdUnitAmt).mulDiv(ONE, s.perpReserve.mulDiv(s.perpPrice, s.perpUnitAmt));
+    }
+
+    function computeDiscountFactor() public view returns (uint256) {
         IBalancer balancer = perp.balancer();
         uint256 perpDR = balancer.deviationRatio().mulDiv(ONE, 10 ** balancer.decimals());
         // If perp is over-subscribed, no discount is applied.
@@ -301,11 +307,11 @@ contract BillBroker {
         return (ONE - (ONE - perpDR).mulDiv(ONE - minDiscountFactor, ONE));
     }
 
-    function usdReserveBal() public view returns (uint256) {
+    function usdReserve() public view returns (uint256) {
         return usd.balanceOf(address(this));
     }
 
-    function perpReserveBal() public view returns (uint256) {
+    function perpReserve() public view returns (uint256) {
         return perp.balanceOf(address(this));
     }
 

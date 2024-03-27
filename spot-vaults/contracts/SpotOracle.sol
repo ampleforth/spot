@@ -23,7 +23,6 @@ contract SpotOracle {
         IPolicy policy = ampl.monetaryPolicy();
         IAmpleforthOracle cpiOracle = policy.cpiOracle();
         // TODO: Increase the time to activity to 1 week,
-        // make it active for 90 days
         (uint256 p, bool v) = cpiOracle.getData();
         v = v && p > UNDERLYING_TARGET_LOWER_BOUND && p < UNDERLYING_TARGET_UPPER_BOUND;
         return (p, v);
