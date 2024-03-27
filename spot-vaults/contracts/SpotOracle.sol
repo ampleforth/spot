@@ -1,9 +1,18 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.24;
 
-contract SpotOracle {
-    IERC20Upgradeable public immutable ampl;
-    IChainlinkOracle public immutable usdOracle;
+import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
+
+import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import { IChainlinkOracle } from "./_interfaces/external/IChainlinkOracle.sol";
+import { IAMPL, IAmpleforth, IAmpleforthOracle } from "./_interfaces/external/IAmpleforth.sol";
+import { IBillBrokerOracle } from "./_interfaces/IBillBrokerOracle.sol";
+
+contract SpotOracle is IBillBrokerOracle {
+    using MathUpgradeable for uint256;
+
+    IAMPL public immutable AMPL;
+    IChainlinkOracle public immutable USD_ORACLE;
 
     uint256 private constant DECIMALS = 18;
     uint256 private constant ONE = (10 ** DECIMALS);
@@ -17,10 +26,17 @@ contract SpotOracle {
     uint256 public constant UNDERLYING_TARGET_LOWER_BOUND = 1 * ONE;
     uint256 public constant UNDERLYING_TARGET_UPPER_BOUND = 3 * ONE;
 
-    constructor() {}
+    constructor(IAMPL ampl, IChainlinkOracle usdOracle) {
+        AMPL = ampl;
+        USD_ORACLE = usdOracle;
+    }
 
-    function getUnderlyingTargetPrice() public returns (uint256, bool) {
-        IPolicy policy = ampl.monetaryPolicy();
+    function decimals() external pure override returns (uint8) {
+        return uint8(DECIMALS);
+    }
+
+    function getUnderlyingTargetPrice() external override returns (uint256, bool) {
+        IAmpleforth policy = AMPL.monetaryPolicy();
         IAmpleforthOracle cpiOracle = policy.cpiOracle();
         // TODO: Increase the time to activity to 1 week,
         (uint256 p, bool v) = cpiOracle.getData();
@@ -28,14 +44,12 @@ contract SpotOracle {
         return (p, v);
     }
 
-    function getUSDPrice() public returns (uint256, bool) {
-        (, int256 price, , uint256 updatedAt, ) = oracle.latestRoundData();
+    function getUSDPrice() external view override returns (uint256, bool) {
+        (, int256 price, , uint256 updatedAt, ) = USD_ORACLE.latestRoundData();
         uint256 p = uint256(price).mulDiv(ONE, 10 ** CL_ORACLE_DECIMALS);
-        v =
-            v &&
-            p > USD_LOWER_BOUND &&
+        bool v = (p > USD_LOWER_BOUND &&
             p < USD_UPPER_BOUND &&
-            ((block.timestamp - updatedAt) <= CL_ORACLE_STALENESS_TRESHOLD_SEC);
+            ((block.timestamp - updatedAt) <= CL_ORACLE_STALENESS_TRESHOLD_SEC));
         return (p, v);
     }
 }
