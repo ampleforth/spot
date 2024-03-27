@@ -26,6 +26,4 @@ struct ReserveState {
     uint256 perpReserve;
     uint256 usdPrice;
     uint256 perpPrice;
-    uint256 usdUnitAmt;
-    uint256 perpUnitAmt;
 }

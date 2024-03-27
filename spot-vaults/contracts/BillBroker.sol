@@ -32,9 +32,12 @@ import "hardhat/console.sol";
  *          (in the case of perps, its measured simply as function of perp's subscription state of the system which ensures that perp is backed by healthy tranches).
  *
  *          The contract charges a fee for swap operations. The fee is a function of available liquidity held in the contract, and goes to the LPs.
- * 
+ *
  *          The ratio of value of dollar tokens vs perp tokens held by the contract is defined as it's `assetRatio`.
  *          The owner can define hard limits on the system's assetRatio outside which swapping is disabled.
+ *
+ *          The contract relies on external data sources to price assets.
+ *          If the data is unreliable, swaps are simply halted.
  *
  *          Intermediating borrowing:
  *          Borrowers who want to borrower dollars against their collateral, tranche their collateral, mint perps and sell it for dollars to the bill broker.
@@ -75,14 +78,19 @@ contract BillBroker is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpg
     /// @notice The USD token.
     IERC20Upgradeable public usd;
 
-    /// @notice The number of decimals for the fixed-point representation of usd tokens.
-    uint8 public usdDecimals;
+    /// @notice TODO.
+    uint256 public usdUnitAmt;
 
-    /// @notice The number of decimals for the fixed-point representation of perp tokens.
-    uint8 public perpDecimals;
+    /// @notice TODO.
+    uint256 public perpUnitAmt;
 
     /// @notice The price oracle.
     IBillBrokerOracle public oracle;
+
+    /// @notice Reference to the address that has the ability to pause/unpause operations.
+    /// @dev The keeper is meant for time-sensitive operations, and may be different from the owner address.
+    /// @return The address of the keeper.
+    address public keeper;
 
     /// @notice The asset ratio bounds outside which swapping is disabled.
     /// @dev Swapping for dollars to perps is disabled if the system ends up with too few dollars, and the asset ratio reduces below `arBound.lower`.
@@ -96,10 +104,9 @@ contract BillBroker is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpg
     Range public arFeeBound;
 
     /// @notice The maximum discount rate applied to perp tokens, when perp's DR is 0.
-    /// @dev When perp's DR is 0, it not backed by any tranches but just a claim on the underlying. 
+    /// @dev When perp's DR is 0, it not backed by any tranches but just a claim on the underlying.
     ///      To learn more about how perp tokens work, refer the perp contract documentation.
-    ///      The applied discount rate is a linear function based on perp's DR. 
-    ///      discountRate = Math.min(LinearFn((1,1), (0, `maxPerpDiscountPerc`)), 1)
+    ///      The applied discount rate is a linear function based on perp's DR.
     uint256 public maxPerpDiscountPerc;
 
     //-----------------------------------------------------------------------------
@@ -113,8 +120,8 @@ contract BillBroker is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpg
     function init(
         string memory name,
         string memory symbol,
-        IPerpetualTranche perp_,
         IERC20Upgradeable usd_,
+        IPerpetualTranche perp_,
         IBillBrokerOracle oracle_
     ) public initializer {
         // initialize dependencies
@@ -124,19 +131,20 @@ contract BillBroker is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpg
         __Pausable_init();
         __ReentrancyGuard_init();
 
-        perp = perp_;
         usd = usd_;
-        perpDecimals = IERC20MetadataUpgradeable(address(perp_)).decimals();
-        usdDecimals = IERC20MetadataUpgradeable(address(usd_)).decimals();
+        perp = perp_;
+
+        usdUnitAmt = 10 ** IERC20MetadataUpgradeable(address(usd_)).decimals();
+        perpUnitAmt = 10 ** IERC20MetadataUpgradeable(address(perp_)).decimals();
 
         updateOracle(oracle_);
+        updateKeeper(owner());
 
         arBound = Range({
             lower: ((ONE * 3) / 4), // 0.75
             upper: ((ONE * 5) / 4) // 1.25
         });
 
-        
         arFeeBound = Range({
             lower: ((ONE * 9) / 10), // 0.9
             upper: ((ONE * 11) / 10) // 1.1
@@ -158,13 +166,26 @@ contract BillBroker is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpg
     //--------------------------------------------------------------------------
     // Owner only methods
 
+    /// @notice Updates the reference to the price oracle.
+    /// @param keeper_ The address of the new oracle.
     function updateOracle(IBillBrokerOracle oracle_) public onlyOwner {
         if (oracle.decimals() != DECIMALS) {
             revert UnexpectedDecimals();
         }
+        if (oracle.perp() != perp || oracle.underlying() != perp.underlying()) {
+            revert UnexpectedReference();
+        }
         oracle = oracle_;
     }
 
+    /// @notice Updates the reference to the keeper.
+    /// @param keeper_ The address of the new keeper.
+    function updateKeeper(address keeper_) public onlyOwner {
+        keeper = keeper_;
+    }
+
+    /// @notice Updates the system fees.
+    /// @param fees_ The new system fees.
     function updateFees(SystemFees memory fees_) public onlyOwner {
         if (
             fees_.mintFeePerc > ONE ||
@@ -186,12 +207,12 @@ contract BillBroker is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpg
     //--------------------------------------------------------------------------
     // External & Public write methods
 
+    /// @notice Deposits usd tokens and perp tokens and mint LP tokens.
+    /// @param usdAmtAvailable The amount of usd tokens available to be deposited.
+    /// @param perpAmtAvailable The amount of perp tokens available to be deposited.
+    /// @return The amount of LP tokens minted.
     function deposit(uint256 usdAmtAvailable, uint256 perpAmtAvailable) external returns (uint256) {
-        (uint256 mintAmt, uint256 usdAmtIn, uint256 perpAmtIn) = computeMintAmt(
-            usdAmtAvailable,
-            perpAmtAvailable,
-            reserveState()
-        );
+        (uint256 mintAmt, uint256 usdAmtIn, uint256 perpAmtIn) = computeMintAmt(usdAmtAvailable, perpAmtAvailable);
         if (mintAmt <= 0) {
             return 0;
         }
@@ -223,15 +244,11 @@ contract BillBroker is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpg
 
     // increases ar
     function swapPerpsForUSD(uint256 perpAmtIn) external returns (uint256) {
-        // TODO: open swaps only on certain conditions
-
         // Transfer perp tokens from user
         perp.safeTransferFrom(msg.sender, address(this), perpAmtIn);
 
         // Compute swap amount
-        (uint256 usdAmtOut, uint256 protocolFeeAmt) = computePerpToUSDSwapAmt(perpAmtIn, reserveState());
-
-        // Revert swap amount is zero
+        (uint256 usdAmtOut, uint256 protocolFeeAmt) = computePerpToUSDSwapAmt(perpAmtIn);
         if (perpAmtIn <= 0 || usdAmtOut <= 0) {
             revert UnacceptableSwap();
         }
@@ -248,15 +265,11 @@ contract BillBroker is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpg
 
     // decreases ar
     function swapUSDForPerps(uint256 usdAmtIn) external returns (uint256) {
-        // TODO: open swaps only on certain conditions
-
         // Transfer usd tokens from user
         usd.safeTransferFrom(msg.sender, address(this), usdAmtIn);
 
         // compute perp amount out
-        (uint256 perpAmtOut, uint256 protocolFeeAmt) = computeUSDToPerpSwapAmt(usdAmtIn, reserveState());
-
-        // Revert swap amount is zero
+        (uint256 perpAmtOut, uint256 protocolFeeAmt) = computeUSDToPerpSwapAmt(usdAmtIn);
         if (usdAmtIn <= 0 || perpAmtOut <= 0) {
             revert UnacceptableSwap();
         }
@@ -271,17 +284,101 @@ contract BillBroker is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpg
         return perpAmtOut;
     }
 
-    // ar = 1, balance
-    // ar < 1 more perps, less dollars
-    // ar > 1 less perps, more dollars
+    function computeMintAmt(
+        uint256 usdAmtAvailable,
+        uint256 perpAmtAvailable
+    ) public returns (uint256, uint256, uint256) {
+        uint256 totalSupply_ = totalSupply();
+
+        // On first deposit we deposit the entire available amounts.
+        if (totalSupply_ <= 0) {
+            uint256 usdValueIn = usdAmtAvailable.mulDiv(getUSDPrice(), usdUnitAmt);
+            uint256 perpValueIn = perpAmtAvailable.mulDiv(getPerpPrice(), perpUnitAmt);
+            uint256 mintAmt = (usdValueIn + perpValueIn);
+            uint256 assetRatio_ = usdValueIn.mulDiv(ONE, perpValueIn);
+            // We ensure that the asset ratios aren't out of bounds.
+            if (assetRatio_ < arBound.lower || assetRatio_ > arBound.upper) {
+                revert UnacceptableDeposit();
+            }
+            return (mintAmt, usdAmtAvailable, perpAmtAvailable);
+        }
+
+        uint256 usdAmtIn = usdAmtAvailable;
+        uint256 perpAmtIn = usdAmtIn.mulDiv(s.perpReserve, s.usdReserve);
+        uint256 mintAmt = totalSupply_.mulDiv(usdAmtIn, s.usdReserve);
+        if (perpAmtIn > perpAmtAvailable) {
+            perpAmtIn = perpAmtAvailable;
+            usdAmtIn = perpAmtIn.mulDiv(s.usdReserve, s.perpReserve);
+            mintAmt = totalSupply_.mulDiv(perpAmtIn, s.perpReserve);
+        }
+        return (mintAmt, usdAmtIn, perpAmtIn);
+    }
+
+    function computePerpToUSDSwapAmt(uint256 perpAmtIn) public returns (uint256, uint256) {
+        ReserveState memory s = reserveState();
+
+        // We compute equal value of usd out given perp tokens in.
+        // We also discount perp tokens based on the perp system's health.
+        uint256 usdAmtOut = perpAmtIn.mulDiv(s.perpPrice, s.usdPrice).mulDiv(usdUnitAmt, perpUnitAmt).mulDiv(
+            ONE - computeDiscountPerc(),
+            ONE
+        );
+        uint256 arPre = _computeAssetRatio(s);
+        uint256 arPost = _computeAssetRatio(
+            ReserveState({
+                usdReserve: s.usdReserve - usdAmtOut,
+                perpReserve: s.perpReserve + perpAmtIn,
+                usdPrice: s.usdPrice,
+                perpPrice: s.perpPrice
+            })
+        );
+        if (arPost > arBound.upper) {
+            revert UnacceptableSwap();
+        }
+
+        uint256 feePerc = computePerpToUSDSwapFeePerc(arPre, arPost);
+        uint256 protocolFeeAmt = usdAmtOut.mulDiv(feePerc, ONE, MathUpgradeable.Rounding.Up).mulDiv(
+            fees.protocolSwapSharePerc,
+            ONE,
+            MathUpgradeable.Rounding.Up
+        );
+        usdAmtOut = usdAmtOut.mulDiv(ONE - feePerc, ONE);
+        return (usdAmtOut, protocolFeeAmt);
+    }
+
+    function computeUSDToPerpSwapAmt(uint256 usdAmtIn) public returns (uint256, uint256) {
+        ReserveState memory s = reserveState();
+
+        uint256 perpAmtOut = usdAmtIn.mulDiv(s.usdPrice, s.perpPrice).mulDiv(perpUnitAmt, usdUnitAmt);
+        uint256 arPre = _computeAssetRatio(s);
+        uint256 arPost = _computeAssetRatio(
+            ReserveState({
+                usdReserve: s.usdReserve + usdAmtIn,
+                perpReserve: s.perpReserve - perpAmtOut,
+                usdPrice: s.usdPrice,
+                perpPrice: s.perpPrice
+            })
+        );
+        if (arPost < arBound.lower) {
+            revert UnacceptableSwap();
+        }
+
+        uint256 feePerc = computeUSDToPerpSwapFeePerc(arPre, arPost);
+        uint256 protocolFeeAmt = perpAmtOut.mulDiv(feePerc, ONE, MathUpgradeable.Rounding.Up).mulDiv(
+            fees.protocolSwapSharePerc,
+            ONE,
+            MathUpgradeable.Rounding.Up
+        );
+        perpAmtOut = perpAmtOut.mulDiv(ONE - feePerc, ONE);
+        return (perpAmtOut, protocolFeeAmt);
+    }
+
     function assetRatio() external returns (uint256) {
         return _computeAssetRatio(reserveState());
     }
 
     function getTVL() external returns (uint256) {
-        return
-            usdReserve().mulDiv(getUSDPrice(), 10 ** usdDecimals) +
-            perpReserve().mulDiv(getPerpPrice(), 10 ** perpDecimals);
+        return (usdReserve().mulDiv(getUSDPrice(), usdUnitAmt) + perpReserve().mulDiv(getPerpPrice(), perpUnitAmt));
     }
 
     function reserveState() public returns (ReserveState memory) {
@@ -290,9 +387,7 @@ contract BillBroker is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpg
                 usdReserve: usdReserve(),
                 perpReserve: perpReserve(),
                 usdPrice: getUSDPrice(),
-                perpPrice: getPerpPrice(),
-                usdUnitAmt: (10 ** usdDecimals),
-                perpUnitAmt: (10 ** perpDecimals)
+                perpPrice: getPerpPrice()
             });
     }
 
@@ -305,45 +400,15 @@ contract BillBroker is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpg
     }
 
     function getPerpPrice() public returns (uint256) {
-        (uint256 p, bool v) = oracle.getUnderlyingTargetPrice();
+        (uint256 p, bool v) = oracle.getPerpPrice();
         if (!v) {
             revert InvalidPrice();
         }
-        return p.mulDiv(perp.getTVL(), perp.totalSupply());
+        return p;
     }
 
     //-----------------------------------------------------------------------------
     // Public view methods
-
-    function computeMintAmt(
-        uint256 usdAmtAvailable,
-        uint256 perpAmtAvailable,
-        ReserveState memory s
-    ) public view returns (uint256, uint256, uint256) {
-        uint256 usdAmtIn = usdAmtAvailable;
-        uint256 perpAmtIn = usdAmtAvailable.mulDiv(s.perpReserve, s.usdReserve);
-        if (perpAmtIn > perpAmtAvailable) {
-            perpAmtIn = perpAmtAvailable;
-            usdAmtIn = perpAmtAvailable.mulDiv(s.usdReserve, s.perpReserve);
-        }
-
-        uint256 usdValueIn = usdAmtIn.mulDiv(s.usdPrice, s.usdUnitAmt);
-        uint256 perpValueIn = perpAmtIn.mulDiv(s.perpPrice, s.perpUnitAmt);
-        uint256 vauleIn = (usdValueIn+perpValueIn);
-        uint256 tvl = s.usdReserve.mulDiv(s.usdPrice, s.usdUnitAmt) + s.perpReserve.mulDiv(s.perpPrice, s.perpUnitAmt);
-        uint256 totalSupply_ = totalSupply();
-        uint256 mintAmt = (totalSupply_ > 0) ? totalSupply_.mulDiv(vauleIn, tvl) : vauleIn;
-
-        // On first deposit we ensure that the asset ratio bounds are honored.
-        if(totalSupply_ <= 0) {
-            uint256 assetRatio_ = usdValueIn.mulDiv(ONE, perpValueIn);
-            if(assetRatio_ < arBound.lower || assetRatio > arBound.higher) {
-                revert UnacceptableDeposit();
-            }
-        }
-
-        return (mintAmt, usdAmtIn, perpAmtIn);
-    }
 
     function computeRedemptionAmts(uint256 burnAmt) public view returns (uint256, uint256) {
         uint256 totalSupply_ = totalSupply();
@@ -354,85 +419,34 @@ contract BillBroker is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpg
         return (usdAmtOut, perpAmtOut);
     }
 
-    function computePerpToUSDSwapAmt(uint256 perpAmtIn, ReserveState memory s) public view returns (uint256, uint256) {
-        // We compute equal value of usd out given perp tokens in.
-        // While swapping in we discount perp tokens based on the perp system's health.
-        uint256 usdAmtOut = perpAmtIn.mulDiv(s.perpPrice, s.usdPrice).mulDiv(s.usdUnitAmt, s.perpUnitAmt).mulDiv(
-            ONE - computeDiscountPerc(),
-            ONE
-        );
-
-        uint256 arPre = _computeAssetRatio(s);
-        uint256 arPost = _computeAssetRatio(
-            ReserveState({
-                usdReserve: s.usdReserve - usdAmtOut,
-                perpReserve: s.perpReserve + perpAmtIn,
-                usdPrice: s.usdPrice,
-                perpPrice: s.perpPrice,
-                usdUnitAmt: s.usdUnitAmt,
-                perpUnitAmt: s.perpUnitAmt
-            })
-        );
-        if (arPost > arBound.upper) {
-            revert UnacceptableSwap();
-        }
-
-        (uint256 lpFeePerc, uint256 protocolFeePerc) = computePerpToUSDSwapFeePercs(arPre, arPost);
-        uint256 protocolFeeAmt = usdAmtOut.mulDiv(protocolFeePerc, ONE, MathUpgradeable.Rounding.Up);
-        usdAmtOut = usdAmtOut.mulDiv(ONE - (lpFeePerc + protocolFeePerc), ONE);
-        return (usdAmtOut, protocolFeeAmt);
-    }
-
-    function computeUSDToPerpSwapAmt(uint256 usdAmtIn, ReserveState memory s) public view returns (uint256, uint256) {
-        uint256 perpAmtOut = usdAmtIn.mulDiv(s.usdPrice, s.perpPrice).mulDiv(s.perpUnitAmt, s.usdUnitAmt);
-
-        uint256 arPre = _computeAssetRatio(s);
-        uint256 arPost = _computeAssetRatio(
-            ReserveState({
-                usdReserve: s.usdReserve + usdAmtIn,
-                perpReserve: s.perpReserve - perpAmtOut,
-                usdPrice: s.usdPrice,
-                perpPrice: s.perpPrice,
-                usdUnitAmt: s.usdUnitAmt,
-                perpUnitAmt: s.perpUnitAmt
-            })
-        );
-        if (arPost < arBound.lower) {
-            revert UnacceptableSwap();
-        }
-
-        (uint256 lpFeePerc, uint256 protocolFeePerc) = computeUSDToPerpSwapFeePercs(arPre, arPost);
-        uint256 protocolFeeAmt = perpAmtOut.mulDiv(protocolFeePerc, ONE, MathUpgradeable.Rounding.Up);
-        perpAmtOut = perpAmtOut.mulDiv(ONE - (lpFeePerc + protocolFeePerc), ONE);
-        return (perpAmtOut, protocolFeeAmt);
-    }
-
     // increases ar
-    function computePerpToUSDSwapFeePercs(uint256 arPre, uint256 arPost) public view returns (uint256, uint256) {
+    function computePerpToUSDSwapFeePerc(uint256 arPre, uint256 arPost) public view returns (uint256) {
+        // When the assetRatio is below `arFeeBound.upper`, we use a flat percentage fee: `perpToUSDSwapFeePercs.lower`
+        // When the assetRatio is above `arFeeBound.upper`, we use a linear fee function to determine the percentage.
         Range memory swapFeePercs = fees.perpToUSDSwapFeePercs;
-        uint256 totalSwapFeePerc = _computeFeePerc(
-            LinearFn({ x1: 0, y1: swapFeePercs.lower, x2: ONE, y2: swapFeePercs.lower }),
-            LinearFn({ x1: arFeeBound.upper, y1: swapFeePercs.lower, x2: arBound.upper, y2: swapFeePercs.upper }),
-            arPre,
-            arPost,
-            arFeeBound.upper
-        );
-        uint256 protocolSwapFeePerc = totalSwapFeePerc.mulDiv(fees.protocolSwapSharePerc, ONE);
-        return (totalSwapFeePerc - protocolSwapFeePerc, protocolSwapFeePerc);
+        return
+            _computeFeePerc(
+                LinearFn({ x1: 0, y1: swapFeePercs.lower, x2: ONE, y2: swapFeePercs.lower }),
+                LinearFn({ x1: arFeeBound.upper, y1: swapFeePercs.lower, x2: arBound.upper, y2: swapFeePercs.upper }),
+                arPre,
+                arPost,
+                arFeeBound.upper
+            );
     }
 
     // reduces ar
-    function computeUSDToPerpSwapFeePercs(uint256 arPre, uint256 arPost) public view returns (uint256, uint256) {
+    function computeUSDToPerpSwapFeePerc(uint256 arPre, uint256 arPost) public view returns (uint256) {
+        // When the assetRatio is above `arFeeBound.lower`, we use a flat percentage fee: `usdToPerpSwapFeePercs.upper`
+        // When the assetRatio is below `arFeeBound.lower`, we use a linear fee function to determine the percentage.
         Range memory swapFeePercs = fees.usdToPerpSwapFeePercs;
-        uint256 totalSwapFeePerc = _computeFeePerc(
-            LinearFn({ x1: arBound.lower, y1: swapFeePercs.upper, x2: arFeeBound.lower, y2: swapFeePercs.lower }),
-            LinearFn({ x1: 0, y1: swapFeePercs.lower, x2: ONE, y2: swapFeePercs.lower }),
-            arPost,
-            arPre,
-            arFeeBound.lower
-        );
-        uint256 protocolSwapFeePerc = totalSwapFeePerc.mulDiv(fees.protocolSwapSharePerc, ONE);
-        return (totalSwapFeePerc - protocolSwapFeePerc, protocolSwapFeePerc);
+        return
+            _computeFeePerc(
+                LinearFn({ x1: arBound.lower, y1: swapFeePercs.upper, x2: arFeeBound.lower, y2: swapFeePercs.lower }),
+                LinearFn({ x1: 0, y1: swapFeePercs.lower, x2: ONE, y2: swapFeePercs.lower }),
+                arPost,
+                arPre,
+                arFeeBound.lower
+            );
     }
 
     function computeDiscountPerc() public view returns (uint256) {
@@ -443,7 +457,7 @@ contract BillBroker is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpg
             return 0;
         }
         // If not we compute the discount rate based on a linear function.
-        return (ONE - perpDR).mulDiv(ONE - maxPerpDiscountPerc, ONE);
+        return maxPerpDiscountPerc.mulDiv(ONE - perpDR, ONE);
     }
 
     function usdReserve() public view returns (uint256) {
@@ -455,11 +469,12 @@ contract BillBroker is ERC20BurnableUpgradeable, OwnableUpgradeable, PausableUpg
     }
 
     //-----------------------------------------------------------------------------
-    // Private pure methods
+    // Private methods
 
-    function _computeAssetRatio(ReserveState memory s) private pure returns (uint256) {
-        return
-            s.usdReserve.mulDiv(s.usdPrice, s.usdUnitAmt).mulDiv(ONE, s.perpReserve.mulDiv(s.perpPrice, s.perpUnitAmt));
+    /// @dev Computes the current asset ratio of the system, i.e) the ratio of the value
+    ///      of usd tokens held in the reserve to the value of perp tokens held in the reserve.
+    function _computeAssetRatio(ReserveState memory s) private view returns (uint256) {
+        return s.usdReserve.mulDiv(s.usdPrice, usdUnitAmt).mulDiv(ONE, s.perpReserve.mulDiv(s.perpPrice, perpUnitAmt));
     }
 
     /// @dev The function assumes the fee curve is defined a pair-wise linear function which merge at the cutoff point.

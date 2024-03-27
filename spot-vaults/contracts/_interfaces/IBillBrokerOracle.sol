@@ -4,6 +4,6 @@ pragma solidity ^0.8.24;
 /// @notice TODO
 interface IBillBrokerOracle {
     function decimals() external pure returns (uint8);
-    function getUnderlyingTargetPrice() external returns (uint256, bool);
+    function getPerpPrice() external returns (uint256, bool);
     function getUSDPrice() external returns (uint256, bool);
 }
