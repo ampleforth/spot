@@ -59,17 +59,23 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     // https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
     uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
 
-    /// @dev The returned fee percentages are fixed point numbers with {DECIMALS} places.
-    ///      The decimals should line up with value expected by consumer (perp, vault).
+    /// @notice The returned fee percentages are fixed point numbers with {DECIMALS} places.
+    /// @dev The decimals should line up with value expected by consumer (perp, vault).
     ///      NOTE: 10**DECIMALS => 100% or 1.0
     uint8 public constant DECIMALS = 8;
-    uint256 public constant ONE = (1 * 10 ** DECIMALS); // 1.0 or 100%
 
-    /// @dev SIGMOID_BOUND is set to 1%, i.e) the rollover fee can be at most 1% on either direction.
-    uint256 public constant SIGMOID_BOUND = ONE / 100; // 0.01 or 1%
+    /// @notice Fixed point representation of 1.0 or 100%.
+    uint256 public constant ONE = (1 * 10 ** DECIMALS);
 
-    uint256 public constant TARGET_SR_LOWER_BOUND = (ONE * 75) / 100; // 0.75 or 75%
-    uint256 public constant TARGET_SR_UPPER_BOUND = 2 * ONE; // 2.0 or 200%
+    /// @notice Sigmoid asymptote bound.
+    /// @dev Set to 0.01 or 1%, i.e) the rollover fee can be at most 1% on either direction.
+    uint256 public constant SIGMOID_BOUND = ONE / 100;
+
+    /// @notice Target subscription ratio lower bound, 0.75 or 75%.
+    uint256 public constant TARGET_SR_LOWER_BOUND = (ONE * 75) / 100;
+
+    /// @notice Target subscription ratio higher bound, 2.0 or 200%.
+    uint256 public constant TARGET_SR_UPPER_BOUND = 2 * ONE;
 
     //-----------------------------------------------------------------------------
     /// @notice The target subscription ratio i.e) the normalization factor.
@@ -111,11 +117,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     //-----------------------------------------------------------------------------
     // Vault fee parameters
 
-    /// @notice The fixed amount vault fee charged during each deployment.
-    /// @dev Denominated in the underlying collateral asset and
-    ///      Paid by the vault note holders to the system owner.
-    uint256 public vaultDeploymentFee;
-
     /// @notice The percentage fee charged on minting vault notes.
     uint256 public vaultMintFeePerc;
 
@@ -130,8 +131,13 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     //-----------------------------------------------------------------------------
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     /// @notice Contract initializer.
-    function init() public initializer {
+    function init() external initializer {
         __Ownable_init();
 
         // initializing mint/burn fees to zero
@@ -139,7 +145,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         perpBurnFeePerc = 0;
         vaultMintFeePerc = 0;
         vaultBurnFeePerc = 0;
-        vaultDeploymentFee = 0;
 
         // initializing swap fees to 100%, to disable swapping initially
         vaultUnderlyingToPerpSwapFeePerc = ONE;
@@ -234,12 +239,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         vaultBurnFeePerc = vaultBurnFeePerc_;
     }
 
-    /// @notice Updates the vault's deployment fee parameters.
-    /// @param vaultDeploymentFee_ The new deployment fee denominated in the underlying tokens.
-    function updateVaultDeploymentFees(uint256 vaultDeploymentFee_) external onlyOwner {
-        vaultDeploymentFee = vaultDeploymentFee_;
-    }
-
     /// @notice Updates the vault's share of the underlying to perp swap fee.
     /// @param feePerc The new fee percentage.
     function updateVaultUnderlyingToPerpSwapFeePerc(uint256 feePerc) external onlyOwner {
@@ -263,14 +262,14 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @inheritdoc IFeePolicy
     /// @dev Minting perps reduces system dr, i.e) drPost < drPre.
-    function computePerpMintFeePerc(uint256 drPre, uint256 drPost) public view override returns (uint256) {
-        return _stepFnFeePerc(drPost, drPre, perpMintFeePerc, 0);
+    function computePerpMintFeePerc() public view override returns (uint256) {
+        return perpMintFeePerc;
     }
 
     /// @inheritdoc IFeePolicy
     /// @dev Burning perps increases system dr, i.e) drPost > drPre.
-    function computePerpBurnFeePerc(uint256 drPre, uint256 drPost) public view override returns (uint256) {
-        return _stepFnFeePerc(drPre, drPost, 0, perpBurnFeePerc);
+    function computePerpBurnFeePerc() public view override returns (uint256) {
+        return perpBurnFeePerc;
     }
 
     /// @inheritdoc IFeePolicy
@@ -287,46 +286,35 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @inheritdoc IFeePolicy
     /// @dev Minting vault notes increases system dr, i.e) drPost > drPre.
-    function computeVaultMintFeePerc(uint256 drPre, uint256 drPost) external view override returns (uint256) {
-        return _stepFnFeePerc(drPre, drPost, 0, vaultMintFeePerc);
+    function computeVaultMintFeePerc() external view override returns (uint256) {
+        return vaultMintFeePerc;
     }
 
     /// @inheritdoc IFeePolicy
-    function computeVaultBurnFeePerc(uint256 /*drPre*/, uint256 /*drPost*/) external view override returns (uint256) {
+    function computeVaultBurnFeePerc() external view override returns (uint256) {
         return vaultBurnFeePerc;
     }
 
     /// @inheritdoc IFeePolicy
-    function computeVaultDeploymentFee() external view override returns (uint256) {
-        return vaultDeploymentFee;
-    }
-
-    /// @inheritdoc IFeePolicy
     /// @dev Swapping by minting perps reduces system dr, i.e) drPost < drPre.
-    function computeUnderlyingToPerpSwapFeePercs(
-        uint256 drPre,
+    function computeUnderlyingToPerpVaultSwapFeePerc(
+        uint256 /*drPre*/,
         uint256 drPost
-    ) external view override returns (uint256, uint256) {
+    ) external view override returns (uint256) {
         // When the after op deviation ratio is below the bound,
         // swapping is disabled. (fees are set to 100%)
-        return (
-            computePerpMintFeePerc(drPre, drPost),
-            (drPost < deviationRatioBoundLower ? ONE : vaultUnderlyingToPerpSwapFeePerc)
-        );
+        return (drPost < deviationRatioBoundLower ? ONE : vaultUnderlyingToPerpSwapFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
     /// @dev Swapping by burning perps increases system dr, i.e) drPost > drPre.
-    function computePerpToUnderlyingSwapFeePercs(
-        uint256 drPre,
+    function computePerpToUnderlyingVaultSwapFeePerc(
+        uint256 /*drPre*/,
         uint256 drPost
-    ) external view override returns (uint256, uint256) {
+    ) external view override returns (uint256) {
         // When the after op deviation ratio is above the bound,
         // swapping is disabled. (fees are set to 100%)
-        return (
-            computePerpBurnFeePerc(drPre, drPost),
-            (drPost > deviationRatioBoundUpper ? ONE : vaultPerpToUnderlyingSwapFeePerc)
-        );
+        return (drPost > deviationRatioBoundUpper ? ONE : vaultPerpToUnderlyingSwapFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
@@ -336,31 +324,8 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @inheritdoc IFeePolicy
     function computeDeviationRatio(SubscriptionParams memory s) public view returns (uint256) {
-        return computeDeviationRatio(s.perpTVL, s.vaultTVL, s.seniorTR);
-    }
-
-    /// @inheritdoc IFeePolicy
-    function computeDeviationRatio(uint256 perpTVL, uint256 vaultTVL, uint256 seniorTR) public view returns (uint256) {
         // NOTE: We assume that perp's TVL and vault's TVL values have the same base denomination.
-        uint256 juniorTR = TRANCHE_RATIO_GRANULARITY - seniorTR;
-        return (vaultTVL * seniorTR).mulDiv(ONE, (perpTVL * juniorTR)).mulDiv(ONE, targetSubscriptionRatio);
-    }
-
-    /// @dev Computes step function fee perc, with a dr cutoff at 1.0. Expects drL < drU.
-    function _stepFnFeePerc(uint256 drL, uint256 drU, uint256 f1, uint256 f2) private pure returns (uint256) {
-        // When drU is below the cutoff, we use f1.
-        if (drU <= ONE) {
-            return f1;
-        }
-        // When drL is above the cutoff, we use f2.
-        else if (drL > ONE) {
-            return f2;
-        }
-        // Otherwise we use f1 and f2 partially.
-        else {
-            uint256 deltaDR = drU - drL;
-            return (f1.mulDiv(ONE - drL, deltaDR, MathUpgradeable.Rounding.Up) +
-                f2.mulDiv(drU - ONE, deltaDR, MathUpgradeable.Rounding.Up));
-        }
+        uint256 juniorTR = TRANCHE_RATIO_GRANULARITY - s.seniorTR;
+        return (s.vaultTVL * s.seniorTR).mulDiv(ONE, (s.perpTVL * juniorTR)).mulDiv(ONE, targetSubscriptionRatio);
     }
 }

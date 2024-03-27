@@ -209,7 +209,7 @@ contract PerpetualTranche is
 
     /// @dev Throws if called by any account other than the keeper.
     modifier onlyKeeper() {
-        if (keeper != _msgSender()) {
+        if (keeper != msg.sender) {
             revert UnauthorizedCall();
         }
         _;
@@ -217,7 +217,7 @@ contract PerpetualTranche is
 
     /// @dev Throws if called not called by vault.
     modifier onlyVault() {
-        if (address(vault) != _msgSender()) {
+        if (address(vault) != msg.sender) {
             revert UnauthorizedCall();
         }
         _;
@@ -225,6 +225,11 @@ contract PerpetualTranche is
 
     //--------------------------------------------------------------------------
     // Construction & Initialization
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
 
     /// @notice Contract state initialization.
     /// @param name ERC-20 Name of the Perp token.
@@ -238,7 +243,7 @@ contract PerpetualTranche is
         IERC20Upgradeable collateral_,
         IBondIssuer bondIssuer_,
         IFeePolicy feePolicy_
-    ) public initializer {
+    ) external initializer {
         __ERC20_init(name, symbol);
         __ERC20Burnable_init();
         __Ownable_init();
@@ -262,16 +267,16 @@ contract PerpetualTranche is
     //--------------------------------------------------------------------------
     // ADMIN only methods
 
+    /// @notice Updates the reference to the rollover vault.
+    /// @param vault_ The address of the new vault.
+    function updateVault(IRolloverVault vault_) external onlyOwner {
+        vault = vault_;
+    }
+
     /// @notice Updates the reference to the keeper.
     /// @param keeper_ The address of the new keeper.
     function updateKeeper(address keeper_) public onlyOwner {
         keeper = keeper_;
-    }
-
-    /// @notice Updates the reference to the rollover vault.
-    /// @param vault_ The address of the new vault.
-    function updateVault(IRolloverVault vault_) public onlyOwner {
-        vault = vault_;
     }
 
     /// @notice Update the reference to the bond issuer contract.
@@ -334,13 +339,13 @@ contract PerpetualTranche is
 
     /// @notice Pauses deposits, withdrawals and rollovers.
     /// @dev ERC-20 functions, like transfers will always remain operational.
-    function pause() public onlyKeeper {
+    function pause() external onlyKeeper {
         _pause();
     }
 
     /// @notice Unpauses deposits, withdrawals and rollovers.
     /// @dev ERC-20 functions, like transfers will always remain operational.
-    function unpause() public onlyKeeper {
+    function unpause() external onlyKeeper {
         _unpause();
     }
 
@@ -364,7 +369,7 @@ contract PerpetualTranche is
         }
 
         // transfers tranche tokens from the sender to the reserve
-        _transferIntoReserve(msg.sender, trancheIn, trancheInAmt);
+        _transferIntoReserve(trancheIn, trancheInAmt);
 
         // mints perp tokens to the sender
         _mint(msg.sender, perpAmtMint);
@@ -393,9 +398,10 @@ contract PerpetualTranche is
         _burn(msg.sender, perpAmtBurnt);
 
         // transfers reserve tokens out
-        for (uint8 i = 0; i < tokensOut.length; i++) {
+        uint8 tokensOutCount = uint8(tokensOut.length);
+        for (uint8 i = 0; i < tokensOutCount; ++i) {
             if (tokensOut[i].amount > 0) {
-                _transferOutOfReserve(msg.sender, tokensOut[i].token, tokensOut[i].amount);
+                _transferOutOfReserve(tokensOut[i].token, tokensOut[i].amount);
             }
         }
 
@@ -423,10 +429,10 @@ contract PerpetualTranche is
         }
 
         // transfers tranche tokens from the sender to the reserve
-        _transferIntoReserve(msg.sender, trancheIn, r.trancheInAmt);
+        _transferIntoReserve(trancheIn, r.trancheInAmt);
 
         // transfers tranche from the reserve to the sender
-        _transferOutOfReserve(msg.sender, tokenOut, r.tokenOutAmt);
+        _transferOutOfReserve(tokenOut, r.tokenOutAmt);
 
         return r;
     }
@@ -499,7 +505,7 @@ contract PerpetualTranche is
         }
 
         // Iterating through the reserve to find tranches that are ready to be rolled out.
-        for (uint8 i = 1; i < reserveCount; i++) {
+        for (uint8 i = 1; i < reserveCount; ++i) {
             IERC20Upgradeable token = _reserveAt(i);
             if (_isTimeForRollout(ITranche(address(token)))) {
                 activeRolloverTokens[i] = token;
@@ -510,7 +516,7 @@ contract PerpetualTranche is
         // We recreate a smaller array with just the tokens up for rollover.
         IERC20Upgradeable[] memory rolloverTokens = new IERC20Upgradeable[](numTokensUpForRollover);
         uint8 j = 0;
-        for (uint8 i = 0; i < reserveCount; i++) {
+        for (uint8 i = 0; i < reserveCount; ++i) {
             if (address(activeRolloverTokens[i]) != address(0)) {
                 rolloverTokens[j++] = activeRolloverTokens[i];
             }
@@ -530,6 +536,9 @@ contract PerpetualTranche is
         ITranche trancheIn,
         uint256 trancheInAmt
     ) external override afterStateUpdate returns (uint256) {
+        if (!_isDepositTranche(trancheIn)) {
+            revert UnexpectedAsset();
+        }
         return _computeMintAmt(trancheIn, trancheInAmt);
     }
 
@@ -546,6 +555,9 @@ contract PerpetualTranche is
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable
     ) external override afterStateUpdate returns (RolloverData memory) {
+        if (!_isAcceptableRollover(trancheIn, tokenOut)) {
+            revert UnacceptableRollover();
+        }
         return _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable);
     }
 
@@ -626,17 +638,17 @@ contract PerpetualTranche is
     //--------------------------------------------------------------------------
     // Private methods
 
-    /// @dev Transfers tokens from the given address to self and updates the reserve set.
+    /// @dev Transfers tokens from the caller (msg.sender) and updates the reserve set.
     /// @return Reserve's token balance after transfer in.
-    function _transferIntoReserve(address from, IERC20Upgradeable token, uint256 trancheAmt) private returns (uint256) {
-        token.safeTransferFrom(from, address(this), trancheAmt);
+    function _transferIntoReserve(IERC20Upgradeable token, uint256 trancheAmt) private returns (uint256) {
+        token.safeTransferFrom(msg.sender, address(this), trancheAmt);
         return _syncReserve(token);
     }
 
-    /// @dev Transfers tokens from self into the given address and updates the reserve set.
+    /// @dev Transfers tokens from self into the caller (msg.sender) and updates the reserve set.
     /// @return Reserve's token balance after transfer out.
-    function _transferOutOfReserve(address to, IERC20Upgradeable token, uint256 tokenAmt) private returns (uint256) {
-        token.safeTransfer(to, tokenAmt);
+    function _transferOutOfReserve(IERC20Upgradeable token, uint256 tokenAmt) private returns (uint256) {
+        token.safeTransfer(msg.sender, tokenAmt);
         return _syncReserve(token);
     }
 
@@ -677,25 +689,14 @@ contract PerpetualTranche is
 
         //-----------------------------------------------------------------------------
         // We charge no mint fee when interacting with other callers within the system.
-        uint256 feePerc = 0;
-        uint256 perpTVL = 0;
-        if (!_isProtocolCaller()) {
-            SubscriptionParams memory s = _querySubscriptionState();
-            feePerc = feePolicy.computePerpMintFeePerc(
-                feePolicy.computeDeviationRatio(s),
-                feePolicy.computeDeviationRatio(s.perpTVL + valueIn, s.vaultTVL, s.seniorTR)
-            );
-            perpTVL = s.perpTVL;
-        } else {
-            perpTVL = _reserveValue();
-        }
+        uint256 feePerc = _isProtocolCaller() ? 0 : feePolicy.computePerpMintFeePerc();
         //-----------------------------------------------------------------------------
 
         // Compute mint amt
         uint256 perpSupply = totalSupply();
         uint256 perpAmtMint = valueIn;
         if (perpSupply > 0) {
-            perpAmtMint = perpAmtMint.mulDiv(perpSupply, perpTVL);
+            perpAmtMint = perpAmtMint.mulDiv(perpSupply, _reserveValue());
         }
 
         // The mint fees are settled by simply minting fewer perps.
@@ -712,25 +713,13 @@ contract PerpetualTranche is
 
         //-----------------------------------------------------------------------------
         // We charge no burn fee when interacting with other parts of the system.
-        uint256 feePerc = 0;
-
-        if (!_isProtocolCaller()) {
-            SubscriptionParams memory s = _querySubscriptionState();
-            feePerc = feePolicy.computePerpBurnFeePerc(
-                feePolicy.computeDeviationRatio(s),
-                feePolicy.computeDeviationRatio(
-                    s.perpTVL.mulDiv(perpSupply - perpAmtBurnt, perpSupply),
-                    s.vaultTVL,
-                    s.seniorTR
-                )
-            );
-        }
+        uint256 feePerc = _isProtocolCaller() ? 0 : feePolicy.computePerpBurnFeePerc();
         //-----------------------------------------------------------------------------
 
         // Compute redemption amounts
         uint8 reserveCount = uint8(_reserves.length());
         TokenAmount[] memory reserveTokens = new TokenAmount[](reserveCount);
-        for (uint8 i = 0; i < reserveCount; i++) {
+        for (uint8 i = 0; i < reserveCount; ++i) {
             IERC20Upgradeable tokenOut = _reserveAt(i);
             reserveTokens[i] = TokenAmount({
                 token: tokenOut,
@@ -758,7 +747,13 @@ contract PerpetualTranche is
         // between `trancheInAmt` and `tokenOutAmt`.
         //
         int256 feePerc = feePolicy.computePerpRolloverFeePerc(
-            feePolicy.computeDeviationRatio(_querySubscriptionState())
+            feePolicy.computeDeviationRatio(
+                SubscriptionParams({
+                    perpTVL: _reserveValue(),
+                    vaultTVL: vault.getTVL(),
+                    seniorTR: _depositBond.getSeniorTrancheRatio()
+                })
+            )
         );
         //-----------------------------------------------------------------------------
 
@@ -910,23 +905,13 @@ contract PerpetualTranche is
         return _reserves.contains(address(token));
     }
 
-    /// @dev Queries the current subscription state of the perp and vault systems.
-    function _querySubscriptionState() private view returns (SubscriptionParams memory) {
-        return
-            SubscriptionParams({
-                perpTVL: _reserveValue(),
-                vaultTVL: IRolloverVault(vault).getTVL(),
-                seniorTR: _depositBond.getSeniorTrancheRatio()
-            });
-    }
-
     /// @dev Calculates the total value of all the tranches in the reserve.
     ///      Value of each reserve tranche is denominated in the underlying collateral.
     function _reserveValue() private view returns (uint256) {
         IERC20Upgradeable underlying_ = _reserveAt(0);
         uint256 totalVal = underlying_.balanceOf(address(this));
         uint8 reserveCount = uint8(_reserves.length());
-        for (uint8 i = 1; i < reserveCount; i++) {
+        for (uint8 i = 1; i < reserveCount; ++i) {
             ITranche tranche = ITranche(address(_reserveAt(i)));
             IBondController parentBond = IBondController(tranche.bond());
             totalVal += _computeReserveTrancheValue(
@@ -974,6 +959,6 @@ contract PerpetualTranche is
     /// @dev Checks if caller is another module within the protocol.
     ///      If so, we do not charge mint/burn for internal operations.
     function _isProtocolCaller() private view returns (bool) {
-        return (_msgSender() == address(vault));
+        return (msg.sender == address(vault));
     }
 }

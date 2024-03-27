@@ -215,9 +215,15 @@ describe("RolloverVault", function () {
       beforeEach(async function () {
         const bondFactory = await setupBondFactory();
         ({ collateralToken } = await setupCollateralToken("Bitcoin", "BTC"));
+
         const BondIssuer = await ethers.getContractFactory("BondIssuer");
-        const issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
-        await issuer.init(4800, [200, 800], 1200, 0);
+        const issuer = await upgrades.deployProxy(
+          BondIssuer.connect(deployer),
+          [bondFactory.address, collateralToken.address, 4800, [200, 800], 1200, 0],
+          {
+            initializer: "init(address,address,uint256,uint256[],uint256,uint256)",
+          },
+        );
 
         const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
         perp = await upgrades.deployProxy(

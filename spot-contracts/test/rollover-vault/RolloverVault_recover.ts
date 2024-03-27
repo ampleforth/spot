@@ -41,9 +41,15 @@ describe("RolloverVault", function () {
 
     bondFactory = await setupBondFactory();
     ({ collateralToken } = await setupCollateralToken("Bitcoin", "BTC"));
+
     const BondIssuer = await ethers.getContractFactory("BondIssuer");
-    issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
-    await issuer.init(4800, [200, 800], 1200, 0);
+    issuer = await upgrades.deployProxy(
+      BondIssuer.connect(deployer),
+      [bondFactory.address, collateralToken.address, 4800, [200, 800], 1200, 0],
+      {
+        initializer: "init(address,address,uint256,uint256[],uint256,uint256)",
+      },
+    );
 
     const FeePolicy = await ethers.getContractFactory("FeePolicy");
     feePolicy = await smock.fake(FeePolicy);
@@ -453,6 +459,51 @@ describe("RolloverVault", function () {
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.address, toFixedPtAmt("7808"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[0].address, toFixedPtAmt("0"));
             await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[1].address, toFixedPtAmt("2400"));
+          });
+        });
+
+        describe("with dust reminder", function () {
+          beforeEach(async function () {
+            await depositIntoBond(newBondIn, toFixedPtAmt("1000"), deployer);
+            await newTranchesIn[0].transfer(vault.address, "200000");
+          });
+
+          it("should recover", async function () {
+            await expect(vault["recover(address)"](newTranchesIn[1].address)).not.to.be.reverted;
+            expect(await vault.assetCount()).to.eq(2);
+            await checkVaultAssetComposition(
+              vault,
+              [collateralToken, newTranchesIn[1]],
+              [toFixedPtAmt("6808.000000000001"), toFixedPtAmt("3199.9999999999992")],
+            );
+          });
+
+          it("should sync assets", async function () {
+            const tx = vault["recover(address)"](newTranchesIn[1].address);
+            await expect(tx)
+              .to.emit(vault, "AssetSynced")
+              .withArgs(collateralToken.address, toFixedPtAmt("6808.000000000001"));
+            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[0].address, toFixedPtAmt("0"));
+            await expect(tx)
+              .to.emit(vault, "AssetSynced")
+              .withArgs(newTranchesIn[1].address, toFixedPtAmt("3199.9999999999992"));
+          });
+
+          it("should not recover dust when triggered again", async function () {
+            await depositIntoBond(newBondIn, toFixedPtAmt("10000"), deployer);
+            await newTranchesIn[0].transfer(vault.address, toFixedPtAmt("799.999999999999"));
+            await vault["recover(address)"](newTranchesIn[1].address);
+            const tx = vault["recover(address)"](newTranchesIn[1].address);
+            await tx;
+            await checkVaultAssetComposition(
+              vault,
+              [collateralToken, newTranchesIn[1]],
+              [toFixedPtAmt("10807.999999999996"), "3200000"],
+            );
+            await expect(tx)
+              .to.emit(vault, "AssetSynced")
+              .withArgs(collateralToken.address, toFixedPtAmt("10807.999999999996"));
+            await expect(tx).to.emit(vault, "AssetSynced").withArgs(newTranchesIn[1].address, "3200000");
           });
         });
       });

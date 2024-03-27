@@ -32,12 +32,10 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
 
     /// @notice Address of the bond factory.
-    // solhint-disable-next-line immutable-vars-naming
-    IBondFactory public immutable bondFactory;
+    IBondFactory public bondFactory;
 
     /// @notice The underlying rebasing token used for tranching.
-    // solhint-disable-next-line immutable-vars-naming
-    address public immutable collateral;
+    address public collateral;
 
     /// @notice The maximum maturity duration for the issued bonds.
     /// @dev In practice, bonds issued by this issuer won't have a constant duration as
@@ -71,12 +69,9 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     /// @notice The timestamp when the issue window opened during the last issue.
     uint256 public lastIssueWindowTimestamp;
 
-    /// @notice Contract constructor
-    /// @param bondFactory_ The bond factory reference.
-    /// @param collateral_ The address of the collateral ERC-20.
-    constructor(IBondFactory bondFactory_, address collateral_) {
-        bondFactory = bondFactory_;
-        collateral = collateral_;
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
     }
 
     /// @notice Contract initializer.
@@ -85,12 +80,16 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     /// @param minIssueTimeIntervalSec_ The minimum time between successive issues.
     /// @param issueWindowOffsetSec_ The issue window offset.
     function init(
+        IBondFactory bondFactory_,
+        address collateral_,
         uint256 maxMaturityDuration_,
         uint256[] memory trancheRatios_,
         uint256 minIssueTimeIntervalSec_,
         uint256 issueWindowOffsetSec_
-    ) public initializer {
+    ) external initializer {
         __Ownable_init();
+        bondFactory = bondFactory_;
+        collateral = collateral_;
         updateMaxMaturityDuration(maxMaturityDuration_);
         updateTrancheRatios(trancheRatios_);
         updateIssuanceTimingConfig(minIssueTimeIntervalSec_, issueWindowOffsetSec_);
@@ -107,11 +106,11 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     function updateTrancheRatios(uint256[] memory trancheRatios_) public onlyOwner {
         trancheRatios = trancheRatios_;
         uint256 ratioSum;
-        for (uint8 i = 0; i < trancheRatios_.length; i++) {
+        uint8 numTranches = uint8(trancheRatios_.length);
+        for (uint8 i = 0; i < numTranches; ++i) {
             ratioSum += trancheRatios_[i];
         }
-
-        if (ratioSum > TRANCHE_RATIO_GRANULARITY) {
+        if (ratioSum != TRANCHE_RATIO_GRANULARITY) {
             revert UnacceptableTrancheRatios();
         }
     }

@@ -38,8 +38,13 @@ describe("RouterV2", function () {
     ({ collateralToken } = await setupCollateralToken("Bitcoin", "BTC"));
 
     const BondIssuer = await ethers.getContractFactory("BondIssuer");
-    issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
-    await issuer.init(3600, [200, 800], 1200, 0);
+    issuer = await upgrades.deployProxy(
+      BondIssuer.connect(deployer),
+      [bondFactory.address, collateralToken.address, 3600, [200, 800], 1200, 0],
+      {
+        initializer: "init(address,address,uint256,uint256[],uint256,uint256)",
+      },
+    );
 
     const FeePolicy = await ethers.getContractFactory("FeePolicy");
     feePolicy = await smock.fake(FeePolicy);

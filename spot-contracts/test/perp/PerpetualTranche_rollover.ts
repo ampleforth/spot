@@ -46,9 +46,15 @@ describe("PerpetualTranche", function () {
 
     bondFactory = await setupBondFactory();
     ({ collateralToken, rebaseOracle } = await setupCollateralToken("Bitcoin", "BTC"));
+
     const BondIssuer = await ethers.getContractFactory("BondIssuer");
-    issuer = await BondIssuer.deploy(bondFactory.address, collateralToken.address);
-    await issuer.init(10800, [500, 500], 1200, 0);
+    issuer = await upgrades.deployProxy(
+      BondIssuer.connect(deployer),
+      [bondFactory.address, collateralToken.address, 10800, [500, 500], 1200, 0],
+      {
+        initializer: "init(address,address,uint256,uint256[],uint256,uint256)",
+      },
+    );
 
     const FeePolicy = await ethers.getContractFactory("FeePolicy");
     feePolicy = await smock.fake(FeePolicy);
@@ -346,12 +352,8 @@ describe("PerpetualTranche", function () {
     });
 
     describe("when trancheIn price is 0.5 and tokenOut is collateral which rebased up", function () {
-      let rolloverInTranche2: Contract;
       beforeEach(async function () {
-        const rolloverInTranches = await getTranches(rolloverInBond);
-        rolloverInTranche2 = rolloverInTranches[1];
         await rebase(collateralToken, rebaseOracle, -0.75);
-
         // simulating collateral rebase up, by just transferring some tokens in
         await mintCollteralToken(collateralToken, toFixedPtAmt("1000"), deployer);
         await collateralToken.transfer(perp.address, toFixedPtAmt("1000"));
@@ -359,7 +361,7 @@ describe("PerpetualTranche", function () {
 
       it("should rollover the correct amount", async function () {
         const r = await perp.callStatic.computeRolloverAmt(
-          rolloverInTranche2.address,
+          rolloverInTranche.address,
           collateralToken.address,
           toFixedPtAmt("500"),
         );
@@ -369,19 +371,15 @@ describe("PerpetualTranche", function () {
     });
 
     describe("when trancheIn price is 0.5 and tokenOut is collateral which rebased down", function () {
-      let rolloverInTranche2: Contract;
       beforeEach(async function () {
         await mintCollteralToken(collateralToken, toFixedPtAmt("1000"), deployer);
         await collateralToken.transfer(perp.address, toFixedPtAmt("1000"));
-
-        const rolloverInTranches = await getTranches(rolloverInBond);
-        rolloverInTranche2 = rolloverInTranches[1];
         await rebase(collateralToken, rebaseOracle, -0.75);
       });
 
       it("should rollover the correct amount", async function () {
         const r = await perp.callStatic.computeRolloverAmt(
-          rolloverInTranche2.address,
+          rolloverInTranche.address,
           collateralToken.address,
           toFixedPtAmt("500"),
         );

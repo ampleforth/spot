@@ -29,7 +29,7 @@ contract MockVault {
     function redeemPerps(IPerpetualTranche perp, uint256 perpAmt) public {
         perp.transferFrom(msg.sender, address(this), perpAmt);
         TokenAmount[] memory tokensOut = perp.redeem(perpAmt);
-        for (uint256 i = 0; i < tokensOut.length; i++) {
+        for (uint256 i = 0; i < tokensOut.length; ++i) {
             IERC20Upgradeable tokenOut = tokensOut[i].token;
             tokenOut.transfer(msg.sender, tokenOut.balanceOf(address(this)));
         }
