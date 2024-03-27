@@ -23,19 +23,22 @@ task("deploy:BondIssuer")
       verify,
       issue,
     } = args;
-    console.log("Signer", await (await hre.ethers.getSigners())[0].getAddress());
 
-    const BondIssuer = await hre.ethers.getContractFactory("BondIssuer");
-    const bondIssuer = await BondIssuer.deploy(bondFactoryAddress, collateralTokenAddress);
-    await bondIssuer.deployed();
+    const signers = await hre.ethers.getSigners();
+    const deployer = signers[0];
+    console.log("Signer", await deployer.getAddress());
 
-    await (await bondIssuer.init(bondDuration, trancheRatios, issueFrequency, issueWindowOffset)).wait();
-    if (issue) {
-      await (await bondIssuer.issue()).wait();
-    }
-
+    const BondIssuer = hre.ethers.getContractFactory("BondIssuer");
+    const bondIssuer = await hre.upgrades.deployProxy(
+      BondIssuer.connect(deployer),
+      [bondFactoryAddress, collateralTokenAddress, bondDuration, trancheRatios, issueFrequency, issueWindowOffset],
+      {
+        initializer: "init(address,address,uint256,uint256[],uint256,uint256)",
+      },
+    );
+    // await (await bondIssuer.issue()).wait();
     if (verify) {
-      await sleep(15);
+      await sleep(30);
       await hre.run("verify:contract", {
         address: bondIssuer.address,
         constructorArguments: [bondFactoryAddress, collateralTokenAddress],
@@ -97,7 +100,7 @@ task("deploy:PerpSystem")
     await (await perp.updateVault(vault.address)).wait();
 
     if (verify) {
-      await sleep(15);
+      await sleep(30);
       // We just need to verify the proxy once
       await hre.run("verify:contract", {
         address: feePolicy.address,
@@ -128,7 +131,7 @@ task("deploy:Router")
     console.log("router", router.address);
 
     if (args.verify) {
-      await sleep(15);
+      await sleep(30);
       await hre.run("verify:contract", {
         address: router.address,
       });

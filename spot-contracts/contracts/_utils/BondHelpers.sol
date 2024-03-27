@@ -5,7 +5,7 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { TokenAmount } from "../_interfaces/CommonTypes.sol";
-import { UnacceptableTrancheLength } from "../_interfaces/ProtocolErrors.sol";
+import { UnacceptableDeposit, UnacceptableTrancheLength } from "../_interfaces/ProtocolErrors.sol";
 
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
@@ -73,6 +73,10 @@ library BondHelpers {
     /// @param b The address of the bond contract.
     /// @return The tranche data, an array of tranche amounts.
     function previewDeposit(IBondController b, uint256 collateralAmount) internal view returns (TokenAmount[] memory) {
+        if (b.isMature()) {
+            revert UnacceptableDeposit();
+        }
+
         BondTranches memory bt = getTranches(b);
         TokenAmount[] memory tranchesOut = new TokenAmount[](2);
 

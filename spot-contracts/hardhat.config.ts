@@ -30,13 +30,13 @@ export default {
       url: "http://127.0.0.1:8545",
       chainId: 1337,
     },
-    goerli: {
-      // url: `https://goerli.infura.io/v3/${process.env.INFURA_SECRET}`,
-      url: `https://eth-goerli.g.alchemy.com/v2/${process.env.ALCHEMY_SECRET}`,
+    sepolia: {
+      // url: `https://sepolia.infura.io/v3/${process.env.INFURA_SECRET}`,
+      url: `https://eth-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_SECRET}`,
       accounts: {
         mnemonic: process.env.PROD_MNEMONIC || Wallet.createRandom().mnemonic.phrase,
       },
-      gasMultiplier: 1.03,
+      gasMultiplier: 1.01,
     },
     mainnet: {
       // url: `https://mainnet.infura.io/v3/${process.env.INFURA_SECRET}`,
@@ -70,6 +70,7 @@ export default {
     apiKey: process.env.ETHERSCAN_API_KEY,
   },
   mocha: {
-    bail: true,
+    bail: false,
+    timeout: 100000000,
   },
 } as HardhatUserConfig;
