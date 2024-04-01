@@ -36,7 +36,9 @@ task("deploy:BondIssuer")
         initializer: "init(address,address,uint256,uint256[],uint256,uint256)",
       },
     );
-    // await (await bondIssuer.issue()).wait();
+    if (issue) {
+      await (await bondIssuer.issue()).wait();
+    }
     if (verify) {
       await sleep(30);
       await hre.run("verify:contract", {
