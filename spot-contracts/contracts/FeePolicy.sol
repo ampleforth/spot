@@ -68,8 +68,8 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     uint256 public constant ONE = (1 * 10 ** DECIMALS);
 
     /// @notice Sigmoid asymptote bound.
-    /// @dev Set to 0.01 or 1%, i.e) the rollover fee can be at most 1% on either direction.
-    uint256 public constant SIGMOID_BOUND = ONE / 100;
+    /// @dev Set to 0.05 or 5%, i.e) the rollover fee can be at most 5% on either direction.
+    uint256 public constant SIGMOID_BOUND = ONE / 20;
 
     /// @notice Target subscription ratio lower bound, 0.75 or 75%.
     uint256 public constant TARGET_SR_LOWER_BOUND = (ONE * 75) / 100;
