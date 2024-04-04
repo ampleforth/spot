@@ -210,7 +210,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @param p Lower, Upper and Growth sigmoid paramters are fixed point numbers with {DECIMALS} places.
     function updatePerpRolloverFees(RolloverFeeSigmoidParams calldata p) external onlyOwner {
         // If the bond duration is 28 days and 13 rollovers happen per year,
-        // perp can be inflated or enriched up to ~13% annually.
+        // perp can be inflated or enriched up to ~65% annually.
         if (p.lower < -int256(SIGMOID_BOUND) || p.upper > int256(SIGMOID_BOUND) || p.lower > p.upper) {
             revert InvalidSigmoidAsymptotes();
         }
