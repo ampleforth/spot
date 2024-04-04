@@ -127,10 +127,12 @@ contract PerpetualTranche is
     address public override keeper;
 
     /// @notice External contract that orchestrates fees across the spot protocol.
+    /// @custom:oz-upgrades-renamed-from feeStrategy
     IFeePolicy public override feePolicy;
 
     /// @notice DEPRECATED.
     /// @dev This used to point to the external strategy that computes a given reserve token's price.
+    /// @custom:oz-upgrades-renamed-from pricingStrategy
     // solhint-disable-next-line var-name-mixedcase
     address private _pricingStrategy_DEPRECATED;
 
@@ -138,6 +140,7 @@ contract PerpetualTranche is
     /// @dev This used to point to the external strategy that computes a given reserve token's discount factor.
     ///      Now, we assume perp accepts only the "senior" most tranche from a bond. Seniors have a discount of 1.0,
     ///      every other tranche has a discount of 0.
+    /// @custom:oz-upgrades-renamed-from discountStrategy
     // solhint-disable-next-line var-name-mixedcase
     address private _discountStrategy_DEPRECATED;
 
@@ -160,6 +163,7 @@ contract PerpetualTranche is
     /// @dev This used to control the percentage of the reserve value to be held as the underlying collateral.
     ///      With V2 perp cannot control this anymore, the rollover mechanics are dictated
     ///      by the amount of capital in the vault system.
+    /// @custom:oz-upgrades-renamed-from matureValueTargetPerc
     // solhint-disable-next-line var-name-mixedcase
     uint256 private _matureValueTargetPerc_DEPRECATED;
 
@@ -175,6 +179,7 @@ contract PerpetualTranche is
     /// @notice DEPRECATED.
     /// @dev This used to store the discount factor applied on each reserve token.
     ///      Now, we assume all tokens in perp have a discount factor of 1.
+    /// @custom:oz-upgrades-renamed-from appliedDiscounts
     // solhint-disable-next-line var-name-mixedcase
     mapping(IERC20Upgradeable => uint256) private _appliedDiscounts_DEPRECATED;
 
@@ -191,7 +196,7 @@ contract PerpetualTranche is
     uint256 private _matureTrancheBalance_DEPRECATED;
 
     //--------------------------------------------------------------------------
-    // v1.1.0 STORAGE ADDITION
+    // v2.0.0 STORAGE ADDITION
 
     /// @notice Address of the authorized rollover vault.
     /// @dev If this address is set, only the rollover vault can perform rollovers.
