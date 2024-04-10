@@ -20,7 +20,7 @@ task("ops:perp:info")
     const issued = (await hre.ethers.provider.getCode(depositBond.address)) !== "0x";
     const perpSupply = await perp.totalSupply();
     const perpTVL = await perp.callStatic.getTVL();
-    const perpPrice = perpSupply.gt("0") ? perpTVL.div(perpSupply) : 0;
+    const perpPrice = perpSupply.gt("0") ? perpTVL.mul(1000).div(perpSupply) : 0;
     const proxyAdminAddress = await getAdminAddress(hre.ethers.provider, perpAddress);
     const implAddress = await getImplementationAddress(hre.ethers.provider, perpAddress);
 
@@ -80,18 +80,18 @@ task("ops:perp:info")
       const tokenAddress = await perp.callStatic.getReserveAt(i);
       const balance = await perp.callStatic.getReserveTokenBalance(tokenAddress);
       const value = await perp.callStatic.getReserveTokenValue(tokenAddress);
-      const price = balance.gt("0") ? value.div(balance) : 0;
+      const price = balance.gt("0") ? value.mul(1000).div(balance) : 0;
       data.push({
         token: tokenAddress,
         balance: utils.formatUnits(balance, await perp.decimals()),
-        price: utils.formatUnits(price, 0),
+        price: utils.formatUnits(price, 3),
         upForRollover: balance.gt("0") && upForRollover.find(t => t === tokenAddress) !== undefined,
       });
     }
     console.table(data);
 
     console.log("reserveCount:", reserveCount);
-    console.log("price:", utils.formatUnits(perpPrice, 0));
+    console.log("price:", utils.formatUnits(perpPrice, 3));
     console.log("---------------------------------------------------------------");
   });
 

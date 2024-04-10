@@ -130,12 +130,36 @@ task("deploy:Router")
     const RouterV2 = await hre.ethers.getContractFactory("RouterV2");
     const router = await RouterV2.deploy();
     await router.deployed();
-    console.log("router", router.address);
+    console.log("RouterV2", router.address);
 
     if (args.verify) {
       await sleep(30);
       await hre.run("verify:contract", {
         address: router.address,
+      });
+    } else {
+      console.log("Skipping verification");
+    }
+  });
+
+task("deploy:FeePolicy")
+  .addParam("verify", "flag to set false for local deployments", true, types.boolean)
+  .setAction(async function (args: TaskArguments, hre) {
+    const deployer = (await hre.ethers.getSigners())[0];
+    console.log("Signer", await deployer.getAddress());
+
+    const FeePolicy = await hre.ethers.getContractFactory("FeePolicy");
+    const feePolicy = await hre.upgrades.deployProxy(FeePolicy.connect(deployer));
+    await feePolicy.deployed();
+    console.log("feePolicy", feePolicy.address);
+
+    if (args.verify) {
+      await sleep(30);
+      await hre.run("verify:contract", {
+        address: feePolicy.address,
+      });
+      await hre.run("verify:contract", {
+        address: await getImplementationAddress(hre.ethers.provider, feePolicy.address),
       });
     } else {
       console.log("Skipping verification");
