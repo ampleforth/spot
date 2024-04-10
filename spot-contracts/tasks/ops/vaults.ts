@@ -64,11 +64,11 @@ task("ops:vault:info")
     const perpBalance = await vault.vaultAssetBalance(perp.address);
     const perpSupply = await perp.totalSupply();
     const perpTVL = await perp.callStatic.getTVL();
-    const perpPrice = perpSupply.gt("0") ? perpTVL.div(perpSupply) : 0;
+    const perpPrice = perpSupply.gt("0") ? perpTVL.mul(1000).div(perpSupply) : 0;
     data.push({
       asset: await perp.symbol(),
       balance: utils.formatUnits(perpBalance, perpDecimals),
-      price: utils.formatUnits(perpPrice, 0),
+      price: utils.formatUnits(perpPrice, 3),
     });
     console.table(data);
 
@@ -81,7 +81,11 @@ task("ops:vault:info")
     const subscriptionRatio = vaultTVL.mul(seniorTR).mul(feeOne).div(perpTVL).div(juniorTR);
     const targetSubscriptionRatio = await feePolicy.targetSubscriptionRatio();
     const expectedVaultTVL = targetSubscriptionRatio.mul(perpTVL).mul(juniorTR).div(seniorTR).div(feeOne);
-
+    const deviationRatio = await feePolicy["computeDeviationRatio((uint256,uint256,uint256))"]([
+      perpTVL,
+      vaultTVL,
+      seniorTR,
+    ]);
     console.log("perpTVL:", utils.formatUnits(perpTVL, underlyingDecimals));
     console.log("vaultTVL:", utils.formatUnits(vaultTVL, underlyingDecimals));
     console.log("expectedVaultTVL:", utils.formatUnits(expectedVaultTVL, underlyingDecimals));
@@ -98,13 +102,28 @@ task("ops:vault:info")
       "deviationRatioBoundUpper:",
       utils.formatUnits(await feePolicy.deviationRatioBoundUpper(), feeDecimals),
     );
+    console.log("deviationRatio:", utils.formatUnits(deviationRatio, feeDecimals));
+
+    console.log("---------------------------------------------------------------");
+    console.log("feePolicy:", feePolicy.address);
+    console.log("owner", await feePolicy.owner());
+    console.log("computeVaultMintFeePerc:", utils.formatUnits(await feePolicy.computeVaultMintFeePerc(), 8));
+    console.log("computeVaultBurnFeePerc:", utils.formatUnits(await feePolicy.computeVaultBurnFeePerc(), 8));
     console.log(
-      "deviationRatio:",
-      utils.formatUnits(
-        await feePolicy["computeDeviationRatio((uint256,uint256,uint256))"]([perpTVL, vaultTVL, seniorTR]),
-        feeDecimals,
-      ),
+      "computeUnderlyingToPerpVaultSwapFeePerc:",
+      utils.formatUnits(await feePolicy.computeUnderlyingToPerpVaultSwapFeePerc(deviationRatio, deviationRatio), 8),
     );
+    console.log(
+      "computePerpToUnderlyingVaultSwapFeePerc:",
+      utils.formatUnits(await feePolicy.computePerpToUnderlyingVaultSwapFeePerc(deviationRatio, deviationRatio), 8),
+    );
+    console.log("---------------------------------------------------------------");
+    console.log("Swap slippage");
+    const buy1000Perps = await vault.callStatic.computeUnderlyingToPerpSwapAmt(utils.parseUnits("1000", perpDecimals));
+    const sell1000Perps = await vault.callStatic.computePerpToUnderlyingSwapAmt(utils.parseUnits("1000", perpDecimals));
+    console.log("PerpPrice:", utils.formatUnits(perpPrice, 3));
+    console.log("Swap 1000 underlying for perps: ", utils.formatUnits(buy1000Perps[0], perpDecimals));
+    console.log("Sell 1000 perps for underlying", utils.formatUnits(sell1000Perps[0], perpDecimals));
     console.log("---------------------------------------------------------------");
   });
 

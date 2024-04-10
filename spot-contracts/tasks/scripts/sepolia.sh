@@ -83,7 +83,11 @@ yarn hardhat --network sepolia ops:redeemTranches \
 
 ########################################################################
 ## upgrade
+yarn hardhat --network sepolia validate_upgrade PerpetualTranche 0xdcCef9065876fD654bAddeBAa778FDA43E0bfC1F
+yarn hardhat --network sepolia validate_upgrade RolloverVault 0x107614c6602A8e602952Da107B8fE62b5Ab13b04
 
-yarn hardhat --network sepolia upgrade:perp:testnet 0xdcCef9065876fD654bAddeBAa778FDA43E0bfC1F
+yarn hardhat --network sepolia prepare_upgrade PerpetualTranche 0xdcCef9065876fD654bAddeBAa778FDA43E0bfC1F
+yarn hardhat --network sepolia prepare_upgrade RolloverVault 0x107614c6602A8e602952Da107B8fE62b5Ab13b04
 
-yarn hardhat --network sepolia upgrade:rolloverVault:testnet 0xca36B64BEbdf141623911987b93767dcA4bF6F1f
+yarn hardhat --network sepolia upgrade:testnet PerpetualTranche 0xdcCef9065876fD654bAddeBAa778FDA43E0bfC1F
+yarn hardhat --network sepolia upgrade:testnet RolloverVault 0x107614c6602A8e602952Da107B8fE62b5Ab13b04
