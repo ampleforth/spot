@@ -79,12 +79,13 @@ describe("HelpersTester", function () {
   });
 
   describe("#getTranches", function () {
-    let bond: Contract;
-    beforeEach(async function () {
-      bond = await createBondWithFactory(bondFactory, collateralToken, [498, 502], 86400);
+    it("should revert if bond has more than 2 tranches", async function () {
+      const bond = await createBondWithFactory(bondFactory, collateralToken, [200, 300, 500], 86400);
+      await expect(helper.getTranches(bond.address)).to.be.revertedWithCustomError(helper, "UnacceptableTrancheLength");
     });
 
     it("should return the tranche data", async function () {
+      const bond = await createBondWithFactory(bondFactory, collateralToken, [498, 502], 86400);
       const td = await helper.getTranches(bond.address);
       expect(td.tranches.length).to.eq(2);
       expect(td.trancheRatios.length).to.eq(2);
@@ -125,6 +126,16 @@ describe("HelpersTester", function () {
     let bond: Contract;
     beforeEach(async function () {
       bond = await createBondWithFactory(bondFactory, collateralToken, [500, 500], 86400);
+    });
+
+    describe("if bond is mature", function () {
+      it("should revert", async function () {
+        await bond.mature();
+        await expect(helper.previewDeposit(bond.address, toFixedPtAmt("1000"))).to.be.revertedWithCustomError(
+          helper,
+          "UnacceptableDeposit",
+        );
+      });
     });
 
     describe("first deposit", function () {
