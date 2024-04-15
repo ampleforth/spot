@@ -294,18 +294,19 @@ describe("RolloverVault", function () {
   describe("#updateMinDeploymentAmt", function () {
     let tx: Transaction;
     beforeEach(async function () {
-      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
+      await vault.connect(deployer).updateKeeper(await otherUser.getAddress());
     });
 
-    describe("when triggered by non-owner", function () {
+    describe("when triggered by non-keeper", function () {
       it("should revert", async function () {
-        await expect(vault.connect(deployer).updateMinDeploymentAmt(0)).to.be.revertedWith(
-          "Ownable: caller is not the owner",
+        await expect(vault.connect(deployer).updateMinDeploymentAmt(0)).to.be.revertedWithCustomError(
+          vault,
+          "UnauthorizedCall",
         );
       });
     });
 
-    describe("when triggered by owner", function () {
+    describe("when triggered by keeper", function () {
       beforeEach(async function () {
         tx = await vault.connect(otherUser).updateMinDeploymentAmt(toFixedPtAmt("1000"));
         await tx;
@@ -319,18 +320,19 @@ describe("RolloverVault", function () {
   describe("#updateMinUnderlyingBal", function () {
     let tx: Transaction;
     beforeEach(async function () {
-      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
+      await vault.connect(deployer).updateKeeper(await otherUser.getAddress());
     });
 
-    describe("when triggered by non-owner", function () {
+    describe("when triggered by non-keeper", function () {
       it("should revert", async function () {
-        await expect(vault.connect(deployer).updateMinUnderlyingBal(0)).to.be.revertedWith(
-          "Ownable: caller is not the owner",
+        await expect(vault.connect(deployer).updateMinUnderlyingBal(0)).to.be.revertedWithCustomError(
+          vault,
+          "UnauthorizedCall",
         );
       });
     });
 
-    describe("when triggered by owner", function () {
+    describe("when triggered by keeper", function () {
       beforeEach(async function () {
         tx = await vault.connect(otherUser).updateMinUnderlyingBal(toFixedPtAmt("1000"));
         await tx;
@@ -344,18 +346,19 @@ describe("RolloverVault", function () {
   describe("#updateMinUnderlyingPerc", function () {
     let tx: Transaction;
     beforeEach(async function () {
-      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
+      await vault.connect(deployer).updateKeeper(await otherUser.getAddress());
     });
 
-    describe("when triggered by non-owner", function () {
+    describe("when triggered by non-keeper", function () {
       it("should revert", async function () {
-        await expect(vault.connect(deployer).updateMinUnderlyingPerc(0)).to.be.revertedWith(
-          "Ownable: caller is not the owner",
+        await expect(vault.connect(deployer).updateMinUnderlyingPerc(0)).to.be.revertedWithCustomError(
+          vault,
+          "UnauthorizedCall",
         );
       });
     });
 
-    describe("when triggered by owner", function () {
+    describe("when triggered by keeper", function () {
       beforeEach(async function () {
         tx = await vault.connect(otherUser).updateMinUnderlyingPerc(toPercFixedPtAmt("0.1"));
         await tx;

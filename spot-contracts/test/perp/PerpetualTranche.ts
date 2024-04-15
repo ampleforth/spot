@@ -330,17 +330,18 @@ describe("PerpetualTranche", function () {
   describe("#updateMintingLimits", function () {
     let tx: Transaction;
 
-    describe("when triggered by non-owner", function () {
+    describe("when triggered by non-keeper", function () {
       it("should revert", async function () {
         await expect(
           perp.connect(otherUser).updateMintingLimits(constants.MaxUint256, constants.MaxUint256),
-        ).to.be.revertedWith("Ownable: caller is not the owner");
+        ).to.be.revertedWithCustomError(perp, "UnauthorizedCall");
       });
     });
 
     describe("when triggered by owner", function () {
       beforeEach(async function () {
-        tx = perp.updateMintingLimits(toFixedPtAmt("100"), toFixedPtAmt("20"));
+        await perp.updateKeeper(await otherUser.getAddress());
+        tx = perp.connect(otherUser).updateMintingLimits(toFixedPtAmt("100"), toFixedPtAmt("20"));
         await tx;
       });
       it("should update reference", async function () {

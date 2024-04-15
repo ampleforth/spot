@@ -316,14 +316,6 @@ contract PerpetualTranche is
         maxTrancheMaturitySec = maxTrancheMaturitySec_;
     }
 
-    /// @notice Update parameters controlling the perp token mint limits.
-    /// @param maxSupply_ New max total supply.
-    /// @param maxMintAmtPerTranche_ New max total for per tranche in minting bond.
-    function updateMintingLimits(uint256 maxSupply_, uint256 maxMintAmtPerTranche_) public onlyOwner {
-        maxSupply = maxSupply_;
-        maxMintAmtPerTranche = maxMintAmtPerTranche_;
-    }
-
     /// @notice Allows the owner to transfer non-critical assets out of the system if required.
     /// @param token The token address.
     /// @param to The destination address.
@@ -352,6 +344,14 @@ contract PerpetualTranche is
     /// @dev ERC-20 functions, like transfers will always remain operational.
     function unpause() external onlyKeeper {
         _unpause();
+    }
+
+    /// @notice Update parameters controlling the perp token mint limits.
+    /// @param maxSupply_ New max total supply.
+    /// @param maxMintAmtPerTranche_ New max total for per tranche in minting bond.
+    function updateMintingLimits(uint256 maxSupply_, uint256 maxMintAmtPerTranche_) public onlyKeeper {
+        maxSupply = maxSupply_;
+        maxMintAmtPerTranche = maxMintAmtPerTranche_;
     }
 
     //--------------------------------------------------------------------------
