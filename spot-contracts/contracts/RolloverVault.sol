@@ -213,27 +213,6 @@ contract RolloverVault is
         feePolicy = feePolicy_;
     }
 
-    /// @notice Updates the minimum deployment amount requirement.
-    /// @param minDeploymentAmt_ The new minimum deployment amount, denominated in underlying tokens.
-    function updateMinDeploymentAmt(uint256 minDeploymentAmt_) external onlyOwner {
-        minDeploymentAmt = minDeploymentAmt_;
-    }
-
-    /// @notice Updates the minimum underlying balance requirement (Absolute number of underlying tokens).
-    /// @param minUnderlyingBal_ The new minimum underlying balance.
-    function updateMinUnderlyingBal(uint256 minUnderlyingBal_) external onlyOwner {
-        minUnderlyingBal = minUnderlyingBal_;
-    }
-
-    /// @notice Updates the minimum underlying percentage requirement (Expressed as a percentage).
-    /// @param minUnderlyingPerc_ The new minimum underlying percentage.
-    function updateMinUnderlyingPerc(uint256 minUnderlyingPerc_) external onlyOwner {
-        if (minUnderlyingPerc_ > ONE) {
-            revert InvalidPerc();
-        }
-        minUnderlyingPerc = minUnderlyingPerc_;
-    }
-
     /// @notice Transfers a non-vault token out of the contract, which may have been added accidentally.
     /// @param token The token address.
     /// @param to The destination address.
@@ -264,6 +243,27 @@ contract RolloverVault is
     /// @dev NOTE: ERC-20 functions, like transfers will always remain operational.
     function unpause() external onlyKeeper {
         _unpause();
+    }
+
+    /// @notice Updates the minimum deployment amount requirement.
+    /// @param minDeploymentAmt_ The new minimum deployment amount, denominated in underlying tokens.
+    function updateMinDeploymentAmt(uint256 minDeploymentAmt_) external onlyKeeper {
+        minDeploymentAmt = minDeploymentAmt_;
+    }
+
+    /// @notice Updates the minimum underlying balance requirement (Absolute number of underlying tokens).
+    /// @param minUnderlyingBal_ The new minimum underlying balance.
+    function updateMinUnderlyingBal(uint256 minUnderlyingBal_) external onlyKeeper {
+        minUnderlyingBal = minUnderlyingBal_;
+    }
+
+    /// @notice Updates the minimum underlying percentage requirement (Expressed as a percentage).
+    /// @param minUnderlyingPerc_ The new minimum underlying percentage.
+    function updateMinUnderlyingPerc(uint256 minUnderlyingPerc_) external onlyKeeper {
+        if (minUnderlyingPerc_ > ONE) {
+            revert InvalidPerc();
+        }
+        minUnderlyingPerc = minUnderlyingPerc_;
     }
 
     //--------------------------------------------------------------------------
