@@ -149,7 +149,9 @@ task("deploy:FeePolicy")
     console.log("Signer", await deployer.getAddress());
 
     const FeePolicy = await hre.ethers.getContractFactory("FeePolicy");
-    const feePolicy = await hre.upgrades.deployProxy(FeePolicy.connect(deployer));
+    const feePolicy = await hre.upgrades.deployProxy(FeePolicy.connect(deployer), [], {
+      initializer: "init()",
+    });
     await feePolicy.deployed();
     console.log("feePolicy", feePolicy.address);
 

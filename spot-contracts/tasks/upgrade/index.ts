@@ -36,7 +36,9 @@ task("prepare_upgrade")
     console.log("Proxy Admin", await getAdminAddress(hre.ethers.provider, address));
 
     const Factory = await hre.ethers.getContractFactory(factory);
-    const newImpl = await hre.upgrades.prepareUpgrade(address, Factory);
+    const newImpl = await hre.upgrades.prepareUpgrade(address, Factory, {
+      unsafeAllowRenames: true,
+    });
     console.log("Deploying using", factory);
     console.log("New implementation at:", newImpl);
 
