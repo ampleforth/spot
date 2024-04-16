@@ -9,6 +9,7 @@ task("ops:vault:info")
     const { vaultAddress } = args;
 
     const vault = await hre.ethers.getContractAt("RolloverVault", vaultAddress);
+    const feePolicy = await hre.ethers.getContractAt("FeePolicy", await vault.feePolicy());
     const vaultDecimals = await vault.decimals();
     const proxyAdminAddress = await getAdminAddress(hre.ethers.provider, vaultAddress);
     const implAddress = await getImplementationAddress(hre.ethers.provider, vaultAddress);
@@ -16,7 +17,6 @@ task("ops:vault:info")
 
     const perp = await hre.ethers.getContractAt("PerpetualTranche", await vault.perp());
     const perpDecimals = await perp.decimals();
-    const priceDecimals = await perp.PRICE_DECIMALS();
 
     const underlying = await hre.ethers.getContractAt("MockERC20", await vault.underlying());
     const underlyingDecimals = await underlying.decimals();
@@ -37,7 +37,6 @@ task("ops:vault:info")
     console.log("underlying:", underlying.address);
     console.log("minDeploymentAmt:", utils.formatUnits(await vault.minDeploymentAmt(), underlyingDecimals));
     console.log("totalSupply:", utils.formatUnits(vaultSupply, vaultDecimals));
-    console.log("tvl:", utils.formatUnits(await vault.callStatic.getTVL(), underlyingDecimals));
     console.log("pokeAvailable:", pokeAvailable);
     console.log("---------------------------------------------------------------");
     const data = [];
@@ -47,29 +46,85 @@ task("ops:vault:info")
       balance: utils.formatUnits(underlyingBalance, underlyingDecimals),
       price: "1",
     });
-    const deployedCount = (await vault.deployedCount()).toNumber();
-    for (let i = 0; i < deployedCount; i++) {
-      const tokenAddress = await vault.callStatic.deployedAt(i);
+    const assetCount = (await vault.assetCount()).toNumber();
+    for (let i = 1; i < assetCount; i++) {
+      const tokenAddress = await vault.callStatic.assetAt(i);
       const balance = await vault.vaultAssetBalance(tokenAddress);
       const value = await vault.callStatic.getVaultAssetValue(tokenAddress);
-      const price = value.mul(BigNumber.from(10 ** priceDecimals)).div(balance);
+      const price = value.mul(BigNumber.from(10 ** perpDecimals)).div(balance);
 
       const token = await hre.ethers.getContractAt("MockERC20", tokenAddress);
       data.push({
         asset: await token.symbol(),
         balance: utils.formatUnits(balance, underlyingDecimals),
-        price: utils.formatUnits(price, priceDecimals),
+        price: utils.formatUnits(price, perpDecimals),
       });
     }
 
-    const earned1Balance = await vault.vaultAssetBalance(perp.address);
-    const earned1Price = await perp.callStatic.getAvgPrice();
+    const perpBalance = await vault.vaultAssetBalance(perp.address);
+    const perpSupply = await perp.totalSupply();
+    const perpTVL = await perp.callStatic.getTVL();
+    const perpPrice = perpSupply.gt("0") ? perpTVL.mul(1000).div(perpSupply) : 0;
     data.push({
       asset: await perp.symbol(),
-      balance: utils.formatUnits(earned1Balance, perpDecimals),
-      price: utils.formatUnits(earned1Price, priceDecimals),
+      balance: utils.formatUnits(perpBalance, perpDecimals),
+      price: utils.formatUnits(perpPrice, 3),
     });
     console.table(data);
+
+    console.log("---------------------------------------------------------------");
+    const feeOne = await feePolicy.ONE();
+    const feeDecimals = await feePolicy.decimals();
+    const vaultTVL = await vault.callStatic.getTVL();
+    const seniorTR = await perp.callStatic.getDepositTrancheRatio();
+    const juniorTR = BigNumber.from("1000").sub(seniorTR);
+    const subscriptionRatio = vaultTVL.mul(seniorTR).mul(feeOne).div(perpTVL).div(juniorTR);
+    const targetSubscriptionRatio = await feePolicy.targetSubscriptionRatio();
+    const expectedVaultTVL = targetSubscriptionRatio.mul(perpTVL).mul(juniorTR).div(seniorTR).div(feeOne);
+    const deviationRatio = await feePolicy["computeDeviationRatio((uint256,uint256,uint256))"]([
+      perpTVL,
+      vaultTVL,
+      seniorTR,
+    ]);
+    console.log("perpTVL:", utils.formatUnits(perpTVL, underlyingDecimals));
+    console.log("vaultTVL:", utils.formatUnits(vaultTVL, underlyingDecimals));
+    console.log("expectedVaultTVL:", utils.formatUnits(expectedVaultTVL, underlyingDecimals));
+    console.log("seniorTR:", utils.formatUnits(seniorTR, 3));
+    console.log("juniorTR:", utils.formatUnits(juniorTR, 3));
+    console.log("subscriptionRatio:", utils.formatUnits(subscriptionRatio, feeDecimals));
+    console.log("targetSubscriptionRatio:", utils.formatUnits(targetSubscriptionRatio, feeDecimals));
+    console.log("targetDeviationRatio:", utils.formatUnits(feeOne, feeDecimals));
+    console.log(
+      "deviationRatioBoundLower:",
+      utils.formatUnits(await feePolicy.deviationRatioBoundLower(), feeDecimals),
+    );
+    console.log(
+      "deviationRatioBoundUpper:",
+      utils.formatUnits(await feePolicy.deviationRatioBoundUpper(), feeDecimals),
+    );
+    console.log("deviationRatio:", utils.formatUnits(deviationRatio, feeDecimals));
+
+    console.log("---------------------------------------------------------------");
+    console.log("feePolicy:", feePolicy.address);
+    console.log("owner", await feePolicy.owner());
+    console.log("computeVaultMintFeePerc:", utils.formatUnits(await feePolicy.computeVaultMintFeePerc(), 8));
+    console.log("computeVaultBurnFeePerc:", utils.formatUnits(await feePolicy.computeVaultBurnFeePerc(), 8));
+    console.log(
+      "computeUnderlyingToPerpVaultSwapFeePerc:",
+      utils.formatUnits(await feePolicy.computeUnderlyingToPerpVaultSwapFeePerc(deviationRatio, deviationRatio), 8),
+    );
+    console.log(
+      "computePerpToUnderlyingVaultSwapFeePerc:",
+      utils.formatUnits(await feePolicy.computePerpToUnderlyingVaultSwapFeePerc(deviationRatio, deviationRatio), 8),
+    );
+    console.log("---------------------------------------------------------------");
+    console.log("Swap slippage");
+    const buy1000Perps = await vault.callStatic.computeUnderlyingToPerpSwapAmt(utils.parseUnits("1000", perpDecimals));
+    const sell1000Perps = await vault.callStatic.computePerpToUnderlyingSwapAmt(utils.parseUnits("1000", perpDecimals));
+    console.log("PerpPrice:", utils.formatUnits(perpPrice, 3));
+    console.log("Swap 1000 underlying for perps: ", utils.formatUnits(buy1000Perps[0], perpDecimals));
+    console.log("Sell 1000 perps for underlying", utils.formatUnits(sell1000Perps[0], perpDecimals));
+    console.log("---------------------------------------------------------------");
   });
 
 task("ops:vault:deposit")
@@ -217,4 +272,117 @@ task("ops:vault:recover")
     const tx = await vault.connect(signer)["recover()"]();
     await tx.wait();
     console.log("Tx", tx.hash);
+  });
+
+task("ops:fee:setSwapFees", "Updates swap fees in fee policy")
+  .addParam("address", "the fee policy contract", undefined, types.string, false)
+  .addParam("feePerc", "the percentage to be set as the swap fee", undefined, types.string, false)
+  .setAction(async function (args: TaskArguments, hre) {
+    const { address, feePerc } = args;
+    const signer = (await hre.ethers.getSigners())[0];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
+    const feePolicy = await hre.ethers.getContractAt("FeePolicy", address);
+    console.log(`Updating both swap fees to ${feePerc}`);
+    const feeAmtFixedPt = utils.parseUnits(feePerc, await feePolicy.decimals());
+
+    const tx1 = await feePolicy.updateVaultUnderlyingToPerpSwapFeePerc(feeAmtFixedPt);
+    console.log(tx1.hash);
+    await tx1.wait();
+
+    const tx2 = await feePolicy.updateVaultPerpToUnderlyingSwapFeePerc(feeAmtFixedPt);
+    console.log(tx2.hash);
+    await tx2.wait();
+  });
+
+task("ops:vault:swapUnderlyingForPerps")
+  .addParam("vaultAddress", "the address of the vault contract", undefined, types.string, false)
+  .addParam(
+    "underlyingAmount",
+    "the total amount of underlying tokens (in float) to deposit",
+    undefined,
+    types.string,
+    false,
+  )
+  .addParam("fromIdx", "the index of sender", 0, types.int)
+  .setAction(async function (args: TaskArguments, hre) {
+    const { vaultAddress, underlyingAmount } = args;
+
+    const vault = await hre.ethers.getContractAt("RolloverVault", vaultAddress);
+    const perp = await hre.ethers.getContractAt("PerpetualTranche", await vault.perp());
+    const underlying = await hre.ethers.getContractAt("MockERC20", await vault.underlying());
+    const fixedPtAmount = utils.parseUnits(underlyingAmount, await underlying.decimals());
+
+    const signer = (await hre.ethers.getSigners())[args.fromIdx];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
+
+    console.log("Signer perp balance", utils.formatUnits(await perp.balanceOf(signerAddress), await perp.decimals()));
+    console.log(
+      "Signer underlying balance",
+      utils.formatUnits(await underlying.balanceOf(signerAddress), await underlying.decimals()),
+    );
+
+    console.log("---------------------------------------------------------------");
+    console.log("Execution:");
+    console.log("Approving router to spend tokens:");
+    if ((await underlying.allowance(signerAddress, vault.address)).lt(fixedPtAmount)) {
+      const tx1 = await underlying.connect(signer).approve(vault.address, fixedPtAmount);
+      await tx1.wait();
+      console.log("Tx", tx1.hash);
+    }
+
+    console.log("Swap:");
+    const tx2 = await vault.connect(signer).swapUnderlyingForPerps(fixedPtAmount);
+    await tx2.wait();
+    console.log("Tx", tx2.hash);
+
+    console.log("Signer perp balance", utils.formatUnits(await perp.balanceOf(signerAddress), await perp.decimals()));
+    console.log(
+      "Signer underlying balance",
+      utils.formatUnits(await underlying.balanceOf(signerAddress), await underlying.decimals()),
+    );
+  });
+
+task("ops:vault:swapPerpsForUnderlying")
+  .addParam("vaultAddress", "the address of the vault contract", undefined, types.string, false)
+  .addParam("perpAmount", "the total amount of underlying tokens (in float) to deposit", undefined, types.string, false)
+  .addParam("fromIdx", "the index of sender", 0, types.int)
+  .setAction(async function (args: TaskArguments, hre) {
+    const { vaultAddress, perpAmount } = args;
+
+    const vault = await hre.ethers.getContractAt("RolloverVault", vaultAddress);
+    const perp = await hre.ethers.getContractAt("PerpetualTranche", await vault.perp());
+    const underlying = await hre.ethers.getContractAt("MockERC20", await vault.underlying());
+    const fixedPtAmount = utils.parseUnits(perpAmount, await perp.decimals());
+
+    const signer = (await hre.ethers.getSigners())[args.fromIdx];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
+
+    console.log(
+      "Signer underlying balance",
+      utils.formatUnits(await underlying.balanceOf(signerAddress), await underlying.decimals()),
+    );
+    console.log("Signer perp balance", utils.formatUnits(await perp.balanceOf(signerAddress), await perp.decimals()));
+
+    console.log("---------------------------------------------------------------");
+    console.log("Execution:");
+    console.log("Approving router to spend tokens:");
+    if ((await perp.allowance(signerAddress, vault.address)).lt(fixedPtAmount)) {
+      const tx1 = await perp.connect(signer).approve(vault.address, fixedPtAmount);
+      await tx1.wait();
+      console.log("Tx", tx1.hash);
+    }
+
+    console.log("Swap:");
+    const tx2 = await vault.connect(signer).swapPerpsForUnderlying(fixedPtAmount);
+    await tx2.wait();
+    console.log("Tx", tx2.hash);
+
+    console.log(
+      "Signer underlying balance",
+      utils.formatUnits(await underlying.balanceOf(signerAddress), await underlying.decimals()),
+    );
+    console.log("Signer perp balance", utils.formatUnits(await perp.balanceOf(signerAddress), await perp.decimals()));
   });

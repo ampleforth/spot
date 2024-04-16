@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import { IBondFactory } from "./_interfaces/buttonwood/IBondFactory.sol";
 import { IBondController } from "./_interfaces/buttonwood/IBondController.sol";
-import { IBondIssuer, NoMaturedBonds } from "./_interfaces/IBondIssuer.sol";
+import { IBondIssuer } from "./_interfaces/IBondIssuer.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 import { BondHelpers } from "./_utils/BondHelpers.sol";
+
+/// @notice Expected tranche ratios to sum up to {TRANCHE_RATIO_GRANULARITY}.
+error UnacceptableTrancheRatios();
+
+/// @notice Expected at least one matured bond.
+error NoMaturedBonds();
 
 /**
  *  @title BondIssuer
@@ -26,10 +32,10 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
 
     /// @notice Address of the bond factory.
-    IBondFactory public immutable bondFactory;
+    IBondFactory public bondFactory;
 
     /// @notice The underlying rebasing token used for tranching.
-    address public immutable collateral;
+    address public collateral;
 
     /// @notice The maximum maturity duration for the issued bonds.
     /// @dev In practice, bonds issued by this issuer won't have a constant duration as
@@ -63,12 +69,9 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     /// @notice The timestamp when the issue window opened during the last issue.
     uint256 public lastIssueWindowTimestamp;
 
-    /// @notice Contract constructor
-    /// @param bondFactory_ The bond factory reference.
-    /// @param collateral_ The address of the collateral ERC-20.
-    constructor(IBondFactory bondFactory_, address collateral_) {
-        bondFactory = bondFactory_;
-        collateral = collateral_;
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
     }
 
     /// @notice Contract initializer.
@@ -77,12 +80,16 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     /// @param minIssueTimeIntervalSec_ The minimum time between successive issues.
     /// @param issueWindowOffsetSec_ The issue window offset.
     function init(
+        IBondFactory bondFactory_,
+        address collateral_,
         uint256 maxMaturityDuration_,
         uint256[] memory trancheRatios_,
         uint256 minIssueTimeIntervalSec_,
         uint256 issueWindowOffsetSec_
-    ) public initializer {
+    ) external initializer {
         __Ownable_init();
+        bondFactory = bondFactory_;
+        collateral = collateral_;
         updateMaxMaturityDuration(maxMaturityDuration_);
         updateTrancheRatios(trancheRatios_);
         updateIssuanceTimingConfig(minIssueTimeIntervalSec_, issueWindowOffsetSec_);
@@ -99,19 +106,22 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
     function updateTrancheRatios(uint256[] memory trancheRatios_) public onlyOwner {
         trancheRatios = trancheRatios_;
         uint256 ratioSum;
-        for (uint8 i = 0; i < trancheRatios_.length; i++) {
+        uint8 numTranches = uint8(trancheRatios_.length);
+        for (uint8 i = 0; i < numTranches; ++i) {
             ratioSum += trancheRatios_[i];
         }
-        require(ratioSum == TRANCHE_RATIO_GRANULARITY, "BondIssuer: Invalid tranche ratios");
+        if (ratioSum != TRANCHE_RATIO_GRANULARITY) {
+            revert UnacceptableTrancheRatios();
+        }
     }
 
     /// @notice Updates the bond frequency and offset.
     /// @param minIssueTimeIntervalSec_ The new issuance interval.
     /// @param issueWindowOffsetSec_ The new issue window offset.
-    function updateIssuanceTimingConfig(uint256 minIssueTimeIntervalSec_, uint256 issueWindowOffsetSec_)
-        public
-        onlyOwner
-    {
+    function updateIssuanceTimingConfig(
+        uint256 minIssueTimeIntervalSec_,
+        uint256 issueWindowOffsetSec_
+    ) public onlyOwner {
         minIssueTimeIntervalSec = minIssueTimeIntervalSec_;
         issueWindowOffsetSec = issueWindowOffsetSec_;
     }

@@ -6,8 +6,9 @@ The official mainnet addresses are:
 
 - SPOT ERC-20 Token: [0xC1f33e0cf7e40a67375007104B929E49a581bafE](https://etherscan.io/address/0xC1f33e0cf7e40a67375007104B929E49a581bafE)
 - Bond issuer: [0x5613Fc36A431c9c2746763B80C1DD89e03593871](https://etherscan.io/address/0x5613Fc36A431c9c2746763B80C1DD89e03593871)
-- Router: [0x38f600e08540178719BF656e6B43FC15A529c393](https://etherscan.io/address/0x38f600e08540178719BF656e6B43FC15A529c393)
+- Router: [0xCe2878d1f2901EFaF48cd456E586B470C145d1BC](https://etherscan.io/address/0xCe2878d1f2901EFaF48cd456E586B470C145d1BC)
 - RolloverVault: [0x82A91a0D599A45d8E9Af781D67f695d7C72869Bd](https://etherscan.io//address/0x82A91a0D599A45d8E9Af781D67f695d7C72869Bd)
+- FeePolicy: [0xE22977381506bF094CB3ed50CB8834E358F7ef6c](https://etherscan.io//address/0xE22977381506bF094CB3ed50CB8834E358F7ef6c)
 
 ## Install
 
@@ -25,12 +26,13 @@ yarn test
 
 ### Testnets
 
-There is a testnet deployment on Goerli.
+There is a testnet deployment on Sepolia.
 
-- SPOT ERC-20 Token: [0x95014Bc18F82a98CFAA3253fbD3184125A01f848](https://goerli.etherscan.io//address/0x95014Bc18F82a98CFAA3253fbD3184125A01f848)
-- Bond issuer: [0xbC060a1EbEC5eC869C4D51d4563244d4a223D307](https://goerli.etherscan.io//address/0xbC060a1EbEC5eC869C4D51d4563244d4a223D307)
-- Router: [0x5e902bdCC408550b4BD612678bE2d57677664Dc9](https://goerli.etherscan.io//address/0x5e902bdCC408550b4BD612678bE2d57677664Dc9)
-- RolloverVault: [0xca36B64BEbdf141623911987b93767dcA4bF6F1f](https://goerli.etherscan.io//address/0xca36B64BEbdf141623911987b93767dcA4bF6F1f)
+- SPOT ERC-20 Token: [0xdcCef9065876fD654bAddeBAa778FDA43E0bfC1F](https://sepolia.etherscan.io//address/0xdcCef9065876fD654bAddeBAa778FDA43E0bfC1F)
+- Bond issuer: [0x3838C8d4D092d40Cb27DD22Dafc6E1A81ea2DB60](https://sepolia.etherscan.io//address/0x3838C8d4D092d40Cb27DD22Dafc6E1A81ea2DB60)
+- Router: [0xE5b53ee8182086790C1ab79cbf801F0c5EE241BF](https://sepolia.etherscan.io//address/0xE5b53ee8182086790C1ab79cbf801F0c5EE241BF)
+- RolloverVault: [0x107614c6602A8e602952Da107B8fE62b5Ab13b04](https://sepolia.etherscan.io//address/0x107614c6602A8e602952Da107B8fE62b5Ab13b04)
+- FeePolicy: [0x2DdF288F26490D1147296cC0FA2B3c4da5E15f10](https://sepolia.etherscan.io//address/0x2DdF288F26490D1147296cC0FA2B3c4da5E15f10)
 
 ## Contribute
 

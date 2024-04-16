@@ -2,8 +2,8 @@ import { HardhatUserConfig } from "hardhat/config";
 import { Wallet } from "ethers";
 
 import "@nomiclabs/hardhat-ethers";
-import "@nomiclabs/hardhat-waffle";
 import "@nomicfoundation/hardhat-chai-matchers";
+import "@nomicfoundation/hardhat-verify";
 import "@openzeppelin/hardhat-upgrades";
 import "solidity-coverage";
 import "hardhat-gas-reporter";
@@ -30,14 +30,13 @@ export default {
       url: "http://127.0.0.1:8545",
       chainId: 1337,
     },
-    goerli: {
-      // url: `https://goerli.infura.io/v3/${process.env.INFURA_SECRET}`,
-      url: `https://eth-goerli.g.alchemy.com/v2/${process.env.ALCHEMY_SECRET}`,
+    sepolia: {
+      // url: `https://sepolia.infura.io/v3/${process.env.INFURA_SECRET}`,
+      url: `https://eth-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_SECRET}`,
       accounts: {
         mnemonic: process.env.PROD_MNEMONIC || Wallet.createRandom().mnemonic.phrase,
       },
-      gasMultiplier: 1.03,
-      allowUnlimitedContractSize: true,
+      gasMultiplier: 1.01,
     },
     mainnet: {
       // url: `https://mainnet.infura.io/v3/${process.env.INFURA_SECRET}`,
@@ -51,11 +50,11 @@ export default {
   solidity: {
     compilers: [
       {
-        version: "0.8.19",
+        version: "0.8.20",
         settings: {
           optimizer: {
             enabled: true,
-            runs: 200,
+            runs: 750,
           },
         },
       },
@@ -72,5 +71,6 @@ export default {
   },
   mocha: {
     bail: false,
+    timeout: 100000000,
   },
 } as HardhatUserConfig;
