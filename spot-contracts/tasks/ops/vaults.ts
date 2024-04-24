@@ -61,7 +61,7 @@ task("ops:vault:info")
       });
     }
 
-    const perpBalance = await vault.vaultAssetBalance(perp.address);
+    const perpBalance = await perp.balanceOf(vault.address);
     const perpSupply = await perp.totalSupply();
     const perpTVL = await perp.callStatic.getTVL();
     const perpPrice = perpSupply.gt("0") ? perpTVL.mul(1000).div(perpSupply) : 0;
@@ -119,11 +119,23 @@ task("ops:vault:info")
     );
     console.log("---------------------------------------------------------------");
     console.log("Swap slippage");
-    const buy1000Perps = await vault.callStatic.computeUnderlyingToPerpSwapAmt(utils.parseUnits("1000", perpDecimals));
-    const sell1000Perps = await vault.callStatic.computePerpToUnderlyingSwapAmt(utils.parseUnits("1000", perpDecimals));
-    console.log("PerpPrice:", utils.formatUnits(perpPrice, 3));
-    console.log("Swap 1000 underlying for perps: ", utils.formatUnits(buy1000Perps[0], perpDecimals));
-    console.log("Sell 1000 perps for underlying", utils.formatUnits(sell1000Perps[0], perpDecimals));
+    try {
+      const buy1000Perps = await vault.callStatic.computeUnderlyingToPerpSwapAmt(
+        utils.parseUnits("1000", perpDecimals),
+      );
+      console.log("Swap 1000 underlying for perps: ", utils.formatUnits(buy1000Perps[0], perpDecimals));
+    } catch {
+      console.log("Swap underlying for perps disabled");
+    }
+    try {
+      const sell1000Perps = await vault.callStatic.computePerpToUnderlyingSwapAmt(
+        utils.parseUnits("1000", perpDecimals),
+      );
+      console.log("PerpPrice:", utils.formatUnits(perpPrice, 3));
+      console.log("Sell 1000 perps for underlying", utils.formatUnits(sell1000Perps[0], perpDecimals));
+    } catch {
+      console.log("Swap perps for underlying disabled");
+    }
     console.log("---------------------------------------------------------------");
   });
 
