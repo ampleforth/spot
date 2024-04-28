@@ -166,7 +166,7 @@ describe("PerpetualTranche", function () {
 
     describe("when the supply cap is exceeded", function () {
       beforeEach(async function () {
-        await perp.updateMintingLimits(toFixedPtAmt("499"), toFixedPtAmt("1000"));
+        await perp.updateMaxSupply(toFixedPtAmt("499"));
       });
 
       it("should revert", async function () {
@@ -180,7 +180,7 @@ describe("PerpetualTranche", function () {
     describe("when the supply cap is exceeded and existing supply > 0", function () {
       beforeEach(async function () {
         await perp.deposit(depositTrancheA.address, toFixedPtAmt("400"));
-        await perp.updateMintingLimits(toFixedPtAmt("499"), toFixedPtAmt("1000"));
+        await perp.updateMaxSupply(toFixedPtAmt("499"));
       });
 
       it("should revert", async function () {
@@ -191,29 +191,55 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when the tranche mint limit is exceeded", function () {
+    describe("when the existing supply is zero", function () {
       beforeEach(async function () {
-        await perp.updateMintingLimits(toFixedPtAmt("1000"), toFixedPtAmt("499"));
+        await perp.updateMaxDepositTrancheValuePerc(toPercFixedPtAmt("0.5"));
       });
-
-      it("should revert", async function () {
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("500"))).to.revertedWithCustomError(
+      it("should not revert", async function () {
+        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("100"))).to.revertedWithCustomError(
           perp,
           "ExceededMaxMintPerTranche",
         );
       });
     });
 
+    describe("when the tranche mint limit has not exceeded and existing supply > 0", function () {
+      beforeEach(async function () {
+        await perp.deposit(depositTrancheA.address, toFixedPtAmt("250"));
+        await advancePerpQueue(perp, 1200);
+        await perp.updateMaxDepositTrancheValuePerc(toPercFixedPtAmt("0.5"));
+      });
+
+      it("should NOT revert", async function () {
+        await mintCollteralToken(collateralToken, toFixedPtAmt("50"), deployer);
+        await collateralToken.transfer(perp.address, toFixedPtAmt("50"));
+        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        await depositIntoBond(newBond, toFixedPtAmt("2000"), deployer);
+        const tranches = await getTranches(newBond);
+        const newTranche = tranches[0];
+        await newTranche.approve(perp.address, toFixedPtAmt("500"));
+        await perp.deposit(newTranche.address, toFixedPtAmt("200"));
+        await expect(perp.deposit(newTranche.address, toFixedPtAmt("1"))).not.to.reverted;
+      });
+    });
+
     describe("when the tranche mint limit is exceeded and existing supply > 0", function () {
       beforeEach(async function () {
-        await perp.deposit(depositTrancheA.address, toFixedPtAmt("400"));
-        await perp.updateMintingLimits(toFixedPtAmt("1000"), toFixedPtAmt("499"));
+        await perp.deposit(depositTrancheA.address, toFixedPtAmt("250"));
+        await advancePerpQueue(perp, 1200);
+        await perp.updateMaxDepositTrancheValuePerc(toPercFixedPtAmt("0.5"));
       });
 
       it("should revert", async function () {
-        await expect(perp.deposit(depositTrancheA.address, toFixedPtAmt("100"))).to.revertedWithCustomError(
+        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        await depositIntoBond(newBond, toFixedPtAmt("2000"), deployer);
+        const tranches = await getTranches(newBond);
+        const newTranche = tranches[0];
+        await newTranche.approve(perp.address, toFixedPtAmt("500"));
+        await perp.deposit(newTranche.address, toFixedPtAmt("250"));
+        await expect(perp.deposit(newTranche.address, toFixedPtAmt("1"))).to.revertedWithCustomError(
           perp,
-          `ExceededMaxMintPerTranche`,
+          "ExceededMaxMintPerTranche",
         );
       });
     });

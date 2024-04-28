@@ -5,7 +5,7 @@ import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/t
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeePolicy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
 import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/CommonTypes.sol";
-import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, UnacceptableParams, UnacceptableRollover, ExceededMaxSupply, ExceededMaxMintPerTranche, ReserveCountOverLimit } from "./_interfaces/ProtocolErrors.sol";
+import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, UnacceptableParams, UnacceptableRollover, ExceededMaxSupply, ExceededMaxMintPerTranche, ReserveCountOverLimit, InvalidPerc } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -111,6 +111,10 @@ contract PerpetualTranche is
     uint8 public constant FEE_POLICY_DECIMALS = 8;
     uint256 public constant FEE_ONE = (10 ** FEE_POLICY_DECIMALS);
 
+    /// @dev Internal percentages are fixed point numbers with {PERC_DECIMALS} places.
+    uint8 public constant PERC_DECIMALS = 8;
+    uint256 public constant ONE = (10 ** PERC_DECIMALS); // 1.0 or 100%
+
     /// @dev The maximum number of reserve assets that can be held by perp.
     uint8 public constant MAX_RESERVE_COUNT = 11;
 
@@ -170,11 +174,15 @@ contract PerpetualTranche is
     /// @notice The maximum supply of perps that can exist at any given time.
     uint256 public maxSupply;
 
-    /// @notice The max number of perps that can be minted using the senior tranche in the minting bond.
-    uint256 public maxMintAmtPerTranche;
+    /// @notice Enforced maximum percentage of reserve value in the deposit tranche.
+    /// @custom:oz-upgrades-renamed-from maxMintAmtPerTranche
+    uint256 public maxDepositTrancheValuePerc;
 
-    /// @notice The total number of perps that have been minted using a given tranche.
-    mapping(ITranche => uint256) public mintedSupplyPerTranche;
+    /// @notice DEPRECATED.
+    /// @dev This used to store the number of perps minted using each deposit tranche.
+    /// @custom:oz-upgrades-renamed-from mintedSupplyPerTranche
+    // solhint-disable-next-line var-name-mixedcase
+    mapping(ITranche => uint256) private _mintedSupplyPerTranche_DEPRECATED;
 
     /// @notice DEPRECATED.
     /// @dev This used to store the discount factor applied on each reserve token.
@@ -266,7 +274,8 @@ contract PerpetualTranche is
         updateBondIssuer(bondIssuer_);
 
         updateTolerableTrancheMaturity(1, type(uint256).max);
-        updateMintingLimits(type(uint256).max, type(uint256).max);
+        updateMaxSupply(type(uint256).max);
+        updateMaxDepositTrancheValuePerc(ONE);
     }
 
     //--------------------------------------------------------------------------
@@ -346,12 +355,20 @@ contract PerpetualTranche is
         _unpause();
     }
 
-    /// @notice Update parameters controlling the perp token mint limits.
+    /// @notice Updates the maximum supply.
     /// @param maxSupply_ New max total supply.
-    /// @param maxMintAmtPerTranche_ New max total for per tranche in minting bond.
-    function updateMintingLimits(uint256 maxSupply_, uint256 maxMintAmtPerTranche_) public onlyKeeper {
+    function updateMaxSupply(uint256 maxSupply_) public onlyKeeper {
         maxSupply = maxSupply_;
-        maxMintAmtPerTranche = maxMintAmtPerTranche_;
+    }
+
+    /// @notice Updates the enforced maximum percentage value of deposit tranches.
+    /// @dev Stored as a fixed point number with {PERC_DECIMALS} places.
+    /// @param maxDepositTrancheValuePerc_ New max percentage.
+    function updateMaxDepositTrancheValuePerc(uint256 maxDepositTrancheValuePerc_) public onlyKeeper {
+        if (maxDepositTrancheValuePerc_ > ONE) {
+            revert InvalidPerc();
+        }
+        maxDepositTrancheValuePerc = maxDepositTrancheValuePerc_;
     }
 
     //--------------------------------------------------------------------------
@@ -380,7 +397,6 @@ contract PerpetualTranche is
         _mint(msg.sender, perpAmtMint);
 
         // post-deposit checks
-        mintedSupplyPerTranche[trancheIn] += perpAmtMint;
         _enforceMintCaps(trancheIn);
 
         return perpAmtMint;
@@ -680,9 +696,6 @@ contract PerpetualTranche is
         } else if (balance <= 0 && inReserve_) {
             // Removes tranche from reserve set.
             _reserves.remove(address(token));
-
-            // Frees up minted supply.
-            delete mintedSupplyPerTranche[ITranche(address(token))];
         }
 
         return balance;
@@ -887,16 +900,40 @@ contract PerpetualTranche is
     }
 
     /// @dev Enforces the total supply and per tranche mint cap. To be invoked AFTER the mint operation.
-    function _enforceMintCaps(ITranche trancheIn) private view {
-        // checks if supply minted using the given tranche is within the cap
-        if (mintedSupplyPerTranche[trancheIn] > maxMintAmtPerTranche) {
-            revert ExceededMaxMintPerTranche();
-        }
-
-        // checks if new total supply is within the max supply cap
+    function _enforceMintCaps(ITranche depositTranche) private view {
+        // Checks if new total supply is within the max supply cap
         uint256 newSupply = totalSupply();
         if (newSupply > maxSupply) {
             revert ExceededMaxSupply();
+        }
+
+        // Checks if the value of deposit tranche relative to the other tranches in the reserve
+        // is no higher than the defined limit.
+        //
+        // NOTE: We consider the tranches which are up for rollover and mature collateral (if any),
+        // to be part of the deposit tranche, as given enough time
+        // they will be eventually rolled over into the deposit tranche.
+        IERC20Upgradeable underlying_ = _reserveAt(0);
+        uint256 totalVal = underlying_.balanceOf(address(this));
+        uint256 depositTrancheValue = totalVal;
+        uint8 reserveCount = uint8(_reserves.length());
+        for (uint8 i = 1; i < reserveCount; ++i) {
+            ITranche tranche = ITranche(address(_reserveAt(i)));
+            uint256 trancheValue = _computeReserveTrancheValue(
+                tranche,
+                IBondController(tranche.bond()),
+                underlying_,
+                tranche.balanceOf(address(this)),
+                true
+            );
+            if (tranche == depositTranche || _isTimeForRollout(tranche)) {
+                depositTrancheValue += trancheValue;
+            }
+            totalVal += trancheValue;
+        }
+        uint256 depositTrancheValuePerc = depositTrancheValue.mulDiv(ONE, totalVal);
+        if (depositTrancheValuePerc > maxDepositTrancheValuePerc) {
+            revert ExceededMaxMintPerTranche();
         }
     }
 
