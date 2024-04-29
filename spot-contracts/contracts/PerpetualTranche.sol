@@ -107,9 +107,6 @@ contract PerpetualTranche is
     //
     //-------------------------------------------------------------------------
     // Constants & Immutables
-    // Number of decimals for a multiplier of 1.0x (i.e. 100%)
-    uint8 public constant FEE_POLICY_DECIMALS = 8;
-    uint256 public constant FEE_ONE = (10 ** FEE_POLICY_DECIMALS);
 
     /// @dev Internal percentages are fixed point numbers with {PERC_DECIMALS} places.
     uint8 public constant PERC_DECIMALS = 8;
@@ -305,7 +302,7 @@ contract PerpetualTranche is
     /// @notice Update the reference to the fee policy contract.
     /// @param feePolicy_ New strategy address.
     function updateFeePolicy(IFeePolicy feePolicy_) public onlyOwner {
-        if (feePolicy_.decimals() != FEE_POLICY_DECIMALS) {
+        if (feePolicy_.decimals() != PERC_DECIMALS) {
             revert UnexpectedDecimals();
         }
         feePolicy = feePolicy_;
@@ -719,7 +716,7 @@ contract PerpetualTranche is
 
         // The mint fees are settled by simply minting fewer perps.
         if (feePerc > 0) {
-            perpAmtMint = perpAmtMint.mulDiv(FEE_ONE - feePerc, FEE_ONE);
+            perpAmtMint = perpAmtMint.mulDiv(ONE - feePerc, ONE);
         }
 
         return perpAmtMint;
@@ -746,7 +743,7 @@ contract PerpetualTranche is
 
             // The burn fees are settled by simply redeeming for fewer tranches.
             if (feePerc > 0) {
-                reserveTokens[i].amount = reserveTokens[i].amount.mulDiv(FEE_ONE - feePerc, FEE_ONE);
+                reserveTokens[i].amount = reserveTokens[i].amount.mulDiv(ONE - feePerc, ONE);
             }
         }
 
@@ -813,12 +810,12 @@ contract PerpetualTranche is
         // A positive fee percentage implies that perp charges rotators by
         // offering tranchesOut for a premium, i.e) more tranches in.
         if (feePerc > 0) {
-            r.trancheInAmt = r.trancheInAmt.mulDiv(FEE_ONE, FEE_ONE - feePerc.toUint256(), MathUpgradeable.Rounding.Up);
+            r.trancheInAmt = r.trancheInAmt.mulDiv(ONE, ONE - feePerc.toUint256(), MathUpgradeable.Rounding.Up);
         }
         // A negative fee percentage (or a reward) implies that perp pays the rotators by
         // offering tranchesOut at a discount, i.e) fewer tranches in.
         else if (feePerc < 0) {
-            r.trancheInAmt = r.trancheInAmt.mulDiv(FEE_ONE, FEE_ONE + feePerc.abs(), MathUpgradeable.Rounding.Up);
+            r.trancheInAmt = r.trancheInAmt.mulDiv(ONE, ONE + feePerc.abs(), MathUpgradeable.Rounding.Up);
         }
 
         //-----------------------------------------------------------------------------
@@ -835,13 +832,13 @@ contract PerpetualTranche is
             // accepting tranchesIn at a discount, i.e) fewer tokens out.
             // This results in perp enrichment.
             if (feePerc > 0) {
-                r.tokenOutAmt = r.tokenOutAmt.mulDiv(FEE_ONE - feePerc.abs(), FEE_ONE);
+                r.tokenOutAmt = r.tokenOutAmt.mulDiv(ONE - feePerc.abs(), ONE);
             }
             // A negative fee percentage (or a reward) implies that perp pays the rotators by
             // accepting tranchesIn at a premium, i.e) more tokens out.
             // This results in perp debasement.
             else if (feePerc < 0) {
-                r.tokenOutAmt = r.tokenOutAmt.mulDiv(FEE_ONE + feePerc.abs(), FEE_ONE);
+                r.tokenOutAmt = r.tokenOutAmt.mulDiv(ONE + feePerc.abs(), ONE);
             }
         }
 
