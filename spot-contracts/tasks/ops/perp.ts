@@ -65,15 +65,15 @@ task("ops:perp:info")
     console.log("---------------------------------------------------------------");
     console.log(`maturityTolarance: [${await perp.minTrancheMaturitySec()}, ${await perp.maxTrancheMaturitySec()}]`);
     console.log("maxSupply:", utils.formatUnits(await perp.maxSupply(), await perp.decimals()));
-    console.log("maxMintAmtPerTranche:", utils.formatUnits(await perp.maxMintAmtPerTranche(), await perp.decimals()));
-    const t = await depositBond.tranches(0);
-    console.log(
-      "availableCap:",
-      utils.formatUnits(
-        (await perp.maxMintAmtPerTranche()).sub(await perp.mintedSupplyPerTranche(t[0])),
-        await perp.decimals(),
-      ),
-    );
+    // console.log("maxMintAmtPerTranche:", utils.formatUnits(await perp.maxMintAmtPerTranche(), await perp.decimals()));
+    // const t = await depositBond.tranches(0);
+    // console.log(
+    //   "availableCap:",
+    //   utils.formatUnits(
+    //     (await perp.maxMintAmtPerTranche()).sub(await perp.mintedSupplyPerTranche(t[0])),
+    //     await perp.decimals(),
+    //   ),
+    // );
     console.log("---------------------------------------------------------------");
     console.log("depositBond:", depositBond.address);
     console.log("issued:", issued);

@@ -71,6 +71,22 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@ampleforthorg/spot-staking-subgraph@workspace:spot-staking-subgraph":
+  version: 0.0.0-use.local
+  resolution: "@ampleforthorg/spot-staking-subgraph@workspace:spot-staking-subgraph"
+  dependencies:
+    "@graphprotocol/graph-cli": ^0.21.1
+    "@graphprotocol/graph-ts": ^0.20.0
+    "@typescript-eslint/eslint-plugin": ^2.0.0
+    "@typescript-eslint/parser": ^2.0.0
+    eslint: ^6.2.2
+    eslint-config-prettier: ^6.1.0
+    mustache: ^4.2.0
+    prettier: ^1.18.2
+    typescript: ^3.5.2
+  languageName: unknown
+  linkType: soft
+
 "@ampleforthorg/spot-subgraph@workspace:spot-subgraph":
   version: 0.0.0-use.local
   resolution: "@ampleforthorg/spot-subgraph@workspace:spot-subgraph"
