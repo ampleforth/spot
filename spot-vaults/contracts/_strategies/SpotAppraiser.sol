@@ -20,8 +20,8 @@ import { InvalidPerc, InvalidSeniorCDRBound } from "../_interfaces/ProtocolError
 /**
  * @title SpotAppraiser
  *
- * @notice Pricing strategy adapter for a BillBroker vault with accepts
- *         SPOT (as the perp token) and USDC tokens.
+ * @notice Pricing strategy adapter for a BillBroker vault which accepts
+ *         SPOT (as the perp token) and dollar tokens like USDC.
  *
  *         AMPL is the underlying token for SPOT.
  *         The market price of AMPL is mean reverting and eventually converges to its target.

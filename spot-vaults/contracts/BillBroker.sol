@@ -250,7 +250,7 @@ contract BillBroker is
     //--------------------------------------------------------------------------
     // Keeper only methods
 
-    /// @notice Pauses deposits, withdrawals and rollovers.
+    /// @notice Pauses deposits, withdrawals and swaps.
     /// @dev ERC-20 functions, like transfers will always remain operational.
     function pause() external onlyKeeper {
         _pause();
@@ -585,7 +585,7 @@ contract BillBroker is
             revert UnexpectedARDelta();
         }
 
-        // When the ar decreases below the lower bond,
+        // When the ar decreases below the lower bound,
         // swaps are effectively halted by setting fees to 100%.
         if (arPost < arHardBound.lower) {
             return ONE;
@@ -644,7 +644,7 @@ contract BillBroker is
             revert UnexpectedARDelta();
         }
 
-        // When the ar increases above the hard bond,
+        // When the ar increases above the hard bound,
         // swaps are effectively halted by setting fees to 100%.
         if (arPost > arHardBound.upper) {
             return ONE;
@@ -724,7 +724,7 @@ contract BillBroker is
     ) private pure returns (uint256) {
         if (arU <= cutoff) {
             return _auc(fn1, arL, arU);
-        } else if (arL > cutoff) {
+        } else if (arL >= cutoff) {
             return _auc(fn2, arL, arU);
         } else {
             return (_auc(fn1, arL, cutoff).mulDiv(cutoff - arL, arU - arL) +
@@ -733,7 +733,7 @@ contract BillBroker is
     }
 
     /// @dev Given a linear function defined by points (x1,y1) (x2,y2),
-    ///      we compute the are under the curve between (xL, xU) assuming xL <= xU.
+    ///      we compute the area under the curve between (xL, xU) assuming xL <= xU.
     function _auc(
         LinearFn memory fn,
         uint256 xL,
