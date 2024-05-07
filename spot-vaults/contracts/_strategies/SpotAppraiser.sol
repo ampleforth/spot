@@ -14,8 +14,8 @@ import { IAmpleforth } from "../_interfaces/external/IAmpleforth.sol";
 import { IAmpleforthOracle } from "../_interfaces/external/IAmpleforthOracle.sol";
 import { IAMPL } from "../_interfaces/external/IAMPL.sol";
 import { IBillBrokerPricingStrategy } from "../_interfaces/IBillBrokerPricingStrategy.sol";
-import { Range } from "../_interfaces/CommonTypes.sol";
-import { InvalidPerc, InvalidSeniorCDRBound } from "../_interfaces/ProtocolErrors.sol";
+import { Range } from "../_interfaces/BillBrokerTypes.sol";
+import { InvalidPerc, InvalidSeniorCDRBound } from "../_interfaces/BillBrokerErrors.sol";
 
 /**
  * @title SpotAppraiser

@@ -426,7 +426,12 @@ describe("BillBroker", function () {
       await perp.mint(billBroker.target, perpFP("100"));
       await pricingStrategy.mockMethod("usdPrice()", [priceFP("1"), true]);
       await pricingStrategy.mockMethod("perpPrice()", [priceFP("1.3"), true]);
-      const r = await billBroker.reserveState.staticCall();
+      const r = {
+        usdReserve: await billBroker.usdReserve(),
+        perpReserve: await billBroker.perpReserve(),
+        usdPrice: await billBroker.usdPrice.staticCall(),
+        perpPrice: await billBroker.perpPrice.staticCall(),
+      };
       expect(r.usdReserve).to.eq(usdFP("115"));
       expect(r.perpReserve).to.eq(perpFP("100"));
       expect(r.usdPrice).to.eq(priceFP("1"));

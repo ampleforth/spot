@@ -14,8 +14,8 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
 import { IPerpetualTranche } from "@ampleforthorg/spot-contracts/contracts/_interfaces/IPerpetualTranche.sol";
 import { IBillBrokerPricingStrategy } from "./_interfaces/IBillBrokerPricingStrategy.sol";
-import { ReserveState, Range, LinearFn, SystemFees } from "./_interfaces/CommonTypes.sol";
-import { UnacceptableSwap, UnreliablePrice, UnexpectedDecimals, InvalidPerc, InvalidARBound, SlippageTooHigh, UnauthorizedCall, UnexpectedARDelta } from "./_interfaces/ProtocolErrors.sol";
+import { ReserveState, Range, Line, BillBrokerFees } from "./_interfaces/BillBrokerTypes.sol";
+import { UnacceptableSwap, UnreliablePrice, UnexpectedDecimals, InvalidPerc, InvalidARBound, SlippageTooHigh, UnauthorizedCall, UnexpectedARDelta } from "./_interfaces/BillBrokerErrors.sol";
 
 /**
  *  @title BillBroker
@@ -28,6 +28,8 @@ import { UnacceptableSwap, UnreliablePrice, UnexpectedDecimals, InvalidPerc, Inv
  *          The contract charges a fee for swap operations. The fee is a function of available liquidity held in the contract, and goes to the LPs.
  *
  *          The ratio of value of dollar tokens vs perp tokens held by the contract is defined as it's `assetRatio`.
+ *              => `assetRatio` = reserveValue(usd) / reserveValue(perp)
+ *
  *          The owner can define hard limits on the system's assetRatio outside which swapping is disabled.
  *
  *          The contract relies on external data sources to price assets.
@@ -96,7 +98,7 @@ contract BillBroker is
     IBillBrokerPricingStrategy public pricingStrategy;
 
     /// @notice All of the system fees.
-    SystemFees public fees;
+    BillBrokerFees public fees;
 
     /// @notice The asset ratio bounds outside which swapping is disabled.
     Range public arHardBound;
@@ -171,7 +173,7 @@ contract BillBroker is
         updateKeeper(owner());
         updatePricingStrategy(pricingStrategy_);
         updateFees(
-            SystemFees({
+            BillBrokerFees({
                 mintFeePerc: 0,
                 burnFeePerc: 0,
                 perpToUSDSwapFeePercs: Range({ lower: ONE, upper: ONE }),
@@ -180,15 +182,19 @@ contract BillBroker is
             })
         );
 
-        arHardBound = Range({
-            lower: ((ONE * 3) / 4), // 0.75
-            upper: ((ONE * 5) / 4) // 1.25
-        });
+        updateARHardBound(
+            Range({
+                lower: ((ONE * 3) / 4), // 0.75
+                upper: ((ONE * 5) / 4) // 1.25
+            })
+        );
 
-        arSoftBound = Range({
-            lower: ((ONE * 9) / 10), // 0.9
-            upper: ((ONE * 11) / 10) // 1.1
-        });
+        updateARSoftBound(
+            Range({
+                lower: ((ONE * 9) / 10), // 0.9
+                upper: ((ONE * 11) / 10) // 1.1
+            })
+        );
     }
 
     //--------------------------------------------------------------------------
@@ -213,7 +219,7 @@ contract BillBroker is
 
     /// @notice Updates the system fees.
     /// @param fees_ The new system fees.
-    function updateFees(SystemFees memory fees_) public onlyOwner {
+    function updateFees(BillBrokerFees memory fees_) public onlyOwner {
         if (
             fees_.mintFeePerc > ONE ||
             fees_.burnFeePerc > ONE ||
@@ -327,9 +333,6 @@ contract BillBroker is
         uint256 usdAmtIn,
         uint256 perpAmtMin
     ) external nonReentrant whenNotPaused returns (uint256) {
-        // Transfer usd tokens from user
-        usd.safeTransferFrom(_msgSender(), address(this), usdAmtIn);
-
         // compute perp amount out
         (
             uint256 perpAmtOut,
@@ -343,10 +346,13 @@ contract BillBroker is
             revert SlippageTooHigh();
         }
 
+        // Transfer usd tokens from user
+        usd.safeTransferFrom(_msgSender(), address(this), usdAmtIn);
+
         // settle fees
         emit FeePerp(lpFeeAmt);
         if (protocolFeeAmt > 0) {
-            perp.safeTransfer(owner(), protocolFeeAmt);
+            perp.safeTransfer(protocolFeeCollector(), protocolFeeAmt);
             emit ProtocolFeePerp(protocolFeeAmt);
         }
 
@@ -363,9 +369,6 @@ contract BillBroker is
         uint256 perpAmtIn,
         uint256 usdAmtMin
     ) external nonReentrant whenNotPaused returns (uint256) {
-        // Transfer perp tokens from user
-        perp.safeTransferFrom(_msgSender(), address(this), perpAmtIn);
-
         // Compute swap amount
         (
             uint256 usdAmtOut,
@@ -379,10 +382,13 @@ contract BillBroker is
             revert SlippageTooHigh();
         }
 
+        // Transfer perp tokens from user
+        perp.safeTransferFrom(_msgSender(), address(this), perpAmtIn);
+
         // settle fees
         emit FeeUSD(lpFeeAmt);
         if (protocolFeeAmt > 0) {
-            usd.safeTransfer(owner(), protocolFeeAmt);
+            usd.safeTransfer(protocolFeeCollector(), protocolFeeAmt);
             emit ProtocolFeeUSD(protocolFeeAmt);
         }
 
@@ -395,12 +401,34 @@ contract BillBroker is
     //-----------------------------------------------------------------------------
     // Public methods
 
+    /// @notice Computes the amount of usd tokens swapped out,
+    ///         when the given number of perp tokens are sent in.
+    /// @param perpAmtIn The amount of perp tokens swapped in.
+    /// @return usdAmtOut The amount usd tokens swapped out.
+    function computePerpToUSDSwapAmt(
+        uint256 perpAmtIn
+    ) public returns (uint256 usdAmtOut) {
+        (usdAmtOut, , ) = computePerpToUSDSwapAmt(perpAmtIn, reserveState());
+        return usdAmtOut;
+    }
+
+    /// @notice Computes the amount of perp tokens swapped out,
+    ///         when the given number of usd tokens are sent in.
+    /// @param usdAmtIn The number of usd tokens sent in.
+    /// @return perpAmtOut The amount of perp tokens swapped out.
+    function computeUSDToPerpSwapAmt(
+        uint256 usdAmtIn
+    ) public returns (uint256 perpAmtOut) {
+        (perpAmtOut, , ) = computeUSDToPerpSwapAmt(usdAmtIn, reserveState());
+        return perpAmtOut;
+    }
+
     /// @return s The reserve usd and perp token balances and prices.
     function reserveState() public returns (ReserveState memory s) {
         return
             ReserveState({
-                usdReserve: usdReserve(),
-                perpReserve: perpReserve(),
+                usdReserve: usd.balanceOf(address(this)),
+                perpReserve: perp.balanceOf(address(this)),
                 usdPrice: usdPrice(),
                 perpPrice: perpPrice()
             });
@@ -424,6 +452,19 @@ contract BillBroker is
             revert UnreliablePrice();
         }
         return p;
+    }
+
+    //-----------------------------------------------------------------------------
+    // External view methods
+
+    /// @return The balance of usd tokens in the reserve.
+    function usdReserve() external view returns (uint256) {
+        return usd.balanceOf(address(this));
+    }
+
+    /// @return The balance of perp tokens in the reserve.
+    function perpReserve() external view returns (uint256) {
+        return perp.balanceOf(address(this));
     }
 
     //-----------------------------------------------------------------------------
@@ -455,8 +496,8 @@ contract BillBroker is
                 ONE.mulDiv(perpAmtIn, perpUnitAmt));
         } else {
             // Users can deposit assets proportional to the reserve.
-            uint256 usdReserve_ = usdReserve();
-            uint256 perpReserve_ = perpReserve();
+            uint256 usdReserve_ = usd.balanceOf(address(this));
+            uint256 perpReserve_ = perp.balanceOf(address(this));
             usdAmtIn = usdAmtMax;
             perpAmtIn = perpReserve_.mulDiv(usdAmtIn, usdReserve_);
             mintAmt = totalSupply_.mulDiv(usdAmtIn, usdReserve_);
@@ -483,11 +524,11 @@ contract BillBroker is
         }
 
         uint256 totalSupply_ = totalSupply();
-        usdAmtOut = burnAmt.mulDiv(usdReserve(), totalSupply_).mulDiv(
+        usdAmtOut = burnAmt.mulDiv(usd.balanceOf(address(this)), totalSupply_).mulDiv(
             ONE - fees.burnFeePerc,
             ONE
         );
-        perpAmtOut = burnAmt.mulDiv(perpReserve(), totalSupply_).mulDiv(
+        perpAmtOut = burnAmt.mulDiv(perp.balanceOf(address(this)), totalSupply_).mulDiv(
             ONE - fees.burnFeePerc,
             ONE
         );
@@ -612,18 +653,13 @@ contract BillBroker is
         Range memory swapFeePercs = fees.perpToUSDSwapFeePercs;
         return
             _computeFeePerc(
-                LinearFn({
+                Line({
                     x1: arHardBound.lower,
                     y1: swapFeePercs.upper,
                     x2: arSoftBound.lower,
                     y2: swapFeePercs.lower
                 }),
-                LinearFn({
-                    x1: 0,
-                    y1: swapFeePercs.lower,
-                    x2: ONE,
-                    y2: swapFeePercs.lower
-                }),
+                Line({ x1: 0, y1: swapFeePercs.lower, x2: ONE, y2: swapFeePercs.lower }),
                 arPost,
                 arPre,
                 arSoftBound.lower
@@ -672,13 +708,8 @@ contract BillBroker is
         Range memory swapFeePercs = fees.usdToPerpSwapFeePercs;
         return
             _computeFeePerc(
-                LinearFn({
-                    x1: 0,
-                    y1: swapFeePercs.lower,
-                    x2: ONE,
-                    y2: swapFeePercs.lower
-                }),
-                LinearFn({
+                Line({ x1: 0, y1: swapFeePercs.lower, x2: ONE, y2: swapFeePercs.lower }),
+                Line({
                     x1: arSoftBound.upper,
                     y1: swapFeePercs.lower,
                     x2: arHardBound.upper,
@@ -700,14 +731,10 @@ contract BillBroker is
             );
     }
 
-    /// @return The balance of usd tokens in the reserve.
-    function usdReserve() public view returns (uint256) {
-        return usd.balanceOf(address(this));
-    }
-
-    /// @return The balance of perp tokens in the reserve.
-    function perpReserve() public view returns (uint256) {
-        return perp.balanceOf(address(this));
+    /// @notice The address which holds any revenue extracted by protocol.
+    /// @return Address of the fee collector.
+    function protocolFeeCollector() public view returns (address) {
+        return owner();
     }
 
     //-----------------------------------------------------------------------------
@@ -716,8 +743,8 @@ contract BillBroker is
     /// @dev The function assumes the fee curve is defined a pair-wise linear function which merge at the cutoff point.
     ///      The swap fee is computed as area under the fee curve between {arL,arU}.
     function _computeFeePerc(
-        LinearFn memory fn1,
-        LinearFn memory fn2,
+        Line memory fn1,
+        Line memory fn2,
         uint256 arL,
         uint256 arU,
         uint256 cutoff
@@ -734,11 +761,7 @@ contract BillBroker is
 
     /// @dev Given a linear function defined by points (x1,y1) (x2,y2),
     ///      we compute the area under the curve between (xL, xU) assuming xL <= xU.
-    function _auc(
-        LinearFn memory fn,
-        uint256 xL,
-        uint256 xU
-    ) private pure returns (uint256) {
+    function _auc(Line memory fn, uint256 xL, uint256 xU) private pure returns (uint256) {
         // m = dlY/dlX
         // c = y2 - m . x2
         // Integral m . x + c => m . x^2 / 2 + c
