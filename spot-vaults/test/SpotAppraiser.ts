@@ -88,7 +88,7 @@ describe("SpotAppraiser", function () {
       expect(await strategy.SPOT()).to.eq(spot.target);
       expect(await strategy.USD_ORACLE()).to.eq(usdPriceOrcle.target);
       expect(await strategy.AMPL_ORACLE()).to.eq(amplPriceOracle.target);
-      expect(await strategy.UNIT_AMPL()).to.eq(perpFP("1"));
+      expect(await strategy.AMPL_DUST_AMT()).to.eq(perpFP("1000"));
       const t = await strategy.tolAMPLPriceDeviationPercs();
       expect(t.lower).to.eq(percentageFP("0.8"));
       expect(t.upper).to.eq(percentageFP("1.75"));

@@ -276,17 +276,16 @@ contract BillBroker is
     /// @param perpAmtMax The amount of perp tokens maximum available to be deposited.
     /// @param usdAmtMin The minimum amount of usd tokens that are expected to be deposited.
     /// @param perpAmtMin The minimum amount of perp tokens that are expected to be deposited.
-    /// @return The amount of LP tokens minted.
+    /// @return mintAmt The amount of LP tokens minted.
     function deposit(
         uint256 usdAmtMax,
         uint256 perpAmtMax,
         uint256 usdAmtMin,
         uint256 perpAmtMin
-    ) external nonReentrant whenNotPaused returns (uint256) {
-        (uint256 mintAmt, uint256 usdAmtIn, uint256 perpAmtIn) = computeMintAmt(
-            usdAmtMax,
-            perpAmtMax
-        );
+    ) external nonReentrant whenNotPaused returns (uint256 mintAmt) {
+        uint256 usdAmtIn;
+        uint256 perpAmtIn;
+        (mintAmt, usdAmtIn, perpAmtIn) = computeMintAmt(usdAmtMax, perpAmtMax);
         if (mintAmt <= 0) {
             return 0;
         }
@@ -300,7 +299,6 @@ contract BillBroker is
 
         // mint LP tokens
         _mint(_msgSender(), mintAmt);
-        return mintAmt;
     }
 
     /// @notice Burns LP tokens and redeems usd and perp tokens.
@@ -309,12 +307,17 @@ contract BillBroker is
     /// @return perpAmtOut The amount perp tokens returned.
     function redeem(
         uint256 burnAmt
-    ) external nonReentrant whenNotPaused returns (uint256, uint256) {
+    )
+        external
+        nonReentrant
+        whenNotPaused
+        returns (uint256 usdAmtOut, uint256 perpAmtOut)
+    {
         if (burnAmt <= 0) {
             return (0, 0);
         }
 
-        (uint256 usdAmtOut, uint256 perpAmtOut) = computeRedemptionAmts(burnAmt);
+        (usdAmtOut, perpAmtOut) = computeRedemptionAmts(burnAmt);
 
         // burn LP tokens
         _burn(_msgSender(), burnAmt);
@@ -322,7 +325,6 @@ contract BillBroker is
         // return funds
         usd.safeTransfer(_msgSender(), usdAmtOut);
         perp.safeTransfer(_msgSender(), perpAmtOut);
-        return (usdAmtOut, perpAmtOut);
     }
 
     /// @notice Swaps usd tokens from the user for perp tokens from the reserve.
@@ -332,13 +334,14 @@ contract BillBroker is
     function swapUSDForPerps(
         uint256 usdAmtIn,
         uint256 perpAmtMin
-    ) external nonReentrant whenNotPaused returns (uint256) {
+    ) external nonReentrant whenNotPaused returns (uint256 perpAmtOut) {
         // compute perp amount out
-        (
-            uint256 perpAmtOut,
-            uint256 lpFeeAmt,
-            uint256 protocolFeeAmt
-        ) = computeUSDToPerpSwapAmt(usdAmtIn, reserveState());
+        uint256 lpFeeAmt;
+        uint256 protocolFeeAmt;
+        (perpAmtOut, lpFeeAmt, protocolFeeAmt) = computeUSDToPerpSwapAmt(
+            usdAmtIn,
+            reserveState()
+        );
         if (usdAmtIn <= 0 || perpAmtOut <= 0) {
             revert UnacceptableSwap();
         }
@@ -358,7 +361,6 @@ contract BillBroker is
 
         // transfer perps out
         perp.safeTransfer(_msgSender(), perpAmtOut);
-        return perpAmtOut;
     }
 
     /// @notice Swaps perp tokens from the user for usd tokens from the reserve.
@@ -368,13 +370,14 @@ contract BillBroker is
     function swapPerpsForUSD(
         uint256 perpAmtIn,
         uint256 usdAmtMin
-    ) external nonReentrant whenNotPaused returns (uint256) {
+    ) external nonReentrant whenNotPaused returns (uint256 usdAmtOut) {
         // Compute swap amount
-        (
-            uint256 usdAmtOut,
-            uint256 lpFeeAmt,
-            uint256 protocolFeeAmt
-        ) = computePerpToUSDSwapAmt(perpAmtIn, reserveState());
+        uint256 lpFeeAmt;
+        uint256 protocolFeeAmt;
+        (usdAmtOut, lpFeeAmt, protocolFeeAmt) = computePerpToUSDSwapAmt(
+            perpAmtIn,
+            reserveState()
+        );
         if (perpAmtIn <= 0 || usdAmtOut <= 0) {
             revert UnacceptableSwap();
         }
@@ -394,8 +397,6 @@ contract BillBroker is
 
         // transfer usd out
         usd.safeTransfer(_msgSender(), usdAmtOut);
-
-        return usdAmtOut;
     }
 
     //-----------------------------------------------------------------------------
@@ -409,7 +410,6 @@ contract BillBroker is
         uint256 perpAmtIn
     ) public returns (uint256 usdAmtOut) {
         (usdAmtOut, , ) = computePerpToUSDSwapAmt(perpAmtIn, reserveState());
-        return usdAmtOut;
     }
 
     /// @notice Computes the amount of perp tokens swapped out,
@@ -420,7 +420,6 @@ contract BillBroker is
         uint256 usdAmtIn
     ) public returns (uint256 perpAmtOut) {
         (perpAmtOut, , ) = computeUSDToPerpSwapAmt(usdAmtIn, reserveState());
-        return perpAmtOut;
     }
 
     /// @return s The reserve usd and perp token balances and prices.
@@ -532,7 +531,6 @@ contract BillBroker is
             ONE - fees.burnFeePerc,
             ONE
         );
-        return (usdAmtOut, perpAmtOut);
     }
 
     /// @notice Computes the amount of usd tokens swapped out,

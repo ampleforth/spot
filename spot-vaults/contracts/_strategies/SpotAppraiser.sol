@@ -4,7 +4,6 @@ pragma solidity ^0.8.24;
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { ITranche } from "@ampleforthorg/spot-contracts/contracts/_interfaces/buttonwood/ITranche.sol";
 import { IBondController } from "@ampleforthorg/spot-contracts/contracts/_interfaces/buttonwood/IBondController.sol";
 import { IPerpetualTranche } from "@ampleforthorg/spot-contracts/contracts/_interfaces/IPerpetualTranche.sol";
@@ -53,7 +52,7 @@ contract SpotAppraiser is Ownable, IBillBrokerPricingStrategy {
     uint256 public constant CL_ORACLE_DECIMALS = 8;
     uint256 public constant CL_ORACLE_STALENESS_TRESHOLD_SEC = 3600 * 24; // 1 day
     uint256 public constant USD_LOWER_BOUND = (99 * ONE) / 100; // 0.99$
-    uint256 public constant AMPL_DUST_AMT = 1000; // 1000 AMPL
+    uint256 public constant AMPL_DUST_AMT = 1000 * (10 ** 9); // 1000 AMPL
 
     /// @notice Address of the AMPL ERC-20 token contract.
     IAMPL public immutable AMPL;
@@ -66,9 +65,6 @@ contract SpotAppraiser is Ownable, IBillBrokerPricingStrategy {
 
     /// @notice Address of the Ampleforth market price oracle.
     IChainlinkOracle public immutable AMPL_ORACLE;
-
-    /// @notice Fixed point amount of 1.0 AMPL.
-    uint256 public immutable UNIT_AMPL;
 
     //-------------------------------------------------------------------------
     // Storage
@@ -100,7 +96,6 @@ contract SpotAppraiser is Ownable, IBillBrokerPricingStrategy {
         SPOT = spot;
         AMPL_ORACLE = amplOracle;
         USD_ORACLE = usdOracle;
-        UNIT_AMPL = 10 ** IERC20Metadata(address(AMPL)).decimals();
 
         tolAMPLPriceDeviationPercs = Range({
             lower: (ONE * 8) / 10, // 0.8
@@ -155,7 +150,7 @@ contract SpotAppraiser is Ownable, IBillBrokerPricingStrategy {
         return (ONE, (v && p > USD_LOWER_BOUND));
     }
 
-    /// @return p The price of the spot token in dollars.
+    /// @return p The price of the spot token in dollar coins.
     /// @return v True if the price is valid and can be used by downstream consumers.
     function perpPrice() external override returns (uint256, bool) {
         //
@@ -235,7 +230,7 @@ contract SpotAppraiser is Ownable, IBillBrokerPricingStrategy {
         // NOTE: In practice some dust might exist or someone could grief this check
         // by transferring some dust AMPL into the spot contract.
         // We consider SPOT unhealthy if it has more than `AMPL_DUST_AMT` AMPL.
-        if (AMPL.balanceOf(address(SPOT)) > (AMPL_DUST_AMT * UNIT_AMPL)) {
+        if (AMPL.balanceOf(address(SPOT)) > AMPL_DUST_AMT) {
             return false;
         }
 
