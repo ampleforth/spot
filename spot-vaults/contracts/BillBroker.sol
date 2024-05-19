@@ -15,7 +15,7 @@ import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/t
 import { IPerpetualTranche } from "@ampleforthorg/spot-contracts/contracts/_interfaces/IPerpetualTranche.sol";
 import { IBillBrokerPricingStrategy } from "./_interfaces/IBillBrokerPricingStrategy.sol";
 import { ReserveState, Range, Line, BillBrokerFees } from "./_interfaces/BillBrokerTypes.sol";
-import { UnacceptableSwap, UnreliablePrice, UnexpectedDecimals, InvalidPerc, InvalidARBound, SlippageTooHigh, UnauthorizedCall, UnexpectedARDelta } from "./_interfaces/BillBrokerErrors.sol";
+import { UnacceptableSwap, UnreliablePrice, UnexpectedDecimals, InvalidPerc, InvalidARBound, SlippageTooHigh, UnauthorizedCall, UnexpectedARDelta, OverDailySwapLimit } from "./_interfaces/BillBrokerErrors.sol";
 
 /**
  *  @title BillBroker
@@ -107,6 +107,16 @@ contract BillBroker is
     ///         the swap fees transition from a flat percentage fee to a linear function.
     Range public arSoftBound;
 
+    /// @notice The timestamp of the day when the last swap executed.
+    uint256 public lastSwapDayTimestampSec;
+
+    /// @notice The enforced usd-denominated daily swap limit.
+    /// @dev Reset to zero on the next calendar day.
+    uint256 public dailyUsdSwapAmtLimit;
+
+    /// @notice The recorded total value of swaps since the start of the current calander day.
+    uint256 public todayUsdSwapAmt;
+
     //--------------------------------------------------------------------------
     // Events
 
@@ -195,6 +205,10 @@ contract BillBroker is
                 upper: ((ONE * 11) / 10) // 1.1
             })
         );
+
+        dailyUsdSwapAmtLimit = type(uint256).max;
+        lastSwapDayTimestampSec = 0;
+        todayUsdSwapAmt = 0;
     }
 
     //--------------------------------------------------------------------------
@@ -268,6 +282,11 @@ contract BillBroker is
         _unpause();
     }
 
+    /// @notice Updates the usd denominated daily swap limit.
+    function updateDailySwapLimit(uint256 dailyUsdSwapAmtLimit_) public onlyKeeper {
+        dailyUsdSwapAmtLimit = dailyUsdSwapAmtLimit_;
+    }
+
     //--------------------------------------------------------------------------
     // External & Public write methods
 
@@ -336,9 +355,9 @@ contract BillBroker is
         uint256 perpAmtMin
     ) external nonReentrant whenNotPaused returns (uint256 perpAmtOut) {
         // compute perp amount out
-        uint256 lpFeeAmt;
-        uint256 protocolFeeAmt;
-        (perpAmtOut, lpFeeAmt, protocolFeeAmt) = computeUSDToPerpSwapAmt(
+        uint256 lpFeePerpAmt;
+        uint256 protocolFeePerpAmt;
+        (perpAmtOut, lpFeePerpAmt, protocolFeePerpAmt) = computeUSDToPerpSwapAmt(
             usdAmtIn,
             reserveState()
         );
@@ -353,14 +372,17 @@ contract BillBroker is
         usd.safeTransferFrom(_msgSender(), address(this), usdAmtIn);
 
         // settle fees
-        emit FeePerp(lpFeeAmt);
-        if (protocolFeeAmt > 0) {
-            perp.safeTransfer(protocolFeeCollector(), protocolFeeAmt);
-            emit ProtocolFeePerp(protocolFeeAmt);
+        emit FeePerp(lpFeePerpAmt);
+        if (protocolFeePerpAmt > 0) {
+            perp.safeTransfer(protocolFeeCollector(), protocolFeePerpAmt);
+            emit ProtocolFeePerp(protocolFeePerpAmt);
         }
 
         // transfer perps out
         perp.safeTransfer(_msgSender(), perpAmtOut);
+
+        // Enforce the daily limit
+        _enforceDailySwapLimit(usdAmtIn);
     }
 
     /// @notice Swaps perp tokens from the user for usd tokens from the reserve.
@@ -372,9 +394,9 @@ contract BillBroker is
         uint256 usdAmtMin
     ) external nonReentrant whenNotPaused returns (uint256 usdAmtOut) {
         // Compute swap amount
-        uint256 lpFeeAmt;
-        uint256 protocolFeeAmt;
-        (usdAmtOut, lpFeeAmt, protocolFeeAmt) = computePerpToUSDSwapAmt(
+        uint256 lpFeeUsdAmt;
+        uint256 protocolFeeUsdAmt;
+        (usdAmtOut, lpFeeUsdAmt, protocolFeeUsdAmt) = computePerpToUSDSwapAmt(
             perpAmtIn,
             reserveState()
         );
@@ -389,14 +411,18 @@ contract BillBroker is
         perp.safeTransferFrom(_msgSender(), address(this), perpAmtIn);
 
         // settle fees
-        emit FeeUSD(lpFeeAmt);
-        if (protocolFeeAmt > 0) {
-            usd.safeTransfer(protocolFeeCollector(), protocolFeeAmt);
-            emit ProtocolFeeUSD(protocolFeeAmt);
+        emit FeeUSD(lpFeeUsdAmt);
+        if (protocolFeeUsdAmt > 0) {
+            usd.safeTransfer(protocolFeeCollector(), protocolFeeUsdAmt);
+            emit ProtocolFeeUSD(protocolFeeUsdAmt);
         }
 
         // transfer usd out
         usd.safeTransfer(_msgSender(), usdAmtOut);
+
+        // Enforce the daily limit
+        uint256 totalUsdAmtOut = usdAmtOut + lpFeeUsdAmt + protocolFeeUsdAmt;
+        _enforceDailySwapLimit(totalUsdAmtOut);
     }
 
     //-----------------------------------------------------------------------------
@@ -737,6 +763,20 @@ contract BillBroker is
 
     //-----------------------------------------------------------------------------
     // Private methods
+
+    /// @dev Checks if total recorded swap amount in the current calendar day is under the limit.
+    ///      If not reverts.
+    function _enforceDailySwapLimit(uint256 usdSwapAmt) private {
+        uint256 currentDayTimestamp = block.timestamp - (block.timestamp % (24 * 3600));
+        if (currentDayTimestamp > lastSwapDayTimestampSec) {
+            lastSwapDayTimestampSec = currentDayTimestamp;
+            todayUsdSwapAmt = 0;
+        }
+        todayUsdSwapAmt += usdSwapAmt;
+        if (todayUsdSwapAmt > dailyUsdSwapAmtLimit) {
+            revert OverDailySwapLimit();
+        }
+    }
 
     /// @dev The function assumes the fee curve is defined a pair-wise linear function which merge at the cutoff point.
     ///      The swap fee is computed as area under the fee curve between {arL,arU}.

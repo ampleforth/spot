@@ -27,3 +27,6 @@ error UnacceptableSwap();
 
 /// @notice Expected usable external price.
 error UnreliablePrice();
+
+/// @notice Expected usable external price.
+error OverDailySwapLimit();

@@ -1,4 +1,4 @@
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 import { Contract, ContractFactory } from "ethers";
 
 const sciParseFloat = (a: string): BigInt =>
@@ -77,3 +77,31 @@ export class DMock {
     return mock[methodFragment].staticCall(...parameters);
   }
 }
+
+export const TimeHelpers = {
+  secondsFromNow: async (secondsFromNow: number): Promise<number> => {
+    return (await TimeHelpers.currentTime()) + secondsFromNow;
+  },
+
+  increaseTime: async (seconds: number): Promise<void> => {
+    await network.provider.request({ method: "evm_increaseTime", params: [seconds] });
+    await network.provider.request({ method: "evm_mine" });
+  },
+
+  setNextBlockTimestamp: async (timestamp: number): Promise<void> => {
+    await network.provider.request({
+      method: "evm_setNextBlockTimestamp",
+      params: [timestamp],
+    });
+    await network.provider.request({ method: "evm_mine" });
+  },
+
+  currentTime: async (): Promise<number> => {
+    const res = await network.provider.request({
+      method: "eth_getBlockByNumber",
+      params: ["latest", false],
+    });
+    const timestamp = parseInt(res.timestamp, 16);
+    return timestamp;
+  },
+};

@@ -2,7 +2,7 @@ import { ethers, upgrades } from "hardhat";
 import { Contract } from "ethers";
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
-import { DMock, usdFP, perpFP, priceFP, percentageFP } from "./helpers";
+import { DMock, usdFP, perpFP, priceFP, percentageFP, TimeHelpers } from "./helpers";
 
 async function updateFees(billBroker: Contract, fees: any) {
   const currentFees = await billBroker.fees();
@@ -469,6 +469,49 @@ describe("BillBroker", function () {
       });
     });
 
+    describe("when daily swap limit is reached", async function () {
+      it("should update swap counters", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        await billBroker.updateDailySwapLimit(usdFP("110"));
+        await billBroker.swapUSDForPerps(usdFP("105"), perpFP("50"));
+
+        const ts = await TimeHelpers.currentTime();
+        const oneDay = 24 * 3600;
+        const dayTs = ts - (ts % oneDay);
+        expect(await billBroker.lastSwapDayTimestampSec()).to.eq(dayTs);
+        expect(await billBroker.todayUsdSwapAmt()).to.eq(usdFP("105"));
+
+        await billBroker.swapUSDForPerps(usdFP("2"), perpFP("1"));
+        expect(await billBroker.lastSwapDayTimestampSec()).to.eq(dayTs);
+        expect(await billBroker.todayUsdSwapAmt()).to.eq(usdFP("107"));
+      });
+      it("should reset counters after a new day", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        await billBroker.updateDailySwapLimit(usdFP("110"));
+        await billBroker.swapUSDForPerps(usdFP("105"), perpFP("50"));
+
+        const ts = await TimeHelpers.currentTime();
+        const oneDay = 24 * 3600;
+        const dayTs = ts - (ts % oneDay);
+        expect(await billBroker.lastSwapDayTimestampSec()).to.eq(dayTs);
+        expect(await billBroker.todayUsdSwapAmt()).to.eq(usdFP("105"));
+
+        await TimeHelpers.increaseTime(24 * 3600);
+        await billBroker.swapUSDForPerps(usdFP("2"), perpFP("1"));
+        expect(await billBroker.lastSwapDayTimestampSec()).to.eq(dayTs + oneDay);
+        expect(await billBroker.todayUsdSwapAmt()).to.eq(usdFP("2"));
+      });
+      it("should revert", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        await billBroker.updateDailySwapLimit(usdFP("110"));
+        await expect(billBroker.swapUSDForPerps(usdFP("105"), perpFP("50"))).not.to.be
+          .reverted;
+        await expect(
+          billBroker.swapUSDForPerps(usdFP("10"), perpFP("5")),
+        ).to.be.revertedWithCustomError(billBroker, "OverDailySwapLimit");
+      });
+    });
+
     describe("stable swap", function () {
       it("should transfer usd from the user", async function () {
         const { billBroker, deployer, usd } = await loadFixture(setupContracts);
@@ -778,6 +821,50 @@ describe("BillBroker", function () {
         await expect(
           billBroker.swapPerpsForUSD(perpFP("115"), usdFP("100")),
         ).to.be.revertedWithCustomError(billBroker, "UnreliablePrice");
+      });
+    });
+
+    describe("when daily swap limit is reached", async function () {
+      it("should update swap counters", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        await billBroker.updateDailySwapLimit(usdFP("110"));
+        await billBroker.swapPerpsForUSD(perpFP("90"), usdFP("90"));
+
+        const ts = await TimeHelpers.currentTime();
+        const oneDay = 24 * 3600;
+        const dayTs = ts - (ts % oneDay);
+        expect(await billBroker.lastSwapDayTimestampSec()).to.eq(dayTs);
+        expect(await billBroker.todayUsdSwapAmt()).to.eq(usdFP("103.5"));
+
+        await billBroker.swapPerpsForUSD(perpFP("5"), usdFP("5"));
+        expect(await billBroker.lastSwapDayTimestampSec()).to.eq(dayTs);
+        expect(await billBroker.todayUsdSwapAmt()).to.eq(usdFP("109.25"));
+      });
+      it("should reset counters after a new day", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        await billBroker.updateDailySwapLimit(usdFP("110"));
+        await billBroker.swapPerpsForUSD(perpFP("90"), usdFP("90"));
+
+        const ts = await TimeHelpers.currentTime();
+        const oneDay = 24 * 3600;
+        const dayTs = ts - (ts % oneDay);
+        expect(await billBroker.lastSwapDayTimestampSec()).to.eq(dayTs);
+        expect(await billBroker.todayUsdSwapAmt()).to.eq(usdFP("103.5"));
+
+        await TimeHelpers.increaseTime(24 * 3600);
+        await billBroker.swapPerpsForUSD(perpFP("5"), usdFP("5"));
+        expect(await billBroker.lastSwapDayTimestampSec()).to.eq(dayTs + oneDay);
+        expect(await billBroker.todayUsdSwapAmt()).to.eq(usdFP("5.75"));
+      });
+
+      it("should revert", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        await billBroker.updateDailySwapLimit(usdFP("110"));
+        await expect(billBroker.swapPerpsForUSD(perpFP("95"), usdFP("95"))).not.to.be
+          .reverted;
+        await expect(
+          billBroker.swapPerpsForUSD(perpFP("10"), usdFP("10")),
+        ).to.be.revertedWithCustomError(billBroker, "OverDailySwapLimit");
       });
     });
 

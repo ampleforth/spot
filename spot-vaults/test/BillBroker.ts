@@ -62,6 +62,10 @@ describe("BillBroker", function () {
 
       expect(await billBroker.usdReserve()).to.eq(usdFP("0"));
       expect(await billBroker.perpReserve()).to.eq(perpFP("0"));
+
+      expect(await billBroker.dailyUsdSwapAmtLimit()).to.eq(ethers.MaxUint256);
+      expect(await billBroker.lastSwapDayTimestampSec()).to.eq("0");
+      expect(await billBroker.todayUsdSwapAmt()).to.eq("0");
     });
   });
 
