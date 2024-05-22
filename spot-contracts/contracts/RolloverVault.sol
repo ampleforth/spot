@@ -521,7 +521,12 @@ contract RolloverVault is
     }
 
     //--------------------------------------------------------------------------
-    // External & Public methods
+    // External & Public compute methods
+
+    /// @inheritdoc IRolloverVault
+    function deviationRatio() external override nonReentrant returns (uint256) {
+        return feePolicy.computeDeviationRatio(_querySubscriptionState(perp));
+    }
 
     /// @inheritdoc IRolloverVault
     function computeUnderlyingToPerpSwapAmt(

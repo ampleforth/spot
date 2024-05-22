@@ -579,6 +579,18 @@ contract PerpetualTranche is
         return _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable);
     }
 
+    /// @inheritdoc IPerpetualTranche
+    function deviationRatio() external override afterStateUpdate nonReentrant returns (uint256) {
+        return
+            feePolicy.computeDeviationRatio(
+                SubscriptionParams({
+                    perpTVL: _reserveValue(),
+                    vaultTVL: vault.getTVL(),
+                    seniorTR: _depositBond.getSeniorTrancheRatio()
+                })
+            );
+    }
+
     //--------------------------------------------------------------------------
     // Public methods
 

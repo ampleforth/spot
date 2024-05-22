@@ -32,4 +32,7 @@ interface IRolloverVault is IVault {
     function computePerpToUnderlyingSwapAmt(
         uint256 perpAmtIn
     ) external returns (uint256, uint256, SubscriptionParams memory);
+
+    /// @return The system's current deviation ratio.
+    function deviationRatio() external returns (uint256);
 }
