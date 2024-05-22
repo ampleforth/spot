@@ -705,6 +705,12 @@ contract PerpetualTranche is
         } else if (balance <= 0 && inReserve_) {
             // Removes tranche from reserve set.
             _reserves.remove(address(token));
+
+            // Frees up storage slot used by existing tranches in the system.
+            // NOTE: This variable in the process of being `DEPRECATED`, and the following line
+            // can be removed once all storage used by all the current tranches are zeroed out
+            // as they are removed from the reserve.
+            delete _mintedSupplyPerTranche_DEPRECATED[ITranche(address(token))];
         }
 
         return balance;
