@@ -212,7 +212,7 @@ describe("PerpetualTranche", function () {
 
       it("should NOT revert", async function () {
         await mintCollteralToken(collateralToken, toFixedPtAmt("50"), deployer);
-        await collateralToken.transfer(perp.address, toFixedPtAmt("50"));
+        await collateralToken.transfer(perp.address, toFixedPtAmt("10"));
         const newBond = await bondAt(await perp.callStatic.getDepositBond());
         await depositIntoBond(newBond, toFixedPtAmt("2000"), deployer);
         const tranches = await getTranches(newBond);
@@ -220,6 +220,26 @@ describe("PerpetualTranche", function () {
         await newTranche.approve(perp.address, toFixedPtAmt("500"));
         await perp.deposit(newTranche.address, toFixedPtAmt("200"));
         await expect(perp.deposit(newTranche.address, toFixedPtAmt("1"))).not.to.reverted;
+      });
+    });
+
+    describe("when the tranche mint limit has exceeded and existing supply > 0", function () {
+      beforeEach(async function () {
+        await perp.deposit(depositTrancheA.address, toFixedPtAmt("250"));
+        await advancePerpQueue(perp, 1200);
+        await perp.updateMaxDepositTrancheValuePerc(toPercFixedPtAmt("0.5"));
+      });
+
+      it("should revert", async function () {
+        await mintCollteralToken(collateralToken, toFixedPtAmt("50"), deployer);
+        await collateralToken.transfer(perp.address, toFixedPtAmt("50"));
+        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        await depositIntoBond(newBond, toFixedPtAmt("2000"), deployer);
+        const tranches = await getTranches(newBond);
+        const newTranche = tranches[0];
+        await newTranche.approve(perp.address, toFixedPtAmt("500"));
+        await perp.deposit(newTranche.address, toFixedPtAmt("200"));
+        await expect(perp.deposit(newTranche.address, toFixedPtAmt("1"))).to.reverted;
       });
     });
 
