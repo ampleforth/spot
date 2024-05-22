@@ -504,7 +504,14 @@ contract PerpetualTranche is
 
         ITranche tranche = ITranche(address(token));
         IBondController parentBond = IBondController(tranche.bond());
-        return _computeReserveTrancheValue(tranche, parentBond, _reserveAt(0), tranche.balanceOf(address(this)), true);
+        return
+            _computeReserveTrancheValue(
+                tranche,
+                parentBond,
+                _reserveAt(0),
+                tranche.balanceOf(address(this)),
+                MathUpgradeable.Rounding.Up
+            );
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -718,7 +725,13 @@ contract PerpetualTranche is
 
     /// @dev Computes the fee adjusted perp mint amount for given amount of tranche tokens deposited into the reserve.
     function _computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) private view returns (uint256) {
-        uint256 valueIn = _computeReserveTrancheValue(trancheIn, _depositBond, _reserveAt(0), trancheInAmt, false);
+        uint256 valueIn = _computeReserveTrancheValue(
+            trancheIn,
+            _depositBond,
+            _reserveAt(0),
+            trancheInAmt,
+            MathUpgradeable.Rounding.Down
+        );
 
         //-----------------------------------------------------------------------------
         // We charge no mint fee when interacting with other callers within the system.
@@ -795,7 +808,13 @@ contract PerpetualTranche is
         // with the same number of decimals.
         IERC20Upgradeable underlying_ = _reserveAt(0);
         uint256 unitTokenAmt = (10 ** _decimals);
-        uint256 trancheInPrice = _computeReserveTrancheValue(trancheIn, _depositBond, underlying_, unitTokenAmt, false);
+        uint256 trancheInPrice = _computeReserveTrancheValue(
+            trancheIn,
+            _depositBond,
+            underlying_,
+            unitTokenAmt,
+            MathUpgradeable.Rounding.Down
+        );
         uint256 tokenOutPrice = unitTokenAmt;
         if (tokenOut != underlying_) {
             ITranche trancheOut = ITranche(address(tokenOut));
@@ -804,7 +823,7 @@ contract PerpetualTranche is
                 IBondController(trancheOut.bond()),
                 underlying_,
                 unitTokenAmt,
-                true
+                MathUpgradeable.Rounding.Up
             );
         }
 
@@ -939,14 +958,14 @@ contract PerpetualTranche is
                 IBondController(tranche.bond()),
                 underlying_,
                 tranche.balanceOf(address(this)),
-                true
+                MathUpgradeable.Rounding.Up
             );
             if (tranche == depositTranche || _isTimeForRollout(tranche)) {
                 depositTrancheValue += trancheValue;
             }
             totalVal += trancheValue;
         }
-        uint256 depositTrancheValuePerc = depositTrancheValue.mulDiv(ONE, totalVal);
+        uint256 depositTrancheValuePerc = depositTrancheValue.mulDiv(ONE, totalVal, MathUpgradeable.Rounding.Up);
         if (depositTrancheValuePerc > maxDepositTrancheValuePerc) {
             revert ExceededMaxMintPerTranche();
         }
@@ -976,7 +995,7 @@ contract PerpetualTranche is
                 parentBond,
                 underlying_,
                 tranche.balanceOf(address(this)),
-                true
+                MathUpgradeable.Rounding.Up
             );
         }
         return totalVal;
@@ -990,7 +1009,7 @@ contract PerpetualTranche is
         IBondController parentBond,
         IERC20Upgradeable collateralToken,
         uint256 trancheAmt,
-        bool roundUp
+        MathUpgradeable.Rounding rounding
     ) private view returns (uint256) {
         // NOTE: As an optimization here, we assume that the reserve tranche is immature and has the most senior claim.
         uint256 parentBondCollateralBalance = collateralToken.balanceOf(address(parentBond));
@@ -998,14 +1017,7 @@ contract PerpetualTranche is
         uint256 trancheClaim = MathUpgradeable.min(trancheSupply, parentBondCollateralBalance);
         // Tranche supply is zero (its parent bond has no deposits yet);
         // the tranche's CDR is assumed 1.0.
-        return
-            (trancheSupply > 0)
-                ? trancheClaim.mulDiv(
-                    trancheAmt,
-                    trancheSupply,
-                    roundUp ? MathUpgradeable.Rounding.Up : MathUpgradeable.Rounding.Down
-                )
-                : trancheAmt;
+        return (trancheSupply > 0) ? trancheClaim.mulDiv(trancheAmt, trancheSupply, rounding) : trancheAmt;
     }
 
     /// @dev Checks if the given token is the underlying collateral token.
