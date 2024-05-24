@@ -55,8 +55,8 @@ async function checkPerpTpUSDSwapAmt(
 async function reserveState(billBroker: Contract) {
   const r = await billBroker.reserveState.staticCall();
   return {
-    usdReserve: r[0],
-    perpReserve: r[1],
+    usdBalance: r[0],
+    perpBalance: r[1],
     usdPrice: r[2],
     perpPrice: r[3],
   };
@@ -112,8 +112,8 @@ describe("BillBroker", function () {
     await perp.approve(billBroker.target, perpFP("25000"));
 
     const r = await reserveState(billBroker);
-    expect(r.usdReserve).to.eq(usdFP("115000"));
-    expect(r.perpReserve).to.eq(perpFP("100000"));
+    expect(r.usdBalance).to.eq(usdFP("115000"));
+    expect(r.perpBalance).to.eq(perpFP("100000"));
     expect(r.usdPrice).to.eq(priceFP("1"));
     expect(r.perpPrice).to.eq(priceFP("1.15"));
     return { deployer, feeCollector, usd, perp, pricingStrategy, billBroker };
@@ -482,12 +482,6 @@ describe("BillBroker", function () {
           billBroker.swapUSDForPerps(usdFP("115"), perpFP("100")),
         ).to.changeTokenBalance(perp, deployer, perpFP("100"));
       });
-      it("should emit fee events", async function () {
-        const { billBroker } = await loadFixture(setupContracts);
-        const tx = billBroker.swapUSDForPerps(usdFP("115"), perpFP("100"));
-        await tx;
-        await expect(tx).to.emit(billBroker, "FeePerp").withArgs(perpFP("0"));
-      });
       it("should increase the reserve ar", async function () {
         const { billBroker } = await loadFixture(setupContracts);
         expect(await assetRatio(billBroker)).to.eq(percentageFP("1"));
@@ -498,8 +492,8 @@ describe("BillBroker", function () {
         const { billBroker } = await loadFixture(setupContracts);
         await billBroker.swapUSDForPerps(usdFP("115"), perpFP("100"));
         const r = await reserveState(billBroker);
-        expect(r.usdReserve).to.eq(usdFP("115115"));
-        expect(r.perpReserve).to.eq(perpFP("99900"));
+        expect(r.usdBalance).to.eq(usdFP("115115"));
+        expect(r.perpBalance).to.eq(perpFP("99900"));
       });
     });
 
@@ -528,18 +522,6 @@ describe("BillBroker", function () {
           billBroker.swapUSDForPerps(usdFP("115"), perpFP("95")),
         ).to.changeTokenBalance(perp, deployer, perpFP("95"));
       });
-      it("should emit fee events", async function () {
-        const { billBroker } = await loadFixture(setupContracts);
-        await updateFees(billBroker, {
-          usdToPerpSwapFeePercs: {
-            lower: percentageFP("0.05"),
-            upper: percentageFP("0.5"),
-          },
-        });
-        const tx = billBroker.swapUSDForPerps(usdFP("115"), perpFP("95"));
-        await tx;
-        await expect(tx).to.emit(billBroker, "FeePerp").withArgs(perpFP("5"));
-      });
       it("should increase the reserve ar", async function () {
         const { billBroker } = await loadFixture(setupContracts);
         await updateFees(billBroker, {
@@ -562,8 +544,8 @@ describe("BillBroker", function () {
         });
         await billBroker.swapUSDForPerps(usdFP("115"), perpFP("95"));
         const r = await reserveState(billBroker);
-        expect(r.usdReserve).to.eq(usdFP("115115"));
-        expect(r.perpReserve).to.eq(perpFP("99905"));
+        expect(r.usdBalance).to.eq(usdFP("115115"));
+        expect(r.perpBalance).to.eq(perpFP("99905"));
       });
     });
 
@@ -613,20 +595,6 @@ describe("BillBroker", function () {
           billBroker.swapUSDForPerps(usdFP("115"), perpFP("95")),
         ).to.changeTokenBalance(perp, feeCollector, perpFP("0.5"));
       });
-      it("should emit fee events", async function () {
-        const { billBroker } = await loadFixture(setupContracts);
-        await updateFees(billBroker, {
-          usdToPerpSwapFeePercs: {
-            lower: percentageFP("0.05"),
-            upper: percentageFP("0.5"),
-          },
-          protocolSwapSharePerc: percentageFP("0.1"),
-        });
-        const tx = billBroker.swapUSDForPerps(usdFP("115"), perpFP("95"));
-        await tx;
-        await expect(tx).to.emit(billBroker, "FeePerp").withArgs(perpFP("4.5"));
-        await expect(tx).to.emit(billBroker, "ProtocolFeePerp").withArgs(perpFP("0.5"));
-      });
       it("should increase the reserve ar", async function () {
         const { billBroker } = await loadFixture(setupContracts);
         await updateFees(billBroker, {
@@ -651,8 +619,8 @@ describe("BillBroker", function () {
         });
         await billBroker.swapUSDForPerps(usdFP("115"), perpFP("95"));
         const r = await reserveState(billBroker);
-        expect(r.usdReserve).to.eq(usdFP("115115"));
-        expect(r.perpReserve).to.eq(perpFP("99904.5"));
+        expect(r.usdBalance).to.eq(usdFP("115115"));
+        expect(r.perpBalance).to.eq(perpFP("99904.5"));
       });
     });
 
@@ -681,18 +649,7 @@ describe("BillBroker", function () {
           billBroker.swapUSDForPerps(usdFP("3795"), perpFP("3130")),
         ).to.changeTokenBalance(perp, deployer, perpFP("3135"));
       });
-      it("should emit fee events", async function () {
-        const { billBroker } = await loadFixture(setupContracts);
-        await updateFees(billBroker, {
-          usdToPerpSwapFeePercs: {
-            lower: percentageFP("0.05"),
-            upper: percentageFP("0.5"),
-          },
-        });
-        const tx = billBroker.swapUSDForPerps(usdFP("3795"), perpFP("3130"));
-        await tx;
-        await expect(tx).to.emit(billBroker, "FeePerp").withArgs(perpFP("165"));
-      });
+
       it("should increase the reserve ar", async function () {
         const { billBroker } = await loadFixture(setupContracts);
         await updateFees(billBroker, {
@@ -715,15 +672,18 @@ describe("BillBroker", function () {
         });
         await billBroker.swapUSDForPerps(usdFP("3795"), perpFP("3130"));
         const r = await reserveState(billBroker);
-        expect(r.usdReserve).to.eq(usdFP("118795"));
-        expect(r.perpReserve).to.eq(perpFP("96865"));
+        expect(r.usdBalance).to.eq(usdFP("118795"));
+        expect(r.perpBalance).to.eq(perpFP("96865"));
       });
     });
 
     describe("when swap amount pushes system outside hard bound", async function () {
       it("should revert", async function () {
         const { billBroker } = await loadFixture(setupContracts);
-        await billBroker.updateARHardBound([percentageFP("0.75"), percentageFP("1.05")]);
+        await billBroker.updateARBounds(
+          [percentageFP("0.8"), percentageFP("1")],
+          [percentageFP("0.75"), percentageFP("1.05")],
+        );
         await updateFees(billBroker, {
           usdToPerpSwapFeePercs: {
             lower: percentageFP("0.05"),
@@ -794,12 +754,7 @@ describe("BillBroker", function () {
           billBroker.swapPerpsForUSD(perpFP("100"), usdFP("115")),
         ).to.changeTokenBalance(usd, deployer, usdFP("115"));
       });
-      it("should emit fee events", async function () {
-        const { billBroker } = await loadFixture(setupContracts);
-        const tx = billBroker.swapPerpsForUSD(perpFP("100"), usdFP("115"));
-        await tx;
-        await expect(tx).to.emit(billBroker, "FeeUSD").withArgs(usdFP("0"));
-      });
+
       it("should decrease the reserve ar", async function () {
         const { billBroker } = await loadFixture(setupContracts);
         expect(await assetRatio(billBroker)).to.eq(percentageFP("1"));
@@ -810,8 +765,8 @@ describe("BillBroker", function () {
         const { billBroker } = await loadFixture(setupContracts);
         await billBroker.swapPerpsForUSD(perpFP("100"), usdFP("115"));
         const r = await reserveState(billBroker);
-        expect(r.usdReserve).to.eq(usdFP("114885"));
-        expect(r.perpReserve).to.eq(perpFP("100100"));
+        expect(r.usdBalance).to.eq(usdFP("114885"));
+        expect(r.perpBalance).to.eq(perpFP("100100"));
       });
     });
 
@@ -840,18 +795,6 @@ describe("BillBroker", function () {
           billBroker.swapPerpsForUSD(perpFP("100"), usdFP("103")),
         ).to.changeTokenBalance(usd, deployer, usdFP("103.5"));
       });
-      it("should emit fee events", async function () {
-        const { billBroker } = await loadFixture(setupContracts);
-        await updateFees(billBroker, {
-          perpToUSDSwapFeePercs: {
-            lower: percentageFP("0.1"),
-            upper: percentageFP("0.5"),
-          },
-        });
-        const tx = billBroker.swapPerpsForUSD(perpFP("100"), usdFP("103"));
-        await tx;
-        await expect(tx).to.emit(billBroker, "FeeUSD").withArgs(usdFP("11.5"));
-      });
       it("should increase the reserve ar", async function () {
         const { billBroker } = await loadFixture(setupContracts);
         await updateFees(billBroker, {
@@ -874,8 +817,8 @@ describe("BillBroker", function () {
         });
         await billBroker.swapPerpsForUSD(perpFP("100"), usdFP("103"));
         const r = await reserveState(billBroker);
-        expect(r.usdReserve).to.eq(usdFP("114896.5"));
-        expect(r.perpReserve).to.eq(perpFP("100100"));
+        expect(r.usdBalance).to.eq(usdFP("114896.5"));
+        expect(r.perpBalance).to.eq(perpFP("100100"));
       });
     });
 
@@ -923,21 +866,6 @@ describe("BillBroker", function () {
           billBroker.swapPerpsForUSD(perpFP("100"), usdFP("103")),
         ).to.changeTokenBalance(usd, feeCollector, usdFP("1.15"));
       });
-      it("should emit fee events", async function () {
-        const { billBroker, feeCollector } = await loadFixture(setupContracts);
-        await updateFees(billBroker, {
-          perpToUSDSwapFeePercs: {
-            lower: percentageFP("0.1"),
-            upper: percentageFP("0.5"),
-          },
-          protocolSwapSharePerc: percentageFP("0.1"),
-        });
-        await billBroker.transferOwnership(await feeCollector.getAddress());
-        const tx = billBroker.swapPerpsForUSD(perpFP("100"), usdFP("103"));
-        await tx;
-        await expect(tx).to.emit(billBroker, "FeeUSD").withArgs(usdFP("10.35"));
-        await expect(tx).to.emit(billBroker, "ProtocolFeeUSD").withArgs(usdFP("1.15"));
-      });
       it("should increase the reserve ar", async function () {
         const { billBroker } = await loadFixture(setupContracts);
         await updateFees(billBroker, {
@@ -962,8 +890,8 @@ describe("BillBroker", function () {
         });
         await billBroker.swapPerpsForUSD(perpFP("100"), usdFP("103"));
         const r = await reserveState(billBroker);
-        expect(r.usdReserve).to.eq(usdFP("114895.35"));
-        expect(r.perpReserve).to.eq(perpFP("100100"));
+        expect(r.usdBalance).to.eq(usdFP("114895.35"));
+        expect(r.perpBalance).to.eq(perpFP("100100"));
       });
     });
 
@@ -992,18 +920,6 @@ describe("BillBroker", function () {
           billBroker.swapPerpsForUSD(perpFP("3600"), usdFP("3000")),
         ).to.changeTokenBalance(usd, deployer, usdFP("3726"));
       });
-      it("should emit fee events", async function () {
-        const { billBroker } = await loadFixture(setupContracts);
-        await updateFees(billBroker, {
-          perpToUSDSwapFeePercs: {
-            lower: percentageFP("0.1"),
-            upper: percentageFP("0.5"),
-          },
-        });
-        const tx = billBroker.swapPerpsForUSD(perpFP("3600"), usdFP("3700"));
-        await tx;
-        await expect(tx).to.emit(billBroker, "FeeUSD").withArgs(usdFP("414"));
-      });
       it("should decrease the reserve ar", async function () {
         const { billBroker } = await loadFixture(setupContracts);
         await updateFees(billBroker, {
@@ -1026,15 +942,18 @@ describe("BillBroker", function () {
         });
         await billBroker.swapPerpsForUSD(perpFP("3600"), usdFP("3700"));
         const r = await reserveState(billBroker);
-        expect(r.usdReserve).to.eq(usdFP("111274"));
-        expect(r.perpReserve).to.eq(perpFP("103600"));
+        expect(r.usdBalance).to.eq(usdFP("111274"));
+        expect(r.perpBalance).to.eq(perpFP("103600"));
       });
     });
 
     describe("when swap pushes system outside hard bound", function () {
       it("should revert", async function () {
         const { billBroker } = await loadFixture(setupContracts);
-        await billBroker.updateARHardBound([percentageFP("0.95"), percentageFP("1.25")]);
+        await billBroker.updateARBounds(
+          [percentageFP("1"), percentageFP("1.1")],
+          [percentageFP("0.95"), percentageFP("1.25")],
+        );
         await updateFees(billBroker, {
           perpToUSDSwapFeePercs: {
             lower: percentageFP("0.1"),

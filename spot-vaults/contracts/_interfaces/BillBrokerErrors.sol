@@ -13,7 +13,7 @@ error InvalidPerc();
 /// @notice Expected Senior CDR bound to be more than 1.0 or 100%.
 error InvalidSeniorCDRBound();
 
-/// @notice Expect AR lower bound to be under 1.0 and upper bound to be above 1.0.
+/// @notice Expect AR lower bound to under the upper bound.
 error InvalidARBound();
 
 /// @notice Expected pre and post swap AR delta to be non-increasing or non-decreasing.

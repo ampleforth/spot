@@ -8,7 +8,7 @@ export const perpFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a),
 export const percentageFP = (a: string): BigInt =>
   ethers.parseUnits(sciParseFloat(a), 18);
 export const priceFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 18);
-export const lpAmtFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 18);
+export const lpAmtFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 24);
 export const oracleAnsFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 8);
 
 export class DMock {

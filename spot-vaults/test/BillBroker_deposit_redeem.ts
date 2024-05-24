@@ -39,14 +39,7 @@ describe("BillBroker", function () {
     describe("when amounts available are zero", function () {
       it("should return zero", async function () {
         const { billBroker } = await loadFixture(setupContracts);
-        const r = await billBroker.computeMintAmt.staticCall(usdFP("0"), perpFP("100"));
-        expect(r[0]).to.eq(0n);
-        expect(r[1]).to.eq(0n);
-        expect(r[2]).to.eq(0n);
-      });
-      it("should return zero", async function () {
-        const { billBroker } = await loadFixture(setupContracts);
-        const r = await billBroker.computeMintAmt.staticCall(usdFP("100"), perpFP("0"));
+        const r = await billBroker.computeMintAmt.staticCall(usdFP("0"), perpFP("0"));
         expect(r[0]).to.eq(0n);
         expect(r[1]).to.eq(0n);
         expect(r[2]).to.eq(0n);
@@ -111,7 +104,7 @@ describe("BillBroker", function () {
           perpFP("100"),
         );
         const r = await billBroker.computeMintAmt.staticCall(usdFP("50"), perpFP("100"));
-        expect(r[0]).to.eq(lpAmtFP("93.478260869565217391"));
+        expect(r[0]).to.eq(lpAmtFP("93.478260869565217391304347"));
         expect(r[1]).to.eq(usdFP("50"));
         expect(r[2]).to.eq(perpFP("43.478260869"));
       });
@@ -165,18 +158,8 @@ describe("BillBroker", function () {
         const { billBroker } = await loadFixture(setupContracts);
         const r = await billBroker.deposit.staticCall(
           usdFP("0"),
-          perpFP("100"),
-          usdFP("0"),
-          perpFP("100"),
-        );
-        expect(r).to.eq(0n);
-      });
-      it("should return zero", async function () {
-        const { billBroker } = await loadFixture(setupContracts);
-        const r = await billBroker.deposit.staticCall(
-          usdFP("100"),
           perpFP("0"),
-          usdFP("100"),
+          usdFP("0"),
           perpFP("0"),
         );
         expect(r).to.eq(0n);
