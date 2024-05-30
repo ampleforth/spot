@@ -44,12 +44,12 @@ describe("BillBroker", function () {
       expect(await billBroker.keeper()).to.eq(await deployer.getAddress());
 
       const arHardBound = await billBroker.arHardBound();
-      expect(arHardBound.upper).to.eq(percentageFP("1.25"));
-      expect(arHardBound.lower).to.eq(percentageFP("0.75"));
+      expect(arHardBound.upper).to.eq(ethers.MaxUint256);
+      expect(arHardBound.lower).to.eq(0n);
 
       const arSoftBound = await billBroker.arSoftBound();
-      expect(arSoftBound.upper).to.eq(percentageFP("1.1"));
-      expect(arSoftBound.lower).to.eq(percentageFP("0.9"));
+      expect(arSoftBound.upper).to.eq(ethers.MaxUint256);
+      expect(arSoftBound.lower).to.eq(0n);
 
       const fees = await billBroker.fees();
       expect(fees.mintFeePerc).to.eq(0);
@@ -60,8 +60,8 @@ describe("BillBroker", function () {
       expect(fees.usdToPerpSwapFeePercs.upper).to.eq(percentageFP("1"));
       expect(fees.protocolSwapSharePerc).to.eq(0);
 
-      expect(await billBroker.usdReserve()).to.eq(usdFP("0"));
-      expect(await billBroker.perpReserve()).to.eq(perpFP("0"));
+      expect(await billBroker.usdBalance()).to.eq(0n);
+      expect(await billBroker.perpBalance()).to.eq(0n);
     });
   });
 
@@ -210,13 +210,16 @@ describe("BillBroker", function () {
     });
   });
 
-  describe("#updateARHardBound", function () {
+  describe("#updateARBounds", function () {
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
         const { billBroker } = await loadFixture(setupContracts);
         await billBroker.renounceOwnership();
         await expect(
-          billBroker.updateARHardBound([percentageFP("0.9"), percentageFP("1.1")]),
+          billBroker.updateARBounds(
+            [percentageFP("0.9"), percentageFP("1.1")],
+            [percentageFP("0.8"), percentageFP("1.2")],
+          ),
         ).to.be.revertedWith("Ownable: caller is not the owner");
       });
     });
@@ -225,66 +228,40 @@ describe("BillBroker", function () {
       it("should revert", async function () {
         const { billBroker } = await loadFixture(setupContracts);
         await expect(
-          billBroker.updateARHardBound([percentageFP("1.01"), percentageFP("1.1")]),
+          billBroker.updateARBounds(
+            [percentageFP("1.1"), percentageFP("1.0")],
+            [percentageFP("0.8"), percentageFP("1.2")],
+          ),
         ).to.be.revertedWithCustomError(billBroker, "InvalidARBound");
       });
 
       it("should revert", async function () {
         const { billBroker } = await loadFixture(setupContracts);
         await expect(
-          billBroker.updateARHardBound([percentageFP("0.99"), percentageFP("0.999")]),
+          billBroker.updateARBounds(
+            [percentageFP("0.9"), percentageFP("1.1")],
+            [percentageFP("1.2"), percentageFP("0.8")],
+          ),
         ).to.be.revertedWithCustomError(billBroker, "InvalidARBound");
       });
 
       it("should revert", async function () {
         const { billBroker } = await loadFixture(setupContracts);
         await expect(
-          billBroker.updateARHardBound([percentageFP("1.01"), percentageFP("0.999")]),
-        ).to.be.revertedWithCustomError(billBroker, "InvalidARBound");
-      });
-    });
-
-    describe("when parameters are valid", function () {
-      it("should update bound", async function () {
-        const { billBroker } = await loadFixture(setupContracts);
-        await billBroker.updateARHardBound([percentageFP("0.5"), percentageFP("1.5")]);
-        const b = await billBroker.arHardBound();
-        expect(b.lower).to.eq(percentageFP("0.5"));
-        expect(b.upper).to.eq(percentageFP("1.5"));
-      });
-    });
-  });
-
-  describe("#updateARSoftBound", function () {
-    describe("when triggered by non-owner", function () {
-      it("should revert", async function () {
-        const { billBroker } = await loadFixture(setupContracts);
-        await billBroker.renounceOwnership();
-        await expect(
-          billBroker.updateARSoftBound([percentageFP("0.9"), percentageFP("1.1")]),
-        ).to.be.revertedWith("Ownable: caller is not the owner");
-      });
-    });
-
-    describe("when parameters are not valid", function () {
-      it("should revert", async function () {
-        const { billBroker } = await loadFixture(setupContracts);
-        await expect(
-          billBroker.updateARSoftBound([percentageFP("1.01"), percentageFP("1.1")]),
+          billBroker.updateARBounds(
+            [percentageFP("0.9"), percentageFP("0.8")],
+            [percentageFP("1.1"), percentageFP("1.2")],
+          ),
         ).to.be.revertedWithCustomError(billBroker, "InvalidARBound");
       });
 
       it("should revert", async function () {
         const { billBroker } = await loadFixture(setupContracts);
         await expect(
-          billBroker.updateARSoftBound([percentageFP("0.99"), percentageFP("0.999")]),
-        ).to.be.revertedWithCustomError(billBroker, "InvalidARBound");
-      });
-
-      it("should revert", async function () {
-        const { billBroker } = await loadFixture(setupContracts);
-        await expect(
-          billBroker.updateARSoftBound([percentageFP("1.01"), percentageFP("0.999")]),
+          billBroker.updateARBounds(
+            [percentageFP("0.8"), percentageFP("1.2")],
+            [percentageFP("0.9"), percentageFP("1.1")],
+          ),
         ).to.be.revertedWithCustomError(billBroker, "InvalidARBound");
       });
     });
@@ -292,10 +269,17 @@ describe("BillBroker", function () {
     describe("when parameters are valid", function () {
       it("should update bound", async function () {
         const { billBroker } = await loadFixture(setupContracts);
-        await billBroker.updateARSoftBound([percentageFP("0.75"), percentageFP("1.25")]);
-        const b = await billBroker.arSoftBound();
-        expect(b.lower).to.eq(percentageFP("0.75"));
-        expect(b.upper).to.eq(percentageFP("1.25"));
+        await billBroker.updateARBounds(
+          [percentageFP("0.9"), percentageFP("1.1")],
+          [percentageFP("0.8"), percentageFP("1.2")],
+        );
+        const b1 = await billBroker.arSoftBound();
+        expect(b1.lower).to.eq(percentageFP("0.9"));
+        expect(b1.upper).to.eq(percentageFP("1.1"));
+
+        const b2 = await billBroker.arHardBound();
+        expect(b2.lower).to.eq(percentageFP("0.8"));
+        expect(b2.upper).to.eq(percentageFP("1.2"));
       });
     });
   });
@@ -401,19 +385,19 @@ describe("BillBroker", function () {
     });
   });
 
-  describe("#usdReserve", function () {
+  describe("#usdBalance", function () {
     it("should return the reserve balance", async function () {
       const { billBroker, usd } = await loadFixture(setupContracts);
       await usd.mint(billBroker.target, usdFP("1246"));
-      expect(await billBroker.usdReserve()).to.eq(usdFP("1246"));
+      expect(await billBroker.usdBalance()).to.eq(usdFP("1246"));
     });
   });
 
-  describe("#perpReserve", function () {
+  describe("#perpBalance", function () {
     it("should return the reserve balance", async function () {
       const { billBroker, perp } = await loadFixture(setupContracts);
       await perp.mint(billBroker.target, perpFP("999"));
-      expect(await billBroker.perpReserve()).to.eq(perpFP("999"));
+      expect(await billBroker.perpBalance()).to.eq(perpFP("999"));
     });
   });
 
@@ -427,13 +411,13 @@ describe("BillBroker", function () {
       await pricingStrategy.mockMethod("usdPrice()", [priceFP("1"), true]);
       await pricingStrategy.mockMethod("perpPrice()", [priceFP("1.3"), true]);
       const r = {
-        usdReserve: await billBroker.usdReserve(),
-        perpReserve: await billBroker.perpReserve(),
+        usdBalance: await billBroker.usdBalance(),
+        perpBalance: await billBroker.perpBalance(),
         usdPrice: await billBroker.usdPrice.staticCall(),
         perpPrice: await billBroker.perpPrice.staticCall(),
       };
-      expect(r.usdReserve).to.eq(usdFP("115"));
-      expect(r.perpReserve).to.eq(perpFP("100"));
+      expect(r.usdBalance).to.eq(usdFP("115"));
+      expect(r.perpBalance).to.eq(perpFP("100"));
       expect(r.usdPrice).to.eq(priceFP("1"));
       expect(r.perpPrice).to.eq(priceFP("1.3"));
     });
@@ -442,21 +426,23 @@ describe("BillBroker", function () {
   describe("#computeUSDToPerpSwapFeePerc", function () {
     it("should compute the right fee perc", async function () {
       const { billBroker } = await loadFixture(setupContracts);
-      await billBroker.updateARHardBound([percentageFP("0.5"), percentageFP("1.5")]);
-      await billBroker.updateARSoftBound([percentageFP("0.75"), percentageFP("1.25")]);
+      await billBroker.updateARBounds(
+        [percentageFP("0.75"), percentageFP("1.25")],
+        [percentageFP("0.5"), percentageFP("1.5")],
+      );
 
       await billBroker.updateFees({
-        mintFeePerc: percentageFP("0"),
-        burnFeePerc: percentageFP("0"),
+        mintFeePerc: 0n,
+        burnFeePerc: 0n,
         perpToUSDSwapFeePercs: {
-          lower: percentageFP("0"),
-          upper: percentageFP("0"),
+          lower: 0n,
+          upper: 0n,
         },
         usdToPerpSwapFeePercs: {
           lower: percentageFP("0.05"),
           upper: percentageFP("1.5"),
         },
-        protocolSwapSharePerc: percentageFP("0"),
+        protocolSwapSharePerc: 0n,
       });
 
       await expect(
@@ -523,21 +509,23 @@ describe("BillBroker", function () {
   describe("#computePerpToUSDSwapFeePerc", function () {
     it("should compute the right fee perc", async function () {
       const { billBroker } = await loadFixture(setupContracts);
-      await billBroker.updateARHardBound([percentageFP("0.5"), percentageFP("1.5")]);
-      await billBroker.updateARSoftBound([percentageFP("0.75"), percentageFP("1.25")]);
+      await billBroker.updateARBounds(
+        [percentageFP("0.75"), percentageFP("1.25")],
+        [percentageFP("0.5"), percentageFP("1.5")],
+      );
 
       await billBroker.updateFees({
-        mintFeePerc: percentageFP("0"),
-        burnFeePerc: percentageFP("0"),
+        mintFeePerc: 0n,
+        burnFeePerc: 0n,
         perpToUSDSwapFeePercs: {
           lower: percentageFP("0.1"),
           upper: percentageFP("0.5"),
         },
         usdToPerpSwapFeePercs: {
-          lower: percentageFP("0"),
-          upper: percentageFP("0"),
+          lower: 0n,
+          upper: 0n,
         },
-        protocolSwapSharePerc: percentageFP("0"),
+        protocolSwapSharePerc: 0n,
       });
 
       await expect(

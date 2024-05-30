@@ -38,9 +38,9 @@ struct BillBrokerFees {
 /// @notice A data structure to represent the BillBroker's reserve state.
 struct ReserveState {
     /// @notice The reserve USD token balance.
-    uint256 usdReserve;
+    uint256 usdBalance;
     /// @notice The reserve perp token balance.
-    uint256 perpReserve;
+    uint256 perpBalance;
     /// @notice The price of USD tokens in dollars (or some common denomination).
     uint256 usdPrice;
     /// @notice The price of perp tokens in dollars (or some common denomination).

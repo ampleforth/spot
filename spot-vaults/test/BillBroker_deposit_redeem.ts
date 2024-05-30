@@ -1,7 +1,7 @@
 import { ethers, upgrades } from "hardhat";
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
-import { DMock, usdFP, perpFP, lpAmtFP, percentageFP } from "./helpers";
+import { DMock, usdFP, perpFP, lpAmtFP, percentageFP, priceFP } from "./helpers";
 
 describe("BillBroker", function () {
   async function setupContracts() {
@@ -17,8 +17,8 @@ describe("BillBroker", function () {
     const pricingStrategy = new DMock("SpotAppraiser");
     await pricingStrategy.deploy();
     await pricingStrategy.mockMethod("decimals()", [18]);
-    await pricingStrategy.mockMethod("perpPrice()", [0, false]);
-    await pricingStrategy.mockMethod("usdPrice()", [0, false]);
+    await pricingStrategy.mockMethod("perpPrice()", [priceFP("1.15"), true]);
+    await pricingStrategy.mockMethod("usdPrice()", [priceFP("1"), true]);
 
     const BillBroker = await ethers.getContractFactory("BillBroker");
     const billBroker = await upgrades.deployProxy(
@@ -28,6 +28,19 @@ describe("BillBroker", function () {
         initializer: "init(string,string,address,address,address)",
       },
     );
+    await billBroker.updateFees({
+      mintFeePerc: 0n,
+      burnFeePerc: 0n,
+      perpToUSDSwapFeePercs: {
+        lower: 0n,
+        upper: 0n,
+      },
+      usdToPerpSwapFeePercs: {
+        lower: 0n,
+        upper: 0n,
+      },
+      protocolSwapSharePerc: 0n,
+    });
     await usd.mint(await deployer.getAddress(), usdFP("2000"));
     await perp.mint(await deployer.getAddress(), perpFP("2000"));
     await usd.mint(await otherUser.getAddress(), usdFP("2000"));
@@ -39,14 +52,7 @@ describe("BillBroker", function () {
     describe("when amounts available are zero", function () {
       it("should return zero", async function () {
         const { billBroker } = await loadFixture(setupContracts);
-        const r = await billBroker.computeMintAmt.staticCall(usdFP("0"), perpFP("100"));
-        expect(r[0]).to.eq(0n);
-        expect(r[1]).to.eq(0n);
-        expect(r[2]).to.eq(0n);
-      });
-      it("should return zero", async function () {
-        const { billBroker } = await loadFixture(setupContracts);
-        const r = await billBroker.computeMintAmt.staticCall(usdFP("100"), perpFP("0"));
+        const r = await billBroker.computeMintAmt.staticCall(0n, 0n);
         expect(r[0]).to.eq(0n);
         expect(r[1]).to.eq(0n);
         expect(r[2]).to.eq(0n);
@@ -111,7 +117,7 @@ describe("BillBroker", function () {
           perpFP("100"),
         );
         const r = await billBroker.computeMintAmt.staticCall(usdFP("50"), perpFP("100"));
-        expect(r[0]).to.eq(lpAmtFP("93.478260869565217391"));
+        expect(r[0]).to.eq(lpAmtFP("93.478260869565217391304347"));
         expect(r[1]).to.eq(usdFP("50"));
         expect(r[2]).to.eq(perpFP("43.478260869"));
       });
@@ -147,6 +153,72 @@ describe("BillBroker", function () {
         expect(r[2]).to.eq(perpFP("100"));
       });
     });
+
+    describe("when the pool has only usd", function () {
+      it("should compute mint amount", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("100"),
+          usdFP("115"),
+          perpFP("100"),
+        );
+
+        await usd.approve(billBroker.target, usdFP("115"));
+        await billBroker.swapUSDForPerps(usdFP("115"), 0n);
+        expect(await perp.balanceOf(billBroker.target)).to.eq(0n);
+
+        const s = await billBroker.reserveState.staticCall();
+        expect(
+          await billBroker.assetRatio({
+            usdBalance: s[0],
+            perpBalance: s[1],
+            usdPrice: s[2],
+            perpPrice: s[3],
+          }),
+        ).to.eq(ethers.MaxUint256);
+
+        const r = await billBroker.computeMintAmt.staticCall(usdFP("100"), 0n);
+        expect(r[0]).to.eq(lpAmtFP("93.478260869565217391304347"));
+        expect(r[1]).to.eq(usdFP("100"));
+        expect(r[2]).to.eq(0n);
+      });
+    });
+
+    describe("when the pool has only perps", function () {
+      it("should compute mint amount", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("100"),
+          usdFP("115"),
+          perpFP("100"),
+        );
+
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.swapPerpsForUSD(perpFP("100"), 0n);
+        expect(await usd.balanceOf(billBroker.target)).to.eq(0n);
+
+        const s = await billBroker.reserveState.staticCall();
+        expect(
+          await billBroker.assetRatio({
+            usdBalance: s[0],
+            perpBalance: s[1],
+            usdPrice: s[2],
+            perpPrice: s[3],
+          }),
+        ).to.eq(0);
+
+        const r = await billBroker.computeMintAmt.staticCall(0n, perpFP("100"));
+        expect(r[0]).to.eq(lpAmtFP("107.5"));
+        expect(r[1]).to.eq(0n);
+        expect(r[2]).to.eq(perpFP("100"));
+      });
+    });
   });
 
   describe("#deposit", function () {
@@ -163,22 +235,7 @@ describe("BillBroker", function () {
     describe("when amounts available are zero", function () {
       it("should return zero", async function () {
         const { billBroker } = await loadFixture(setupContracts);
-        const r = await billBroker.deposit.staticCall(
-          usdFP("0"),
-          perpFP("100"),
-          usdFP("0"),
-          perpFP("100"),
-        );
-        expect(r).to.eq(0n);
-      });
-      it("should return zero", async function () {
-        const { billBroker } = await loadFixture(setupContracts);
-        const r = await billBroker.deposit.staticCall(
-          usdFP("100"),
-          perpFP("0"),
-          usdFP("100"),
-          perpFP("0"),
-        );
+        const r = await billBroker.deposit.staticCall(0n, 0n, 0n, 0n);
         expect(r).to.eq(0n);
       });
     });
@@ -359,6 +416,76 @@ describe("BillBroker", function () {
         ).to.changeTokenBalance(billBroker, deployer, lpAmtFP("193.5"));
       });
     });
+
+    describe("when the pool has only usd", function () {
+      it("should mint lp tokens", async function () {
+        const { billBroker, usd, perp, deployer } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("100"),
+          usdFP("115"),
+          perpFP("100"),
+        );
+
+        await usd.approve(billBroker.target, usdFP("115"));
+        await billBroker.swapUSDForPerps(usdFP("115"), 0n);
+        expect(await perp.balanceOf(billBroker.target)).to.eq(0n);
+
+        const s = await billBroker.reserveState.staticCall();
+        expect(
+          await billBroker.assetRatio({
+            usdBalance: s[0],
+            perpBalance: s[1],
+            usdPrice: s[2],
+            perpPrice: s[3],
+          }),
+        ).to.eq(ethers.MaxUint256);
+
+        await usd.approve(billBroker.target, usdFP("115"));
+        await expect(() =>
+          billBroker.deposit(usdFP("100"), 0n, usdFP("100"), 0n),
+        ).to.changeTokenBalance(
+          billBroker,
+          deployer,
+          lpAmtFP("93.478260869565217391304347"),
+        );
+      });
+    });
+
+    describe("when the pool has only perps", function () {
+      it("should mint lp tokens", async function () {
+        const { billBroker, usd, perp, deployer } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("100"),
+          usdFP("115"),
+          perpFP("100"),
+        );
+
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.swapPerpsForUSD(perpFP("100"), 0n);
+        expect(await usd.balanceOf(billBroker.target)).to.eq(0n);
+
+        const s = await billBroker.reserveState.staticCall();
+        expect(
+          await billBroker.assetRatio({
+            usdBalance: s[0],
+            perpBalance: s[1],
+            usdPrice: s[2],
+            perpPrice: s[3],
+          }),
+        ).to.eq(0);
+
+        await perp.approve(billBroker.target, perpFP("100"));
+        await expect(() =>
+          billBroker.deposit(usdFP("100"), perpFP("100"), 0n, perpFP("100")),
+        ).to.changeTokenBalance(billBroker, deployer, lpAmtFP("107.5"));
+      });
+    });
   });
 
   describe("#computeRedemptionAmts", function () {
@@ -440,6 +567,70 @@ describe("BillBroker", function () {
         const r = await billBroker.computeRedemptionAmts.staticCall(lpAmtFP("215"));
         expect(r[0]).to.eq(usdFP("103.5"));
         expect(r[1]).to.eq(perpFP("90"));
+      });
+    });
+
+    describe("when the pool has only usd", function () {
+      it("should return redemption amounts", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("100"),
+          usdFP("115"),
+          perpFP("100"),
+        );
+
+        await usd.approve(billBroker.target, usdFP("115"));
+        await billBroker.swapUSDForPerps(usdFP("115"), 0n);
+        expect(await perp.balanceOf(billBroker.target)).to.eq(0n);
+
+        const s = await billBroker.reserveState.staticCall();
+        expect(
+          await billBroker.assetRatio({
+            usdBalance: s[0],
+            perpBalance: s[1],
+            usdPrice: s[2],
+            perpPrice: s[3],
+          }),
+        ).to.eq(ethers.MaxUint256);
+
+        const r = await billBroker.computeRedemptionAmts.staticCall(lpAmtFP("100"));
+        expect(r[0]).to.eq(usdFP("106.976744"));
+        expect(r[1]).to.eq(0n);
+      });
+    });
+
+    describe("when the pool has only perps", function () {
+      it("should return redemption amounts", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("100"),
+          usdFP("115"),
+          perpFP("100"),
+        );
+
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.swapPerpsForUSD(perpFP("100"), 0n);
+        expect(await usd.balanceOf(billBroker.target)).to.eq(0n);
+
+        const s = await billBroker.reserveState.staticCall();
+        expect(
+          await billBroker.assetRatio({
+            usdBalance: s[0],
+            perpBalance: s[1],
+            usdPrice: s[2],
+            perpPrice: s[3],
+          }),
+        ).to.eq(0);
+
+        const r = await billBroker.computeRedemptionAmts.staticCall(lpAmtFP("100"));
+        expect(r[0]).to.eq(0n);
+        expect(r[1]).to.eq(perpFP("93.023255813"));
       });
     });
   });
@@ -632,6 +823,80 @@ describe("BillBroker", function () {
           deployer,
           perpFP("100"),
         );
+      });
+    });
+
+    describe("when the pool has only usd", function () {
+      it("should burn lp tokens", async function () {
+        const { billBroker, usd, perp, deployer } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("100"),
+          usdFP("115"),
+          perpFP("100"),
+        );
+
+        await usd.approve(billBroker.target, usdFP("115"));
+        await billBroker.swapUSDForPerps(usdFP("115"), 0n);
+        expect(await perp.balanceOf(billBroker.target)).to.eq(0n);
+
+        const s = await billBroker.reserveState.staticCall();
+        expect(
+          await billBroker.assetRatio({
+            usdBalance: s[0],
+            perpBalance: s[1],
+            usdPrice: s[2],
+            perpPrice: s[3],
+          }),
+        ).to.eq(ethers.MaxUint256);
+
+        const perpBal = await perp.balanceOf(await deployer.getAddress());
+        await expect(() => billBroker.redeem(lpAmtFP("100"))).to.changeTokenBalance(
+          usd,
+          deployer,
+          usdFP("106.976744"),
+        );
+        const perpBal_ = await perp.balanceOf(await deployer.getAddress());
+        expect(perpBal_ - perpBal).to.eq(0n);
+      });
+    });
+
+    describe("when the pool has only perps", function () {
+      it("should burn lp tokens", async function () {
+        const { billBroker, usd, perp, deployer } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("100"),
+          usdFP("115"),
+          perpFP("100"),
+        );
+
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.swapPerpsForUSD(perpFP("100"), 0n);
+        expect(await usd.balanceOf(billBroker.target)).to.eq(0n);
+
+        const s = await billBroker.reserveState.staticCall();
+        expect(
+          await billBroker.assetRatio({
+            usdBalance: s[0],
+            perpBalance: s[1],
+            usdPrice: s[2],
+            perpPrice: s[3],
+          }),
+        ).to.eq(0);
+
+        const usdBal = await usd.balanceOf(await deployer.getAddress());
+        await expect(() => billBroker.redeem(lpAmtFP("100"))).to.changeTokenBalance(
+          perp,
+          deployer,
+          perpFP("93.023255813"),
+        );
+        const usdBal_ = await usd.balanceOf(await deployer.getAddress());
+        expect(usdBal_ - usdBal).to.eq(0n);
       });
     });
   });
