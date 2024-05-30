@@ -19,15 +19,6 @@ type BondController @entity {
   " bond issuer used to create the bond "
   issuer: BondIssuer
 
-  " address of the owner "
-  owner: String!
-
-  " deposit limit of the bond "
-  depositLimit: BigInt!
-  
-  " fee percentage collected by bond owner "
-  feePerc: BigDecimal!
-
   " reference to the collateral token "
   collateral: Token!
 
@@ -85,6 +76,41 @@ type Tranche @entity {
   totalSupplyAtMaturity: BigDecimal
 }
 
+type AccountTrancheValue @entity {
+  " Equals to: <accountAddress>-<trancheAddress>"
+  id: ID!
+
+  " if the tranche's parent bond has matured "
+  isBondMature: Boolean!
+
+  " if the tranche has the most senior payout "
+  isSeniorTranche: Boolean!
+
+  " total supply of tranche tokens "
+  trancheSupply: BigDecimal!
+
+  " parent bond's collateral balance "
+  bondCollateralBalance: BigDecimal!
+
+  " parent bond's total debt "
+  bondTotalDebt: BigDecimal!
+
+  " collateral claimable by tranche "
+  trancheClaim: BigDecimal!
+
+  " the tranche cdr "
+  trancheCDR: BigDecimal!
+
+  " parent bond's cdr "
+  bondCDR: BigDecimal!
+
+  " price of each tranche token "
+  tranchePrice: BigDecimal!
+
+  " total value of account's tranche tokens"
+  trancheValue: BigDecimal!
+}
+
 type Token @entity {
   " token address "
   id: ID!
@@ -136,82 +162,44 @@ type Account @entity {
   balances: [AccountBalance!]! @derivedFrom(field: "account")
 }
 
-
 type BondIssuer @entity {
   " issuer address "
   id: ID!
   
-  " the minimum time between issues "
-  minIssueTimeIntervalSec: BigInt!
-  
-  " issue window offset time "
-  issueWindowOffsetSec: BigInt!
-
-  " maximum bond duration "
-  maxMaturityDuration: BigInt!
-
   " timestamp of last issue "
   lastIssueTimestamp: BigInt
-
-  " Block number of last issue "
-  lastIssueBlock: BigInt
 
   " list of bonds issued by the issuer "
   issuedBonds: [BondController!] @derivedFrom(field: "issuer")
 }
 
-
 type PerpetualTranche @entity {
-  " perp token address "
+  " perp token store reference "
   id: ID!
 
   " reference to the ERC20 token attributes "
   token: Token!
 
   " reference to the collateral "
-  collateral: Token!
+  underlying: Token!
   
-  " address of the owner "
-  owner: String!
-
-  " address of the keeper "
-  keeper: String!
-
-  " address of the bond issuer "
-  issuer: BondIssuer!
-
-  " address of the fee strategy "
-  feeStrategy: String!
-
-  " address of the pricing strategy "
-  pricingStrategy: String!
-
-  " address of the discount strategy "
-  discountStrategy: String!
-
-  " allowed time to maturity before tranche is moved to the holding pen "
-  minTrancheMaturitySec: BigInt!
-
-  " allowed time from maturity after which tranche can be accepted "
-  maxTrancheMaturitySec: BigInt!
-
-  " supply ceiling "
-  maxSupply: BigDecimal!
-
-  " maximum mint allowed per tranche "
-  maxMintAmtPerTranche: BigDecimal!
-
-  " percentage of reserve value allowed to be held in the holding pen "
-  matureValueTargetPerc: BigDecimal!
-
   " reference to the current deposit bond "
   depositBond: BondController
 
-  " the virtual holding pen tranche balance "
-  matureTrancheBalance: BigDecimal!
-
   " reference to assets held in the reserve "
   reserves: [PerpetualTrancheReserveAsset!]! @derivedFrom(field: "perp")
+
+  " addresses of assets currently in the reserve "
+  activeReserves: [PerpetualTrancheReserveAsset!]!
+
+  " the current tvl based on the active reserves "
+  tvl: BigDecimal!
+
+  " the price of each perp token "
+  price: BigDecimal!
+
+  " reference to the daily stats "
+  dailyStats: [PerpetualTrancheDailyStat!]! @derivedFrom(field: "perp")
 }
 
 type PerpetualTrancheReserveAsset @entity {
@@ -224,13 +212,47 @@ type PerpetualTrancheReserveAsset @entity {
   " reference to the token "
   token: Token!
 
-  " reference to the underlying tranche "
+  " reference to the reserve tranche "
   tranche: Tranche
+
+  " Value of the reserve tranche "
+  value: AccountTrancheValue
 
   " balance held by the reserve "
   balance: BigDecimal!
 }
 
+type PerpetualTrancheDailyStat @entity {
+  " Equals to: <perpTokenAddress>-<timestamp>"
+  id: ID!
+
+  " reference to the perpetual tranche token "
+  perp: PerpetualTranche!
+
+  " the timestamp of the given day "
+  timestamp: BigInt!
+
+  " the total perp tokens minted on the given day  "
+  totalMints: BigDecimal!
+
+  " the total perp tokens redeemed on the given day  "
+  totalRedemptions: BigDecimal!
+
+  " the total value of perp tokens minted on the given day  "
+  totalMintValue: BigDecimal!
+
+  " the total value of perp tokens redeemed on the given day  "
+  totalRedemptionValue: BigDecimal!
+
+  " the tvl on the given day "
+  tvl: BigDecimal!
+
+  " the price on the given day "
+  price: BigDecimal!
+
+  " the perp token supply on the given day "
+  totalSupply: BigDecimal!
+}
 
 type RolloverVault @entity {
   " vault token address "
@@ -245,20 +267,32 @@ type RolloverVault @entity {
   " reference to the perp on which rollovers are performed"
   perp: PerpetualTranche!
 
-  " address of the owner "
-  owner: String!
-
   " reference to assets held in by the vault "
   assets: [RolloverVaultAsset!]! @derivedFrom(field: "vault")
 
-  " the total fixed mc share of underlying tokens in the system "
-  totalUnderlyingScaledHeld: BigDecimal!
+  " addresses of assets currently in the reserve "
+  activeReserves: [RolloverVaultAsset!]!
+
+  " the total fixed mc share of underlying tokens deposited into the system "
+  totalScaledUnderlyingDeposited: BigDecimal!
 
   " the total fixed mc share of underlying tokens deposited by each user "
-  scaledUnderlyingBalances: [ScaledUnderlyingVaultBalance!]! @derivedFrom(field: "vault")
+  scaledUnderlyingBalances: [ScaledUnderlyingVaultDepositorBalance!]! @derivedFrom(field: "vault")
+
+  " the current tvl based on the active reserves "
+  tvl: BigDecimal!
+
+  " the current rebase multiplier "
+  rebaseMultiplier: BigDecimal!
+
+  " the price of each token "
+  price: BigDecimal!
+
+  " reference to the daily stats "
+  dailyStats: [RolloverVaultDailyStat!]! @derivedFrom(field: "vault")
 }
 
-type ScaledUnderlyingVaultBalance @entity {
+type ScaledUnderlyingVaultDepositorBalance @entity {
   id: ID!
   vault: RolloverVault!
   account: Bytes!
@@ -280,4 +314,45 @@ type RolloverVaultAsset @entity {
 
   " balance held by the vault "
   balance: BigDecimal!
+
+  " Value of the reserve tranche "
+  value: AccountTrancheValue
+}
+
+type RolloverVaultDailyStat @entity {
+  " Equals to: <vaultAddress>-<timestamp>"
+  id: ID!
+
+  " reference to the rollover vault "
+  vault: RolloverVault!
+
+  " the timestamp of the given day "
+  timestamp: BigInt!
+
+  " the total vault notes minted on the given day  "
+  totalMints: BigDecimal!
+
+  " the total vault notes redeemed on the given day  "
+  totalRedemptions: BigDecimal!
+
+  " the total value of vault notes minted on the given day  "
+  totalMintValue: BigDecimal!
+
+  " the total value of vault notes redeemed on the given day  "
+  totalRedemptionValue: BigDecimal!
+
+  " the tvl on the given day "
+  tvl: BigDecimal!
+
+  " the rebase multiplier on the given day "
+  rebaseMultiplier: BigDecimal!
+
+  " the price on the given day "
+  price: BigDecimal!
+
+  " the vault note supply on the given day "
+  totalSupply: BigDecimal!
+
+  " the total value of swaps on the given day "
+  totalSwapValue: BigDecimal!
 }

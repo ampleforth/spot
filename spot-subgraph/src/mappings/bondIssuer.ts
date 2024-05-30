@@ -8,7 +8,6 @@ export function handleBondIssued(event: BondIssued): void {
 
   let issuer = fetchBondIssuer(event.address)
   issuer.lastIssueTimestamp = event.block.timestamp
-  issuer.lastIssueBlock = event.block.number
   issuer.save()
 
   let bond = fetchBond(event.params.bond)
