@@ -138,4 +138,7 @@ interface IPerpetualTranche is IERC20Upgradeable {
 
     /// @notice Updates time dependent storage state.
     function updateState() external;
+
+    /// @return The system's current deviation ratio.
+    function deviationRatio() external returns (uint256);
 }

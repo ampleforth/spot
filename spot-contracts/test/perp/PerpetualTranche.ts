@@ -15,6 +15,7 @@ import {
   TimeHelpers,
   rebase,
   advancePerpQueueToRollover,
+  toPercFixedPtAmt,
 } from "../helpers";
 use(smock.matchers);
 
@@ -90,7 +91,7 @@ describe("PerpetualTranche", function () {
       expect(await perp.minTrancheMaturitySec()).to.eq(1);
       expect(await perp.maxTrancheMaturitySec()).to.eq(constants.MaxUint256);
       expect(await perp.maxSupply()).to.eq(constants.MaxUint256);
-      expect(await perp.maxMintAmtPerTranche()).to.eq(constants.MaxUint256);
+      expect(await perp.maxDepositTrancheValuePerc()).to.eq(toPercFixedPtAmt("1"));
     });
 
     it("should NOT be paused", async function () {
@@ -327,26 +328,58 @@ describe("PerpetualTranche", function () {
     });
   });
 
-  describe("#updateMintingLimits", function () {
+  describe("#updateMaxSupply", function () {
     let tx: Transaction;
 
     describe("when triggered by non-keeper", function () {
       it("should revert", async function () {
-        await expect(
-          perp.connect(otherUser).updateMintingLimits(constants.MaxUint256, constants.MaxUint256),
-        ).to.be.revertedWithCustomError(perp, "UnauthorizedCall");
+        await expect(perp.connect(otherUser).updateMaxSupply(constants.MaxUint256)).to.be.revertedWithCustomError(
+          perp,
+          "UnauthorizedCall",
+        );
       });
     });
 
     describe("when triggered by owner", function () {
       beforeEach(async function () {
         await perp.updateKeeper(await otherUser.getAddress());
-        tx = perp.connect(otherUser).updateMintingLimits(toFixedPtAmt("100"), toFixedPtAmt("20"));
+        tx = perp.connect(otherUser).updateMaxSupply(toFixedPtAmt("100"));
         await tx;
       });
       it("should update reference", async function () {
         expect(await perp.maxSupply()).to.eq(toFixedPtAmt("100"));
-        expect(await perp.maxMintAmtPerTranche()).to.eq(toFixedPtAmt("20"));
+      });
+    });
+  });
+
+  describe("#updateMaxDepositTrancheValuePerc", function () {
+    let tx: Transaction;
+
+    describe("when triggered by non-keeper", function () {
+      it("should revert", async function () {
+        await expect(
+          perp.connect(otherUser).updateMaxDepositTrancheValuePerc(toPercFixedPtAmt("0.33")),
+        ).to.be.revertedWithCustomError(perp, "UnauthorizedCall");
+      });
+    });
+
+    describe("when invalid perc", function () {
+      it("should revert", async function () {
+        await perp.updateKeeper(await otherUser.getAddress());
+        await expect(
+          perp.connect(otherUser).updateMaxDepositTrancheValuePerc(toPercFixedPtAmt("1.01")),
+        ).to.be.revertedWithCustomError(perp, "InvalidPerc");
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      beforeEach(async function () {
+        await perp.updateKeeper(await otherUser.getAddress());
+        tx = perp.connect(otherUser).updateMaxDepositTrancheValuePerc(toPercFixedPtAmt("0.33"));
+        await tx;
+      });
+      it("should update reference", async function () {
+        expect(await perp.maxDepositTrancheValuePerc()).to.eq(toPercFixedPtAmt("0.33"));
       });
     });
   });
