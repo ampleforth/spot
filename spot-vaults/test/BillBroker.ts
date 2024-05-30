@@ -44,12 +44,12 @@ describe("BillBroker", function () {
       expect(await billBroker.keeper()).to.eq(await deployer.getAddress());
 
       const arHardBound = await billBroker.arHardBound();
-      expect(arHardBound.upper).to.eq(percentageFP("1.25"));
-      expect(arHardBound.lower).to.eq(percentageFP("0.75"));
+      expect(arHardBound.upper).to.eq(ethers.MaxUint256);
+      expect(arHardBound.lower).to.eq(0n);
 
       const arSoftBound = await billBroker.arSoftBound();
-      expect(arSoftBound.upper).to.eq(percentageFP("1.1"));
-      expect(arSoftBound.lower).to.eq(percentageFP("0.9"));
+      expect(arSoftBound.upper).to.eq(ethers.MaxUint256);
+      expect(arSoftBound.lower).to.eq(0n);
 
       const fees = await billBroker.fees();
       expect(fees.mintFeePerc).to.eq(0);
@@ -60,8 +60,8 @@ describe("BillBroker", function () {
       expect(fees.usdToPerpSwapFeePercs.upper).to.eq(percentageFP("1"));
       expect(fees.protocolSwapSharePerc).to.eq(0);
 
-      expect(await billBroker.usdBalance()).to.eq(usdFP("0"));
-      expect(await billBroker.perpBalance()).to.eq(perpFP("0"));
+      expect(await billBroker.usdBalance()).to.eq(0n);
+      expect(await billBroker.perpBalance()).to.eq(0n);
     });
   });
 
@@ -432,17 +432,17 @@ describe("BillBroker", function () {
       );
 
       await billBroker.updateFees({
-        mintFeePerc: percentageFP("0"),
-        burnFeePerc: percentageFP("0"),
+        mintFeePerc: 0n,
+        burnFeePerc: 0n,
         perpToUSDSwapFeePercs: {
-          lower: percentageFP("0"),
-          upper: percentageFP("0"),
+          lower: 0n,
+          upper: 0n,
         },
         usdToPerpSwapFeePercs: {
           lower: percentageFP("0.05"),
           upper: percentageFP("1.5"),
         },
-        protocolSwapSharePerc: percentageFP("0"),
+        protocolSwapSharePerc: 0n,
       });
 
       await expect(
@@ -515,17 +515,17 @@ describe("BillBroker", function () {
       );
 
       await billBroker.updateFees({
-        mintFeePerc: percentageFP("0"),
-        burnFeePerc: percentageFP("0"),
+        mintFeePerc: 0n,
+        burnFeePerc: 0n,
         perpToUSDSwapFeePercs: {
           lower: percentageFP("0.1"),
           upper: percentageFP("0.5"),
         },
         usdToPerpSwapFeePercs: {
-          lower: percentageFP("0"),
-          upper: percentageFP("0"),
+          lower: 0n,
+          upper: 0n,
         },
-        protocolSwapSharePerc: percentageFP("0"),
+        protocolSwapSharePerc: 0n,
       });
 
       await expect(

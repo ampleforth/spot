@@ -169,15 +169,9 @@ contract BillBroker is
 
         updateARBounds(
             // Soft bound
-            Range({
-                lower: ((ONE * 9) / 10), // 0.9
-                upper: ((ONE * 11) / 10) // 1.1
-            }),
+            Range({ lower: 0, upper: type(uint256).max }),
             // Hard bound
-            Range({
-                lower: ((ONE * 3) / 4), // 0.75
-                upper: ((ONE * 5) / 4) // 1.25
-            })
+            Range({ lower: 0, upper: type(uint256).max })
         );
     }
 
@@ -297,7 +291,7 @@ contract BillBroker is
         returns (uint256 usdAmtOut, uint256 perpAmtOut)
     {
         (usdAmtOut, perpAmtOut) = computeRedemptionAmts(burnAmt);
-        if (usdAmtOut == 0 || perpAmtOut == 0) {
+        if (usdAmtOut == 0 && perpAmtOut == 0) {
             return (0, 0);
         }
 
@@ -474,13 +468,23 @@ contract BillBroker is
             // Users can deposit assets proportional to the reserve.
             uint256 usdBalance_ = usd.balanceOf(address(this));
             uint256 perpBalance_ = perp.balanceOf(address(this));
-            usdAmtIn = usdAmtMax;
-            perpAmtIn = perpBalance_.mulDiv(usdAmtIn, usdBalance_);
-            if (perpAmtIn > perpAmtMax) {
+            if (usdBalance_ == 0) {
+                usdAmtIn = 0;
                 perpAmtIn = perpAmtMax;
-                usdAmtIn = usdBalance_.mulDiv(perpAmtIn, perpBalance_);
+                mintAmt = totalSupply_.mulDiv(perpAmtIn, perpBalance_);
+            } else if (perpBalance_ == 0) {
+                perpAmtIn = 0;
+                usdAmtIn = usdAmtMax;
+                mintAmt = totalSupply_.mulDiv(usdAmtIn, usdBalance_);
+            } else {
+                usdAmtIn = usdAmtMax;
+                perpAmtIn = perpBalance_.mulDiv(usdAmtIn, usdBalance_);
+                if (perpAmtIn > perpAmtMax) {
+                    perpAmtIn = perpAmtMax;
+                    usdAmtIn = usdBalance_.mulDiv(perpAmtIn, perpBalance_);
+                }
+                mintAmt = totalSupply_.mulDiv(usdAmtIn, usdBalance_);
             }
-            mintAmt = totalSupply_.mulDiv(usdAmtIn, usdBalance_);
         }
 
         mintAmt = mintAmt.mulDiv(ONE - fees.mintFeePerc, ONE);
@@ -641,12 +645,7 @@ contract BillBroker is
                     x2: arSoftBound.lower,
                     y2: swapFeePercs.lower
                 }),
-                Line({
-                    x1: arSoftBound.lower,
-                    y1: swapFeePercs.lower,
-                    x2: ONE,
-                    y2: swapFeePercs.lower
-                }),
+                Line({ x1: 0, y1: swapFeePercs.lower, x2: ONE, y2: swapFeePercs.lower }),
                 arPost,
                 arPre,
                 arSoftBound.lower
@@ -712,10 +711,14 @@ contract BillBroker is
     /// @return The computed asset ratio of the system.
     function assetRatio(ReserveState memory s) public view returns (uint256) {
         return
-            s.usdBalance.mulDiv(s.usdPrice, usdUnitAmt).mulDiv(
-                ONE,
-                s.perpBalance.mulDiv(s.perpPrice, perpUnitAmt)
-            );
+            s.perpBalance > 0
+                ? (
+                    s.usdBalance.mulDiv(s.usdPrice, usdUnitAmt).mulDiv(
+                        ONE,
+                        s.perpBalance.mulDiv(s.perpPrice, perpUnitAmt)
+                    )
+                )
+                : type(uint256).max;
     }
 
     /// @notice The address which holds any revenue extracted by protocol.
