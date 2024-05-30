@@ -1,0 +1,1 @@
+The "redeem()" function on perp has a modified ABI in v2; A return value was added. Using the v2 abi to parse transaction call handlers before the v2 implementation upgrade throws an error. The modified PerpetualTranche.json ABI uses the "redeem" function fragment from v1.
