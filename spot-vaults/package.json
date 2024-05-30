@@ -20,7 +20,7 @@
     "@openzeppelin/contracts": "4.9.6",
     "@openzeppelin/contracts-upgradeable": "4.7.3",
     "ampleforth-contracts": "https://github.com/ampleforth/ampleforth-contracts#master",
-    "tranche": "https://github.com/buttonwood-protocol/tranche.git"
+    "tranche": "https://github.com/buttonwood-protocol/tranche.git#main"
   },
   "devDependencies": {
     "@ethersproject/abi": "^5.6.4",

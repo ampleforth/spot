@@ -163,7 +163,7 @@ __metadata:
     prettier-plugin-solidity: ^1.0.0-dev.23
     solhint: ^3.3.7
     solidity-coverage: ^0.8.5
-    tranche: "https://github.com/buttonwood-protocol/tranche.git"
+    tranche: "https://github.com/buttonwood-protocol/tranche.git#main"
     ts-node: ^10.9.1
     typechain: ^8.1.0
     typescript: ^4.7.4
@@ -3282,7 +3282,7 @@ __metadata:
   resolution: "ampleforth-contracts@https://github.com/ampleforth/ampleforth-contracts.git#commit=d6cbb023e670159edf85fb6386c47fd7b6b0f6e9"
   dependencies:
     "@openzeppelin/contracts-upgradeable": ^4.7.3
-  checksum: c544fa68e4b1b6db93c51bf8144cfdf06dba77b018f725b75d42baa1a8a4973bb5212a9f28658503880d4cd947b8fb8ce7145826d4b6e0253ea70c0feeb286ec
+  checksum: c5d1283826fd8057d1c14ca37e83c5a918d8da2e330b5da7ebb6cd944027285f4fd01009e72bbf496769aff7303e776c81067654246a8b25c8c1b0de494efb5d
   languageName: node
   linkType: hard
 
@@ -3702,7 +3702,7 @@ __metadata:
   bin:
     asc: bin/asc
     asinit: bin/asinit
-  checksum: 8a407db6179addfaa5fcc637543a755ecc22ae8dd5e8259492305afd0d2bb73eae019d4178f79b515f75648d71dfda2c1ceb0c7421bff7817aebb2e2f5c8bfe7
+  checksum: 08fde3fd50e3c67c2e057c83963f65f9f4a710380b6040727fd87b3a162795c498de603a3bc68ceb1da7ec4b5e31e9d61ec6ea961a0ba228b91584f18c197e98
   languageName: node
   linkType: hard
 
@@ -15871,7 +15871,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tranche@https://github.com/buttonwood-protocol/tranche.git":
+"tranche@https://github.com/buttonwood-protocol/tranche.git#main":
   version: 1.0.0
   resolution: "tranche@https://github.com/buttonwood-protocol/tranche.git#commit=3b9b6be224b5220fe5e08a4dfa76a27b9684f259"
   dependencies:
@@ -15880,7 +15880,7 @@ __metadata:
     "@uniswap/v2-periphery": ^1.1.0-beta.0
     "@uniswap/v3-periphery": ^1.1.0
     lodash: ^4.17.21
-  checksum: 953aa11f09ae1367c02758cd555ba48550300fc4ffe5cbb61182d833456123c2e9f87b88fa411572c9f06db941fa00777f0d1ad1ae34215a576587e36365a91a
+  checksum: 52706d5b87a74289206073d4d7cda9ec36d0b1fed34a4a8d67baecb2572f5a4ef63c565a7d79ba7f956147c9a7bd9550fd4b58a31d3e42012ccbb41966127240
   languageName: node
   linkType: hard
 
