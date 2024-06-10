@@ -504,6 +504,35 @@ describe("BillBroker", function () {
         ),
       ).to.eq(percentageFP("1"));
     });
+
+    it("should compute the right fee perc when outside bounds", async function () {
+      const { billBroker } = await loadFixture(setupContracts);
+      await billBroker.updateARBounds(
+        [percentageFP("0.75"), percentageFP("1.25")],
+        [percentageFP("0"), percentageFP("10")],
+      );
+
+      await billBroker.updateFees({
+        mintFeePerc: 0n,
+        burnFeePerc: 0n,
+        perpToUSDSwapFeePercs: {
+          lower: 0n,
+          upper: 0n,
+        },
+        usdToPerpSwapFeePercs: {
+          lower: percentageFP("1.01"),
+          upper: percentageFP("2"),
+        },
+        protocolSwapSharePerc: 0n,
+      });
+
+      expect(
+        await billBroker.computeUSDToPerpSwapFeePerc(
+          percentageFP("1"),
+          percentageFP("1.25"),
+        ),
+      ).to.eq(percentageFP("1"));
+    });
   });
 
   describe("#computePerpToUSDSwapFeePerc", function () {
@@ -572,6 +601,35 @@ describe("BillBroker", function () {
         await billBroker.computePerpToUSDSwapFeePerc(
           percentageFP("1.0"),
           percentageFP("0.49"),
+        ),
+      ).to.eq(percentageFP("1"));
+    });
+
+    it("should compute the right fee perc when outside bounds", async function () {
+      const { billBroker } = await loadFixture(setupContracts);
+      await billBroker.updateARBounds(
+        [percentageFP("0.75"), percentageFP("1.25")],
+        [percentageFP("0"), percentageFP("10")],
+      );
+
+      await billBroker.updateFees({
+        mintFeePerc: 0n,
+        burnFeePerc: 0n,
+        perpToUSDSwapFeePercs: {
+          lower: percentageFP("1.01"),
+          upper: percentageFP("2"),
+        },
+        usdToPerpSwapFeePercs: {
+          lower: 0n,
+          upper: 0n,
+        },
+        protocolSwapSharePerc: 0n,
+      });
+
+      expect(
+        await billBroker.computePerpToUSDSwapFeePerc(
+          percentageFP("1.25"),
+          percentageFP("1.11"),
         ),
       ).to.eq(percentageFP("1"));
     });

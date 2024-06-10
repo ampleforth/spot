@@ -756,15 +756,16 @@ contract BillBroker is
         uint256 arL,
         uint256 arU,
         uint256 cutoff
-    ) private pure returns (uint256) {
+    ) private pure returns (uint256 feePerc) {
         if (arU <= cutoff) {
-            return _avgY(fn1, arL, arU);
+            feePerc = _avgY(fn1, arL, arU);
         } else if (arL >= cutoff) {
-            return _avgY(fn2, arL, arU);
+            feePerc = _avgY(fn2, arL, arU);
         } else {
-            return (_avgY(fn1, arL, cutoff).mulDiv(cutoff - arL, arU - arL) +
+            feePerc = (_avgY(fn1, arL, cutoff).mulDiv(cutoff - arL, arU - arL) +
                 _avgY(fn2, cutoff, arU).mulDiv(arU - cutoff, arU - arL));
         }
+        feePerc = MathUpgradeable.min(feePerc, ONE);
     }
 
     /// @dev We compute the average height of the line between {xL,xU}.
