@@ -117,7 +117,7 @@ contract BillBroker is
 
     /// @dev Throws if called by any account other than the keeper.
     modifier onlyKeeper() {
-        if (_msgSender() != keeper) {
+        if (msg.sender != keeper) {
             revert UnauthorizedCall();
         }
         _;
@@ -276,8 +276,8 @@ contract BillBroker is
         }
 
         // Transfer perp and usd tokens from the user
-        usd.safeTransferFrom(_msgSender(), address(this), usdAmtIn);
-        perp.safeTransferFrom(_msgSender(), address(this), perpAmtIn);
+        usd.safeTransferFrom(msg.sender, address(this), usdAmtIn);
+        perp.safeTransferFrom(msg.sender, address(this), perpAmtIn);
 
         // Permanently lock the MINIMUM_LIQUIDITY tokens on first mint
         if (isFirstMint) {
@@ -286,7 +286,7 @@ contract BillBroker is
         }
 
         // mint LP tokens to the user
-        _mint(_msgSender(), mintAmt);
+        _mint(msg.sender, mintAmt);
     }
 
     /// @notice Burns LP tokens and redeems usd and perp tokens.
@@ -307,11 +307,11 @@ contract BillBroker is
         }
 
         // burn LP tokens
-        _burn(_msgSender(), burnAmt);
+        _burn(msg.sender, burnAmt);
 
         // return funds
-        usd.safeTransfer(_msgSender(), usdAmtOut);
-        perp.safeTransfer(_msgSender(), perpAmtOut);
+        usd.safeTransfer(msg.sender, usdAmtOut);
+        perp.safeTransfer(msg.sender, perpAmtOut);
     }
 
     /// @notice Swaps usd tokens from the user for perp tokens from the reserve.
@@ -336,7 +336,7 @@ contract BillBroker is
         }
 
         // Transfer usd tokens from user
-        usd.safeTransferFrom(_msgSender(), address(this), usdAmtIn);
+        usd.safeTransferFrom(msg.sender, address(this), usdAmtIn);
 
         // settle fees
         if (protocolFeePerpAmt > 0) {
@@ -344,7 +344,7 @@ contract BillBroker is
         }
 
         // transfer perps out to the user
-        perp.safeTransfer(_msgSender(), perpAmtOut);
+        perp.safeTransfer(msg.sender, perpAmtOut);
     }
 
     /// @notice Swaps perp tokens from the user for usd tokens from the reserve.
@@ -369,7 +369,7 @@ contract BillBroker is
         }
 
         // Transfer perp tokens from user
-        perp.safeTransferFrom(_msgSender(), address(this), perpAmtIn);
+        perp.safeTransferFrom(msg.sender, address(this), perpAmtIn);
 
         // settle fees
         if (protocolFeeUsdAmt > 0) {
@@ -377,7 +377,7 @@ contract BillBroker is
         }
 
         // transfer usd out to the user
-        usd.safeTransfer(_msgSender(), usdAmtOut);
+        usd.safeTransfer(msg.sender, usdAmtOut);
     }
 
     //-----------------------------------------------------------------------------
