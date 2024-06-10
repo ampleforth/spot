@@ -77,6 +77,7 @@ contract BillBroker is
     uint256 public constant DECIMALS = 18;
     uint256 public constant ONE = (10 ** DECIMALS);
     uint256 private constant INITIAL_RATE = 1000000;
+    uint256 public constant MINIMUM_LIQUIDITY = 10 ** 22;
 
     //-------------------------------------------------------------------------
     // Storage
@@ -262,7 +263,11 @@ contract BillBroker is
     ) external nonReentrant whenNotPaused returns (uint256 mintAmt) {
         uint256 usdAmtIn;
         uint256 perpAmtIn;
-        (mintAmt, usdAmtIn, perpAmtIn) = computeMintAmt(usdAmtMax, perpAmtMax);
+        bool isFirstMint;
+        (mintAmt, usdAmtIn, perpAmtIn, isFirstMint) = computeMintAmt(
+            usdAmtMax,
+            perpAmtMax
+        );
         if (mintAmt <= 0) {
             return 0;
         }
@@ -274,7 +279,13 @@ contract BillBroker is
         usd.safeTransferFrom(_msgSender(), address(this), usdAmtIn);
         perp.safeTransferFrom(_msgSender(), address(this), perpAmtIn);
 
-        // mint LP tokens
+        // Permanently lock the MINIMUM_LIQUIDITY tokens on first mint
+        if (isFirstMint) {
+            _mint(address(this), MINIMUM_LIQUIDITY);
+            mintAmt -= MINIMUM_LIQUIDITY;
+        }
+
+        // mint LP tokens to the user
         _mint(_msgSender(), mintAmt);
     }
 
@@ -446,19 +457,26 @@ contract BillBroker is
     /// @return mintAmt The amount of LP tokens minted.
     /// @return usdAmtIn The usd tokens to be deposited.
     /// @return perpAmtIn The perp tokens to be deposited.
+    /// @return isFirstMint If the pool currently has no deposits.
     function computeMintAmt(
         uint256 usdAmtMax,
         uint256 perpAmtMax
-    ) public view returns (uint256 mintAmt, uint256 usdAmtIn, uint256 perpAmtIn) {
+    )
+        public
+        view
+        returns (uint256 mintAmt, uint256 usdAmtIn, uint256 perpAmtIn, bool isFirstMint)
+    {
+        uint256 totalSupply_ = totalSupply();
+        isFirstMint = (totalSupply_ <= 0);
+
         if (usdAmtMax <= 0 && perpAmtMax <= 0) {
-            return (0, 0, 0);
+            return (0, 0, 0, isFirstMint);
         }
 
-        uint256 totalSupply_ = totalSupply();
         // During the initial deposit we deposit the entire available amounts.
         // The onus is on the depositor to ensure that the value of USD tokens and
         // perp tokens on first deposit are equivalent.
-        if (totalSupply_ <= 0) {
+        if (isFirstMint) {
             usdAmtIn = usdAmtMax;
             perpAmtIn = perpAmtMax;
             mintAmt = (ONE.mulDiv(usdAmtIn, usdUnitAmt) +
