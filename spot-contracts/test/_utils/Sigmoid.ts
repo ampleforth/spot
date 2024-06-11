@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { Contract, BigNumber } from "ethers";
+import { Contract } from "ethers";
 
 import { toPercFixedPtAmt } from "../helpers";
 
@@ -22,7 +22,6 @@ describe("Sigmoid", function () {
     before(async function () {
       const MathTester = await ethers.getContractFactory("MathTester");
       math = await MathTester.deploy();
-      await math.deployed();
     });
     it("should return sigmoid(x)", async function () {
       await cmp(0, 0, -0.01, 0.05, 0);
@@ -58,72 +57,71 @@ describe("Sigmoid", function () {
     before(async function () {
       const MathTester = await ethers.getContractFactory("MathTester");
       math = await MathTester.deploy();
-      await math.deployed();
     });
 
-    const decimals18 = BigNumber.from("1000000000000000000");
-    const decimals10 = BigNumber.from("10000000000");
+    const decimals18 = BigInt("1000000000000000000");
+    const decimals10 = BigInt("10000000000");
     it("2^0", async function () {
-      const e = BigNumber.from(0);
-      const one = BigNumber.from(1).mul(decimals18);
+      const e = 0n;
+      const one = 1n * decimals18;
       expect(await math.twoPower(e, one)).to.eq(one);
     });
     it("2^1", async function () {
-      const e = BigNumber.from(1).mul(decimals18);
-      const one = BigNumber.from(1).mul(decimals18);
-      const result = BigNumber.from(2).mul(decimals18);
+      const e = 1n * decimals18;
+      const one = 1n * decimals18;
+      const result = 2n * decimals18;
       expect(await math.twoPower(e, one)).to.eq(result);
     });
     it("2^30", async function () {
-      const e = BigNumber.from(30).mul(decimals18);
-      const one = BigNumber.from(1).mul(decimals18);
-      const result = BigNumber.from(2 ** 30).mul(decimals18);
+      const e = 30n * decimals18;
+      const one = 1n * decimals18;
+      const result = 2n ** 30n * decimals18;
       expect(await math.twoPower(e, one)).to.eq(result);
     });
     it("2^2.5", async function () {
-      const e = BigNumber.from("25000000000");
-      const one = BigNumber.from(1).mul(decimals10);
-      const result = BigNumber.from("56568542494");
+      const e = BigInt("25000000000");
+      const one = 1n * decimals10;
+      const result = BigInt("56568542494");
       expect(await math.twoPower(e, one)).to.eq(result);
     });
     it("2^2.25", async function () {
-      const e = BigNumber.from("22500000000");
-      const one = BigNumber.from(1).mul(decimals10);
-      const result = BigNumber.from("47568284600");
+      const e = BigInt("22500000000");
+      const one = 1n * decimals10;
+      const result = BigInt("47568284600");
       expect(await math.twoPower(e, one)).to.eq(result);
     });
     it("2^-2.25", async function () {
-      const e = BigNumber.from("-22500000000");
-      const one = BigNumber.from(1).mul(decimals10);
-      const result = BigNumber.from("2102241038");
+      const e = BigInt("-22500000000");
+      const one = 1n * decimals10;
+      const result = BigInt("2102241038");
       expect(await math.twoPower(e, one)).to.eq(result);
     });
     it("2^-0.6", async function () {
-      const e = BigNumber.from("-6000000000");
-      const one = BigNumber.from(1).mul(decimals10);
-      const result = BigNumber.from("6626183216");
+      const e = BigInt("-6000000000");
+      const one = 1n * decimals10;
+      const result = BigInt("6626183216");
       expect(await math.twoPower(e, one)).to.eq(result);
     });
     it("2^2.96875", async function () {
-      const e = BigNumber.from("29687500000");
-      const one = BigNumber.from(1).mul(decimals10);
-      const result = BigNumber.from("78285764964");
+      const e = BigInt("29687500000");
+      const one = 1n * decimals10;
+      const result = BigInt("78285764964");
       expect(await math.twoPower(e, one)).to.eq(result);
     });
     it("2^2.99", async function () {
-      const e = BigNumber.from("29900000000");
-      const one = BigNumber.from(1).mul(decimals10);
-      const result = BigNumber.from("78285764964");
+      const e = BigInt("29900000000");
+      const one = 1n * decimals10;
+      const result = BigInt("78285764964");
       expect(await math.twoPower(e, one)).to.eq(result);
     });
     it("should fail on too small exponents", async function () {
-      const e = BigNumber.from("-1011000000000");
-      const one = BigNumber.from(1).mul(decimals10);
+      const e = BigInt("-1011000000000");
+      const one = 1n * decimals10;
       await expect(math.twoPower(e, one)).to.be.revertedWithCustomError(math, "ExpTooLarge");
     });
     it("should fail on too large exponents", async function () {
-      const e = BigNumber.from("1011000000000");
-      const one = BigNumber.from(1).mul(decimals10);
+      const e = BigInt("1011000000000");
+      const one = 1n * decimals10;
       await expect(math.twoPower(e, one)).to.be.revertedWithCustomError(math, "ExpTooLarge");
     });
   });
