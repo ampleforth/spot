@@ -26,27 +26,38 @@ library TrancheHelpers {
         ITranche tranche,
         IERC20Upgradeable collateralToken
     ) internal view returns (uint256, uint256) {
-        IBondController bond = IBondController(tranche.bond());
+        return getTrancheCollateralization(tranche, IBondController(tranche.bond()), collateralToken);
+    }
 
+    /// @notice Given a tranche, calculates the claimable collateral balance backing the tranche supply.
+    /// @param tranche Address of the tranche token.
+    /// @param parentBond Address of the tranche's parent bond.
+    /// @param collateralToken Address of the tranche's underlying collateral token.
+    /// @return The collateral balance and the tranche token supply.
+    function getTrancheCollateralization(
+        ITranche tranche,
+        IBondController parentBond,
+        IERC20Upgradeable collateralToken
+    ) internal view returns (uint256, uint256) {
         uint256 trancheSupply = tranche.totalSupply();
         uint256 trancheClaim = 0;
 
         // When the tranche's parent bond is mature
-        if (bond.isMature()) {
+        if (parentBond.isMature()) {
             trancheClaim = collateralToken.balanceOf(address(tranche));
             return (trancheClaim, trancheSupply);
         }
 
         // NOTE: This implementation assumes the bond has only two tranches.
-        if (bond.trancheCount() != 2) {
+        if (parentBond.trancheCount() != 2) {
             revert UnacceptableTrancheLength();
         }
 
-        uint256 bondCollateralBalance = collateralToken.balanceOf(address(bond));
+        uint256 bondCollateralBalance = parentBond.collateralBalance();
 
         // For junior tranche
-        if (bond.trancheAt(1) == tranche) {
-            uint256 seniorSupply = bond.totalDebt() - trancheSupply;
+        if (parentBond.trancheAt(1) == tranche) {
+            uint256 seniorSupply = parentBond.totalDebt() - trancheSupply;
             uint256 seniorClaim = MathUpgradeable.min(seniorSupply, bondCollateralBalance);
             trancheClaim = bondCollateralBalance - seniorClaim;
         }

@@ -12,6 +12,8 @@ interface IBondController {
 
     function totalDebt() external view returns (uint256);
 
+    function collateralBalance() external view returns (uint256);
+
     function feeBps() external view returns (uint256);
 
     function isMature() external view returns (bool);
