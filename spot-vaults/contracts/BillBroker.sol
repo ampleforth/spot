@@ -77,6 +77,7 @@ contract BillBroker is
     uint256 public constant DECIMALS = 18;
     uint256 public constant ONE = (10 ** DECIMALS);
     uint256 private constant INITIAL_RATE = 1000000;
+    uint256 public constant MINIMUM_LIQUIDITY = 10 ** 22;
 
     //-------------------------------------------------------------------------
     // Storage
@@ -116,7 +117,7 @@ contract BillBroker is
 
     /// @dev Throws if called by any account other than the keeper.
     modifier onlyKeeper() {
-        if (_msgSender() != keeper) {
+        if (msg.sender != keeper) {
             revert UnauthorizedCall();
         }
         _;
@@ -262,7 +263,11 @@ contract BillBroker is
     ) external nonReentrant whenNotPaused returns (uint256 mintAmt) {
         uint256 usdAmtIn;
         uint256 perpAmtIn;
-        (mintAmt, usdAmtIn, perpAmtIn) = computeMintAmt(usdAmtMax, perpAmtMax);
+        bool isFirstMint;
+        (mintAmt, usdAmtIn, perpAmtIn, isFirstMint) = computeMintAmt(
+            usdAmtMax,
+            perpAmtMax
+        );
         if (mintAmt <= 0) {
             return 0;
         }
@@ -271,11 +276,17 @@ contract BillBroker is
         }
 
         // Transfer perp and usd tokens from the user
-        usd.safeTransferFrom(_msgSender(), address(this), usdAmtIn);
-        perp.safeTransferFrom(_msgSender(), address(this), perpAmtIn);
+        usd.safeTransferFrom(msg.sender, address(this), usdAmtIn);
+        perp.safeTransferFrom(msg.sender, address(this), perpAmtIn);
 
-        // mint LP tokens
-        _mint(_msgSender(), mintAmt);
+        // Permanently lock the MINIMUM_LIQUIDITY tokens on first mint
+        if (isFirstMint) {
+            _mint(address(this), MINIMUM_LIQUIDITY);
+            mintAmt -= MINIMUM_LIQUIDITY;
+        }
+
+        // mint LP tokens to the user
+        _mint(msg.sender, mintAmt);
     }
 
     /// @notice Burns LP tokens and redeems usd and perp tokens.
@@ -296,11 +307,11 @@ contract BillBroker is
         }
 
         // burn LP tokens
-        _burn(_msgSender(), burnAmt);
+        _burn(msg.sender, burnAmt);
 
         // return funds
-        usd.safeTransfer(_msgSender(), usdAmtOut);
-        perp.safeTransfer(_msgSender(), perpAmtOut);
+        usd.safeTransfer(msg.sender, usdAmtOut);
+        perp.safeTransfer(msg.sender, perpAmtOut);
     }
 
     /// @notice Swaps usd tokens from the user for perp tokens from the reserve.
@@ -325,7 +336,7 @@ contract BillBroker is
         }
 
         // Transfer usd tokens from user
-        usd.safeTransferFrom(_msgSender(), address(this), usdAmtIn);
+        usd.safeTransferFrom(msg.sender, address(this), usdAmtIn);
 
         // settle fees
         if (protocolFeePerpAmt > 0) {
@@ -333,7 +344,7 @@ contract BillBroker is
         }
 
         // transfer perps out to the user
-        perp.safeTransfer(_msgSender(), perpAmtOut);
+        perp.safeTransfer(msg.sender, perpAmtOut);
     }
 
     /// @notice Swaps perp tokens from the user for usd tokens from the reserve.
@@ -358,7 +369,7 @@ contract BillBroker is
         }
 
         // Transfer perp tokens from user
-        perp.safeTransferFrom(_msgSender(), address(this), perpAmtIn);
+        perp.safeTransferFrom(msg.sender, address(this), perpAmtIn);
 
         // settle fees
         if (protocolFeeUsdAmt > 0) {
@@ -366,7 +377,7 @@ contract BillBroker is
         }
 
         // transfer usd out to the user
-        usd.safeTransfer(_msgSender(), usdAmtOut);
+        usd.safeTransfer(msg.sender, usdAmtOut);
     }
 
     //-----------------------------------------------------------------------------
@@ -446,19 +457,26 @@ contract BillBroker is
     /// @return mintAmt The amount of LP tokens minted.
     /// @return usdAmtIn The usd tokens to be deposited.
     /// @return perpAmtIn The perp tokens to be deposited.
+    /// @return isFirstMint If the pool currently has no deposits.
     function computeMintAmt(
         uint256 usdAmtMax,
         uint256 perpAmtMax
-    ) public view returns (uint256 mintAmt, uint256 usdAmtIn, uint256 perpAmtIn) {
+    )
+        public
+        view
+        returns (uint256 mintAmt, uint256 usdAmtIn, uint256 perpAmtIn, bool isFirstMint)
+    {
+        uint256 totalSupply_ = totalSupply();
+        isFirstMint = (totalSupply_ <= 0);
+
         if (usdAmtMax <= 0 && perpAmtMax <= 0) {
-            return (0, 0, 0);
+            return (0, 0, 0, isFirstMint);
         }
 
-        uint256 totalSupply_ = totalSupply();
         // During the initial deposit we deposit the entire available amounts.
         // The onus is on the depositor to ensure that the value of USD tokens and
         // perp tokens on first deposit are equivalent.
-        if (totalSupply_ <= 0) {
+        if (isFirstMint) {
             usdAmtIn = usdAmtMax;
             perpAmtIn = perpAmtMax;
             mintAmt = (ONE.mulDiv(usdAmtIn, usdUnitAmt) +
@@ -738,15 +756,16 @@ contract BillBroker is
         uint256 arL,
         uint256 arU,
         uint256 cutoff
-    ) private pure returns (uint256) {
+    ) private pure returns (uint256 feePerc) {
         if (arU <= cutoff) {
-            return _avgY(fn1, arL, arU);
+            feePerc = _avgY(fn1, arL, arU);
         } else if (arL >= cutoff) {
-            return _avgY(fn2, arL, arU);
+            feePerc = _avgY(fn2, arL, arU);
         } else {
-            return (_avgY(fn1, arL, cutoff).mulDiv(cutoff - arL, arU - arL) +
+            feePerc = (_avgY(fn1, arL, cutoff).mulDiv(cutoff - arL, arU - arL) +
                 _avgY(fn2, cutoff, arU).mulDiv(arU - cutoff, arU - arL));
         }
+        feePerc = MathUpgradeable.min(feePerc, ONE);
     }
 
     /// @dev We compute the average height of the line between {xL,xU}.
