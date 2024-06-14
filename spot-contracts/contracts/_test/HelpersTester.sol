@@ -29,12 +29,12 @@ contract HelpersTester {
         return b.trancheAt(index);
     }
 
-    function getSeniorTranche(IBondController b) public view returns (ITranche) {
-        return b.getSeniorTranche();
+    function seniorTranche(IBondController b) public view returns (ITranche) {
+        return b.seniorTranche();
     }
 
-    function getSeniorTrancheRatio(IBondController b) public view returns (uint256) {
-        return b.getSeniorTrancheRatio();
+    function seniorTrancheRatio(IBondController b) public view returns (uint256) {
+        return b.seniorTrancheRatio();
     }
 
     function previewDeposit(IBondController b, uint256 collateralAmount) public view returns (TokenAmount[] memory) {
@@ -66,8 +66,8 @@ contract HelpersTester {
         IPerpetualTranche perp,
         uint256 perpTVL,
         uint256 perpAmtToMint
-    ) public returns (uint256, uint256) {
-        IBondController depositBond = perp.getDepositBond();
+    ) public view returns (uint256, uint256) {
+        IBondController depositBond = perp.depositBond();
         return
             PerpHelpers.estimateUnderlyingAmtToTranche(
                 PerpHelpers.MintEstimationParams({
@@ -77,8 +77,8 @@ contract HelpersTester {
                         address(depositBond)
                     ),
                     depositBondTotalDebt: depositBond.totalDebt(),
-                    depositTrancheSupply: (depositBond.getSeniorTranche()).totalSupply(),
-                    depositTrancheTR: depositBond.getSeniorTrancheRatio()
+                    depositTrancheSupply: (depositBond.seniorTranche()).totalSupply(),
+                    depositTrancheTR: depositBond.seniorTrancheRatio()
                 }),
                 perpAmtToMint
             );
