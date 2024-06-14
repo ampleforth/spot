@@ -168,9 +168,9 @@ contract SpotAppraiser is Ownable, IBillBrokerPricingStrategy {
         // we consider it unhealthy.
         // NOTE: Any CDR below 100%, means that the tranche is impaired
         // and is roughly equivalent to holding AMPL.
-        uint8 reserveCount = uint8(SPOT.getReserveCount());
+        uint8 reserveCount = uint8(SPOT.reserveCount());
         for (uint8 i = 1; i < reserveCount; i++) {
-            ITranche tranche = ITranche(address(SPOT.getReserveAt(i)));
+            ITranche tranche = ITranche(address(SPOT.reserveAt(i)));
             IBondController bond = IBondController(tranche.bond());
             if (bond.isMature()) {
                 return false;

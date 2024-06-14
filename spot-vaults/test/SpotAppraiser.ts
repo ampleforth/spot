@@ -44,9 +44,9 @@ describe("SpotAppraiser", function () {
     await spot.mockMethod("getTVL()", [perpFP("1000000")]);
     await spot.mockMethod("totalSupply()", [perpFP("1000000")]);
     await spot.mockMethod("deviationRatio()", [oracleAnsFP("1.5")]);
-    await spot.mockMethod("getReserveCount()", [2]);
-    await spot.mockCall("getReserveAt(uint256)", [0], [ampl.target]);
-    await spot.mockCall("getReserveAt(uint256)", [1], [tranche.target]);
+    await spot.mockMethod("reserveCount()", [2]);
+    await spot.mockCall("reserveAt(uint256)", [0], [ampl.target]);
+    await spot.mockCall("reserveAt(uint256)", [1], [tranche.target]);
     await ampl.mockCall("balanceOf(address)", [spot.target], [perpFP("1000")]);
 
     const PriceOracle = await ethers.getContractFactory("MockCLOracle");
