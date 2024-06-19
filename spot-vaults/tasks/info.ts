@@ -1,3 +1,4 @@
+import { getAdminAddress, getImplementationAddress } from "@openzeppelin/upgrades-core";
 import { task, types } from "hardhat/config";
 import { TaskArguments } from "hardhat/types";
 import { ethers } from "ethers";
@@ -19,6 +20,8 @@ task("info:BillBroker")
 
     const billBroker = await hre.ethers.getContractAt("BillBroker", address);
     const billBrokerDecimals = await billBroker.decimals();
+    const proxyAdminAddress = await getAdminAddress(hre.ethers.provider, address);
+    const implAddress = await getImplementationAddress(hre.ethers.provider, address);
 
     const usd = await hre.ethers.getContractAt("ERC20", await billBroker.usd());
     const usdDecimals = await usd.decimals();
@@ -36,16 +39,21 @@ task("info:BillBroker")
 
     console.log("---------------------------------------------------------------");
     console.log("SpotAppraiser:", spotAppraiser.target);
+    console.log("owner:", await spotAppraiser.owner());
     const usdPriceCall = await spotAppraiser.usdPrice.staticCall();
-    const perpPriceCall = await spotAppraiser.perpPrice.staticCall();
     console.log("usdPrice:", pp(usdPriceCall[0], appraiserDecimals));
     console.log("usdPriceValid:", usdPriceCall[1]);
+    const perpPriceCall = await spotAppraiser.perpPrice.staticCall();
     console.log("perpPrice:", pp(perpPriceCall[0], appraiserDecimals));
     console.log("perpPriceValid:", perpPriceCall[1]);
     console.log("isSpotHealthy:", await spotAppraiser.isSPOTHealthy.staticCall());
     console.log("---------------------------------------------------------------");
     console.log("BillBroker:", billBroker.target);
-
+    console.log("owner:", await billBroker.owner());
+    console.log("keeper:", await billBroker.keeper());
+    console.log("proxyAdmin:", proxyAdminAddress);
+    console.log("implementation:", implAddress);
+    console.log("paused:", await billBroker.paused());
     const fees = await billBroker.fees.staticCall();
     console.log("Fees:");
     console.table([
