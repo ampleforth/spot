@@ -139,13 +139,6 @@ contract SpotAppraiser is Ownable, IBillBrokerPricingStrategy {
     /// @return p The price of the spot token in dollar coins.
     /// @return v True if the price is valid and can be used by downstream consumers.
     function perpPrice() external override returns (uint256, bool) {
-        //
-        // TODO:
-        // Go through governance to increase the delay time of cpi oracle to 1 week,
-        // This ensures there's enough time to react to BEA's PCE data issues.
-        // OR we could store the previous targetPrice in the contract state and ensure
-        // that is hasn't deviated too much. (TBD)
-        //
         (uint256 targetPrice, bool targetPriceValid) = AMPL_CPI_ORACLE.getData();
         uint256 p = targetPrice.mulDiv(SPOT.getTVL(), SPOT.totalSupply());
         bool v = (targetPriceValid && isSPOTHealthy());
