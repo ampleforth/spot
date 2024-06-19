@@ -70,16 +70,6 @@ task("ops:perp:info")
       "maxDepositTrancheValuePerc:",
       utils.formatUnits(await perp.maxDepositTrancheValuePerc(), percDecimals),
     );
-
-    // console.log("maxMintAmtPerTranche:", utils.formatUnits(await perp.maxMintAmtPerTranche(), await perp.decimals()));
-    // const t = await depositBond.tranches(0);
-    // console.log(
-    //   "availableCap:",
-    //   utils.formatUnits(
-    //     (await perp.maxMintAmtPerTranche()).sub(await perp.mintedSupplyPerTranche(t[0])),
-    //     await perp.decimals(),
-    //   ),
-    // );
     console.log("---------------------------------------------------------------");
     console.log("depositBond:", depositBond.address);
     console.log("issued:", issued);
