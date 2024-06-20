@@ -36,7 +36,6 @@ task("info:BillBroker")
       await billBroker.pricingStrategy.staticCall(),
     );
     const appraiserDecimals = await spotAppraiser.decimals();
-
     console.log("---------------------------------------------------------------");
     console.log("SpotAppraiser:", spotAppraiser.target);
     console.log("owner:", await spotAppraiser.owner());
@@ -85,10 +84,22 @@ task("info:BillBroker")
         ["usdPrice", pp(r[2], billBrokerDecimals)],
         ["perpPrice", pp(r[3], billBrokerDecimals)],
       ]);
+      const assetRatio = await billBroker.assetRatio({
+        usdBalance: r[0],
+        perpBalance: r[1],
+        usdPrice: r[2],
+        perpPrice: r[3],
+      });
+      console.log("assetRatio", pp(assetRatio, billBrokerDecimals));
 
-      const swapAmt = 100n;
+      const tvl =
+        pp(r[0], usdDecimals) * pp(r[2], billBrokerDecimals) +
+        pp(r[1], perpDecimals) * pp(r[3], billBrokerDecimals);
+      console.log("tvl", tvl);
+
+      const swapAmt = 1n;
       console.log(
-        `Quote for ${swapAmt} perp: `,
+        `Buy price for ${swapAmt} perp: `,
         pp(
           await billBroker["computePerpToUSDSwapAmt(uint256)"].staticCall(
             unitPerp * swapAmt,
@@ -97,13 +108,14 @@ task("info:BillBroker")
         ),
       );
       console.log(
-        `Quote for ${swapAmt} usd: `,
-        pp(
-          await billBroker["computeUSDToPerpSwapAmt(uint256)"].staticCall(
-            unitUsd * swapAmt,
+        `Sell price for ${swapAmt} perp: `,
+        1 /
+          pp(
+            await billBroker["computeUSDToPerpSwapAmt(uint256)"].staticCall(
+              unitUsd * swapAmt,
+            ),
+            perpDecimals,
           ),
-          perpDecimals,
-        ),
       );
     } catch (e) {
       console.log(e);

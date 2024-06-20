@@ -226,12 +226,7 @@ task("ops:swapUSDForPerps")
     }
 
     console.log("Swap:");
-    const expectedAmountOut = await billBroker[
-      "computeUSDToPerpSwapAmt(uint256)"
-    ].staticCall(fixedPtAmount);
-    const tx2 = await billBroker
-      .connect(signer)
-      .swapUSDForPerps(fixedPtAmount, expectedAmountOut);
+    const tx2 = await billBroker.connect(signer).swapUSDForPerps(fixedPtAmount, "0");
     await tx2.wait();
     console.log("Tx", tx2.hash);
 
@@ -290,12 +285,7 @@ task("ops:swapPerpsForUSD")
     }
 
     console.log("Swap:");
-    const expectedAmountOut = await billBroker[
-      "computePerpToUSDSwapAmt(uint256)"
-    ].staticCall(fixedPtAmount);
-    const tx2 = await billBroker
-      .connect(signer)
-      .swapPerpsForUSD(fixedPtAmount, expectedAmountOut);
+    const tx2 = await billBroker.connect(signer).swapPerpsForUSD(fixedPtAmount, "0");
     await tx2.wait();
     console.log("Tx", tx2.hash);
 
