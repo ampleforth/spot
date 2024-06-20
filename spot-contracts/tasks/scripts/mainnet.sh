@@ -103,7 +103,6 @@ yarn hardhat --network mainnet ops:trancheAndRollover \
   --perp-address 0xC1f33e0cf7e40a67375007104B929E49a581bafE \
   --collateral-amount 200
 
-
 yarn hardhat --network mainnet ops:vault:info 0x82A91a0D599A45d8E9Af781D67f695d7C72869Bd
 
 yarn hardhat --network mainnet ops:vault:deposit \

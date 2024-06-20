@@ -36,7 +36,6 @@ export default {
       accounts: {
         mnemonic: process.env.PROD_MNEMONIC || Wallet.createRandom().mnemonic.phrase,
       },
-      gasMultiplier: 1.01,
     },
     mainnet: {
       // url: `https://mainnet.infura.io/v3/${process.env.INFURA_SECRET}`,

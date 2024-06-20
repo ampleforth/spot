@@ -8,6 +8,12 @@ import "@openzeppelin/hardhat-upgrades";
 import "solidity-coverage";
 import "hardhat-gas-reporter";
 
+// Loads custom tasks
+import "./tasks/deploy";
+import "./tasks/ops";
+import "./tasks/info";
+import "./tasks/tools";
+
 // Loads env variables from .env file
 import * as dotenv from "dotenv";
 dotenv.config();
