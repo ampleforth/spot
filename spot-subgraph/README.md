@@ -30,9 +30,9 @@ To build and deploy the subgraph to the graph hosted service:
 
 ```
 # local deployment
-./scripts/deploy-local.sh goerli ampleforth/spot-goerli
+./scripts/deploy-local.sh sepolia ampleforth-spot-sepolia
 
 # prod deployment
-./scripts/deploy.sh goerli ampleforth/spot-goerli
-./scripts/deploy.sh mainnet ampleforth/spot
+./scripts/deploy.sh sepolia ampleforth-spot-sepolia
+./scripts/deploy.sh mainnet ampleforth-spot
 ```

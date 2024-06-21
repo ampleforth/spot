@@ -1,14 +1,10 @@
-import {
-  BigInt,
-  Address,
-  ethereum,
-  DataSourceContext,
-} from '@graphprotocol/graph-ts'
+import { BigInt, Address, ethereum, DataSourceContext } from '@graphprotocol/graph-ts'
 import {
   BondFactory,
   BondController,
   Tranche,
   Token,
+  AccountTrancheValue,
 } from '../../generated/schema'
 import { BondController as BondControllerABI } from '../../generated/BondFactory/BondController'
 import { ERC20 as ERC20ABI } from '../../generated/BondFactory/ERC20'
@@ -16,13 +12,8 @@ import {
   BondController as BondControllerTemplate,
   RebasingToken as RebasingTokenTemplate,
 } from '../../generated/templates'
-import {
-  BIGINT_ZERO,
-  BIGDECIMAL_ZERO,
-  stringToAddress,
-  formatBalance,
-} from '../utils'
-import { fetchToken } from './token'
+import { BIGINT_ZERO, BIGDECIMAL_ZERO, stringToAddress, formatBalance } from '../utils'
+import { fetchToken, refreshSupply } from './token'
 
 export function fetchBondFactory(address: Address): BondFactory {
   let id = address.toHexString()
@@ -41,10 +32,7 @@ export function fetchBond(address: Address): BondController {
   if (bond == null) {
     let bondContract = BondControllerABI.bind(address)
     bond = new BondController(id)
-    bond.owner = bondContract.owner().toHexString()
     bond.collateral = fetchToken(bondContract.collateralToken()).id
-    bond.depositLimit = bondContract.depositLimit()
-    bond.feePerc = formatBalance(bondContract.feeBps(), BigInt.fromI32(2))
     bond.creationDate = bondContract.creationDate()
     bond.maturityDate = bondContract.maturityDate()
     bond.isMature = bondContract.isMature()
@@ -63,23 +51,15 @@ export function fetchBond(address: Address): BondController {
 
     let collateralContext = new DataSourceContext()
     collateralContext.setString('bond', id)
-    RebasingTokenTemplate.createWithContext(
-      stringToAddress(bond.collateral),
-      collateralContext,
-    )
+    RebasingTokenTemplate.createWithContext(stringToAddress(bond.collateral), collateralContext)
   }
   return bond as BondController
 }
 
-export function fetchTranche(
-  bond: BondController,
-  trancheIndex: number,
-): Tranche {
+export function fetchTranche(bond: BondController, trancheIndex: number): Tranche {
   let bondAddress = stringToAddress(bond.id)
   let bondContract = BondControllerABI.bind(bondAddress)
-  let trancheResult = bondContract.try_tranches(
-    BigInt.fromI32(trancheIndex as i32),
-  )
+  let trancheResult = bondContract.try_tranches(BigInt.fromI32(trancheIndex as i32))
   if (trancheResult.reverted) {
     throw new Error('Unable to fetch tranche')
   }
@@ -104,14 +84,11 @@ export function refreshBond(bond: BondController): void {
   let collateralAddress = stringToAddress(bond.collateral)
   let collateralContract = ERC20ABI.bind(collateralAddress)
   let collateral = fetchToken(collateralAddress)
+  refreshSupply(collateral)
 
   bond.totalDebt = formatBalance(bondContract.totalDebt(), collateral.decimals)
   bond.totalCollateral = formatBalance(
     collateralContract.balanceOf(bondAddress),
-    collateral.decimals,
-  )
-  collateral.totalSupply = formatBalance(
-    collateralContract.totalSupply(),
     collateral.decimals,
   )
 
@@ -121,11 +98,8 @@ export function refreshBond(bond: BondController): void {
     let trancheAddress = stringToAddress(tranche.id)
     let trancheContract = ERC20ABI.bind(trancheAddress)
     let trancheToken = fetchToken(trancheAddress)
+    refreshSupply(trancheToken)
 
-    trancheToken.totalSupply = formatBalance(
-      trancheContract.totalSupply(),
-      collateral.decimals,
-    )
     tranche.totalCollateral = formatBalance(
       collateralContract.balanceOf(trancheAddress),
       collateral.decimals,
@@ -151,9 +125,7 @@ export function matureBond(bond: BondController, block: ethereum.Block): void {
     let trancheAddress = stringToAddress(tranche.id)
     let trancheToken = fetchToken(trancheAddress)
 
-    totalCollateralAtMaturity = totalCollateralAtMaturity.plus(
-      tranche.totalCollateral,
-    )
+    totalCollateralAtMaturity = totalCollateralAtMaturity.plus(tranche.totalCollateral)
 
     tranche.totalSupplyAtMaturity = trancheToken.totalSupply
     tranche.totalCollateralAtMaturity = tranche.totalCollateral
@@ -162,4 +134,29 @@ export function matureBond(bond: BondController, block: ethereum.Block): void {
 
   bond.totalCollateralAtMaturity = totalCollateralAtMaturity
   bond.save()
+}
+
+export function fetchAccountTrancheValue(
+  accountAddress: Address,
+  trancheAddress: Address,
+): AccountTrancheValue {
+  let accountId = accountAddress.toHexString()
+  let trancheId = trancheAddress.toHexString()
+  let id = accountId.concat('-').concat(trancheId)
+  let trancheValueInfo = AccountTrancheValue.load(id)
+  if (trancheValueInfo === null) {
+    trancheValueInfo = new AccountTrancheValue(id)
+    trancheValueInfo.isBondMature = false
+    trancheValueInfo.isSeniorTranche = false
+    trancheValueInfo.trancheSupply = BIGDECIMAL_ZERO
+    trancheValueInfo.bondCollateralBalance = BIGDECIMAL_ZERO
+    trancheValueInfo.bondTotalDebt = BIGDECIMAL_ZERO
+    trancheValueInfo.trancheClaim = BIGDECIMAL_ZERO
+    trancheValueInfo.trancheCDR = BIGDECIMAL_ZERO
+    trancheValueInfo.bondCDR = BIGDECIMAL_ZERO
+    trancheValueInfo.tranchePrice = BIGDECIMAL_ZERO
+    trancheValueInfo.trancheValue = BIGDECIMAL_ZERO
+    trancheValueInfo.save()
+  }
+  return trancheValueInfo as AccountTrancheValue
 }

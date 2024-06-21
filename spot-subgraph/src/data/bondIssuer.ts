@@ -11,10 +11,6 @@ export function fetchBondIssuer(address: Address): BondIssuer {
     let address = stringToAddress(id)
     let issuerContract = BondIssuerABI.bind(address)
     issuer = new BondIssuer(id)
-
-    issuer.minIssueTimeIntervalSec = issuerContract.minIssueTimeIntervalSec()
-    issuer.issueWindowOffsetSec = issuerContract.issueWindowOffsetSec()
-    issuer.maxMaturityDuration = issuerContract.maxMaturityDuration()
     issuer.save()
   }
   return issuer as BondIssuer

@@ -10,6 +10,7 @@ dataSources:
     network: {{ network }}
     source:
       abi: BondFactory
+      address: "{{ bondFactory }}"
       startBlock: {{ startBlock }}
     mapping:
       kind: ethereum/events
@@ -22,6 +23,8 @@ dataSources:
           file: ../spot-contracts/external-artifacts/BondFactory.json
         - name: BondController
           file: ../spot-contracts/external-artifacts/BondController.json
+        - name: Tranche
+          file: ../spot-contracts/external-artifacts/Tranche.json
         - name: ERC20
           file: ../spot-contracts/external-artifacts/ERC20ABI.json
       eventHandlers:
@@ -29,11 +32,41 @@ dataSources:
           handler: handleBondCreated
       file: ./src/mappings/bondFactory.ts
 
+  {{#previousBondFactories}}
+  - kind: ethereum/contract
+    name: BondFactoryPrev{{0}}
+    network: {{ network }}
+    source:
+      abi: BondFactory
+      address: "{{1}}"
+      startBlock: {{ startBlock }}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.4
+      language: wasm/assemblyscript
+      entities:
+        - BondCreated
+      abis:
+        - name: BondFactory
+          file: ../spot-contracts/external-artifacts/BondFactory.json
+        - name: BondController
+          file: ../spot-contracts/external-artifacts/BondController.json
+        - name: Tranche
+          file: ../spot-contracts/external-artifacts/Tranche.json
+        - name: ERC20
+          file: ../spot-contracts/external-artifacts/ERC20ABI.json
+      eventHandlers:
+        - event: BondCreated(address,address)
+          handler: handleBondCreated
+      file: ./src/mappings/bondFactory.ts
+  {{/previousBondFactories}}
+
   - kind: ethereum/contract
     name: BondIssuer
     network: {{ network }}
     source:
       abi: BondIssuer
+      address: "{{ bondIssuer }}"
       startBlock: {{ startBlock }}
     mapping:
       kind: ethereum/events
@@ -46,69 +79,77 @@ dataSources:
           file: ../spot-contracts/exported-artifacts/BondIssuer.json
         - name: BondController
           file: ../spot-contracts/external-artifacts/BondController.json
+        - name: Tranche
+          file: ../spot-contracts/external-artifacts/Tranche.json
       eventHandlers:
         - event: BondIssued(address)
           handler: handleBondIssued
       file: ./src/mappings/bondIssuer.ts
 
+  {{#previousIssuers}}
   - kind: ethereum/contract
-    name: PerpetualTranche
+    name: BondIssuerPrev{{0}}
     network: {{ network }}
     source:
-      abi: PerpetualTranche
-      address: "{{ spot }}"
+      abi: BondIssuer
+      address: "{{1}}"
       startBlock: {{ startBlock }}
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.4
       language: wasm/assemblyscript
       entities:
-        - UpdatedKeeper
-        - UpdatedBondIssuer
-        - UpdatedFeeStrategy
-        - UpdatedPricingStrategy
-        - UpdatedDiscountStrategy
-        - UpdatedTolerableTrancheMaturity
-        - UpdatedMintingLimits
-        - UpdatedMatureValueTargetPerc
+        - BondIssued
+      abis:
+        - name: BondIssuer
+          file: ../spot-contracts/exported-artifacts/BondIssuer.json
+        - name: BondController
+          file: ../spot-contracts/external-artifacts/BondController.json
+        - name: Tranche
+          file: ../spot-contracts/external-artifacts/Tranche.json
+      eventHandlers:
+        - event: BondIssued(address)
+          handler: handleBondIssued
+      file: ./src/mappings/bondIssuer.ts
+  {{/previousIssuers}}
+
+  - kind: ethereum/contract
+    name: PerpetualTranche
+    network: {{ network }}
+    source:
+      abi: PerpetualTranche
+      address: "{{ perpetualTranche }}"
+      startBlock: {{ startBlock }}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.4
+      language: wasm/assemblyscript
+      entities:
         - UpdatedDepositBond
-        - UpdatedMatureTrancheBalance
         - ReserveSynced
       abis:
         - name: PerpetualTranche
-          file: ../spot-contracts/exported-artifacts/PerpetualTranche.json
+          file: ./modified-artifacts/PerpetualTranche.json
+        - name: PerpetualTrancheV1
+          file: ../spot-contracts/exported-artifacts/PerpetualTrancheV1.json
         - name: BondController
           file: ../spot-contracts/external-artifacts/BondController.json
+        - name: Tranche
+          file: ../spot-contracts/external-artifacts/Tranche.json
         - name: ERC20
           file: ../spot-contracts/external-artifacts/ERC20ABI.json
         - name: RebasingERC20
           file: ../spot-contracts/external-artifacts/RebasingERC20ABI.json
       eventHandlers:
-        - event: UpdatedKeeper(address,address)
-          handler: handleGenericStorageUpdateViaEvent
-        - event: UpdatedBondIssuer(address)
-          handler: handleGenericStorageUpdateViaEvent
-        - event: UpdatedFeeStrategy(address)
-          handler: handleGenericStorageUpdateViaEvent
-        - event: UpdatedPricingStrategy(address)
-          handler: handleGenericStorageUpdateViaEvent
-        - event: UpdatedDiscountStrategy(address)
-          handler: handleGenericStorageUpdateViaEvent
-        - event: UpdatedTolerableTrancheMaturity(uint256,uint256)
-          handler: handleGenericStorageUpdateViaEvent
-        - event: UpdatedMintingLimits(uint256,uint256)
-          handler: handleGenericStorageUpdateViaEvent
-        - event: UpdatedMatureValueTargetPerc(uint256)
-          handler: handleGenericStorageUpdateViaEvent
         - event: ReserveSynced(address,uint256)
           handler: handleReserveSynced
         - event: UpdatedDepositBond(address)
           handler: handleUpdatedDepositBond
-        - event: UpdatedMatureTrancheBalance(uint256)
-          handler: handleUpdatedMatureTrancheBalance
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleMint
       callHandlers:
-        - function: init(string,string,address,address,address,address,address)
-          handler: handleGenericStorageUpdateViaCall
+        - function: redeem(uint256)
+          handler: handleRedeem
       file: ./src/mappings/perpetualTranche.ts
 
   - kind: ethereum/contract
@@ -127,22 +168,28 @@ dataSources:
       abis:
         - name: RolloverVault
           file: ../spot-contracts/exported-artifacts/RolloverVault.json
+        - name: PerpetualTranche
+          file: ../spot-contracts/exported-artifacts/PerpetualTranche.json
+        - name: BondController
+          file: ../spot-contracts/external-artifacts/BondController.json
+        - name: Tranche
+          file: ../spot-contracts/external-artifacts/Tranche.json
         - name: ERC20
           file: ../spot-contracts/external-artifacts/ERC20ABI.json
         - name: RebasingERC20
           file: ../spot-contracts/external-artifacts/RebasingERC20ABI.json
       eventHandlers:
-        - event: OwnershipTransferred(indexed address,indexed address)
-          handler: handleGenericStorageUpdateViaEvent
         - event: AssetSynced(address,uint256)
           handler: handleAssetSynced
       callHandlers:
-        - function: init(string,string,address)
-          handler: handleGenericStorageUpdateViaCall
         - function: deposit(uint256)
           handler: handleDeposit
         - function: redeem(uint256)
           handler: handleRedeem
+        - function: swapUnderlyingForPerps(uint256)
+          handler: handleUnderlyingToPerpSwap
+        - function: swapPerpsForUnderlying(uint256)
+          handler: handlePerpToUnderlyingSwap
       file: ./src/mappings/rolloverVault.ts
 templates:
   - kind: ethereum/contract
@@ -155,8 +202,6 @@ templates:
       apiVersion: 0.0.4
       language: wasm/assemblyscript
       entities:
-        - OwnershipTransferred
-        - FeeUpdate
         - Deposit
         - Mature
         - Redeem
@@ -164,13 +209,11 @@ templates:
       abis:
         - name: BondController
           file: ../spot-contracts/external-artifacts/BondController.json
+        - name: Tranche
+          file: ../spot-contracts/external-artifacts/Tranche.json
         - name: ERC20
           file: ../spot-contracts/external-artifacts/ERC20ABI.json
       eventHandlers:
-        - event: OwnershipTransferred(indexed address,indexed address)
-          handler: handleOwnershipTransferred
-        - event: FeeUpdate(uint256)
-          handler: handleFeeUpdate
         - event: Deposit(address,uint256,uint256)
           handler: handleDeposit
         - event: Mature(address)
@@ -215,10 +258,14 @@ templates:
       abis:
         - name: PerpetualTranche
           file: ../spot-contracts/exported-artifacts/PerpetualTranche.json
+        - name: PerpetualTrancheV1
+          file: ../spot-contracts/exported-artifacts/PerpetualTrancheV1.json
         - name: RolloverVault
           file: ../spot-contracts/exported-artifacts/RolloverVault.json
         - name: BondController
           file: ../spot-contracts/external-artifacts/BondController.json
+        - name: Tranche
+          file: ../spot-contracts/external-artifacts/Tranche.json
         - name: ERC20
           file: ../spot-contracts/external-artifacts/ERC20ABI.json
         - name: RebasingERC20

@@ -10,6 +10,7 @@ task("ops:perp:info")
 
     const perp = await hre.ethers.getContractAt("PerpetualTranche", perpAddress);
     const perpDecimals = await perp.decimals();
+    const percDecimals = await perp.PERC_DECIMALS();
 
     const bondIssuer = await hre.ethers.getContractAt("BondIssuer", await perp.bondIssuer());
     const latestBond = await hre.ethers.getContractAt("IBondController", await bondIssuer.callStatic.getLatestBond());
@@ -47,12 +48,12 @@ task("ops:perp:info")
     console.log("---------------------------------------------------------------");
     console.log("feePolicy:", feePolicy.address);
     console.log("owner", await feePolicy.owner());
-    console.log("perpMintFeePerc:", utils.formatUnits(await feePolicy.perpMintFeePerc(), 8));
-    console.log("perpBurnFeePerc:", utils.formatUnits(await feePolicy.perpBurnFeePerc(), 8));
+    console.log("perpMintFeePerc:", utils.formatUnits(await feePolicy.perpMintFeePerc(), percDecimals));
+    console.log("perpBurnFeePerc:", utils.formatUnits(await feePolicy.perpBurnFeePerc(), percDecimals));
     const r = await feePolicy.perpRolloverFee();
-    console.log("perpRolloverFeeLower:", utils.formatUnits(r.lower, 8));
-    console.log("perpRolloverFeeUpper:", utils.formatUnits(r.upper, 8));
-    console.log("perpRolloverFeeGrowth:", utils.formatUnits(r.growth, 8));
+    console.log("perpRolloverFeeLower:", utils.formatUnits(r.lower, percDecimals));
+    console.log("perpRolloverFeeUpper:", utils.formatUnits(r.upper, percDecimals));
+    console.log("perpRolloverFeeGrowth:", utils.formatUnits(r.growth, percDecimals));
 
     console.log("---------------------------------------------------------------");
     console.log("PerpetualTranche:", perp.address);
@@ -65,20 +66,16 @@ task("ops:perp:info")
     console.log("---------------------------------------------------------------");
     console.log(`maturityTolarance: [${await perp.minTrancheMaturitySec()}, ${await perp.maxTrancheMaturitySec()}]`);
     console.log("maxSupply:", utils.formatUnits(await perp.maxSupply(), await perp.decimals()));
-    console.log("maxMintAmtPerTranche:", utils.formatUnits(await perp.maxMintAmtPerTranche(), await perp.decimals()));
-    const t = await depositBond.tranches(0);
     console.log(
-      "availableCap:",
-      utils.formatUnits(
-        (await perp.maxMintAmtPerTranche()).sub(await perp.mintedSupplyPerTranche(t[0])),
-        await perp.decimals(),
-      ),
+      "maxDepositTrancheValuePerc:",
+      utils.formatUnits(await perp.maxDepositTrancheValuePerc(), percDecimals),
     );
     console.log("---------------------------------------------------------------");
     console.log("depositBond:", depositBond.address);
     console.log("issued:", issued);
     console.log("TotalSupply:", utils.formatUnits(perpSupply, perpDecimals));
     console.log("TVL:", utils.formatUnits(perpTVL, perpDecimals));
+    console.log("deviationRatio:", utils.formatUnits(await perp.callStatic.deviationRatio(), percDecimals));
     console.log("---------------------------------------------------------------");
     console.log("Reserve:");
     const reserveCount = (await perp.callStatic.getReserveCount()).toNumber();

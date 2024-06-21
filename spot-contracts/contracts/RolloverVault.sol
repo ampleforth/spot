@@ -74,10 +74,6 @@ contract RolloverVault is
     //-------------------------------------------------------------------------
     // Constants
 
-    /// @dev Number of decimals for a multiplier of 1.0x (i.e. 100%)
-    uint8 public constant FEE_POLICY_DECIMALS = 8;
-    uint256 public constant FEE_ONE = (10 ** FEE_POLICY_DECIMALS);
-
     /// @dev Internal percentages are fixed point numbers with {PERC_DECIMALS} places.
     uint8 public constant PERC_DECIMALS = 8;
     uint256 public constant ONE = (10 ** PERC_DECIMALS); // 1.0 or 100%
@@ -207,7 +203,7 @@ contract RolloverVault is
     /// @notice Update the reference to the fee policy contract.
     /// @param feePolicy_ New strategy address.
     function updateFeePolicy(IFeePolicy feePolicy_) public onlyOwner {
-        if (feePolicy_.decimals() != FEE_POLICY_DECIMALS) {
+        if (feePolicy_.decimals() != PERC_DECIMALS) {
             revert UnexpectedDecimals();
         }
         feePolicy = feePolicy_;
@@ -521,7 +517,12 @@ contract RolloverVault is
     }
 
     //--------------------------------------------------------------------------
-    // External & Public methods
+    // External & Public compute methods
+
+    /// @inheritdoc IRolloverVault
+    function deviationRatio() external override nonReentrant returns (uint256) {
+        return feePolicy.computeDeviationRatio(_querySubscriptionState(perp));
+    }
 
     /// @inheritdoc IRolloverVault
     function computeUnderlyingToPerpSwapAmt(
@@ -545,10 +546,10 @@ contract RolloverVault is
         //-----------------------------------------------------------------------------
 
         // Calculate perp fee share to be paid by the vault
-        uint256 perpFeeAmtToBurn = perpAmtOut.mulDiv(perpFeePerc, FEE_ONE, MathUpgradeable.Rounding.Up);
+        uint256 perpFeeAmtToBurn = perpAmtOut.mulDiv(perpFeePerc, ONE, MathUpgradeable.Rounding.Up);
 
         // We deduct fees by transferring out fewer perp tokens
-        perpAmtOut = perpAmtOut.mulDiv(FEE_ONE - (perpFeePerc + vaultFeePerc), FEE_ONE);
+        perpAmtOut = perpAmtOut.mulDiv(ONE - (perpFeePerc + vaultFeePerc), ONE);
 
         return (perpAmtOut, perpFeeAmtToBurn, s);
     }
@@ -579,10 +580,10 @@ contract RolloverVault is
         //-----------------------------------------------------------------------------
 
         // Calculate perp fee share to be paid by the vault
-        uint256 perpFeeAmtToBurn = perpAmtIn.mulDiv(perpFeePerc, FEE_ONE, MathUpgradeable.Rounding.Up);
+        uint256 perpFeeAmtToBurn = perpAmtIn.mulDiv(perpFeePerc, ONE, MathUpgradeable.Rounding.Up);
 
         // We deduct fees by transferring out fewer underlying tokens
-        underlyingAmtOut = underlyingAmtOut.mulDiv(FEE_ONE - (perpFeePerc + vaultFeePerc), FEE_ONE);
+        underlyingAmtOut = underlyingAmtOut.mulDiv(ONE - (perpFeePerc + vaultFeePerc), ONE);
 
         return (underlyingAmtOut, perpFeeAmtToBurn, s);
     }
@@ -603,7 +604,7 @@ contract RolloverVault is
             : (underlyingAmtIn * INITIAL_RATE);
 
         // The mint fees are settled by simply minting fewer vault notes.
-        notes = notes.mulDiv(FEE_ONE - feePerc, FEE_ONE);
+        notes = notes.mulDiv(ONE - feePerc, ONE);
         return notes;
     }
 
@@ -625,7 +626,7 @@ contract RolloverVault is
             token: underlying_,
             amount: underlying_.balanceOf(address(this)).mulDiv(noteAmtBurnt, noteSupply)
         });
-        redemptions[0].amount = redemptions[0].amount.mulDiv(FEE_ONE - feePerc, FEE_ONE);
+        redemptions[0].amount = redemptions[0].amount.mulDiv(ONE - feePerc, ONE);
 
         for (uint8 i = 1; i < assetCount_; ++i) {
             // tranche token share to be redeemed
@@ -636,7 +637,7 @@ contract RolloverVault is
             });
 
             // deduct redemption fee
-            redemptions[i].amount = redemptions[i].amount.mulDiv(FEE_ONE - feePerc, FEE_ONE);
+            redemptions[i].amount = redemptions[i].amount.mulDiv(ONE - feePerc, ONE);
 
             // in case the redemption amount is just dust, we skip
             if (redemptions[i].amount < TRANCHE_DUST_AMT) {
