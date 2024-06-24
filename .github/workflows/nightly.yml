@@ -39,7 +39,7 @@ jobs:
         run: yarn workspace @ampleforthorg/spot-vaults run coverage
 
       - name: spot-vaults report coverage
-        uses: coverallsapp/github-action@v2.2.3
+        uses: coverallsapp/github-action@v2.3.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path-to-lcov: "./spot-vaults/coverage/lcov.info"
