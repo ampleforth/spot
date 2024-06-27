@@ -128,7 +128,7 @@ __metadata:
     "@nomicfoundation/hardhat-verify": latest
     "@nomiclabs/hardhat-waffle": ^2.0.6
     "@openzeppelin/contracts": 4.9.6
-    "@openzeppelin/contracts-upgradeable": 4.7.3
+    "@openzeppelin/contracts-upgradeable": 4.9.6
     "@openzeppelin/hardhat-upgrades": ^3.0.4
     "@openzeppelin/upgrades-core": latest
     "@typechain/ethers-v6": ^0.5.1
@@ -139,6 +139,7 @@ __metadata:
     "@types/sinon-chai": ^3.2.12
     "@typescript-eslint/eslint-plugin": ^5.0.0
     "@typescript-eslint/parser": ^5.0.0
+    "@uniswap/v3-core": ^1.0.1
     ampleforth-contracts: "https://github.com/ampleforth/ampleforth-contracts#master"
     chai: ^4.3.6
     dotenv: ^16.0.1
@@ -1707,14 +1708,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@openzeppelin/contracts-upgradeable@npm:4.7.3":
-  version: 4.7.3
-  resolution: "@openzeppelin/contracts-upgradeable@npm:4.7.3"
-  checksum: c9ffb40cb847a975d440204fc6a811f43af960050242f707332b984d29bd16dc242ffa0935de61867aeb9e0357fadedb16b09b276deda5e9775582face831021
-  languageName: node
-  linkType: hard
-
-"@openzeppelin/contracts-upgradeable@npm:^4.1.0, @openzeppelin/contracts-upgradeable@npm:^4.7.3":
+"@openzeppelin/contracts-upgradeable@npm:4.9.6, @openzeppelin/contracts-upgradeable@npm:^4.1.0, @openzeppelin/contracts-upgradeable@npm:^4.7.3":
   version: 4.9.6
   resolution: "@openzeppelin/contracts-upgradeable@npm:4.9.6"
   checksum: 481075e7222cab025ae55304263fca69a2d04305521957bc16d2aece9fa2b86b6914711724822493e3d04df7e793469cd0bcb1e09f0ddd10cb4e360ac7eed12a
@@ -2931,7 +2925,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@uniswap/v3-core@npm:^1.0.0":
+"@uniswap/v3-core@npm:^1.0.0, @uniswap/v3-core@npm:^1.0.1":
   version: 1.0.1
   resolution: "@uniswap/v3-core@npm:1.0.1"
   checksum: 4bfd8b218391a3d9efde44e0f984cfec3bc25889cd4d1386766828521006e71b210a3583ee32b52f3c81d384af9e8c39f471f2229e9af4d50da6801446ecb3e4

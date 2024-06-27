@@ -18,7 +18,8 @@
   "dependencies": {
     "@ampleforthorg/spot-contracts": "workspaces:*",
     "@openzeppelin/contracts": "4.9.6",
-    "@openzeppelin/contracts-upgradeable": "4.7.3",
+    "@openzeppelin/contracts-upgradeable": "4.9.6",
+    "@uniswap/v3-core": "^1.0.1",
     "ampleforth-contracts": "https://github.com/ampleforth/ampleforth-contracts#master",
     "tranche": "https://github.com/buttonwood-protocol/tranche.git#main"
   },
