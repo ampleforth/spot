@@ -50,6 +50,7 @@ describe("SpotAppraiser", function () {
     await ampl.mockCall("balanceOf(address)", [spot.target], [perpFP("1000")]);
 
     const PriceOracle = await ethers.getContractFactory("MockCLOracle");
+    // TODO: use dMOCK HERE!
     const usdPriceOrcle = await PriceOracle.deploy();
     await usdPriceOrcle.mockLastRoundData(oracleAnsFP("1"), nowTS());
 
