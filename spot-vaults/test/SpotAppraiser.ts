@@ -49,9 +49,16 @@ describe("SpotAppraiser", function () {
     await spot.mockCall("getReserveAt(uint256)", [1], [tranche.target]);
     await ampl.mockCall("balanceOf(address)", [spot.target], [perpFP("1000")]);
 
-    const PriceOracle = await ethers.getContractFactory("MockCLOracle");
-    const usdPriceOrcle = await PriceOracle.deploy();
-    await usdPriceOrcle.mockLastRoundData(oracleAnsFP("1"), nowTS());
+    const usdPriceOrcle = new DMock("IChainlinkOracle");
+    await usdPriceOrcle.deploy();
+    await usdPriceOrcle.mockMethod("decimals()", [8]);
+    await usdPriceOrcle.mockMethod("latestRoundData()", [
+      0,
+      oracleAnsFP("1"),
+      0,
+      nowTS(),
+      0,
+    ]);
 
     const SpotAppraiser = await ethers.getContractFactory("SpotAppraiser");
     const strategy = await SpotAppraiser.deploy(
@@ -140,7 +147,13 @@ describe("SpotAppraiser", function () {
     describe("when data is stale", function () {
       it("should return invalid", async function () {
         const { strategy, usdPriceOrcle } = await loadFixture(setupContracts);
-        await usdPriceOrcle.mockLastRoundData(oracleAnsFP("1"), nowTS() - 50 * 3600);
+        await usdPriceOrcle.mockMethod("latestRoundData()", [
+          0,
+          oracleAnsFP("1"),
+          0,
+          nowTS() - 50 * 3600,
+          0,
+        ]);
         const p = await strategy.usdPrice();
         expect(p[0]).to.eq(priceFP("1"));
         expect(p[1]).to.eq(false);
@@ -150,7 +163,13 @@ describe("SpotAppraiser", function () {
     describe("when oracle price is below thresh", function () {
       it("should return invalid", async function () {
         const { strategy, usdPriceOrcle } = await loadFixture(setupContracts);
-        await usdPriceOrcle.mockLastRoundData(oracleAnsFP("0.98"), nowTS());
+        await usdPriceOrcle.mockMethod("latestRoundData()", [
+          0,
+          oracleAnsFP("0.98"),
+          0,
+          nowTS(),
+          0,
+        ]);
         const p = await strategy.usdPrice();
         expect(p[0]).to.eq(priceFP("1"));
         expect(p[1]).to.eq(false);
