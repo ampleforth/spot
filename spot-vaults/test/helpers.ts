@@ -1,7 +1,7 @@
 import { ethers } from "hardhat";
 import { Contract, ContractFactory } from "ethers";
 
-const sciParseFloat = (a: string): BigInt =>
+export const sciParseFloat = (a: string): BigInt =>
   a.includes("e") ? parseFloat(a).toFixed(18) : a;
 export const usdFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 6);
 export const perpFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 9);
@@ -22,9 +22,9 @@ export class DMock {
   }
 
   public async deploy(): Promise<void> {
-    this.refFactory = await ethers.getContractFactory(this.refArtifact);
     this.contract = await (await ethers.getContractFactory("DMock")).deploy();
     this.target = this.contract.target;
+    this.refFactory = await ethers.getContractAt(this.refArtifact, this.target);
   }
 
   public async mockMethod(methodFragment: string, returnValue: any = []): Promise<void> {
@@ -72,8 +72,51 @@ export class DMock {
     );
   }
 
+  public async clearMockMethod(methodFragment: string): Promise<void> {
+    if (!this.contract) {
+      await this.deploy();
+    }
+    const methodFragmentObj = this.refFactory.interface.fragments.filter(
+      f => f.type === "function" && f.format("sighash") === methodFragment,
+    )[0];
+    if (!methodFragmentObj) {
+      throw Error(
+        `Unkown function fragment ${methodFragment}, not part of the contract abi`,
+      );
+    }
+    await this.contract.clearMockMethodSig(methodFragmentObj.selector);
+  }
+
+  public async clearMockCall(methodFragment: string, parameters: any): Promise<void> {
+    if (!this.contract) {
+      await this.deploy();
+    }
+    const methodFragmentObj = this.refFactory.interface.fragments.filter(
+      f => f.type === "function" && f.format("sighash") === methodFragment,
+    )[0];
+    if (!methodFragmentObj) {
+      throw Error(
+        `Unkown function fragment ${methodFragment}, not part of the contract abi`,
+      );
+    }
+    const encodedData = this.refFactory.interface.encodeFunctionData(
+      methodFragmentObj,
+      parameters,
+    );
+    await this.contract.clearMockCall(encodedData);
+  }
+
   public async staticCall(methodFragment: string, parameters: any = []): Promise<any> {
     const mock = this.refFactory.attach(this.contract.target);
     return mock[methodFragment].staticCall(...parameters);
   }
+}
+
+export function univ3PositionKey(owner, tickLower, tickUpper): string {
+  const checksummedAddress = ethers.getAddress(owner);
+  const encodedData = ethers.solidityPacked(
+    ["address", "int24", "int24"],
+    [checksummedAddress, tickLower, tickUpper],
+  );
+  return ethers.keccak256(encodedData);
 }

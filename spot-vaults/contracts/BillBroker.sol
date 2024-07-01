@@ -14,7 +14,7 @@ import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/t
 
 import { IPerpetualTranche } from "@ampleforthorg/spot-contracts/contracts/_interfaces/IPerpetualTranche.sol";
 import { IBillBrokerPricingStrategy } from "./_interfaces/IBillBrokerPricingStrategy.sol";
-import { ReserveState, Range, Line, BillBrokerFees } from "./_interfaces/BillBrokerTypes.sol";
+import { ReserveState, BillBrokerFees, Line, Range } from "./_interfaces/BillBrokerTypes.sol";
 import { UnacceptableSwap, UnreliablePrice, UnexpectedDecimals, InvalidPerc, InvalidARBound, SlippageTooHigh, UnauthorizedCall, UnexpectedARDelta } from "./_interfaces/BillBrokerErrors.sol";
 
 /**

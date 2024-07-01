@@ -139,6 +139,8 @@ contract SpotAppraiser is Ownable, IBillBrokerPricingStrategy {
     /// @return p The price of the spot token in dollar coins.
     /// @return v True if the price is valid and can be used by downstream consumers.
     function perpPrice() external override returns (uint256, bool) {
+        // NOTE: Since {DECIMALS} == {AMPL_CPI_ORACLE_DECIMALS} == 18
+        // we don't adjust the returned values.
         (uint256 targetPrice, bool targetPriceValid) = AMPL_CPI_ORACLE.getData();
         uint256 p = targetPrice.mulDiv(SPOT.getTVL(), SPOT.totalSupply());
         bool v = (targetPriceValid && isSPOTHealthy());
