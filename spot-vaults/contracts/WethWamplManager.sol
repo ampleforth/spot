@@ -12,6 +12,7 @@ import { IAlphaProVault } from "./_interfaces/external/IAlphaProVault.sol";
 import { IChainlinkOracle } from "./_interfaces/external/IChainlinkOracle.sol";
 import { IAmpleforthOracle } from "./_interfaces/external/IAmpleforthOracle.sol";
 import { IWAMPL } from "./_interfaces/external/IWAMPL.sol";
+import { IUniswapV3Pool } from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 
 /// @title WethWamplManager
 /// @notice This contract is a programmatic manager for the WETH-WAMPL Charm AlphaProVault.
@@ -38,6 +39,15 @@ contract WethWamplManager {
 
     /// @notice The WETH-WAMPL charm alpha vault.
     IAlphaProVault public immutable VAULT;
+
+    /// @notice The underlying WETH-WAMPL univ3 pool.
+    IUniswapV3Pool public immutable POOL;
+
+    /// @notice The vault's token0, the WETH token.
+    address public immutable WETH;
+
+    /// @notice The vault's token1, the WAMPL token.
+    IWAMPL public immutable WAMPL;
 
     /// @notice The cpi oracle which returns AMPL's price target in USD.
     IAmpleforthOracle public cpiOracle;
@@ -138,6 +148,10 @@ contract WethWamplManager {
         owner = msg.sender;
 
         VAULT = vault_;
+        POOL = vault_.pool();
+        WETH = vault_.token0();
+        WAMPL = IWAMPL(vault_.token1());
+
         cpiOracle = cpiOracle_;
         ethOracle = ethOracle_;
 
@@ -231,7 +245,7 @@ contract WethWamplManager {
         uint256 activeLiqPerc = computeActiveLiqPerc(deviation);
 
         // Update limit range.
-        isNarrowLimitRange(deviation)
+        inNarrowLimitRange(deviation)
             ? VAULT.setLimitThreshold(limitThresholdNarrow)
             : VAULT.setLimitThreshold(limitThresholdWide);
 
@@ -270,16 +284,6 @@ contract WethWamplManager {
     //-----------------------------------------------------------------------------
     // External Public view methods
 
-    /// @return The vault's token0, the WETH token.
-    function weth() external view returns (address) {
-        return VAULT.token0();
-    }
-
-    /// @return The vault's token1, the WAMPL token.
-    function wampl() public view returns (IWAMPL) {
-        return IWAMPL(VAULT.token1());
-    }
-
     /// @notice Computes active liquidity percentage based on the provided deviation factor.
     /// @return The computed active liquidity percentage.
     function computeActiveLiqPerc(uint256 deviation) public view returns (uint256) {
@@ -290,7 +294,7 @@ contract WethWamplManager {
     }
 
     /// @notice Checks if the vault is in the narrow limit range based on the current deviation factor.
-    function isNarrowLimitRange(uint256 deviation) public view returns (bool) {
+    function inNarrowLimitRange(uint256 deviation) public view returns (bool) {
         int24 _marketPrice = VAULT.getTwap();
         int24 _limitLower = VAULT.limitLower();
         int24 _limitUpper = VAULT.limitUpper();
@@ -312,7 +316,7 @@ contract WethWamplManager {
             FullMath.mulDiv(
                 getWamplUSDPrice(ethUSDPrice),
                 ONE_AMPL,
-                wampl().wrapperToUnderlying(ONE_WAMPL) // #AMPL per WAMPL
+                WAMPL.wrapperToUnderlying(ONE_WAMPL) // #AMPL per WAMPL
             );
     }
 
@@ -396,7 +400,7 @@ contract WethWamplManager {
         int24 tickUpper
     ) private view returns (uint128, uint256, uint256, uint128, uint128) {
         bytes32 positionKey = PositionKey.compute(address(VAULT), tickLower, tickUpper);
-        return VAULT.pool().positions(positionKey);
+        return POOL.positions(positionKey);
     }
 
     /// @dev Fetches most recent report from the given chain link oracle contract.

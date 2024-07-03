@@ -85,6 +85,7 @@ describe("WethWamplManager", function () {
       mockETHOracle,
       mockWeth,
       mockWampl,
+      mockPool,
       manager,
     };
   }
@@ -111,9 +112,12 @@ describe("WethWamplManager", function () {
     });
 
     it("should set the token refs", async function () {
-      const { manager, mockWeth, mockWampl } = await loadFixture(setupContracts);
-      expect(await manager.weth()).to.equal(mockWeth.target);
-      expect(await manager.wampl()).to.equal(mockWampl.target);
+      const { manager, mockWeth, mockWampl, mockPool } = await loadFixture(
+        setupContracts,
+      );
+      expect(await manager.POOL()).to.equal(mockPool.target);
+      expect(await manager.WETH()).to.equal(mockWeth.target);
+      expect(await manager.WAMPL()).to.equal(mockWampl.target);
     });
 
     it("should set the active perc calculation params", async function () {
@@ -458,14 +462,14 @@ describe("WethWamplManager", function () {
     });
   });
 
-  describe("isNarrowLimitRange", function () {
+  describe("inNarrowLimitRange", function () {
     describe("when wampl sell, dr > 1", function () {
       it("should return true", async function () {
         const { manager, mockVault } = await loadFixture(setupContracts);
         await mockVault.mockMethod("getTwap()", [30001]);
         await mockVault.mockMethod("limitLower()", [20000]);
         await mockVault.mockMethod("limitUpper()", [40000]);
-        expect(await manager.isNarrowLimitRange(percFP("1.1"))).to.eq(true);
+        expect(await manager.inNarrowLimitRange(percFP("1.1"))).to.eq(true);
       });
     });
 
@@ -475,7 +479,7 @@ describe("WethWamplManager", function () {
         await mockVault.mockMethod("getTwap()", [30001]);
         await mockVault.mockMethod("limitLower()", [20000]);
         await mockVault.mockMethod("limitUpper()", [40000]);
-        expect(await manager.isNarrowLimitRange(percFP("0.9"))).to.eq(false);
+        expect(await manager.inNarrowLimitRange(percFP("0.9"))).to.eq(false);
       });
     });
 
@@ -485,7 +489,7 @@ describe("WethWamplManager", function () {
         await mockVault.mockMethod("getTwap()", [29999]);
         await mockVault.mockMethod("limitLower()", [20000]);
         await mockVault.mockMethod("limitUpper()", [40000]);
-        expect(await manager.isNarrowLimitRange(percFP("1.1"))).to.eq(false);
+        expect(await manager.inNarrowLimitRange(percFP("1.1"))).to.eq(false);
       });
     });
 
@@ -495,7 +499,7 @@ describe("WethWamplManager", function () {
         await mockVault.mockMethod("getTwap()", [29999]);
         await mockVault.mockMethod("limitLower()", [20000]);
         await mockVault.mockMethod("limitUpper()", [40000]);
-        expect(await manager.isNarrowLimitRange(percFP("0.9"))).to.eq(true);
+        expect(await manager.inNarrowLimitRange(percFP("0.9"))).to.eq(true);
       });
     });
   });
