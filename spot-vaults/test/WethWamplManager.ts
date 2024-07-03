@@ -122,20 +122,20 @@ describe("WethWamplManager", function () {
 
     it("should set the active perc calculation params", async function () {
       const { manager } = await loadFixture(setupContracts);
-      expect(await manager.deviationCutoff()).to.equal(percFP("1.05"));
+      expect(await manager.deviationCutoff()).to.equal(percFP("1"));
       expect(await manager.lastActiveLiqPerc()).to.equal(percFP("1"));
       expect(await manager.tolerableActiveLiqPercDelta()).to.equal(percFP("0.1"));
 
       const f1 = await manager.activeLiqPercFn1();
-      expect(f1[0]).to.equal(percFP("0.75"));
-      expect(f1[1]).to.equal(percFP("0.1"));
-      expect(f1[2]).to.equal(percFP("1.05"));
+      expect(f1[0]).to.equal(percFP("0.7"));
+      expect(f1[1]).to.equal(percFP("0.25"));
+      expect(f1[2]).to.equal(percFP("0.95"));
       expect(f1[3]).to.equal(percFP("1"));
 
       const f2 = await manager.activeLiqPercFn2();
-      expect(f2[0]).to.equal(percFP("1.05"));
+      expect(f2[0]).to.equal(percFP("1.2"));
       expect(f2[1]).to.equal(percFP("1"));
-      expect(f2[2]).to.equal(percFP("2"));
+      expect(f2[2]).to.equal(percFP("2.5"));
       expect(f2[3]).to.equal(percFP("0.25"));
     });
 
@@ -295,42 +295,43 @@ describe("WethWamplManager", function () {
   describe("#computeActiveLiqPerc", function () {
     it("should compute the active liquidity percentage", async function () {
       const { manager } = await loadFixture(setupContracts);
-      expect(await manager.computeActiveLiqPerc(percFP("0"))).to.eq(percFP("0.05"));
-      expect(await manager.computeActiveLiqPerc(percFP("0.5"))).to.eq(percFP("0.05"));
+      expect(await manager.computeActiveLiqPerc(percFP("0"))).to.eq(percFP("0.25"));
+      expect(await manager.computeActiveLiqPerc(percFP("0.5"))).to.eq(percFP("0.25"));
       expect(await manager.computeActiveLiqPerc(percFP("0.73888888"))).to.eq(
-        percFP("0.06666664"),
+        percFP("0.36666664"),
       );
       expect(await manager.computeActiveLiqPerc(percFP("0.7425"))).to.eq(
-        percFP("0.0775"),
+        percFP("0.3775"),
       );
-      expect(await manager.computeActiveLiqPerc(percFP("0.75"))).to.eq(percFP("0.1"));
-      expect(await manager.computeActiveLiqPerc(percFP("0.8"))).to.eq(percFP("0.25"));
-      expect(await manager.computeActiveLiqPerc(percFP("0.85"))).to.eq(percFP("0.4"));
-      expect(await manager.computeActiveLiqPerc(percFP("0.9"))).to.eq(percFP("0.55"));
-      expect(await manager.computeActiveLiqPerc(percFP("0.95"))).to.eq(percFP("0.7"));
-      expect(await manager.computeActiveLiqPerc(percFP("1"))).to.eq(percFP("0.85"));
+      expect(await manager.computeActiveLiqPerc(percFP("0.75"))).to.eq(percFP("0.4"));
+      expect(await manager.computeActiveLiqPerc(percFP("0.8"))).to.eq(percFP("0.55"));
+      expect(await manager.computeActiveLiqPerc(percFP("0.85"))).to.eq(percFP("0.7"));
+      expect(await manager.computeActiveLiqPerc(percFP("0.9"))).to.eq(percFP("0.85"));
+      expect(await manager.computeActiveLiqPerc(percFP("0.95"))).to.eq(percFP("1"));
+      expect(await manager.computeActiveLiqPerc(percFP("1"))).to.eq(percFP("1"));
       expect(await manager.computeActiveLiqPerc(percFP("1.05"))).to.eq(percFP("1"));
-      expect(await manager.computeActiveLiqPerc(percFP("1.1"))).to.eq(
-        percFP("0.960526315789473684"),
-      );
+      expect(await manager.computeActiveLiqPerc(percFP("1.1"))).to.eq(percFP("1"));
+      expect(await manager.computeActiveLiqPerc(percFP("1.2"))).to.eq(percFP("1"));
       expect(await manager.computeActiveLiqPerc(percFP("1.3"))).to.eq(
-        percFP("0.802631578947368421"),
+        percFP("0.942307692307692307"),
       );
       expect(await manager.computeActiveLiqPerc(percFP("1.5"))).to.eq(
-        percFP("0.644736842105263157"),
+        percFP("0.826923076923076923"),
       );
       expect(await manager.computeActiveLiqPerc(percFP("1.75"))).to.eq(
-        percFP("0.447368421052631578"),
+        percFP("0.682692307692307692"),
       );
-      expect(await manager.computeActiveLiqPerc(percFP("2"))).to.eq(percFP("0.25"));
+      expect(await manager.computeActiveLiqPerc(percFP("2"))).to.eq(
+        percFP("0.538461538461538461"),
+      );
       expect(await manager.computeActiveLiqPerc(percFP("2.25"))).to.eq(
-        percFP("0.052631578947368422"),
+        percFP("0.394230769230769230"),
       );
-      expect(await manager.computeActiveLiqPerc(percFP("2.5"))).to.eq(percFP("0.05"));
-      expect(await manager.computeActiveLiqPerc(percFP("5"))).to.eq(percFP("0.05"));
-      expect(await manager.computeActiveLiqPerc(percFP("10"))).to.eq(percFP("0.05"));
-      expect(await manager.computeActiveLiqPerc(percFP("100000"))).to.eq(percFP("0.05"));
-      expect(await manager.computeActiveLiqPerc(ethers.MaxUint256)).to.eq(percFP("0.05"));
+      expect(await manager.computeActiveLiqPerc(percFP("2.5"))).to.eq(percFP("0.25"));
+      expect(await manager.computeActiveLiqPerc(percFP("5"))).to.eq(percFP("0.25"));
+      expect(await manager.computeActiveLiqPerc(percFP("10"))).to.eq(percFP("0.25"));
+      expect(await manager.computeActiveLiqPerc(percFP("100000"))).to.eq(percFP("0.25"));
+      expect(await manager.computeActiveLiqPerc(ethers.MaxUint256)).to.eq(percFP("0.25"));
     });
   });
 
@@ -551,7 +552,7 @@ describe("WethWamplManager", function () {
         await mockVault.mockMethod("limitLower()", [45000]);
         await mockVault.mockMethod("limitUpper()", [50000]);
         await mockVault.mockCall("setLimitThreshold(int24)", [887200], []);
-        await mockCPIOracle.mockMethod("getData()", [amplOracleFP("1.2"), true]);
+        await mockCPIOracle.mockMethod("getData()", [amplOracleFP("1.35"), true]);
         await mockVault.mockMethod("emergencyBurn(int24,int24,uint128)", []);
         await mockVault.mockMethod("rebalance()", []);
         await expect(manager.rebalance()).not.to.be.reverted;
@@ -563,17 +564,17 @@ describe("WethWamplManager", function () {
       await mockVault.mockMethod("limitLower()", [45000]);
       await mockVault.mockMethod("limitUpper()", [55000]);
       await mockVault.mockCall("setLimitThreshold(int24)", [887200], []);
-      await mockVault.mockMethod("getTwap()", [49000]);
+      await mockVault.mockMethod("getTwap()", [47500]);
       await mockVault.mockMethod("rebalance()", []);
       // activePerc = ~0.92
       await mockVault.mockCall(
         "emergencyBurn(int24,int24,uint128)",
-        [-887200, 887200, 7698],
+        [-887200, 887200, 7685],
         [],
       );
       await mockVault.mockCall(
         "emergencyBurn(int24,int24,uint128)",
-        [45000, 55000, 1539],
+        [45000, 55000, 1537],
         [],
       );
       await expect(manager.rebalance()).not.to.be.reverted;
@@ -584,11 +585,11 @@ describe("WethWamplManager", function () {
       await mockVault.mockMethod("limitLower()", [45000]);
       await mockVault.mockMethod("limitUpper()", [55000]);
       await mockVault.mockCall("setLimitThreshold(int24)", [887200], []);
-      await mockVault.mockMethod("getTwap()", [49000]);
+      await mockVault.mockMethod("getTwap()", [47500]);
       await mockVault.mockMethod("rebalance()", []);
       await mockVault.mockMethod("emergencyBurn(int24,int24,uint128)", []);
       await expect(manager.rebalance()).not.to.be.reverted;
-      expect(await manager.lastActiveLiqPerc()).to.eq(percFP("0.923015441817660636"));
+      expect(await manager.lastActiveLiqPerc()).to.eq(percFP("0.923147616635188312"));
     });
   });
 });

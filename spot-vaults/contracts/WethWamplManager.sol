@@ -25,8 +25,8 @@ contract WethWamplManager {
     uint256 public constant DECIMALS = 18;
     uint256 public constant ONE = (10 ** DECIMALS);
 
-    /// @dev At all times active liquidity percentage is no lower than 5%.
-    uint256 public constant MIN_ACTIVE_LIQ_PERC = ONE / 20; // 5%
+    /// @dev At all times active liquidity percentage is no lower than 25%.
+    uint256 public constant MIN_ACTIVE_LIQ_PERC = ONE / 4; // 25%
 
     /// @dev We bound the deviation factor to 100.0.
     uint256 public constant MAX_DEVIATION = 100 * ONE; // 100.0
@@ -155,17 +155,17 @@ contract WethWamplManager {
         cpiOracle = cpiOracle_;
         ethOracle = ethOracle_;
 
-        deviationCutoff = (ONE * 105) / 100; // 1.05
+        deviationCutoff = ONE; // 1.0
         activeLiqPercFn1 = Line({
-            x1: (ONE * 3) / 4, // 0.75
-            y1: ONE / 10, // 10%
-            x2: (ONE * 105) / 100, // 1.05
+            x1: (ONE * 7) / 10, // 0.7
+            y1: ONE / 4, // 25%
+            x2: (ONE * 95) / 100, // 0.95
             y2: ONE // 100%
         });
         activeLiqPercFn2 = Line({
-            x1: (ONE * 105) / 100, // 1.05
+            x1: (ONE * 120) / 100, // 1.2
             y1: ONE, // 100%
-            x2: ONE * 2, // 2.0
+            x2: (ONE * 5) / 2, // 2.5
             y2: ONE / 4 // 25%
         });
         lastActiveLiqPerc = ONE; // 100%
