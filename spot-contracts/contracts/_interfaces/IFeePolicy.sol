@@ -22,7 +22,7 @@ interface IFeePolicy {
     ///         example) 100 tranchesIn for 99 tranchesOut; i.e) perp enrichment
     ///      - A fee of -1%, implies the exchange rate is adjusted in favor of tranchesOut.
     ///         example) 99 tranchesIn for 100 tranchesOut
-    function computePerpRolloverFeePerc(uint256 dr) external view returns (int256);
+    function computeRolloverFeePerc(uint256 dr) external view returns (int256);
 
     /// @return The percentage of the mint vault note amount to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.20;
 
-import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { IBondController } from "../_interfaces/buttonwood/IBondController.sol";
 import { ITranche } from "../_interfaces/buttonwood/ITranche.sol";
 import { TokenAmount } from "../_interfaces/CommonTypes.sol";
@@ -9,7 +8,7 @@ import { UnacceptableDeposit, UnacceptableTrancheLength } from "../_interfaces/P
 
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
-import { BondTranches } from "./BondTranchesHelpers.sol";
+import { BondTranches, BondTranchesHelpers } from "./BondTranchesHelpers.sol";
 
 /**
  *  @title BondHelpers
@@ -21,9 +20,10 @@ library BondHelpers {
     using SafeCastUpgradeable for uint256;
     using MathUpgradeable for uint256;
 
-    // Replicating value used here:
+    // Replicating values used here:
     // https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
     uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
+    uint256 private constant MINIMUM_VALID_DEBT = 10e9;
 
     /// @notice Given a bond, calculates the time remaining to maturity.
     /// @param b The address of the bond contract.
@@ -55,14 +55,22 @@ library BondHelpers {
     /// @notice Given a bond, returns the address of the most senior tranche.
     /// @param b The address of the bond contract.
     /// @return t The senior tranche address.
-    function getSeniorTranche(IBondController b) internal view returns (ITranche t) {
+    function seniorTranche(IBondController b) internal view returns (ITranche t) {
         (t, ) = b.tranches(0);
+    }
+
+    /// @notice Given a bond, returns the address of the most junior tranche.
+    /// @dev We assume that the bond has only two tranches.
+    /// @param b The address of the bond contract.
+    /// @return t The junior tranche address.
+    function juniorTranche(IBondController b) internal view returns (ITranche t) {
+        (t, ) = b.tranches(1);
     }
 
     /// @notice Given a bond, returns the tranche ratio of the most senior tranche.
     /// @param b The address of the bond contract.
     /// @return r The tranche ratio of the senior most tranche.
-    function getSeniorTrancheRatio(IBondController b) internal view returns (uint256 r) {
+    function seniorTrancheRatio(IBondController b) internal view returns (uint256 r) {
         (, r) = b.tranches(0);
     }
 
@@ -81,7 +89,7 @@ library BondHelpers {
         TokenAmount[] memory tranchesOut = new TokenAmount[](2);
 
         uint256 totalDebt = b.totalDebt();
-        uint256 collateralBalance = IERC20Upgradeable(b.collateralToken()).balanceOf(address(b));
+        uint256 collateralBalance = b.collateralBalance();
 
         uint256 seniorAmt = collateralAmount.mulDiv(bt.trancheRatios[0], TRANCHE_RATIO_GRANULARITY);
         if (collateralBalance > 0) {
@@ -96,5 +104,20 @@ library BondHelpers {
         tranchesOut[1] = TokenAmount({ token: bt.tranches[1], amount: juniorAmt });
 
         return tranchesOut;
+    }
+
+    /// @notice Wrapper function around bond's redeem function which handles min-debt error by retrying.
+    /// @dev When the bond is fully redeemed before maturity, button-wood's contract
+    ///      throws an error expecting `MINIMUM_VALID_DEBT` worth of collateral to stay within
+    ///      the bond till maturity. If we hit this error, we simply redeem as much as we can
+    ///      and leave some dust back.
+    function safeRedeemImmature(IBondController b, uint256[] memory trancheAmts) internal {
+        try b.redeem(trancheAmts) {
+            return;
+        } catch {
+            BondTranches memory bt = getTranches(b);
+            trancheAmts[0] -= MINIMUM_VALID_DEBT;
+            b.redeem(BondTranchesHelpers.computeRedeemableTrancheAmounts(bt, trancheAmts));
+        }
     }
 }

@@ -1,7 +1,7 @@
 import { HardhatUserConfig } from "hardhat/config";
 import { Wallet } from "ethers";
 
-import "@nomiclabs/hardhat-ethers";
+import "@nomicfoundation/hardhat-ethers";
 import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomicfoundation/hardhat-verify";
 import "@openzeppelin/hardhat-upgrades";
@@ -9,10 +9,10 @@ import "solidity-coverage";
 import "hardhat-gas-reporter";
 
 // Loads custom tasks
-import "./tasks/tools";
-import "./tasks/deploy";
-import "./tasks/upgrade";
-import "./tasks/ops";
+// import "./tasks/tools";
+// import "./tasks/deploy";
+// import "./tasks/upgrade";
+// import "./tasks/ops";
 
 // Loads env variables from .env file
 import * as dotenv from "dotenv";
@@ -62,7 +62,7 @@ export default {
   gasReporter: {
     currency: "USD",
     enabled: !!process.env.REPORT_GAS,
-    excludeContracts: ["mocks/"],
+    excludeContracts: ["_test/", "_interfaces/"],
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
   },
   etherscan: {

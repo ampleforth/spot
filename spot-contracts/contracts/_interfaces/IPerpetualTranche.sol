@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 
 import { IBondIssuer } from "./IBondIssuer.sol";
-import { IFeePolicy } from "./IFeePolicy.sol";
+import { IBalancer } from "./IBalancer.sol";
 import { IBondController } from "./buttonwood/IBondController.sol";
 import { ITranche } from "./buttonwood/ITranche.sol";
 import { IRolloverVault } from "./IRolloverVault.sol";
@@ -25,6 +25,16 @@ interface IPerpetualTranche is IERC20Upgradeable {
 
     //--------------------------------------------------------------------------
     // Methods
+
+    /// @notice Updates time dependent storage state.
+    function updateState() external;
+
+    /// @notice Updates the deposit bond, if enough time has passed.
+    /// @return The system's current deposit bond after the update.
+    function updateDepositBond() external returns (IBondController);
+
+    /// @notice Redeems mature tranche tokens held by perp for the underlying.
+    function recover() external;
 
     /// @notice Deposits tranche tokens into the system and mint perp tokens.
     /// @param trancheIn The address of the tranche token to be deposited.
@@ -66,63 +76,63 @@ interface IPerpetualTranche is IERC20Upgradeable {
 
     /// @notice The parent bond whose tranches are currently accepted to mint perp tokens.
     /// @return Address of the deposit bond.
-    function getDepositBond() external returns (IBondController);
+    function depositBond() external view returns (IBondController);
 
     /// @notice The tranche token contract currently accepted to mint perp tokens.
     /// @return Address of the deposit tranche ERC-20 token.
-    function getDepositTranche() external returns (ITranche);
+    function depositTranche() external view returns (ITranche);
 
     /// @return The tranche ratio of the current deposit tranche.
-    function getDepositTrancheRatio() external returns (uint256);
+    function depositTrancheRatio() external view returns (uint256);
 
-    /// @notice The policy contract with the fee computation logic for the perp and vault systems.
-    /// @return Address of the policy contract.
-    function feePolicy() external view returns (IFeePolicy);
+    /// @notice The balancer contract which controls fees and orchestrates external actions with perp and vault systems.
+    /// @return Address of the balancer contract.
+    function balancer() external view returns (IBalancer);
 
     /// @notice Total count of tokens held in the reserve.
     /// @return The reserve token count.
-    function getReserveCount() external returns (uint256);
+    function reserveCount() external view returns (uint256);
 
     /// @notice The token address from the reserve list by index.
     /// @param index The index of a token.
     /// @return The reserve token address.
-    function getReserveAt(uint256 index) external returns (IERC20Upgradeable);
+    function reserveAt(uint256 index) external view returns (IERC20Upgradeable);
 
     /// @notice Checks if the given token is part of the reserve.
     /// @param token The address of a token to check.
     /// @return If the token is part of the reserve.
-    function inReserve(IERC20Upgradeable token) external returns (bool);
+    function inReserve(IERC20Upgradeable token) external view returns (bool);
 
     /// @notice Fetches the reserve's token balance.
     /// @param token The address of the tranche token held by the reserve.
     /// @return The ERC-20 balance of the reserve token.
-    function getReserveTokenBalance(IERC20Upgradeable token) external returns (uint256);
+    function reserveTokenBalance(IERC20Upgradeable token) external view returns (uint256);
 
     /// @notice Calculates the reserve's token value,
     ///         in a standard denomination as defined by the implementation.
     /// @param token The address of the tranche token held by the reserve.
     /// @return The value of the reserve token balance held by the reserve, in a standard denomination.
-    function getReserveTokenValue(IERC20Upgradeable token) external returns (uint256);
+    function reserveTokenValue(IERC20Upgradeable token) external view returns (uint256);
 
     /// @notice Computes the total value of assets currently held in the reserve.
     /// @return The total value of the perp system, in a standard denomination.
-    function getTVL() external returns (uint256);
+    function getTVL() external view returns (uint256);
 
     /// @notice Fetches the list of reserve tokens which are up for rollover.
     /// @return The list of reserve tokens up for rollover.
-    function getReserveTokensUpForRollover() external returns (IERC20Upgradeable[] memory);
+    function reserveTokensUpForRollover() external view returns (IERC20Upgradeable[] memory);
 
     /// @notice Computes the amount of perp tokens minted when `trancheInAmt` `trancheIn` tokens
     ///         are deposited into the system.
     /// @param trancheIn The tranche token deposited.
     /// @param trancheInAmt The amount of tranche tokens deposited.
     /// @return The amount of perp tokens to be minted.
-    function computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) external returns (uint256);
+    function computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) external view returns (uint256);
 
     /// @notice Computes the amount reserve tokens redeemed when burning given number of perp tokens.
     /// @param perpAmtBurnt The amount of perp tokens to be burnt.
     /// @return tokensOut The list of reserve tokens and amounts redeemed.
-    function computeRedemptionAmts(uint256 perpAmtBurnt) external returns (TokenAmount[] memory tokensOut);
+    function computeRedemptionAmts(uint256 perpAmtBurnt) external view returns (TokenAmount[] memory tokensOut);
 
     /// @notice Computes the amount reserve tokens that are rolled out for the given number
     ///         of `trancheIn` tokens rolled in.
@@ -136,9 +146,9 @@ interface IPerpetualTranche is IERC20Upgradeable {
         uint256 trancheInAmtAvailable
     ) external returns (RolloverData memory r);
 
-    /// @notice Updates time dependent storage state.
-    function updateState() external;
-
     /// @return The system's current deviation ratio.
     function deviationRatio() external returns (uint256);
+
+    /// @notice Updates internal book-keeping with the reserve token's current balance.
+    function sync(IERC20Upgradeable token) external;
 }
