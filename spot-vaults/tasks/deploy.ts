@@ -91,3 +91,35 @@ task("deploy:BillBroker")
       console.log("Skipping verification");
     }
   });
+
+task("deploy:WethWamplManager")
+  .addParam(
+    "vault",
+    "the address of the weth-wampl charm vault",
+    undefined,
+    types.string,
+    false,
+  )
+  .addParam("cpiOracle", "the address of the usd oracle", undefined, types.string, false)
+  .addParam("ethOracle", "the address of the eth oracle", undefined, types.string, false)
+  .addParam("verify", "flag to set false for local deployments", true, types.boolean)
+  .setAction(async function (args: TaskArguments, hre) {
+    const deployer = (await hre.ethers.getSigners())[0];
+    console.log("Signer", await deployer.getAddress());
+
+    const { vault, cpiOracle, ethOracle } = args;
+
+    const WethWamplManager = await hre.ethers.getContractFactory("WethWamplManager");
+    const manager = await WethWamplManager.deploy(vault, cpiOracle, ethOracle);
+    console.log("wethWamplManager", manager.target);
+
+    if (args.verify) {
+      await sleep(30);
+      await hre.run("verify:contract", {
+        address: manager.target,
+        constructorArguments: [vault, ethOracle, cpiOracle],
+      });
+    } else {
+      console.log("Skipping verification");
+    }
+  });

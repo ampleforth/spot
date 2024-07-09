@@ -123,3 +123,58 @@ task("info:BillBroker")
     }
     console.log("---------------------------------------------------------------");
   });
+
+task("info:WethWamplManager")
+  .addPositionalParam(
+    "address",
+    "the address of the weth-wampl mananger contract",
+    undefined,
+    types.string,
+    false,
+  )
+  .setAction(async function (args: TaskArguments, hre) {
+    const { address } = args;
+
+    const manager = await hre.ethers.getContractAt("WethWamplManager", address);
+    const managerDecimals = await manager.decimals();
+    console.log("---------------------------------------------------------------");
+    console.log("WethWamplManager:", manager.target);
+    console.log("owner:", await manager.owner());
+    console.log("cpiOracle:", await manager.cpiOracle());
+    console.log("ethOracle:", await manager.ethOracle());
+
+    console.log("---------------------------------------------------------------");
+    const deviation = await manager.computeDeviationFactor.staticCall();
+    console.log("amplDeviation:", pp(deviation, managerDecimals));
+    console.log(
+      "inNarrowLimitRange:",
+      await manager.inNarrowLimitRange.staticCall(deviation),
+    );
+    console.log(
+      "activeLiqPerc:",
+      pp(
+        await manager.computeActiveLiqPerc(
+          await manager.computeDeviationFactor.staticCall(),
+        ),
+        managerDecimals,
+      ),
+    );
+
+    const ethPriceData = await manager.getEthUSDPrice();
+    console.log("ethPrice:", pp(ethPriceData[0], managerDecimals));
+
+    const wamplPrice = await manager.getWamplUSDPrice(ethPriceData[0]);
+    console.log("wamplPrice:", pp(wamplPrice, managerDecimals));
+
+    const amplPrice = await manager.getAmplUSDPrice(ethPriceData[0]);
+    console.log("amplPrice:", pp(amplPrice, managerDecimals));
+
+    let rebalanceActive = true;
+    try {
+      await manager.rebalance.staticCall();
+    } catch (e) {
+      rebalanceActive = false;
+    }
+    console.log("rebalanceActive:", rebalanceActive);
+    console.log("---------------------------------------------------------------");
+  });
