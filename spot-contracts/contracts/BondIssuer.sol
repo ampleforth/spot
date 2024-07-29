@@ -55,7 +55,7 @@ contract BondIssuer is IBondIssuer, OwnableUpgradeable {
 
     /// @notice The issue window begins this many seconds into the minIssueTimeIntervalSec period.
     /// @dev For example if minIssueTimeIntervalSec is 604800 (1 week), and issueWindowOffsetSec is 93600
-    ///      then the issue window opens at Friday 2AM GMT every week.
+    ///      then the issue window opens Friday at 2AM GMT every week.
     uint256 public issueWindowOffsetSec;
 
     /// @notice An enumerable list to keep track of bonds issued by this issuer.
