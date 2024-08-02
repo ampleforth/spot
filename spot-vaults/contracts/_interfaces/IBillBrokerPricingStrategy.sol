@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: BUSL-1.1
-pragma solidity ^0.8.24;
 
 /**
  * @title IBillBrokerPricingStrategy
@@ -8,6 +7,7 @@ pragma solidity ^0.8.24;
  *         which accepts Perp and USDC tokens.
  *
  */
+// solhint-disable-next-line compiler-version
 interface IBillBrokerPricingStrategy {
     /// @return Number of decimals representing the prices returned.
     function decimals() external pure returns (uint8);
