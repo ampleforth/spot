@@ -97,31 +97,38 @@ task("info:BillBroker")
         pp(r[1], perpDecimals) * pp(r[3], billBrokerDecimals);
       console.log("tvl", tvl);
 
-      const swapAmt = 1n;
-      console.log(
-        `Buy price for ${swapAmt} perp: `,
-        pp(
-          await billBroker["computePerpToUSDSwapAmt(uint256)"].staticCall(
-            unitPerp * swapAmt,
-          ),
-          usdDecimals,
-        ),
-      );
-      console.log(
-        `Sell price for ${swapAmt} perp: `,
-        1 /
+      console.log("---------------------------------------------------------------");
+      const swapAmts = [1n, 1000n, 10000n, 25000n, 50000n, 100000n];
+      for (let i = 0; i < swapAmts.length; i++) {
+        const swapAmt = swapAmts[i];
+        console.log(
+          `Buy price for ${swapAmt} perp: `,
           pp(
-            await billBroker["computeUSDToPerpSwapAmt(uint256)"].staticCall(
-              unitUsd * swapAmt,
+            await billBroker["computePerpToUSDSwapAmt(uint256)"].staticCall(
+              unitPerp * swapAmt,
             ),
-            perpDecimals,
-          ),
-      );
+            usdDecimals,
+          ) / parseInt(swapAmt),
+          `usd per perp`,
+        );
+        console.log(
+          `~Sell price for ${swapAmt} perp: `,
+          parseInt(swapAmt) /
+            pp(
+              await billBroker["computeUSDToPerpSwapAmt(uint256)"].staticCall(
+                unitUsd * swapAmt,
+              ),
+              perpDecimals,
+            ),
+          `usd per perp`,
+        );
+      }
+      console.log("---------------------------------------------------------------");
     } catch (e) {
       console.log(e);
       console.log("ReserveState: NA");
+      console.log("---------------------------------------------------------------");
     }
-    console.log("---------------------------------------------------------------");
   });
 
 task("info:WethWamplManager")
@@ -148,16 +155,15 @@ task("info:WethWamplManager")
     console.log("amplDeviation:", pp(deviation, managerDecimals));
     console.log(
       "inNarrowLimitRange:",
-      await manager.inNarrowLimitRange.staticCall(deviation),
+      await manager.checkNarrowLimitRange.staticCall(deviation),
+    );
+    console.log(
+      "lastActiveLiqPerc:",
+      pp(await manager.lastActiveLiqPerc(), managerDecimals),
     );
     console.log(
       "activeLiqPerc:",
-      pp(
-        await manager.computeActiveLiqPerc(
-          await manager.computeDeviationFactor.staticCall(),
-        ),
-        managerDecimals,
-      ),
+      pp(await manager.computeActiveLiqPerc(deviation), managerDecimals),
     );
 
     const ethPriceData = await manager.getEthUSDPrice();
