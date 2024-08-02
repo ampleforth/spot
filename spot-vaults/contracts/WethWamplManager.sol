@@ -25,8 +25,8 @@ contract WethWamplManager {
     uint256 public constant DECIMALS = 18;
     uint256 public constant ONE = (10 ** DECIMALS);
 
-    /// @dev At all times active liquidity percentage is no lower than 25%.
-    uint256 public constant MIN_ACTIVE_LIQ_PERC = ONE / 4; // 25%
+    /// @dev At all times active liquidity percentage is no lower than 20%.
+    uint256 public constant MIN_ACTIVE_LIQ_PERC = ONE / 5; // 20%
 
     /// @dev We bound the deviation factor to 100.0.
     uint256 public constant MAX_DEVIATION = 100 * ONE; // 100.0
@@ -65,10 +65,10 @@ contract WethWamplManager {
     // AMPL's current market price and its target price.
     // The deviation is 1.0, when AMPL is at the target.
     //
-    // The active liquidity percentage (a value between 5% to 100%)
+    // The active liquidity percentage (a value between 25% to 100%)
     // is computed based on pair-wise linear function, defined by the contract owner.
     //
-    // If the current deviation is below the deviation cutoff, function f1 is used
+    // If the current deviation is below ONE, function f1 is used
     // else function f2 is used. Both f1 and f2 are defined by the owner.
     // They are lines, with 2 {x,y} coordinates. The x coordinates are deviation factors,
     // and y coordinates are active liquidity percentages.
@@ -76,9 +76,6 @@ contract WethWamplManager {
     // Both deviation and active liquidity percentage and represented internally
     // as a fixed-point number with {DECIMALS} places.
     //
-    /// @notice The deviation cutoff which determines if either f1 or f2 is used
-    ///         to compute the active liquidity percentage.
-    uint256 public deviationCutoff;
 
     /// @notice A data structure to define a geometric Line with two points.
     struct Line {
@@ -92,37 +89,24 @@ contract WethWamplManager {
         uint256 y2;
     }
 
-    /// @notice Active percentage calculation function for when deviation is below the cutoff.
+    /// @notice Active percentage calculation function for when deviation is below ONE.
     Line public activeLiqPercFn1;
 
-    /// @notice Active percentage calculation function for when deviation is above the cutoff.
+    /// @notice Active percentage calculation function for when deviation is above ONE.
     Line public activeLiqPercFn2;
 
-    /// @notice The recorded active liquidity percentage at the time of the last successful rebalance operation.
-    uint256 public lastActiveLiqPerc;
+    //-------------------------------------------------------------------------
+    // Manager parameters
 
     /// @notice The delta between the current and last recorded active liquidity percentage values
     ///         outside which a rebalance is executed forcefully.
     uint256 public tolerableActiveLiqPercDelta;
 
     //-------------------------------------------------------------------------
-    // Limit range parameters
-    //
-    // Based on the deviation, the manager selectively updates the vault's limit threshold values.
-    //
-    // If the deviation is above the cutoff and the vault is WAMPL heavy,
-    // Or if the deviation is below the cutoff and the vault is WETH heavy,
-    // vault chooses a narrow limit range.
-    // Otherwise, the vault uses a wide limit range.
-    //
-    // This strategy attempts to reduce IL using knowledge about the behavior of AMPL.
-    // Put simply, The vault tries NOT to sell AMPL below the cutoff or buy AMPL above the cutoff.
+    // Manager storage
 
-    /// @notice The narrow limit range, in univ3 ticks.
-    int24 public limitThresholdNarrow;
-
-    /// @notice The default wide limit range, in univ3 ticks.
-    int24 public limitThresholdWide;
+    /// @notice The recorded deviation factor at the time of the last successful rebalance operation.
+    uint256 public prevDeviation;
 
     //--------------------------------------------------------------------------
     // Modifiers
@@ -155,24 +139,21 @@ contract WethWamplManager {
         cpiOracle = cpiOracle_;
         ethOracle = ethOracle_;
 
-        deviationCutoff = ONE; // 1.0
         activeLiqPercFn1 = Line({
-            x1: (ONE * 7) / 10, // 0.7
-            y1: ONE / 4, // 25%
-            x2: (ONE * 95) / 100, // 0.95
+            x1: ONE / 2, // 0.5
+            y1: ONE / 5, // 20%
+            x2: ONE, // 1.0
             y2: ONE // 100%
         });
         activeLiqPercFn2 = Line({
-            x1: (ONE * 120) / 100, // 1.2
+            x1: ONE, // 1.0
             y1: ONE, // 100%
-            x2: (ONE * 5) / 2, // 2.5
-            y2: ONE / 4 // 25%
+            x2: ONE * 2, // 2.0
+            y2: ONE / 5 // 20%
         });
-        lastActiveLiqPerc = ONE; // 100%
-        tolerableActiveLiqPercDelta = ONE / 10; // 10%
 
-        limitThresholdNarrow = 3200; // [-27.4%, 37.7%]
-        limitThresholdWide = 887200; // ~Inf
+        tolerableActiveLiqPercDelta = ONE / 10; // 10%
+        prevDeviation = 0;
     }
 
     //--------------------------------------------------------------------------
@@ -195,12 +176,10 @@ contract WethWamplManager {
 
     /// @notice Updates the active liquidity percentage calculation parameters.
     function setActivePercParams(
-        uint256 deviationCutoff_,
         uint256 tolerableActiveLiqPercDelta_,
         Line memory activeLiqPercFn1_,
         Line memory activeLiqPercFn2_
     ) external onlyOwner {
-        deviationCutoff = deviationCutoff_;
         tolerableActiveLiqPercDelta = tolerableActiveLiqPercDelta_;
         activeLiqPercFn1 = activeLiqPercFn1_;
         activeLiqPercFn2 = activeLiqPercFn2_;
@@ -210,17 +189,12 @@ contract WethWamplManager {
     function setLiquidityRanges(
         int24 baseThreshold,
         uint24 fullRangeWeight,
-        int24 limitThresholdNarrow_,
-        int24 limitThresholdWide_
+        int24 limitThreshold
     ) external onlyOwner {
-        // Update the base and full range parameters on the vault
+        // Update liquidity parameters on the vault.
         VAULT.setBaseThreshold(baseThreshold);
         VAULT.setFullRangeWeight(fullRangeWeight);
-
-        // Update the limit range parameters on the manager
-        limitThresholdNarrow = limitThresholdNarrow_;
-        limitThresholdWide = limitThresholdWide_;
-        VAULT.setLimitThreshold(limitThresholdWide_);
+        VAULT.setLimitThreshold(limitThreshold);
     }
 
     /// @notice Forwards the given calldata to the vault.
@@ -241,44 +215,59 @@ contract WethWamplManager {
 
     /// @notice Executes vault rebalance.
     function rebalance() public {
-        uint256 deviation = computeDeviationFactor();
-        uint256 activeLiqPerc = computeActiveLiqPerc(deviation);
+        // Get the current deviation factor.
+        (uint256 deviation, bool deviaitonValid) = computeDeviationFactor();
 
-        // Update limit range.
-        inNarrowLimitRange(deviation)
-            ? VAULT.setLimitThreshold(limitThresholdNarrow)
-            : VAULT.setLimitThreshold(limitThresholdWide);
+        // Calculate the current active liquidity percentage.
+        uint256 activeLiqPerc = deviaitonValid
+            ? computeActiveLiqPerc(deviation)
+            : MIN_ACTIVE_LIQ_PERC;
+
+        // We have to rebalance out of turn
+        //   - if the active liquidity perc has deviated significantly, or
+        //   - if the deviation factor has crossed ONE (in either direction).
+        uint256 prevActiveLiqPerc = computeActiveLiqPerc(prevDeviation);
+        uint256 activeLiqPercDelta = (activeLiqPerc > prevActiveLiqPerc)
+            ? activeLiqPerc - prevActiveLiqPerc
+            : prevActiveLiqPerc - activeLiqPerc;
+        bool forceLiquidityUpdate = (activeLiqPercDelta > tolerableActiveLiqPercDelta) ||
+            ((deviation <= ONE && prevDeviation > ONE) ||
+                (deviation >= ONE && prevDeviation < ONE));
 
         // Execute rebalance.
         // NOTE: the vault.rebalance() will revert if enough time has not elapsed.
         // We thus override with a force rebalance.
         // https://learn.charm.fi/charm/technical-references/core/alphaprovault#rebalance
-        uint256 activeLiqPercDelta = activeLiqPerc > lastActiveLiqPerc
-            ? (activeLiqPerc - lastActiveLiqPerc)
-            : (lastActiveLiqPerc - activeLiqPerc);
-        activeLiqPercDelta > tolerableActiveLiqPercDelta
-            ? _execForceRebalance()
-            : VAULT.rebalance();
+        forceLiquidityUpdate ? _execForceRebalance() : VAULT.rebalance();
 
-        // Trim position after rebalance.
-        _trimLiquidity(activeLiqPerc);
+        // We only activate the limit range liquidity, when
+        // the vault sells WAMPL and deviation is above ONE, or when
+        // the vault buys WAMPL and deviation is below ONE
+        bool extraWampl = isOverweightWampl();
+        bool activeLimitRange = deviaitonValid &&
+            ((deviation >= ONE && extraWampl) || (deviation <= ONE && !extraWampl));
 
-        // Update the active liquidity percentage
-        lastActiveLiqPerc = activeLiqPerc;
+        // Trim positions after rebalance.
+        _trimLiquidity(activeLiqPerc, activeLimitRange);
+
+        // Update rebalance state.
+        prevDeviation = deviation;
     }
 
     /// @notice Computes the deviation between AMPL's market price and target.
     /// @return The computed deviation factor.
-    function computeDeviationFactor() public returns (uint256) {
+    function computeDeviationFactor() public returns (uint256, bool) {
         (uint256 ethUSDPrice, bool ethPriceValid) = getEthUSDPrice();
         uint256 marketPrice = getAmplUSDPrice(ethUSDPrice);
         (uint256 targetPrice, bool targetPriceValid) = _getAmpleforthOracleData(
             cpiOracle
         );
-        uint256 deviation = (ethPriceValid && targetPriceValid)
+        bool deviaitonValid = (ethPriceValid && targetPriceValid);
+        uint256 deviation = (targetPrice > 0)
             ? FullMath.mulDiv(marketPrice, ONE, targetPrice)
-            : 0;
-        return (deviation > MAX_DEVIATION) ? MAX_DEVIATION : deviation;
+            : type(uint256).max;
+        deviation = (deviation > MAX_DEVIATION) ? MAX_DEVIATION : deviation;
+        return (deviation, deviaitonValid);
     }
 
     //-----------------------------------------------------------------------------
@@ -288,24 +277,9 @@ contract WethWamplManager {
     /// @return The computed active liquidity percentage.
     function computeActiveLiqPerc(uint256 deviation) public view returns (uint256) {
         return
-            (deviation <= deviationCutoff)
+            (deviation <= ONE)
                 ? _computeActiveLiqPerc(activeLiqPercFn1, deviation)
                 : _computeActiveLiqPerc(activeLiqPercFn2, deviation);
-    }
-
-    /// @notice Checks if the vault is in the narrow limit range based on the current deviation factor.
-    function inNarrowLimitRange(uint256 deviation) public view returns (bool) {
-        int24 _marketPrice = VAULT.getTwap();
-        int24 _limitLower = VAULT.limitLower();
-        int24 _limitUpper = VAULT.limitUpper();
-        int24 _limitPrice = (_limitLower + _limitUpper) / 2;
-        // The limit range has more WAMPL than WETH if `_marketPrice >= _limitPrice`,
-        // so the vault looks to sell WAMPL.
-        // NOTE: This assumes that in the underlying univ3 pool
-        // token0 is WETH and token1 is WAMPL.
-        bool isWamplAsk = (_marketPrice >= _limitPrice);
-        return ((deviation >= deviationCutoff && isWamplAsk) ||
-            (deviation <= deviationCutoff && !isWamplAsk));
     }
 
     /// @notice Computes the AMPL price in USD.
@@ -340,6 +314,19 @@ contract WethWamplManager {
         return _getCLOracleData(ethOracle);
     }
 
+    /// @notice Checks the vault is overweight WAMPL, and looking to sell the extra WAMPL for WETH.
+    function isOverweightWampl() public view returns (bool) {
+        // NOTE: This assumes that in the underlying univ3 pool and
+        // token0 is WETH and token1 is WAMPL.
+        int24 _marketPrice = VAULT.getTwap();
+        int24 _limitLower = VAULT.limitLower();
+        int24 _limitUpper = VAULT.limitUpper();
+        int24 _limitPrice = (_limitLower + _limitUpper) / 2;
+        // The limit range has more token1 than token0 if `_marketPrice >= _limitPrice`,
+        // so the vault looks to sell token1.
+        return (_marketPrice >= _limitPrice);
+    }
+
     /// @return Number of decimals representing 1.0.
     function decimals() external pure returns (uint8) {
         return uint8(DECIMALS);
@@ -348,32 +335,39 @@ contract WethWamplManager {
     //-----------------------------------------------------------------------------
     // Private methods
 
-    /// @dev Trims the vault's current liquidity based on the active liquidity percentage.
+    /// @dev Trims the vault's current liquidity.
     ///      To be invoked right after a rebalance operation, as it assumes that all of the vault's
     ///      liquidity has been deployed before trimming.
-    function _trimLiquidity(uint256 activePerc) private {
-        int24 _fullLower = VAULT.fullLower();
-        int24 _fullUpper = VAULT.fullUpper();
-
-        int24 _baseLower = VAULT.baseLower();
-        int24 _baseUpper = VAULT.baseUpper();
-
-        (uint128 fullLiquidity, , , , ) = _position(_fullLower, _fullUpper);
-        (uint128 baseLiquidity, , , , ) = _position(_baseLower, _baseUpper);
-
+    function _trimLiquidity(uint256 activePerc, bool activeLimitRange) private {
         // Calculated baseLiquidityToBurn, baseLiquidityToBurn will be lesser than fullLiquidity, baseLiquidity
         // Thus, there's no risk of overflow.
-        uint128 fullLiquidityToBurn = uint128(
-            FullMath.mulDiv(uint256(fullLiquidity), ONE - activePerc, ONE)
-        );
-        uint128 baseLiquidityToBurn = uint128(
-            FullMath.mulDiv(uint256(baseLiquidity), ONE - activePerc, ONE)
-        );
+        if (activePerc < ONE) {
+            int24 _fullLower = VAULT.fullLower();
+            int24 _fullUpper = VAULT.fullUpper();
+            int24 _baseLower = VAULT.baseLower();
+            int24 _baseUpper = VAULT.baseUpper();
+            (uint128 fullLiquidity, , , , ) = _position(_fullLower, _fullUpper);
+            (uint128 baseLiquidity, , , , ) = _position(_baseLower, _baseUpper);
+            uint128 fullLiquidityToBurn = uint128(
+                FullMath.mulDiv(uint256(fullLiquidity), ONE - activePerc, ONE)
+            );
+            uint128 baseLiquidityToBurn = uint128(
+                FullMath.mulDiv(uint256(baseLiquidity), ONE - activePerc, ONE)
+            );
+            // docs: https://learn.charm.fi/charm/technical-references/core/alphaprovault#emergencyburn
+            // We remove the calculated percentage of base and full range liquidity.
+            VAULT.emergencyBurn(_fullLower, _fullUpper, fullLiquidityToBurn);
+            VAULT.emergencyBurn(_baseLower, _baseUpper, baseLiquidityToBurn);
+        }
 
-        // docs: https://learn.charm.fi/charm/technical-references/core/alphaprovault#emergencyburn
-        VAULT.emergencyBurn(_fullLower, _fullUpper, fullLiquidityToBurn);
-        VAULT.emergencyBurn(_baseLower, _baseUpper, baseLiquidityToBurn);
-        // NOTE: Limit liquidity remains unchanged here.
+        // When the limit range is not active, we remove entirely.
+        if (!activeLimitRange) {
+            int24 _limitLower = VAULT.limitLower();
+            int24 _limitUpper = VAULT.limitUpper();
+            (uint128 limitLiquidity, , , , ) = _position(_limitLower, _limitUpper);
+            // docs: https://learn.charm.fi/charm/technical-references/core/alphaprovault#emergencyburn
+            VAULT.emergencyBurn(_limitLower, _limitUpper, limitLiquidity);
+        }
     }
 
     /// @dev Fetches most recent report from the given ampleforth oracle contract.
