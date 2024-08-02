@@ -216,10 +216,10 @@ contract WethWamplManager {
     /// @notice Executes vault rebalance.
     function rebalance() public {
         // Get the current deviation factor.
-        (uint256 deviation, bool deviaitonValid) = computeDeviationFactor();
+        (uint256 deviation, bool deviationValid) = computeDeviationFactor();
 
         // Calculate the current active liquidity percentage.
-        uint256 activeLiqPerc = deviaitonValid
+        uint256 activeLiqPerc = deviationValid
             ? computeActiveLiqPerc(deviation)
             : MIN_ACTIVE_LIQ_PERC;
 
@@ -244,7 +244,7 @@ contract WethWamplManager {
         // the vault sells WAMPL and deviation is above ONE, or when
         // the vault buys WAMPL and deviation is below ONE
         bool extraWampl = isOverweightWampl();
-        bool activeLimitRange = deviaitonValid &&
+        bool activeLimitRange = deviationValid &&
             ((deviation >= ONE && extraWampl) || (deviation <= ONE && !extraWampl));
 
         // Trim positions after rebalance.
@@ -262,12 +262,12 @@ contract WethWamplManager {
         (uint256 targetPrice, bool targetPriceValid) = _getAmpleforthOracleData(
             cpiOracle
         );
-        bool deviaitonValid = (ethPriceValid && targetPriceValid);
+        bool deviationValid = (ethPriceValid && targetPriceValid);
         uint256 deviation = (targetPrice > 0)
             ? FullMath.mulDiv(marketPrice, ONE, targetPrice)
             : type(uint256).max;
         deviation = (deviation > MAX_DEVIATION) ? MAX_DEVIATION : deviation;
-        return (deviation, deviaitonValid);
+        return (deviation, deviationValid);
     }
 
     //-----------------------------------------------------------------------------

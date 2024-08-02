@@ -125,7 +125,7 @@ contract UsdcSpotManager {
 
     /// @notice Executes vault rebalance.
     function rebalance() public {
-        (uint256 deviation, bool deviaitonValid) = computeDeviationFactor();
+        (uint256 deviation, bool deviationValid) = computeDeviationFactor();
 
         // We rebalance if the deviation factor has crossed ONE (in either direction).
         bool forceLiquidityUpdate = ((deviation <= ONE && prevDeviation > ONE) ||
@@ -141,7 +141,7 @@ contract UsdcSpotManager {
         // the vault sells SPOT and deviation is above ONE, or when
         // the vault buys SPOT and deviation is below ONE
         bool extraSpot = isOverweightSpot();
-        bool activeLimitRange = deviaitonValid &&
+        bool activeLimitRange = deviationValid &&
             ((deviation >= ONE && extraSpot) || (deviation <= ONE && !extraSpot));
 
         // Trim positions after rebalance.
@@ -159,12 +159,12 @@ contract UsdcSpotManager {
         uint256 spotMarketPrice = getSpotUSDPrice();
         (uint256 spotTargetPrice, bool spotTargetPriceValid) = spotAppraiser.perpPrice();
         (, bool usdcPriceValid) = spotAppraiser.usdPrice();
-        bool deviaitonValid = (spotTargetPriceValid && usdcPriceValid);
+        bool deviationValid = (spotTargetPriceValid && usdcPriceValid);
         uint256 deviation = spotTargetPrice > 0
             ? FullMath.mulDiv(spotMarketPrice, ONE, spotTargetPrice)
             : type(uint256).max;
         deviation = (deviation > MAX_DEVIATION) ? MAX_DEVIATION : deviation;
-        return (deviation, deviaitonValid);
+        return (deviation, deviationValid);
     }
 
     //-----------------------------------------------------------------------------
