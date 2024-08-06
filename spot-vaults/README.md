@@ -6,6 +6,7 @@ The official mainnet addresses are:
 
 - Bill Broker (SPOT-USDC): [0xA088Aef966CAD7fE0B38e28c2E07590127Ab4ccB](https://etherscan.io/address/0xA088Aef966CAD7fE0B38e28c2E07590127Ab4ccB)
 - SpotAppraiser: [0x965FBFebDA76d9AA11642C1d0074CdF02e546F3c](https://etherscan.io/address/0x965FBFebDA76d9AA11642C1d0074CdF02e546F3c)
+- WethWamplManager: [0x6785fa26191eb531c54fd093931f395c4b01b583](https://etherscan.io/address/0x6785fa26191eb531c54fd093931f395c4b01b583)
 
 The official testnet addresses are:
 
