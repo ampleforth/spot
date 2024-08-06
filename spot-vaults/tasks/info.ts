@@ -151,21 +151,6 @@ task("info:WethWamplManager")
     console.log("ethOracle:", await manager.ethOracle());
 
     console.log("---------------------------------------------------------------");
-    const deviation = await manager.computeDeviationFactor.staticCall();
-    console.log("amplDeviation:", pp(deviation, managerDecimals));
-    console.log(
-      "inNarrowLimitRange:",
-      await manager.checkNarrowLimitRange.staticCall(deviation),
-    );
-    console.log(
-      "lastActiveLiqPerc:",
-      pp(await manager.lastActiveLiqPerc(), managerDecimals),
-    );
-    console.log(
-      "activeLiqPerc:",
-      pp(await manager.computeActiveLiqPerc(deviation), managerDecimals),
-    );
-
     const ethPriceData = await manager.getEthUSDPrice();
     console.log("ethPrice:", pp(ethPriceData[0], managerDecimals));
 
@@ -174,6 +159,17 @@ task("info:WethWamplManager")
 
     const amplPrice = await manager.getAmplUSDPrice(ethPriceData[0]);
     console.log("amplPrice:", pp(amplPrice, managerDecimals));
+
+    const r = await manager.computeDeviationFactor.staticCall();
+    const deviation = r[0];
+    console.log("dataValid:", r[1]);
+    console.log("isOverweightWampl:", await manager.isOverweightWampl());
+    console.log("prevDeviation:", pp(await manager.prevDeviation(), managerDecimals));
+    console.log("amplDeviation:", pp(deviation, managerDecimals));
+    console.log(
+      "activeLiqPerc:",
+      pp(await manager.computeActiveLiqPerc(deviation), managerDecimals),
+    );
 
     let rebalanceActive = true;
     try {
