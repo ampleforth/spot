@@ -65,7 +65,7 @@ contract WethWamplManager {
     // AMPL's current market price and its target price.
     // The deviation is 1.0, when AMPL is at the target.
     //
-    // The active liquidity percentage (a value between 25% to 100%)
+    // The active liquidity percentage (a value between 20% to 100%)
     // is computed based on pair-wise linear function, defined by the contract owner.
     //
     // If the current deviation is below ONE, function f1 is used
