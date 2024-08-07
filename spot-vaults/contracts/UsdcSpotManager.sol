@@ -174,8 +174,8 @@ contract UsdcSpotManager {
     function getSpotUSDPrice() public view returns (uint256) {
         uint160 sqrtPriceX96 = TickMath.getSqrtRatioAtTick(VAULT.getTwap());
         uint256 ratioX192 = uint256(sqrtPriceX96) * sqrtPriceX96;
-        uint256 spotPerUsdc = FullMath.mulDiv(ONE, ratioX192, (1 << 192));
-        return FullMath.mulDiv(spotPerUsdc, ONE_USDC, ONE_SPOT);
+        uint256 usdcPerSpot = FullMath.mulDiv(ONE, (1 << 192), ratioX192);
+        return FullMath.mulDiv(usdcPerSpot, ONE_SPOT, ONE_USDC);
     }
 
     /// @notice Checks the vault is overweight SPOT, and looking to sell the extra SPOT for USDC.
