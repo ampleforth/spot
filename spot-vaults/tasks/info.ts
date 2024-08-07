@@ -97,31 +97,38 @@ task("info:BillBroker")
         pp(r[1], perpDecimals) * pp(r[3], billBrokerDecimals);
       console.log("tvl", tvl);
 
-      const swapAmt = 1n;
-      console.log(
-        `Buy price for ${swapAmt} perp: `,
-        pp(
-          await billBroker["computePerpToUSDSwapAmt(uint256)"].staticCall(
-            unitPerp * swapAmt,
-          ),
-          usdDecimals,
-        ),
-      );
-      console.log(
-        `Sell price for ${swapAmt} perp: `,
-        1 /
+      console.log("---------------------------------------------------------------");
+      const swapAmts = [1n, 1000n, 10000n, 25000n, 50000n, 100000n];
+      for (let i = 0; i < swapAmts.length; i++) {
+        const swapAmt = swapAmts[i];
+        console.log(
+          `Buy price for ${swapAmt} perp: `,
           pp(
-            await billBroker["computeUSDToPerpSwapAmt(uint256)"].staticCall(
-              unitUsd * swapAmt,
+            await billBroker["computePerpToUSDSwapAmt(uint256)"].staticCall(
+              unitPerp * swapAmt,
             ),
-            perpDecimals,
-          ),
-      );
+            usdDecimals,
+          ) / parseInt(swapAmt),
+          `usd per perp`,
+        );
+        console.log(
+          `~Sell price for ${swapAmt} perp: `,
+          parseInt(swapAmt) /
+            pp(
+              await billBroker["computeUSDToPerpSwapAmt(uint256)"].staticCall(
+                unitUsd * swapAmt,
+              ),
+              perpDecimals,
+            ),
+          `usd per perp`,
+        );
+      }
+      console.log("---------------------------------------------------------------");
     } catch (e) {
       console.log(e);
       console.log("ReserveState: NA");
+      console.log("---------------------------------------------------------------");
     }
-    console.log("---------------------------------------------------------------");
   });
 
 task("info:WethWamplManager")
@@ -144,22 +151,6 @@ task("info:WethWamplManager")
     console.log("ethOracle:", await manager.ethOracle());
 
     console.log("---------------------------------------------------------------");
-    const deviation = await manager.computeDeviationFactor.staticCall();
-    console.log("amplDeviation:", pp(deviation, managerDecimals));
-    console.log(
-      "inNarrowLimitRange:",
-      await manager.inNarrowLimitRange.staticCall(deviation),
-    );
-    console.log(
-      "activeLiqPerc:",
-      pp(
-        await manager.computeActiveLiqPerc(
-          await manager.computeDeviationFactor.staticCall(),
-        ),
-        managerDecimals,
-      ),
-    );
-
     const ethPriceData = await manager.getEthUSDPrice();
     console.log("ethPrice:", pp(ethPriceData[0], managerDecimals));
 
@@ -168,6 +159,17 @@ task("info:WethWamplManager")
 
     const amplPrice = await manager.getAmplUSDPrice(ethPriceData[0]);
     console.log("amplPrice:", pp(amplPrice, managerDecimals));
+
+    const r = await manager.computeDeviationFactor.staticCall();
+    const deviation = r[0];
+    console.log("dataValid:", r[1]);
+    console.log("isOverweightWampl:", await manager.isOverweightWampl());
+    console.log("prevDeviation:", pp(await manager.prevDeviation(), managerDecimals));
+    console.log("amplDeviation:", pp(deviation, managerDecimals));
+    console.log(
+      "activeLiqPerc:",
+      pp(await manager.computeActiveLiqPerc(deviation), managerDecimals),
+    );
 
     let rebalanceActive = true;
     try {

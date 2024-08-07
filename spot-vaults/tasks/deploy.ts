@@ -117,7 +117,7 @@ task("deploy:WethWamplManager")
       await sleep(30);
       await hre.run("verify:contract", {
         address: manager.target,
-        constructorArguments: [vault, ethOracle, cpiOracle],
+        constructorArguments: [vault, cpiOracle, ethOracle],
       });
     } else {
       console.log("Skipping verification");
