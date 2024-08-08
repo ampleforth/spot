@@ -21,7 +21,7 @@ describe("UsdcSpotManager", function () {
     await mockVault.mockMethod("fullUpper()", [800000]);
     await mockVault.mockMethod("baseLower()", [45000]);
     await mockVault.mockMethod("baseUpper()", [55000]);
-    await mockVault.mockMethod("getTwap()", [71000]);
+    await mockVault.mockMethod("getTwap()", [67200]);
     await mockVault.mockMethod("limitThreshold()", [800000]);
 
     const mockPool = new DMock("IUniswapV3Pool");
@@ -176,7 +176,7 @@ describe("UsdcSpotManager", function () {
         const { manager, mockAppraiser } = await loadFixture(setupContracts);
         await mockAppraiser.mockMethod("perpPrice()", [priceFP("1.2"), false]);
         const r = await manager.computeDeviationFactor.staticCall();
-        expect(r[0]).to.eq(percFP("1.009614109343384160"));
+        expect(r[0]).to.eq(percFP("1.0057863765655975"));
         expect(r[1]).to.eq(false);
       });
     });
@@ -186,7 +186,7 @@ describe("UsdcSpotManager", function () {
         const { manager, mockAppraiser } = await loadFixture(setupContracts);
         await mockAppraiser.mockMethod("usdPrice()", [priceFP("0.8"), false]);
         const r = await manager.computeDeviationFactor.staticCall();
-        expect(r[0]).to.eq(percFP("1.009614109343384160"));
+        expect(r[0]).to.eq(percFP("1.0057863765655975"));
         expect(r[1]).to.eq(false);
       });
     });
@@ -194,23 +194,23 @@ describe("UsdcSpotManager", function () {
     it("should return deviation factor", async function () {
       const { manager } = await loadFixture(setupContracts);
       const r = await manager.computeDeviationFactor.staticCall();
-      expect(r[0]).to.eq(percFP("1.009614109343384160"));
+      expect(r[0]).to.eq(percFP("1.0057863765655975"));
       expect(r[1]).to.eq(true);
     });
 
     it("should return deviation factor", async function () {
       const { manager, mockVault } = await loadFixture(setupContracts);
-      await mockVault.mockMethod("getTwap()", [72500]);
+      await mockVault.mockMethod("getTwap()", [65800]);
       const r = await manager.computeDeviationFactor.staticCall();
-      expect(r[0]).to.eq(percFP("1.172995447264373845"));
+      expect(r[0]).to.eq(percFP("1.1569216182711425"));
       expect(r[1]).to.eq(true);
     });
 
     it("should return deviation factor", async function () {
       const { manager, mockVault } = await loadFixture(setupContracts);
-      await mockVault.mockMethod("getTwap()", [70500]);
+      await mockVault.mockMethod("getTwap()", [67800]);
       const r = await manager.computeDeviationFactor.staticCall();
-      expect(r[0]).to.eq(percFP("0.960377048978079093"));
+      expect(r[0]).to.eq(percFP("0.947216779268338333"));
       expect(r[1]).to.eq(true);
     });
 
@@ -218,7 +218,7 @@ describe("UsdcSpotManager", function () {
       const { manager, mockAppraiser } = await loadFixture(setupContracts);
       await mockAppraiser.mockMethod("perpPrice()", [priceFP("1.5"), true]);
       const r = await manager.computeDeviationFactor.staticCall();
-      expect(r[0]).to.eq(percFP("0.807691287474707328"));
+      expect(r[0]).to.eq(percFP("0.804629101252478"));
       expect(r[1]).to.eq(true);
     });
 
@@ -226,7 +226,7 @@ describe("UsdcSpotManager", function () {
       const { manager, mockAppraiser } = await loadFixture(setupContracts);
       await mockAppraiser.mockMethod("perpPrice()", [priceFP("1"), true]);
       const r = await manager.computeDeviationFactor.staticCall();
-      expect(r[0]).to.eq(percFP("1.211536931212060992"));
+      expect(r[0]).to.eq(percFP("1.206943651878717"));
       expect(r[1]).to.eq(true);
     });
 
@@ -267,7 +267,7 @@ describe("UsdcSpotManager", function () {
         it("should keep limit range", async function () {
           const { manager, mockVault } = await loadFixture(setupContracts);
 
-          await mockVault.mockMethod("getTwap()", [72000]);
+          await mockVault.mockMethod("getTwap()", [66200]);
           await mockVault.mockMethod("limitLower()", [40000]);
           await mockVault.mockMethod("limitUpper()", [45000]);
 
@@ -279,7 +279,7 @@ describe("UsdcSpotManager", function () {
           expect(await manager.prevDeviation()).to.eq("0");
           expect(await manager.isOverweightSpot()).to.eq(true);
           await expect(manager.rebalance()).not.to.be.reverted;
-          expect(await manager.prevDeviation()).to.eq(percFP("1.11579057353024426"));
+          expect(await manager.prevDeviation()).to.eq(percFP("1.111560295732100833"));
         });
       });
 
@@ -287,7 +287,7 @@ describe("UsdcSpotManager", function () {
         it("should remove limit range", async function () {
           const { manager, mockVault, mockPool } = await loadFixture(setupContracts);
 
-          await mockVault.mockMethod("getTwap()", [72000]);
+          await mockVault.mockMethod("getTwap()", [66200]);
           await mockVault.mockMethod("limitLower()", [73000]);
           await mockVault.mockMethod("limitUpper()", [75000]);
           await mockPool.mockCall(
@@ -309,7 +309,7 @@ describe("UsdcSpotManager", function () {
           expect(await manager.prevDeviation()).to.eq("0");
           expect(await manager.isOverweightSpot()).to.eq(false);
           await expect(manager.rebalance()).not.to.be.reverted;
-          expect(await manager.prevDeviation()).to.eq(percFP("1.115790573530244260"));
+          expect(await manager.prevDeviation()).to.eq(percFP("1.111560295732100833"));
         });
       });
     });
@@ -319,7 +319,7 @@ describe("UsdcSpotManager", function () {
         it("should remove limit range", async function () {
           const { manager, mockVault, mockPool } = await loadFixture(setupContracts);
 
-          await mockVault.mockMethod("getTwap()", [72000]);
+          await mockVault.mockMethod("getTwap()", [66200]);
           await mockVault.mockMethod("limitLower()", [40000]);
           await mockVault.mockMethod("limitUpper()", [45000]);
           await mockVault.mockMethod("period()", [86400]);
@@ -328,7 +328,7 @@ describe("UsdcSpotManager", function () {
           await mockVault.mockMethod("rebalance()", []);
           await manager.rebalance();
 
-          await mockVault.mockMethod("getTwap()", [70000]);
+          await mockVault.mockMethod("getTwap()", [67800]);
           await mockVault.mockMethod("limitLower()", [60000]);
           await mockVault.mockMethod("limitUpper()", [65000]);
           await mockPool.mockCall(
@@ -343,10 +343,10 @@ describe("UsdcSpotManager", function () {
             [],
           );
 
-          expect(await manager.prevDeviation()).to.eq(percFP("1.115790573530244260"));
+          expect(await manager.prevDeviation()).to.eq(percFP("1.111560295732100833"));
           expect(await manager.isOverweightSpot()).to.eq(true);
           await expect(manager.rebalance()).not.to.be.reverted;
-          expect(await manager.prevDeviation()).to.eq(percFP("0.913541191300990579"));
+          expect(await manager.prevDeviation()).to.eq(percFP("0.947216779268338333"));
         });
       });
 
@@ -354,7 +354,7 @@ describe("UsdcSpotManager", function () {
         it("should keep limit range", async function () {
           const { manager, mockVault } = await loadFixture(setupContracts);
 
-          await mockVault.mockMethod("getTwap()", [72000]);
+          await mockVault.mockMethod("getTwap()", [66200]);
           await mockVault.mockMethod("limitLower()", [40000]);
           await mockVault.mockMethod("limitUpper()", [45000]);
           await mockVault.mockMethod("period()", [86400]);
@@ -363,15 +363,15 @@ describe("UsdcSpotManager", function () {
           await mockVault.mockMethod("rebalance()", []);
           await manager.rebalance();
 
-          await mockVault.mockMethod("getTwap()", [70000]);
+          await mockVault.mockMethod("getTwap()", [67800]);
           await mockVault.mockMethod("limitLower()", [75000]);
           await mockVault.mockMethod("limitUpper()", [80000]);
           await mockVault.clearMockMethod("emergencyBurn(int24,int24,uint128)");
 
-          expect(await manager.prevDeviation()).to.eq(percFP("1.115790573530244260"));
+          expect(await manager.prevDeviation()).to.eq(percFP("1.111560295732100833"));
           expect(await manager.isOverweightSpot()).to.eq(false);
           await expect(manager.rebalance()).not.to.be.reverted;
-          expect(await manager.prevDeviation()).to.eq(percFP("0.913541191300990579"));
+          expect(await manager.prevDeviation()).to.eq(percFP("0.947216779268338333"));
         });
       });
     });
@@ -381,7 +381,7 @@ describe("UsdcSpotManager", function () {
         it("should not force rebalance", async function () {
           const { manager, mockVault, mockPool } = await loadFixture(setupContracts);
 
-          await mockVault.mockMethod("getTwap()", [70500]);
+          await mockVault.mockMethod("getTwap()", [67800]);
           await mockVault.mockMethod("limitLower()", [40000]);
           await mockVault.mockMethod("limitUpper()", [45000]);
           await mockVault.mockMethod("rebalance()", []);
@@ -399,7 +399,7 @@ describe("UsdcSpotManager", function () {
           expect(await manager.prevDeviation()).to.eq("0");
           expect(await manager.isOverweightSpot()).to.eq(true);
           await expect(manager.rebalance()).not.to.be.reverted;
-          expect(await manager.prevDeviation()).to.eq(percFP("0.960377048978079093"));
+          expect(await manager.prevDeviation()).to.eq(percFP("0.947216779268338333"));
         });
       });
     });
@@ -409,7 +409,7 @@ describe("UsdcSpotManager", function () {
         it("should not force rebalance", async function () {
           const { manager, mockVault, mockPool } = await loadFixture(setupContracts);
 
-          await mockVault.mockMethod("getTwap()", [72000]);
+          await mockVault.mockMethod("getTwap()", [66200]);
           await mockVault.mockMethod("limitLower()", [40000]);
           await mockVault.mockMethod("limitUpper()", [45000]);
           await mockVault.mockMethod("period()", [86400]);
@@ -423,7 +423,7 @@ describe("UsdcSpotManager", function () {
           await mockVault.clearMockCall("period()", []);
           await mockVault.clearMockMethod("emergencyBurn(int24,int24,uint128)");
 
-          await mockVault.mockMethod("getTwap()", [71500]);
+          await mockVault.mockMethod("getTwap()", [66800]);
           await mockVault.mockMethod("limitLower()", [75000]);
           await mockVault.mockMethod("limitUpper()", [80000]);
           await mockPool.mockCall(
@@ -433,10 +433,10 @@ describe("UsdcSpotManager", function () {
           );
           await mockVault.mockMethod("emergencyBurn(int24,int24,uint128)", []);
 
-          expect(await manager.prevDeviation()).to.eq(percFP("1.115790573530244260"));
+          expect(await manager.prevDeviation()).to.eq(percFP("1.111560295732100833"));
           expect(await manager.isOverweightSpot()).to.eq(false);
           await expect(manager.rebalance()).not.to.be.reverted;
-          expect(await manager.prevDeviation()).to.eq(percFP("1.061375478380992817"));
+          expect(await manager.prevDeviation()).to.eq(percFP("1.0468312037404625"));
         });
       });
     });

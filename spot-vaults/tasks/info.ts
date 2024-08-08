@@ -165,11 +165,50 @@ task("info:WethWamplManager")
     console.log("dataValid:", r[1]);
     console.log("isOverweightWampl:", await manager.isOverweightWampl());
     console.log("prevDeviation:", pp(await manager.prevDeviation(), managerDecimals));
-    console.log("amplDeviation:", pp(deviation, managerDecimals));
+    console.log("deviation:", pp(deviation, managerDecimals));
     console.log(
       "activeLiqPerc:",
       pp(await manager.computeActiveLiqPerc(deviation), managerDecimals),
     );
+
+    let rebalanceActive = true;
+    try {
+      await manager.rebalance.staticCall();
+    } catch (e) {
+      rebalanceActive = false;
+    }
+    console.log("rebalanceActive:", rebalanceActive);
+    console.log("---------------------------------------------------------------");
+  });
+
+task("info:UsdcSpotManager")
+  .addPositionalParam(
+    "address",
+    "the address of the usdc-spot mananger contract",
+    undefined,
+    types.string,
+    false,
+  )
+  .setAction(async function (args: TaskArguments, hre) {
+    const { address } = args;
+
+    const manager = await hre.ethers.getContractAt("UsdcSpotManager", address);
+    const managerDecimals = await manager.decimals();
+    console.log("---------------------------------------------------------------");
+    console.log("UsdcSpotManager:", manager.target);
+    console.log("owner:", await manager.owner());
+    console.log("spotAppraiser:", await manager.spotAppraiser());
+
+    console.log("---------------------------------------------------------------");
+    const spotPrice = await manager.getSpotUSDPrice();
+    console.log("spotPrice:", pp(spotPrice, managerDecimals));
+
+    const r = await manager.computeDeviationFactor.staticCall();
+    const deviation = r[0];
+    console.log("dataValid:", r[1]);
+    console.log("isOverweightSpot:", await manager.isOverweightSpot());
+    console.log("prevDeviation:", pp(await manager.prevDeviation(), managerDecimals));
+    console.log("deviation:", pp(deviation, managerDecimals));
 
     let rebalanceActive = true;
     try {
