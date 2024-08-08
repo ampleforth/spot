@@ -1,9 +1,8 @@
 import { task, types } from "hardhat/config";
 import { TaskArguments } from "hardhat/types";
 
-export async function sleep(sleepSec: number) {
-  await new Promise(resolve => setTimeout(resolve, sleepSec));
-}
+export const sleep = seconds =>
+  new Promise(resolve => setTimeout(resolve, seconds * 1000));
 
 task("accounts", "Prints the list of accounts", async (_taskArgs, hre) => {
   const accounts = await hre.ethers.getSigners();

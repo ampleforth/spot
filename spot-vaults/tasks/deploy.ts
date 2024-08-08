@@ -123,3 +123,40 @@ task("deploy:WethWamplManager")
       console.log("Skipping verification");
     }
   });
+
+task("deploy:UsdcSpotManager")
+  .addParam(
+    "vault",
+    "the address of the usdc-spot charm vault",
+    undefined,
+    types.string,
+    false,
+  )
+  .addParam(
+    "spotAppraiser",
+    "the address of the spot appraiser",
+    undefined,
+    types.string,
+    false,
+  )
+  .addParam("verify", "flag to set false for local deployments", true, types.boolean)
+  .setAction(async function (args: TaskArguments, hre) {
+    const deployer = (await hre.ethers.getSigners())[0];
+    console.log("Signer", await deployer.getAddress());
+
+    const { vault, spotAppraiser } = args;
+
+    const UsdcSpotManager = await hre.ethers.getContractFactory("UsdcSpotManager");
+    const manager = await UsdcSpotManager.deploy(vault, spotAppraiser);
+    console.log("usdcSpotManager", manager.target);
+
+    if (args.verify) {
+      await sleep(30);
+      await hre.run("verify:contract", {
+        address: manager.target,
+        constructorArguments: [vault, spotAppraiser],
+      });
+    } else {
+      console.log("Skipping verification");
+    }
+  });
