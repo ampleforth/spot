@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 /**
- * @title IBillBrokerPricingStrategy
+ * @title ISpotPricingStrategy
  *
  * @notice Pricing strategy adapter for a BillBroker vault
  *         which accepts Perp and USDC tokens.
  *
  */
 // solhint-disable-next-line compiler-version
-interface IBillBrokerPricingStrategy {
+interface ISpotPricingStrategy {
     /// @return Number of decimals representing the prices returned.
     function decimals() external pure returns (uint8);
 
