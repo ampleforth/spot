@@ -13,7 +13,7 @@ import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
 
 import { IPerpetualTranche } from "@ampleforthorg/spot-contracts/contracts/_interfaces/IPerpetualTranche.sol";
-import { IBillBrokerPricingStrategy } from "./_interfaces/IBillBrokerPricingStrategy.sol";
+import { ISpotPricingStrategy } from "./_interfaces/ISpotPricingStrategy.sol";
 import { ReserveState, BillBrokerFees, Line, Range } from "./_interfaces/BillBrokerTypes.sol";
 import { UnacceptableSwap, UnreliablePrice, UnexpectedDecimals, InvalidPerc, InvalidARBound, SlippageTooHigh, UnauthorizedCall, UnexpectedARDelta } from "./_interfaces/BillBrokerErrors.sol";
 
@@ -100,7 +100,7 @@ contract BillBroker is
     address public keeper;
 
     /// @notice The pricing strategy.
-    IBillBrokerPricingStrategy public pricingStrategy;
+    ISpotPricingStrategy public pricingStrategy;
 
     /// @notice All of the system fees.
     BillBrokerFees public fees;
@@ -141,7 +141,7 @@ contract BillBroker is
         string memory symbol,
         IERC20Upgradeable usd_,
         IPerpetualTranche perp_,
-        IBillBrokerPricingStrategy pricingStrategy_
+        ISpotPricingStrategy pricingStrategy_
     ) public initializer {
         // initialize dependencies
         __ERC20_init(name, symbol);
@@ -188,7 +188,7 @@ contract BillBroker is
     /// @notice Updates the reference to the pricing strategy.
     /// @param pricingStrategy_ The address of the new pricing strategy.
     function updatePricingStrategy(
-        IBillBrokerPricingStrategy pricingStrategy_
+        ISpotPricingStrategy pricingStrategy_
     ) public onlyOwner {
         if (pricingStrategy_.decimals() != DECIMALS) {
             revert UnexpectedDecimals();
