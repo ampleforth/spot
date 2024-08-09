@@ -28,7 +28,7 @@ describe("UsdcSpotManager", function () {
     await mockPool.deploy();
     await mockVault.mockMethod("pool()", [mockPool.target]);
 
-    const mockAppraiser = new DMock("IBillBrokerPricingStrategy");
+    const mockAppraiser = new DMock("ISpotPricingStrategy");
     await mockAppraiser.deploy();
     await mockAppraiser.mockMethod("decimals()", [18]);
     await mockAppraiser.mockMethod("perpPrice()", [priceFP("1.2"), true]);
@@ -71,7 +71,7 @@ describe("UsdcSpotManager", function () {
 
     it("should set the appraiser address", async function () {
       const { manager, mockAppraiser } = await loadFixture(setupContracts);
-      expect(await manager.spotAppraiser()).to.eq(mockAppraiser.target);
+      expect(await manager.pricingStrategy()).to.eq(mockAppraiser.target);
     });
 
     it("should set the token refs", async function () {
@@ -102,18 +102,18 @@ describe("UsdcSpotManager", function () {
     });
   });
 
-  describe("#setSpotAppraiser", function () {
+  describe("#updatePricingStrategy", function () {
     it("should fail to when called by non-owner", async function () {
       const { manager, addr1 } = await loadFixture(setupContracts);
       await expect(
-        manager.connect(addr1).setSpotAppraiser(addr1.address),
+        manager.connect(addr1).updatePricingStrategy(addr1.address),
       ).to.be.revertedWith("Unauthorized caller");
     });
 
     it("should succeed when called by owner", async function () {
       const { manager, addr1 } = await loadFixture(setupContracts);
-      await manager.setSpotAppraiser(addr1.address);
-      expect(await manager.spotAppraiser()).to.eq(await addr1.getAddress());
+      await manager.updatePricingStrategy(addr1.address);
+      expect(await manager.pricingStrategy()).to.eq(await addr1.getAddress());
     });
   });
 
