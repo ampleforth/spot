@@ -176,6 +176,22 @@ describe("SpotAppraiser", function () {
       });
     });
 
+    describe("when oracle price is above thresh", function () {
+      it("should return invalid", async function () {
+        const { strategy, usdPriceOrcle } = await loadFixture(setupContracts);
+        await usdPriceOrcle.mockMethod("latestRoundData()", [
+          0,
+          oracleAnsFP("1.02"),
+          0,
+          nowTS(),
+          0,
+        ]);
+        const p = await strategy.usdPrice();
+        expect(p[0]).to.eq(priceFP("1"));
+        expect(p[1]).to.eq(false);
+      });
+    });
+
     it("should return price", async function () {
       const { strategy } = await loadFixture(setupContracts);
       const p = await strategy.usdPrice();
