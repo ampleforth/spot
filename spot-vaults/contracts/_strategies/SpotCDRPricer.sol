@@ -36,7 +36,7 @@ contract SpotCDRPricer is ISpotPricingStrategy {
     uint256 private constant ONE = (10 ** DECIMALS);
     uint256 public constant CL_ORACLE_DECIMALS = 8;
     uint256 public constant CL_ORACLE_STALENESS_THRESHOLD_SEC = 3600 * 48; // 2 days
-    uint256 public constant USD_LOWER_UPPER = (101 * ONE) / 100; // 1.01$
+    uint256 public constant USD_UPPER_BOUND = (101 * ONE) / 100; // 1.01$
     uint256 public constant USD_LOWER_BOUND = (99 * ONE) / 100; // 0.99$
 
     /// @notice Address of the SPOT (perpetual tranche) ERC-20 token contract.
@@ -89,7 +89,7 @@ contract SpotCDRPricer is ISpotPricingStrategy {
         // If the market price of the USD coin deviated too much from 1$,
         // it's an indication of some systemic issue with the USD token
         // and thus its price should be considered unreliable.
-        return (ONE, (v && p < USD_LOWER_UPPER && p > USD_LOWER_BOUND));
+        return (ONE, (v && p < USD_UPPER_BOUND && p > USD_LOWER_BOUND));
     }
 
     /// @return p The price of the spot token in dollar coins.
