@@ -36,6 +36,33 @@ task("deploy:SpotAppraiser")
       await sleep(30);
       await hre.run("verify:contract", {
         address: spotAppraiser.target,
+        constructorArguments: [perp, usdOracle, cpiOracle],
+      });
+    } else {
+      console.log("Skipping verification");
+    }
+  });
+
+task("deploy:SpotCDRPricer")
+  .addParam("perp", "the address of the perp token", undefined, types.string, false)
+  .addParam("usdOracle", "the address of the usd oracle", undefined, types.string, false)
+  .addParam("cpiOracle", "the address of the usd oracle", undefined, types.string, false)
+  .addParam("verify", "flag to set false for local deployments", true, types.boolean)
+  .setAction(async function (args: TaskArguments, hre) {
+    const deployer = (await hre.ethers.getSigners())[0];
+    console.log("Signer", await deployer.getAddress());
+
+    const { perp, usdOracle, cpiOracle } = args;
+
+    const SpotCDRPricer = await hre.ethers.getContractFactory("SpotCDRPricer");
+    const spotCDRPricer = await SpotCDRPricer.deploy(perp, usdOracle, cpiOracle);
+    console.log("spotCDRPricer", spotCDRPricer.target);
+
+    if (args.verify) {
+      await sleep(30);
+      await hre.run("verify:contract", {
+        address: spotCDRPricer.target,
+        constructorArguments: [perp, usdOracle, cpiOracle],
       });
     } else {
       console.log("Skipping verification");

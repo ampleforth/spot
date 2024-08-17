@@ -31,21 +31,21 @@ task("info:BillBroker")
     const unitUsd = await billBroker.usdUnitAmt();
     const unitPerp = await billBroker.perpUnitAmt();
 
-    const spotAppraiser = await hre.ethers.getContractAt(
-      "SpotAppraiser",
+    const pricingStrategy = await hre.ethers.getContractAt(
+      "pricingStrategy",
       await billBroker.pricingStrategy.staticCall(),
     );
-    const appraiserDecimals = await spotAppraiser.decimals();
+    const pricingStrategyDecimals = await pricingStrategy.decimals();
     console.log("---------------------------------------------------------------");
-    console.log("SpotAppraiser:", spotAppraiser.target);
-    console.log("owner:", await spotAppraiser.owner());
-    const usdPriceCall = await spotAppraiser.usdPrice.staticCall();
-    console.log("usdPrice:", pp(usdPriceCall[0], appraiserDecimals));
+    console.log("pricingStrategy:", pricingStrategy.target);
+    console.log("owner:", await pricingStrategy.owner());
+    const usdPriceCall = await pricingStrategy.usdPrice.staticCall();
+    console.log("usdPrice:", pp(usdPriceCall[0], pricingStrategyDecimals));
     console.log("usdPriceValid:", usdPriceCall[1]);
-    const perpPriceCall = await spotAppraiser.perpPrice.staticCall();
-    console.log("perpPrice:", pp(perpPriceCall[0], appraiserDecimals));
+    const perpPriceCall = await pricingStrategy.perpPrice.staticCall();
+    console.log("perpPrice:", pp(perpPriceCall[0], pricingStrategyDecimals));
     console.log("perpPriceValid:", perpPriceCall[1]);
-    console.log("isSpotHealthy:", await spotAppraiser.isSPOTHealthy.staticCall());
+    console.log("isSpotHealthy:", await pricingStrategy.isSPOTHealthy.staticCall());
     console.log("---------------------------------------------------------------");
     console.log("BillBroker:", billBroker.target);
     console.log("owner:", await billBroker.owner());
@@ -197,7 +197,6 @@ task("info:UsdcSpotManager")
     console.log("---------------------------------------------------------------");
     console.log("UsdcSpotManager:", manager.target);
     console.log("owner:", await manager.owner());
-    console.log("spotAppraiser:", await manager.spotAppraiser());
 
     console.log("---------------------------------------------------------------");
     const spotPrice = await manager.getSpotUSDPrice();

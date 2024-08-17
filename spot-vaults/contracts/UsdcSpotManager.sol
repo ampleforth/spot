@@ -7,7 +7,7 @@ import { FullMath } from "@uniswap/v3-core/contracts/libraries/FullMath.sol";
 import { TickMath } from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import { PositionKey } from "@uniswap/v3-periphery/contracts/libraries/PositionKey.sol";
 
-import { IBillBrokerPricingStrategy } from "./_interfaces/IBillBrokerPricingStrategy.sol";
+import { ISpotPricingStrategy } from "./_interfaces/ISpotPricingStrategy.sol";
 import { IAlphaProVault } from "./_interfaces/external/IAlphaProVault.sol";
 import { IUniswapV3Pool } from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 
@@ -41,7 +41,7 @@ contract UsdcSpotManager {
     address public immutable SPOT;
 
     /// @notice Pricing strategy to price the SPOT token.
-    IBillBrokerPricingStrategy public spotAppraiser;
+    ISpotPricingStrategy public pricingStrategy;
 
     /// @notice The contract owner.
     address public owner;
@@ -66,8 +66,8 @@ contract UsdcSpotManager {
 
     /// @notice Constructor initializes the contract with provided addresses.
     /// @param vault_ Address of the AlphaProVault contract.
-    /// @param spotAppraiser_ Address of the spot appraiser.
-    constructor(IAlphaProVault vault_, IBillBrokerPricingStrategy spotAppraiser_) {
+    /// @param pricingStrategy_ Address of the spot appraiser.
+    constructor(IAlphaProVault vault_, ISpotPricingStrategy pricingStrategy_) {
         owner = msg.sender;
 
         VAULT = vault_;
@@ -75,9 +75,9 @@ contract UsdcSpotManager {
         USDC = vault_.token0();
         SPOT = vault_.token1();
 
-        spotAppraiser = spotAppraiser_;
+        pricingStrategy = pricingStrategy_;
         // solhint-disable-next-line custom-errors
-        require(spotAppraiser.decimals() == DECIMALS, "Invalid decimals");
+        require(pricingStrategy.decimals() == DECIMALS, "Invalid decimals");
     }
 
     //--------------------------------------------------------------------------
@@ -88,11 +88,11 @@ contract UsdcSpotManager {
         owner = owner_;
     }
 
-    /// @notice Updates the Spot Appraiser reference.
-    function setSpotAppraiser(
-        IBillBrokerPricingStrategy spotAppraiser_
+    /// @notice Updates the Spot pricing strategy reference.
+    function updatePricingStrategy(
+        ISpotPricingStrategy pricingStrategy_
     ) external onlyOwner {
-        spotAppraiser = spotAppraiser_;
+        pricingStrategy = pricingStrategy_;
     }
 
     /// @notice Updates the vault's liquidity range parameters.
@@ -157,8 +157,9 @@ contract UsdcSpotManager {
     /// @return The computed deviation factor.
     function computeDeviationFactor() public returns (uint256, bool) {
         uint256 spotMarketPrice = getSpotUSDPrice();
-        (uint256 spotTargetPrice, bool spotTargetPriceValid) = spotAppraiser.perpPrice();
-        (, bool usdcPriceValid) = spotAppraiser.usdPrice();
+        (uint256 spotTargetPrice, bool spotTargetPriceValid) = pricingStrategy
+            .perpPrice();
+        (, bool usdcPriceValid) = pricingStrategy.usdPrice();
         bool deviationValid = (spotTargetPriceValid && usdcPriceValid);
         uint256 deviation = spotTargetPrice > 0
             ? FullMath.mulDiv(spotMarketPrice, ONE, spotTargetPrice)
