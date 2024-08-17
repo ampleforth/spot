@@ -602,7 +602,7 @@ contract BillBroker is
 
         // We only allow minting LP-tokens with USD,
         // when asset ratio is less than ONE; i.e) pool is overweight Perp.
-        if (assetRatioPre >= ONE || assetRatioPost >= ONE) {
+        if (assetRatioPre >= ONE || assetRatioPost > ONE) {
             return 0;
         }
 
@@ -641,7 +641,7 @@ contract BillBroker is
 
         // We only allow minting LP-tokens with Perps,
         // when asset ratio is greater than ONE; i.e) pool is overweight USD.
-        if (assetRatioPre <= ONE || assetRatioPost <= ONE) {
+        if (assetRatioPre <= ONE || assetRatioPost < ONE) {
             return 0;
         }
 
