@@ -294,19 +294,33 @@ contract BillBroker is
 
     /// @notice Single sided usd token deposit and mint LP tokens.
     /// @param usdAmtIn The amount of usd tokens to be deposited.
-    /// @param mintAmtMin The minimum amount of LP tokens expected to be minted.
-    /// @param mintAmtMax The maximum amount of LP tokens expected to be minted.
+    /// @param postOpAssetRatioMax The system asset ratio can be no higher than this value after deposit.
     /// @return mintAmt The amount of LP tokens minted.
     function depositUSD(
         uint256 usdAmtIn,
-        uint256 mintAmtMin,
-        uint256 mintAmtMax
+        uint256 postOpAssetRatioMax
     ) external nonReentrant whenNotPaused returns (uint256 mintAmt) {
-        mintAmt = computeMintAmtWithUSD(usdAmtIn, reserveState());
+        ReserveState memory s = reserveState();
+        uint256 preOpAssetRatio = assetRatio(s);
+        uint256 postOpAssetRatio = assetRatio(
+            ReserveState({
+                usdBalance: s.usdBalance + usdAmtIn,
+                perpBalance: s.perpBalance,
+                usdPrice: s.usdPrice,
+                perpPrice: s.perpPrice
+            })
+        );
+
+        // We allow minting only pool is underweight usd
+        if (preOpAssetRatio >= ONE || postOpAssetRatio > ONE) {
+            return 0;
+        }
+
+        mintAmt = computeMintAmtWithUSD(usdAmtIn, s);
         if (mintAmt <= 0) {
             return 0;
         }
-        if (mintAmt < mintAmtMin || mintAmt > mintAmtMax) {
+        if (postOpAssetRatio > postOpAssetRatioMax) {
             revert SlippageTooHigh();
         }
 
@@ -319,19 +333,33 @@ contract BillBroker is
 
     /// @notice Single sided perp token deposit and mint LP tokens.
     /// @param perpAmtIn The amount of perp tokens to be deposited.
-    /// @param mintAmtMin The minimum amount of LP tokens expected to be minted.
-    /// @param mintAmtMax The maximum amount of LP tokens expected to be minted.
+    /// @param postOpAssetRatioMin The system asset ratio can be no lower than this value after deposit.
     /// @return mintAmt The amount of LP tokens minted.
     function depositPerp(
         uint256 perpAmtIn,
-        uint256 mintAmtMin,
-        uint256 mintAmtMax
+        uint256 postOpAssetRatioMin
     ) external nonReentrant whenNotPaused returns (uint256 mintAmt) {
-        mintAmt = computeMintAmtWithPerp(perpAmtIn, reserveState());
+        ReserveState memory s = reserveState();
+        uint256 preOpAssetRatio = assetRatio(s);
+        uint256 postOpAssetRatio = assetRatio(
+            ReserveState({
+                usdBalance: s.usdBalance,
+                perpBalance: s.perpBalance + perpAmtIn,
+                usdPrice: s.usdPrice,
+                perpPrice: s.perpPrice
+            })
+        );
+
+        // We allow minting only pool is underweight perp
+        if (preOpAssetRatio <= ONE || postOpAssetRatio < ONE) {
+            return 0;
+        }
+
+        mintAmt = computeMintAmtWithPerp(perpAmtIn, s);
         if (mintAmt <= 0) {
             return 0;
         }
-        if (mintAmt < mintAmtMin || mintAmt > mintAmtMax) {
+        if (postOpAssetRatio < postOpAssetRatioMin) {
             revert SlippageTooHigh();
         }
 
@@ -585,24 +613,8 @@ contract BillBroker is
     function computeMintAmtWithUSD(
         uint256 usdAmtIn,
         ReserveState memory s
-    ) public view returns (uint256 mintAmt) {
+    ) public view returns (uint256) {
         if (usdAmtIn <= 0) {
-            return 0;
-        }
-
-        uint256 assetRatioPre = assetRatio(s);
-        uint256 assetRatioPost = assetRatio(
-            ReserveState({
-                usdBalance: s.usdBalance + usdAmtIn,
-                perpBalance: s.perpBalance,
-                usdPrice: s.usdPrice,
-                perpPrice: s.perpPrice
-            })
-        );
-
-        // We only allow minting LP-tokens with USD,
-        // when asset ratio is less than ONE; i.e) pool is overweight Perp.
-        if (assetRatioPre >= ONE || assetRatioPost > ONE) {
             return 0;
         }
 
@@ -610,10 +622,13 @@ contract BillBroker is
         uint256 totalReserveVal = (s.usdPrice.mulDiv(s.usdBalance, usdUnitAmt) +
             s.perpPrice.mulDiv(s.perpBalance, perpUnitAmt));
 
-        mintAmt = valueIn.mulDiv(totalSupply(), totalReserveVal).mulDiv(
-            ONE - fees.mintFeePerc,
-            ONE
-        );
+        return
+            (totalReserveVal > 0)
+                ? valueIn.mulDiv(totalSupply(), totalReserveVal).mulDiv(
+                    ONE - fees.mintFeePerc,
+                    ONE
+                )
+                : 0;
     }
 
     /// @notice Computes the amount of LP tokens minted,
@@ -624,24 +639,8 @@ contract BillBroker is
     function computeMintAmtWithPerp(
         uint256 perpAmtIn,
         ReserveState memory s
-    ) public view returns (uint256 mintAmt) {
+    ) public view returns (uint256) {
         if (perpAmtIn <= 0) {
-            return 0;
-        }
-
-        uint256 assetRatioPre = assetRatio(s);
-        uint256 assetRatioPost = assetRatio(
-            ReserveState({
-                usdBalance: s.usdBalance,
-                perpBalance: s.perpBalance + perpAmtIn,
-                usdPrice: s.usdPrice,
-                perpPrice: s.perpPrice
-            })
-        );
-
-        // We only allow minting LP-tokens with Perps,
-        // when asset ratio is greater than ONE; i.e) pool is overweight USD.
-        if (assetRatioPre <= ONE || assetRatioPost < ONE) {
             return 0;
         }
 
@@ -649,10 +648,13 @@ contract BillBroker is
         uint256 totalReserveVal = (s.usdPrice.mulDiv(s.usdBalance, usdUnitAmt) +
             s.perpPrice.mulDiv(s.perpBalance, perpUnitAmt));
 
-        mintAmt = valueIn.mulDiv(totalSupply(), totalReserveVal).mulDiv(
-            ONE - fees.mintFeePerc,
-            ONE
-        );
+        return
+            (totalReserveVal > 0)
+                ? valueIn.mulDiv(totalSupply(), totalReserveVal).mulDiv(
+                    ONE - fees.mintFeePerc,
+                    ONE
+                )
+                : 0;
     }
 
     /// @notice Computes the amount of usd and perp tokens redeemed,
