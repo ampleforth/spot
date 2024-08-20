@@ -791,6 +791,26 @@ describe("BillBroker", function () {
         );
       });
 
+      it("should emit DepositUSD", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("200"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("200"),
+          usdFP("115"),
+          perpFP("200"),
+        );
+        await usd.approve(billBroker.target, usdFP("10"));
+        const r = await billBroker.reserveState.staticCall();
+        await expect(billBroker.depositUSD(usdFP("10"), percentageFP("1")))
+          .to.emit(billBroker, "DepositUSD")
+          .withArgs(usdFP("10"), r);
+        expect(await billBroker.totalSupply()).to.eq(
+          lpAmtFP("324.130434782608695652173913"),
+        );
+      });
+
       it("should return mint amount", async function () {
         const { billBroker, usd, perp } = await loadFixture(setupContracts);
         await usd.approve(billBroker.target, usdFP("115"));
@@ -977,6 +997,25 @@ describe("BillBroker", function () {
         await expect(() =>
           billBroker.depositPerp(perpFP("10"), percentageFP("1")),
         ).to.changeTokenBalance(billBroker, deployer, lpAmtFP("11"));
+        expect(await billBroker.totalSupply()).to.eq(lpAmtFP("341"));
+      });
+
+      it("should emit DepositPerp", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("230"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("230"),
+          perpFP("100"),
+          usdFP("230"),
+          perpFP("100"),
+        );
+
+        await perp.approve(billBroker.target, perpFP("10"));
+        const r = await billBroker.reserveState.staticCall();
+        await expect(billBroker.depositPerp(perpFP("10"), percentageFP("1")))
+          .to.emit(billBroker, "DepositPerp")
+          .withArgs(perpFP("10"), r);
         expect(await billBroker.totalSupply()).to.eq(lpAmtFP("341"));
       });
 

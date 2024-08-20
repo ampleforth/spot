@@ -116,6 +116,29 @@ contract BillBroker is
     Range public arSoftBound;
 
     //--------------------------------------------------------------------------
+    // Events
+
+    /// @notice Emitted when a user deposits USD tokens to mint LP tokens.
+    /// @param usdAmtIn The amount of USD tokens deposited.
+    /// @param preOpState The reserve state before the deposit operation.
+    event DepositUSD(uint256 usdAmtIn, ReserveState preOpState);
+
+    /// @notice Emitted when a user deposits Perp tokens to mint LP tokens.
+    /// @param perpAmtIn The amount of Perp tokens deposited.
+    /// @param preOpState The reserve state before the deposit operation.
+    event DepositPerp(uint256 perpAmtIn, ReserveState preOpState);
+
+    /// @notice Emitted when a user swaps Perp tokens for USD tokens.
+    /// @param perpAmtIn The amount of Perp tokens swapped in.
+    /// @param preOpState The reserve state before the swap operation.
+    event SwapPerpsForUSD(uint256 perpAmtIn, ReserveState preOpState);
+
+    /// @notice Emitted when a user swaps USD tokens for Perp tokens.
+    /// @param usdAmtIn The amount of USD tokens swapped in.
+    /// @param preOpState The reserve state before the swap operation.
+    event SwapUSDForPerps(uint256 usdAmtIn, ReserveState preOpState);
+
+    //--------------------------------------------------------------------------
     // Modifiers
 
     /// @dev Throws if called by any account other than the keeper.
@@ -300,14 +323,14 @@ contract BillBroker is
         uint256 usdAmtIn,
         uint256 postOpAssetRatioMax
     ) external nonReentrant whenNotPaused returns (uint256 mintAmt) {
-        ReserveState memory s = reserveState();
-        uint256 preOpAssetRatio = assetRatio(s);
+        ReserveState memory preOpState = reserveState();
+        uint256 preOpAssetRatio = assetRatio(preOpState);
         uint256 postOpAssetRatio = assetRatio(
             ReserveState({
-                usdBalance: s.usdBalance + usdAmtIn,
-                perpBalance: s.perpBalance,
-                usdPrice: s.usdPrice,
-                perpPrice: s.perpPrice
+                usdBalance: preOpState.usdBalance + usdAmtIn,
+                perpBalance: preOpState.perpBalance,
+                usdPrice: preOpState.usdPrice,
+                perpPrice: preOpState.perpPrice
             })
         );
 
@@ -316,7 +339,7 @@ contract BillBroker is
             return 0;
         }
 
-        mintAmt = computeMintAmtWithUSD(usdAmtIn, s);
+        mintAmt = computeMintAmtWithUSD(usdAmtIn, preOpState);
         if (mintAmt <= 0) {
             return 0;
         }
@@ -329,6 +352,9 @@ contract BillBroker is
 
         // mint LP tokens to the user
         _mint(msg.sender, mintAmt);
+
+        // Emit deposit info
+        emit DepositUSD(usdAmtIn, preOpState);
     }
 
     /// @notice Single sided perp token deposit and mint LP tokens.
@@ -339,14 +365,14 @@ contract BillBroker is
         uint256 perpAmtIn,
         uint256 postOpAssetRatioMin
     ) external nonReentrant whenNotPaused returns (uint256 mintAmt) {
-        ReserveState memory s = reserveState();
-        uint256 preOpAssetRatio = assetRatio(s);
+        ReserveState memory preOpState = reserveState();
+        uint256 preOpAssetRatio = assetRatio(preOpState);
         uint256 postOpAssetRatio = assetRatio(
             ReserveState({
-                usdBalance: s.usdBalance,
-                perpBalance: s.perpBalance + perpAmtIn,
-                usdPrice: s.usdPrice,
-                perpPrice: s.perpPrice
+                usdBalance: preOpState.usdBalance,
+                perpBalance: preOpState.perpBalance + perpAmtIn,
+                usdPrice: preOpState.usdPrice,
+                perpPrice: preOpState.perpPrice
             })
         );
 
@@ -355,7 +381,7 @@ contract BillBroker is
             return 0;
         }
 
-        mintAmt = computeMintAmtWithPerp(perpAmtIn, s);
+        mintAmt = computeMintAmtWithPerp(perpAmtIn, preOpState);
         if (mintAmt <= 0) {
             return 0;
         }
@@ -368,6 +394,9 @@ contract BillBroker is
 
         // mint LP tokens to the user
         _mint(msg.sender, mintAmt);
+
+        // Emit deposit info
+        emit DepositPerp(perpAmtIn, preOpState);
     }
 
     /// @notice Burns LP tokens and redeems usd and perp tokens.
@@ -404,10 +433,11 @@ contract BillBroker is
         uint256 perpAmtMin
     ) external nonReentrant whenNotPaused returns (uint256 perpAmtOut) {
         // compute perp amount out
+        ReserveState memory preOpState = reserveState();
         uint256 protocolFeePerpAmt;
         (perpAmtOut, , protocolFeePerpAmt) = computeUSDToPerpSwapAmt(
             usdAmtIn,
-            reserveState()
+            preOpState
         );
         if (usdAmtIn <= 0 || perpAmtOut <= 0) {
             revert UnacceptableSwap();
@@ -426,6 +456,9 @@ contract BillBroker is
 
         // transfer perps out to the user
         perp.safeTransfer(msg.sender, perpAmtOut);
+
+        // Emit swap info
+        emit SwapUSDForPerps(usdAmtIn, preOpState);
     }
 
     /// @notice Swaps perp tokens from the user for usd tokens from the reserve.
@@ -437,11 +470,9 @@ contract BillBroker is
         uint256 usdAmtMin
     ) external nonReentrant whenNotPaused returns (uint256 usdAmtOut) {
         // Compute swap amount
+        ReserveState memory preOpState = reserveState();
         uint256 protocolFeeUsdAmt;
-        (usdAmtOut, , protocolFeeUsdAmt) = computePerpToUSDSwapAmt(
-            perpAmtIn,
-            reserveState()
-        );
+        (usdAmtOut, , protocolFeeUsdAmt) = computePerpToUSDSwapAmt(perpAmtIn, preOpState);
         if (perpAmtIn <= 0 || usdAmtOut <= 0) {
             revert UnacceptableSwap();
         }
@@ -459,6 +490,9 @@ contract BillBroker is
 
         // transfer usd out to the user
         usd.safeTransfer(msg.sender, usdAmtOut);
+
+        // Emit swap info
+        emit SwapPerpsForUSD(perpAmtIn, preOpState);
     }
 
     //-----------------------------------------------------------------------------
