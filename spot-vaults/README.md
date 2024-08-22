@@ -8,7 +8,7 @@ The official mainnet addresses are:
 - WethWamplManager: [0x6785fa26191eb531c54fd093931f395c4b01b583](https://etherscan.io/address/0x6785fa26191eb531c54fd093931f395c4b01b583)
 - UsdcSpotManager: [0x780eB92040bf24cd9BF993505390e88E8ED59935](https://etherscan.io/address/0x780eB92040bf24cd9BF993505390e88E8ED59935)
 - SpotAppraiser: [0x965FBFebDA76d9AA11642C1d0074CdF02e546F3c](https://etherscan.io/address/0x965FBFebDA76d9AA11642C1d0074CdF02e546F3c) Used by the Bill Broker
-- SpotCDRPricer: [0x10B03340d27BC5470aa46Da007cD5BDE89201739](https://etherscan.io/address/0x10B03340d27BC5470aa46Da007cD5BDE89201739) Used by the Charm auto manager
+- SpotCDRPricer: [0xa76df05BAb61444fa2C1c5c1e14A3aD912A00EbA](https://etherscan.io/address/0xa76df05BAb61444fa2C1c5c1e14A3aD912A00EbA) Used by the Charm USDC/SPOT auto manager
 
 The official testnet addresses are:
 
