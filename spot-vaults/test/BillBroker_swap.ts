@@ -570,6 +570,14 @@ describe("BillBroker", function () {
         expect(r.usdBalance).to.eq(usdFP("115115"));
         expect(r.perpBalance).to.eq(perpFP("99900"));
       });
+
+      it("should emit SwapUSDForPerps", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        const r = await billBroker.reserveState.staticCall();
+        await expect(billBroker.swapUSDForPerps(usdFP("115"), perpFP("100")))
+          .to.emit(billBroker, "SwapUSDForPerps")
+          .withArgs(usdFP("115"), r);
+      });
     });
 
     describe("stable swap with fees", function () {
@@ -621,6 +629,19 @@ describe("BillBroker", function () {
         const r = await reserveState(billBroker);
         expect(r.usdBalance).to.eq(usdFP("115115"));
         expect(r.perpBalance).to.eq(perpFP("99905"));
+      });
+      it("should emit SwapUSDForPerps", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        await updateFees(billBroker, {
+          usdToPerpSwapFeePercs: {
+            lower: percentageFP("0.05"),
+            upper: percentageFP("0.5"),
+          },
+        });
+        const r = await billBroker.reserveState.staticCall();
+        await expect(billBroker.swapUSDForPerps(usdFP("115"), perpFP("95")))
+          .to.emit(billBroker, "SwapUSDForPerps")
+          .withArgs(usdFP("115"), r);
       });
     });
 
@@ -697,6 +718,20 @@ describe("BillBroker", function () {
         expect(r.usdBalance).to.eq(usdFP("115115"));
         expect(r.perpBalance).to.eq(perpFP("99904.5"));
       });
+      it("should emit SwapUSDForPerps", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        await updateFees(billBroker, {
+          usdToPerpSwapFeePercs: {
+            lower: percentageFP("0.05"),
+            upper: percentageFP("0.5"),
+          },
+          protocolSwapSharePerc: percentageFP("0.1"),
+        });
+        const r = await billBroker.reserveState.staticCall();
+        await expect(billBroker.swapUSDForPerps(usdFP("115"), perpFP("95")))
+          .to.emit(billBroker, "SwapUSDForPerps")
+          .withArgs(usdFP("115"), r);
+      });
     });
 
     describe("when swap amount pushes system outside soft bound", async function () {
@@ -749,6 +784,19 @@ describe("BillBroker", function () {
         const r = await reserveState(billBroker);
         expect(r.usdBalance).to.eq(usdFP("118795"));
         expect(r.perpBalance).to.eq(perpFP("96865"));
+      });
+      it("should emit SwapUSDForPerps", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        await updateFees(billBroker, {
+          usdToPerpSwapFeePercs: {
+            lower: percentageFP("0.05"),
+            upper: percentageFP("0.5"),
+          },
+        });
+        const r = await billBroker.reserveState.staticCall();
+        await expect(billBroker.swapUSDForPerps(usdFP("3795"), perpFP("3130")))
+          .to.emit(billBroker, "SwapUSDForPerps")
+          .withArgs(usdFP("3795"), r);
       });
     });
 
@@ -873,6 +921,13 @@ describe("BillBroker", function () {
         expect(r.usdBalance).to.eq(usdFP("114885"));
         expect(r.perpBalance).to.eq(perpFP("100100"));
       });
+      it("should emit SwapPerpsForUSD", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        const r = await billBroker.reserveState.staticCall();
+        await expect(billBroker.swapPerpsForUSD(perpFP("100"), usdFP("115")))
+          .to.emit(billBroker, "SwapPerpsForUSD")
+          .withArgs(perpFP("100"), r);
+      });
     });
 
     describe("stable swap with fees", function () {
@@ -924,6 +979,19 @@ describe("BillBroker", function () {
         const r = await reserveState(billBroker);
         expect(r.usdBalance).to.eq(usdFP("114896.5"));
         expect(r.perpBalance).to.eq(perpFP("100100"));
+      });
+      it("should emit SwapPerpsForUSD", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        await updateFees(billBroker, {
+          perpToUSDSwapFeePercs: {
+            lower: percentageFP("0.1"),
+            upper: percentageFP("0.5"),
+          },
+        });
+        const r = await billBroker.reserveState.staticCall();
+        await expect(billBroker.swapPerpsForUSD(perpFP("100"), usdFP("103")))
+          .to.emit(billBroker, "SwapPerpsForUSD")
+          .withArgs(perpFP("100"), r);
       });
     });
 
@@ -998,6 +1066,20 @@ describe("BillBroker", function () {
         expect(r.usdBalance).to.eq(usdFP("114895.35"));
         expect(r.perpBalance).to.eq(perpFP("100100"));
       });
+      it("should emit SwapPerpsForUSD", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        await updateFees(billBroker, {
+          perpToUSDSwapFeePercs: {
+            lower: percentageFP("0.1"),
+            upper: percentageFP("0.5"),
+          },
+          protocolSwapSharePerc: percentageFP("0.1"),
+        });
+        const r = await billBroker.reserveState.staticCall();
+        await expect(billBroker.swapPerpsForUSD(perpFP("100"), usdFP("103")))
+          .to.emit(billBroker, "SwapPerpsForUSD")
+          .withArgs(perpFP("100"), r);
+      });
     });
 
     describe("when swap pushes system outside soft bound", function () {
@@ -1068,6 +1150,20 @@ describe("BillBroker", function () {
         await expect(
           billBroker.swapPerpsForUSD(perpFP("5000"), usdFP("4000")),
         ).to.be.revertedWithCustomError(billBroker, "UnacceptableSwap");
+      });
+      it("should emit SwapPerpsForUSD", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        await updateFees(billBroker, {
+          perpToUSDSwapFeePercs: {
+            lower: percentageFP("0.1"),
+            upper: percentageFP("0.5"),
+          },
+          protocolSwapSharePerc: percentageFP("0.1"),
+        });
+        const r = await billBroker.reserveState.staticCall();
+        await expect(billBroker.swapPerpsForUSD(perpFP("5000"), usdFP("4000")))
+          .to.emit(billBroker, "SwapPerpsForUSD")
+          .withArgs(perpFP("5000"), r);
       });
     });
 

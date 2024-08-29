@@ -48,6 +48,16 @@ describe("BillBroker", function () {
     return { deployer, otherUser, usd, perp, pricingStrategy, billBroker };
   }
 
+  async function assetRatio(billBroker) {
+    const r = await billBroker.reserveState.staticCall();
+    return billBroker.assetRatio({
+      usdBalance: r[0],
+      perpBalance: r[1],
+      usdPrice: r[2],
+      perpPrice: r[3],
+    });
+  }
+
   describe("#computeMintAmt", function () {
     describe("when amounts available are zero", function () {
       it("should return zero", async function () {
@@ -170,15 +180,7 @@ describe("BillBroker", function () {
         await billBroker.swapUSDForPerps(usdFP("115"), 0n);
         expect(await perp.balanceOf(billBroker.target)).to.eq(0n);
 
-        const s = await billBroker.reserveState.staticCall();
-        expect(
-          await billBroker.assetRatio({
-            usdBalance: s[0],
-            perpBalance: s[1],
-            usdPrice: s[2],
-            perpPrice: s[3],
-          }),
-        ).to.eq(ethers.MaxUint256);
+        expect(await assetRatio(billBroker)).to.eq(ethers.MaxUint256);
 
         const r = await billBroker.computeMintAmt.staticCall(usdFP("100"), 0n);
         expect(r[0]).to.eq(lpAmtFP("93.478260869565217391304347"));
@@ -203,20 +205,186 @@ describe("BillBroker", function () {
         await billBroker.swapPerpsForUSD(perpFP("100"), 0n);
         expect(await usd.balanceOf(billBroker.target)).to.eq(0n);
 
-        const s = await billBroker.reserveState.staticCall();
-        expect(
-          await billBroker.assetRatio({
-            usdBalance: s[0],
-            perpBalance: s[1],
-            usdPrice: s[2],
-            perpPrice: s[3],
-          }),
-        ).to.eq(0);
+        expect(await assetRatio(billBroker)).to.eq(0);
 
         const r = await billBroker.computeMintAmt.staticCall(0n, perpFP("100"));
         expect(r[0]).to.eq(lpAmtFP("107.5"));
         expect(r[1]).to.eq(0n);
         expect(r[2]).to.eq(perpFP("100"));
+      });
+    });
+  });
+
+  describe("#computeMintAmtWithUSD", function () {
+    describe("when usdAmtIn is zero", function () {
+      it("should return zero", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        expect(await billBroker.computeMintAmtWithUSD.staticCall(0n)).to.eq(0n);
+      });
+    });
+
+    describe("when total supply is zero", function () {
+      it("should return zero", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        expect(await billBroker.computeMintAmtWithUSD.staticCall(usdFP("100"))).to.eq(0n);
+      });
+    });
+
+    describe("when fee = 0", function () {
+      it("should return the mint amount", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("200"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("200"),
+          usdFP("115"),
+          perpFP("200"),
+        );
+        expect(await billBroker.computeMintAmtWithUSD.staticCall(usdFP("11.5"))).to.eq(
+          lpAmtFP("10.5"),
+        );
+      });
+    });
+
+    describe("when fee > 0", function () {
+      it("should return the mint amount", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("200"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("200"),
+          usdFP("115"),
+          perpFP("200"),
+        );
+        await billBroker.updateFees({
+          mintFeePerc: percentageFP("0.1"),
+          burnFeePerc: 0n,
+          perpToUSDSwapFeePercs: {
+            lower: 0n,
+            upper: 0n,
+          },
+          usdToPerpSwapFeePercs: {
+            lower: 0n,
+            upper: 0n,
+          },
+          protocolSwapSharePerc: 0n,
+        });
+        expect(await billBroker.computeMintAmtWithUSD.staticCall(usdFP("11.5"))).to.eq(
+          lpAmtFP("9.45"),
+        );
+      });
+    });
+
+    describe("when the pool has only perps", function () {
+      it("should mint lp tokens", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("100"),
+          usdFP("115"),
+          perpFP("100"),
+        );
+
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.swapPerpsForUSD(perpFP("100"), 0n);
+        expect(await usd.balanceOf(billBroker.target)).to.eq(0n);
+
+        expect(await assetRatio(billBroker)).to.eq(0);
+        expect(await billBroker.computeMintAmtWithUSD.staticCall(usdFP("115"))).to.eq(
+          lpAmtFP("107.5"),
+        );
+      });
+    });
+  });
+
+  describe("#computeMintAmtWithPerp", function () {
+    describe("when perpAmtIn is zero", function () {
+      it("should return zero", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        expect(await billBroker.computeMintAmtWithPerp.staticCall(0n)).to.eq(0n);
+      });
+    });
+
+    describe("when total supply is zero", function () {
+      it("should return zero", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        expect(await billBroker.computeMintAmtWithPerp.staticCall(perpFP("100"))).to.eq(
+          0n,
+        );
+      });
+    });
+
+    describe("when fee = 0", function () {
+      it("should return the mint amount", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("200"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("200"),
+          perpFP("100"),
+          usdFP("200"),
+          perpFP("100"),
+        );
+        expect(await billBroker.computeMintAmtWithPerp.staticCall(perpFP("10.5"))).to.eq(
+          lpAmtFP("11.5"),
+        );
+      });
+    });
+
+    describe("when fee > 0", function () {
+      it("should return the mint amount", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("200"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("200"),
+          perpFP("100"),
+          usdFP("200"),
+          perpFP("100"),
+        );
+        await billBroker.updateFees({
+          mintFeePerc: percentageFP("0.1"),
+          burnFeePerc: 0n,
+          perpToUSDSwapFeePercs: {
+            lower: 0n,
+            upper: 0n,
+          },
+          usdToPerpSwapFeePercs: {
+            lower: 0n,
+            upper: 0n,
+          },
+          protocolSwapSharePerc: 0n,
+        });
+        expect(await billBroker.computeMintAmtWithPerp.staticCall(perpFP("10.5"))).to.eq(
+          lpAmtFP("10.35"),
+        );
+      });
+    });
+
+    describe("when the pool has only usd", function () {
+      it("should mint lp tokens", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("100"),
+          usdFP("115"),
+          perpFP("100"),
+        );
+
+        await usd.approve(billBroker.target, usdFP("115"));
+        await billBroker.swapUSDForPerps(usdFP("115"), 0n);
+        expect(await perp.balanceOf(billBroker.target)).to.eq(0n);
+
+        expect(await assetRatio(billBroker)).to.eq(ethers.MaxUint256);
+        expect(await billBroker.computeMintAmtWithPerp.staticCall(perpFP("100"))).to.eq(
+          lpAmtFP("107.5"),
+        );
       });
     });
   });
@@ -433,15 +601,7 @@ describe("BillBroker", function () {
         await billBroker.swapUSDForPerps(usdFP("115"), 0n);
         expect(await perp.balanceOf(billBroker.target)).to.eq(0n);
 
-        const s = await billBroker.reserveState.staticCall();
-        expect(
-          await billBroker.assetRatio({
-            usdBalance: s[0],
-            perpBalance: s[1],
-            usdPrice: s[2],
-            perpPrice: s[3],
-          }),
-        ).to.eq(ethers.MaxUint256);
+        expect(await assetRatio(billBroker)).to.eq(ethers.MaxUint256);
 
         await usd.approve(billBroker.target, usdFP("115"));
         await expect(() =>
@@ -470,20 +630,444 @@ describe("BillBroker", function () {
         await billBroker.swapPerpsForUSD(perpFP("100"), 0n);
         expect(await usd.balanceOf(billBroker.target)).to.eq(0n);
 
-        const s = await billBroker.reserveState.staticCall();
-        expect(
-          await billBroker.assetRatio({
-            usdBalance: s[0],
-            perpBalance: s[1],
-            usdPrice: s[2],
-            perpPrice: s[3],
-          }),
-        ).to.eq(0);
+        expect(await assetRatio(billBroker)).to.eq(0);
 
         await perp.approve(billBroker.target, perpFP("100"));
         await expect(() =>
           billBroker.deposit(usdFP("100"), perpFP("100"), 0n, perpFP("100")),
         ).to.changeTokenBalance(billBroker, deployer, lpAmtFP("107.5"));
+      });
+    });
+  });
+
+  describe("#depositUSD", function () {
+    describe("when paused", function () {
+      it("should revert", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        await billBroker.pause();
+        await expect(billBroker.depositUSD(usdFP("115"), percentageFP("1"))).to.be
+          .reverted;
+      });
+    });
+
+    describe("when usdAmtIn is zero", function () {
+      it("should return zero", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        const r = await billBroker.depositUSD.staticCall(0n, percentageFP("1"));
+        expect(r).to.eq(0n);
+      });
+    });
+
+    describe("when assetRatioPre > 1", function () {
+      it("should return zero", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("230"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("100"),
+          usdFP("115"),
+          perpFP("100"),
+        );
+        await usd.approve(billBroker.target, usdFP("100"));
+        expect(
+          await billBroker.depositUSD.staticCall(usdFP("100"), ethers.MaxUint256),
+        ).to.eq(0n);
+      });
+    });
+
+    describe("when assetRatioPost > 1", function () {
+      it("should return zero", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("100"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("100"),
+          perpFP("100"),
+          usdFP("100"),
+          perpFP("100"),
+        );
+        await usd.approve(billBroker.target, usdFP("100"));
+        expect(
+          await billBroker.depositUSD.staticCall(usdFP("100"), ethers.MaxUint256),
+        ).to.eq(0n);
+      });
+    });
+
+    describe("when assetRatioPre = 1", function () {
+      it("should return the mint amount", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("100"),
+          usdFP("115"),
+          perpFP("100"),
+        );
+        await usd.approve(billBroker.target, usdFP("1"));
+        expect(
+          await billBroker.depositUSD.staticCall(usdFP("1"), ethers.MaxUint256),
+        ).to.eq(0n);
+      });
+    });
+
+    describe("when assetRatioPost = 1", function () {
+      it("should return the mint amount", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("200"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("200"),
+          usdFP("115"),
+          perpFP("200"),
+        );
+        await usd.approve(billBroker.target, usdFP("115"));
+        expect(
+          await billBroker.depositUSD.staticCall(usdFP("115"), ethers.MaxUint256),
+        ).to.eq(lpAmtFP("105"));
+      });
+    });
+
+    describe("when slippage is too high", function () {
+      it("should revert asset ratio increases beyond limit", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("200"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("200"),
+          usdFP("115"),
+          perpFP("200"),
+        );
+
+        await usd.approve(billBroker.target, usdFP("10"));
+        await expect(
+          billBroker.depositUSD(usdFP("10"), percentageFP("0.50")),
+        ).to.be.revertedWithCustomError(billBroker, "SlippageTooHigh");
+      });
+    });
+
+    describe("successful deposit", function () {
+      it("should transfer usd from user", async function () {
+        const { billBroker, usd, perp, deployer } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("200"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("200"),
+          usdFP("115"),
+          perpFP("200"),
+        );
+
+        await usd.approve(billBroker.target, usdFP("10"));
+        await expect(() =>
+          billBroker.depositUSD(usdFP("10"), percentageFP("1")),
+        ).to.changeTokenBalance(usd, deployer, usdFP("-10"));
+      });
+
+      it("should mint lp tokens", async function () {
+        const { billBroker, usd, perp, deployer } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("200"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("200"),
+          usdFP("115"),
+          perpFP("200"),
+        );
+
+        await usd.approve(billBroker.target, usdFP("10"));
+        await expect(() =>
+          billBroker.depositUSD(usdFP("10"), percentageFP("1")),
+        ).to.changeTokenBalance(
+          billBroker,
+          deployer,
+          lpAmtFP("9.130434782608695652173913"),
+        );
+        expect(await billBroker.totalSupply()).to.eq(
+          lpAmtFP("324.130434782608695652173913"),
+        );
+      });
+
+      it("should emit DepositUSD", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("200"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("200"),
+          usdFP("115"),
+          perpFP("200"),
+        );
+        await usd.approve(billBroker.target, usdFP("10"));
+        const r = await billBroker.reserveState.staticCall();
+        await expect(billBroker.depositUSD(usdFP("10"), percentageFP("1")))
+          .to.emit(billBroker, "DepositUSD")
+          .withArgs(usdFP("10"), r);
+        expect(await billBroker.totalSupply()).to.eq(
+          lpAmtFP("324.130434782608695652173913"),
+        );
+      });
+
+      it("should return mint amount", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("200"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("200"),
+          usdFP("115"),
+          perpFP("200"),
+        );
+
+        await usd.approve(billBroker.target, usdFP("10"));
+        const r = await billBroker.depositUSD.staticCall(usdFP("10"), percentageFP("1"));
+        expect(r).to.eq(lpAmtFP("9.130434782608695652173913"));
+      });
+    });
+
+    describe("when fee > 0", function () {
+      it("should withhold fees and mint lp tokens", async function () {
+        const { billBroker, usd, perp, deployer } = await loadFixture(setupContracts);
+        await billBroker.updateFees({
+          mintFeePerc: percentageFP("0.1"),
+          burnFeePerc: 0n,
+          perpToUSDSwapFeePercs: {
+            lower: 0n,
+            upper: 0n,
+          },
+          usdToPerpSwapFeePercs: {
+            lower: 0n,
+            upper: 0n,
+          },
+          protocolSwapSharePerc: 0n,
+        });
+
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("200"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("200"),
+          usdFP("115"),
+          perpFP("200"),
+        );
+
+        await usd.approve(billBroker.target, usdFP("10"));
+        await expect(() =>
+          billBroker.depositUSD(usdFP("10"), percentageFP("1")),
+        ).to.changeTokenBalance(
+          billBroker,
+          deployer,
+          lpAmtFP("7.395652173913043478260868"),
+        );
+      });
+    });
+  });
+
+  describe("#depositPerp", function () {
+    describe("when paused", function () {
+      it("should revert", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        await billBroker.pause();
+        await expect(billBroker.depositPerp(perpFP("100"), percentageFP("1"))).to.be
+          .reverted;
+      });
+    });
+
+    describe("when perpAmtIn is zero", function () {
+      it("should return zero", async function () {
+        const { billBroker } = await loadFixture(setupContracts);
+        const r = await billBroker.depositPerp.staticCall(0n, percentageFP("1"));
+        expect(r).to.eq(0n);
+      });
+    });
+
+    describe("when assetRatioPre < 1", function () {
+      it("should return zero", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("200"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("200"),
+          perpFP("100"),
+          usdFP("200"),
+          perpFP("100"),
+        );
+        await perp.approve(billBroker.target, perpFP("100"));
+        expect(await billBroker.depositPerp.staticCall(perpFP("100"), 0n)).to.eq(0n);
+      });
+    });
+
+    describe("when assetRatioPost < 1", function () {
+      it("should return zero", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("120"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("120"),
+          perpFP("100"),
+          usdFP("120"),
+          perpFP("100"),
+        );
+        await perp.approve(billBroker.target, perpFP("100"));
+        expect(await billBroker.depositPerp.staticCall(perpFP("100"), 0n)).to.eq(0n);
+      });
+    });
+
+    describe("when assetRatioPre = 1", function () {
+      it("should return the mint amount", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("100"),
+          usdFP("115"),
+          perpFP("100"),
+        );
+        await perp.approve(billBroker.target, perpFP("1"));
+        expect(await billBroker.depositPerp.staticCall(perpFP("1"), 0n)).to.eq(0n);
+      });
+    });
+
+    describe("when assetRatioPost = 1", function () {
+      it("should return the mint amount", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("90"));
+        await billBroker.deposit(usdFP("115"), perpFP("90"), usdFP("115"), perpFP("90"));
+        await perp.approve(billBroker.target, perpFP("10"));
+        expect(await billBroker.depositPerp.staticCall(perpFP("10"), 0n)).to.eq(
+          lpAmtFP("10.789473684210526315789473"),
+        );
+      });
+    });
+
+    describe("when slippage is too high", function () {
+      it("should revert asset ratio reduces below the limit", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("230"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("230"),
+          perpFP("100"),
+          usdFP("230"),
+          perpFP("100"),
+        );
+
+        await perp.approve(billBroker.target, perpFP("10"));
+        await expect(
+          billBroker.depositPerp(perpFP("10"), percentageFP("1.85")),
+        ).to.be.revertedWithCustomError(billBroker, "SlippageTooHigh");
+      });
+    });
+
+    describe("successful deposit", function () {
+      it("should transfer perps from user", async function () {
+        const { billBroker, usd, perp, deployer } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("230"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("230"),
+          perpFP("100"),
+          usdFP("230"),
+          perpFP("100"),
+        );
+
+        await perp.approve(billBroker.target, perpFP("10"));
+        await expect(() =>
+          billBroker.depositPerp(perpFP("10"), percentageFP("1")),
+        ).to.changeTokenBalance(perp, deployer, perpFP("-10"));
+      });
+
+      it("should mint lp tokens", async function () {
+        const { billBroker, usd, perp, deployer } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("230"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("230"),
+          perpFP("100"),
+          usdFP("230"),
+          perpFP("100"),
+        );
+
+        await perp.approve(billBroker.target, perpFP("10"));
+        await expect(() =>
+          billBroker.depositPerp(perpFP("10"), percentageFP("1")),
+        ).to.changeTokenBalance(billBroker, deployer, lpAmtFP("11"));
+        expect(await billBroker.totalSupply()).to.eq(lpAmtFP("341"));
+      });
+
+      it("should emit DepositPerp", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("230"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("230"),
+          perpFP("100"),
+          usdFP("230"),
+          perpFP("100"),
+        );
+
+        await perp.approve(billBroker.target, perpFP("10"));
+        const r = await billBroker.reserveState.staticCall();
+        await expect(billBroker.depositPerp(perpFP("10"), percentageFP("1")))
+          .to.emit(billBroker, "DepositPerp")
+          .withArgs(perpFP("10"), r);
+        expect(await billBroker.totalSupply()).to.eq(lpAmtFP("341"));
+      });
+
+      it("should return mint amount", async function () {
+        const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("230"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("230"),
+          perpFP("100"),
+          usdFP("230"),
+          perpFP("100"),
+        );
+
+        await perp.approve(billBroker.target, perpFP("10"));
+        const r = await billBroker.depositPerp.staticCall(
+          perpFP("10"),
+          percentageFP("1"),
+        );
+        expect(r).to.eq(lpAmtFP("11"));
+      });
+    });
+
+    describe("when fee > 0", function () {
+      it("should withhold fees and mint lp tokens", async function () {
+        const { billBroker, usd, perp, deployer } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("230"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("230"),
+          perpFP("100"),
+          usdFP("230"),
+          perpFP("100"),
+        );
+
+        await billBroker.updateFees({
+          mintFeePerc: percentageFP("0.1"),
+          burnFeePerc: 0n,
+          perpToUSDSwapFeePercs: {
+            lower: 0n,
+            upper: 0n,
+          },
+          usdToPerpSwapFeePercs: {
+            lower: 0n,
+            upper: 0n,
+          },
+          protocolSwapSharePerc: 0n,
+        });
+        await perp.approve(billBroker.target, perpFP("10"));
+        await expect(() =>
+          billBroker.depositPerp(perpFP("10"), percentageFP("1")),
+        ).to.changeTokenBalance(billBroker, deployer, lpAmtFP("9.9"));
       });
     });
   });
@@ -540,7 +1124,7 @@ describe("BillBroker", function () {
       });
     });
 
-    describe("when fee is zero", function () {
+    describe("when fee > 0", function () {
       it("should withhold and return redemption amounts", async function () {
         const { billBroker, usd, perp } = await loadFixture(setupContracts);
         await billBroker.updateFees({

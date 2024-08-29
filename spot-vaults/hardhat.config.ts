@@ -78,6 +78,7 @@ export default {
     enabled: !!process.env.REPORT_GAS,
     excludeContracts: ["_test/"],
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
+    L1Etherscan: process.env.ETHERSCAN_API_KEY,
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,

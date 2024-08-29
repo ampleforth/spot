@@ -50,6 +50,9 @@ import { UnacceptableSwap, UnreliablePrice, UnexpectedDecimals, InvalidPerc, Inv
  *          Lenders can buy perps from the bill broker contract when it's under-priced,
  *          hold the perp tokens until the market price recovers and sell it back to the bill broker contract.
  *
+ *          Single Sided deposits:
+ *          The pool also supports single sided deposits with either perps or usd tokens
+ *          insofar as it brings the pool back into balance.
  *
  */
 contract BillBroker is
@@ -111,6 +114,29 @@ contract BillBroker is
     /// @notice The asset ratio bounds outside which swapping is still functional but,
     ///         the swap fees transition from a flat percentage fee to a linear function.
     Range public arSoftBound;
+
+    //--------------------------------------------------------------------------
+    // Events
+
+    /// @notice Emitted when a user deposits USD tokens to mint LP tokens.
+    /// @param usdAmtIn The amount of USD tokens deposited.
+    /// @param preOpState The reserve state before the deposit operation.
+    event DepositUSD(uint256 usdAmtIn, ReserveState preOpState);
+
+    /// @notice Emitted when a user deposits Perp tokens to mint LP tokens.
+    /// @param perpAmtIn The amount of Perp tokens deposited.
+    /// @param preOpState The reserve state before the deposit operation.
+    event DepositPerp(uint256 perpAmtIn, ReserveState preOpState);
+
+    /// @notice Emitted when a user swaps Perp tokens for USD tokens.
+    /// @param perpAmtIn The amount of Perp tokens swapped in.
+    /// @param preOpState The reserve state before the swap operation.
+    event SwapPerpsForUSD(uint256 perpAmtIn, ReserveState preOpState);
+
+    /// @notice Emitted when a user swaps USD tokens for Perp tokens.
+    /// @param usdAmtIn The amount of USD tokens swapped in.
+    /// @param preOpState The reserve state before the swap operation.
+    event SwapUSDForPerps(uint256 usdAmtIn, ReserveState preOpState);
 
     //--------------------------------------------------------------------------
     // Modifiers
@@ -289,6 +315,90 @@ contract BillBroker is
         _mint(msg.sender, mintAmt);
     }
 
+    /// @notice Single sided usd token deposit and mint LP tokens.
+    /// @param usdAmtIn The amount of usd tokens to be deposited.
+    /// @param postOpAssetRatioMax The system asset ratio can be no higher than this value after deposit.
+    /// @return mintAmt The amount of LP tokens minted.
+    function depositUSD(
+        uint256 usdAmtIn,
+        uint256 postOpAssetRatioMax
+    ) external nonReentrant whenNotPaused returns (uint256 mintAmt) {
+        ReserveState memory preOpState = reserveState();
+        uint256 preOpAssetRatio = assetRatio(preOpState);
+        uint256 postOpAssetRatio = assetRatio(
+            ReserveState({
+                usdBalance: preOpState.usdBalance + usdAmtIn,
+                perpBalance: preOpState.perpBalance,
+                usdPrice: preOpState.usdPrice,
+                perpPrice: preOpState.perpPrice
+            })
+        );
+
+        // We allow minting only pool is underweight usd
+        if (preOpAssetRatio >= ONE || postOpAssetRatio > ONE) {
+            return 0;
+        }
+
+        mintAmt = computeMintAmtWithUSD(usdAmtIn, preOpState);
+        if (mintAmt <= 0) {
+            return 0;
+        }
+        if (postOpAssetRatio > postOpAssetRatioMax) {
+            revert SlippageTooHigh();
+        }
+
+        // Transfer usd tokens from the user
+        usd.safeTransferFrom(msg.sender, address(this), usdAmtIn);
+
+        // mint LP tokens to the user
+        _mint(msg.sender, mintAmt);
+
+        // Emit deposit info
+        emit DepositUSD(usdAmtIn, preOpState);
+    }
+
+    /// @notice Single sided perp token deposit and mint LP tokens.
+    /// @param perpAmtIn The amount of perp tokens to be deposited.
+    /// @param postOpAssetRatioMin The system asset ratio can be no lower than this value after deposit.
+    /// @return mintAmt The amount of LP tokens minted.
+    function depositPerp(
+        uint256 perpAmtIn,
+        uint256 postOpAssetRatioMin
+    ) external nonReentrant whenNotPaused returns (uint256 mintAmt) {
+        ReserveState memory preOpState = reserveState();
+        uint256 preOpAssetRatio = assetRatio(preOpState);
+        uint256 postOpAssetRatio = assetRatio(
+            ReserveState({
+                usdBalance: preOpState.usdBalance,
+                perpBalance: preOpState.perpBalance + perpAmtIn,
+                usdPrice: preOpState.usdPrice,
+                perpPrice: preOpState.perpPrice
+            })
+        );
+
+        // We allow minting only pool is underweight perp
+        if (preOpAssetRatio <= ONE || postOpAssetRatio < ONE) {
+            return 0;
+        }
+
+        mintAmt = computeMintAmtWithPerp(perpAmtIn, preOpState);
+        if (mintAmt <= 0) {
+            return 0;
+        }
+        if (postOpAssetRatio < postOpAssetRatioMin) {
+            revert SlippageTooHigh();
+        }
+
+        // Transfer perp tokens from the user
+        perp.safeTransferFrom(msg.sender, address(this), perpAmtIn);
+
+        // mint LP tokens to the user
+        _mint(msg.sender, mintAmt);
+
+        // Emit deposit info
+        emit DepositPerp(perpAmtIn, preOpState);
+    }
+
     /// @notice Burns LP tokens and redeems usd and perp tokens.
     /// @param burnAmt The LP tokens to be burnt.
     /// @return usdAmtOut The amount usd tokens returned.
@@ -323,10 +433,11 @@ contract BillBroker is
         uint256 perpAmtMin
     ) external nonReentrant whenNotPaused returns (uint256 perpAmtOut) {
         // compute perp amount out
+        ReserveState memory preOpState = reserveState();
         uint256 protocolFeePerpAmt;
         (perpAmtOut, , protocolFeePerpAmt) = computeUSDToPerpSwapAmt(
             usdAmtIn,
-            reserveState()
+            preOpState
         );
         if (usdAmtIn <= 0 || perpAmtOut <= 0) {
             revert UnacceptableSwap();
@@ -345,6 +456,9 @@ contract BillBroker is
 
         // transfer perps out to the user
         perp.safeTransfer(msg.sender, perpAmtOut);
+
+        // Emit swap info
+        emit SwapUSDForPerps(usdAmtIn, preOpState);
     }
 
     /// @notice Swaps perp tokens from the user for usd tokens from the reserve.
@@ -356,11 +470,9 @@ contract BillBroker is
         uint256 usdAmtMin
     ) external nonReentrant whenNotPaused returns (uint256 usdAmtOut) {
         // Compute swap amount
+        ReserveState memory preOpState = reserveState();
         uint256 protocolFeeUsdAmt;
-        (usdAmtOut, , protocolFeeUsdAmt) = computePerpToUSDSwapAmt(
-            perpAmtIn,
-            reserveState()
-        );
+        (usdAmtOut, , protocolFeeUsdAmt) = computePerpToUSDSwapAmt(perpAmtIn, preOpState);
         if (perpAmtIn <= 0 || usdAmtOut <= 0) {
             revert UnacceptableSwap();
         }
@@ -378,10 +490,29 @@ contract BillBroker is
 
         // transfer usd out to the user
         usd.safeTransfer(msg.sender, usdAmtOut);
+
+        // Emit swap info
+        emit SwapPerpsForUSD(perpAmtIn, preOpState);
     }
 
     //-----------------------------------------------------------------------------
     // Public methods
+
+    /// @notice Computes the amount of LP tokens minted,
+    ///         when the given number of usd tokens are deposited.
+    /// @param usdAmtIn The amount of usd tokens deposited.
+    /// @return mintAmt The amount of LP tokens minted.
+    function computeMintAmtWithUSD(uint256 usdAmtIn) public returns (uint256 mintAmt) {
+        return computeMintAmtWithUSD(usdAmtIn, reserveState());
+    }
+
+    /// @notice Computes the amount of LP tokens minted,
+    ///         when the given number of perp tokens are deposited.
+    /// @param perpAmtIn The amount of perp tokens deposited.
+    /// @return mintAmt The amount of LP tokens minted.
+    function computeMintAmtWithPerp(uint256 perpAmtIn) public returns (uint256 mintAmt) {
+        return computeMintAmtWithPerp(perpAmtIn, reserveState());
+    }
 
     /// @notice Computes the amount of usd tokens swapped out,
     ///         when the given number of perp tokens are sent in.
@@ -506,6 +637,58 @@ contract BillBroker is
         }
 
         mintAmt = mintAmt.mulDiv(ONE - fees.mintFeePerc, ONE);
+    }
+
+    /// @notice Computes the amount of LP tokens minted,
+    ///         when the given number of usd tokens are deposited.
+    /// @param usdAmtIn The amount of usd tokens deposited.
+    /// @param s The current reserve state.
+    /// @return mintAmt The amount of LP tokens minted.
+    function computeMintAmtWithUSD(
+        uint256 usdAmtIn,
+        ReserveState memory s
+    ) public view returns (uint256) {
+        if (usdAmtIn <= 0) {
+            return 0;
+        }
+
+        uint256 valueIn = s.usdPrice.mulDiv(usdAmtIn, usdUnitAmt);
+        uint256 totalReserveVal = (s.usdPrice.mulDiv(s.usdBalance, usdUnitAmt) +
+            s.perpPrice.mulDiv(s.perpBalance, perpUnitAmt));
+
+        return
+            (totalReserveVal > 0)
+                ? valueIn.mulDiv(totalSupply(), totalReserveVal).mulDiv(
+                    ONE - fees.mintFeePerc,
+                    ONE
+                )
+                : 0;
+    }
+
+    /// @notice Computes the amount of LP tokens minted,
+    ///         when the given number of perp tokens are deposited.
+    /// @param perpAmtIn The amount of perp tokens deposited.
+    /// @param s The current reserve state.
+    /// @return mintAmt The amount of LP tokens minted.
+    function computeMintAmtWithPerp(
+        uint256 perpAmtIn,
+        ReserveState memory s
+    ) public view returns (uint256) {
+        if (perpAmtIn <= 0) {
+            return 0;
+        }
+
+        uint256 valueIn = s.perpPrice.mulDiv(perpAmtIn, perpUnitAmt);
+        uint256 totalReserveVal = (s.usdPrice.mulDiv(s.usdBalance, usdUnitAmt) +
+            s.perpPrice.mulDiv(s.perpBalance, perpUnitAmt));
+
+        return
+            (totalReserveVal > 0)
+                ? valueIn.mulDiv(totalSupply(), totalReserveVal).mulDiv(
+                    ONE - fees.mintFeePerc,
+                    ONE
+                )
+                : 0;
     }
 
     /// @notice Computes the amount of usd and perp tokens redeemed,
