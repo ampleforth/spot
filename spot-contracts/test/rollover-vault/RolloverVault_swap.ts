@@ -114,8 +114,8 @@ describe("RolloverVault", function () {
     );
     expect(await vault.assetCount()).to.eq(2);
 
-    await collateralToken.approve(vault.address, toFixedPtAmt("1000"));
-    await perp.approve(vault.address, toFixedPtAmt("1000"));
+    await collateralToken.approve(vault.address, toFixedPtAmt("10000"));
+    await perp.approve(vault.address, toFixedPtAmt("10000"));
   });
 
   afterEach(async function () {
@@ -1258,6 +1258,24 @@ describe("RolloverVault", function () {
         expect(await vault.callStatic.getTVL()).to.eq(toFixedPtAmt("2000")); // + 2400 transferred in
         await txFn();
         expect(await vault.callStatic.getTVL()).to.eq(toFixedPtAmt("4434.6153846153846152"));
+      });
+    });
+
+    describe("when vault reduces underlying liquidity", function () {
+      it("should be reverted", async function () {
+        await feePolicy.computePerpBurnFeePerc.returns(toPercFixedPtAmt("0.1"));
+        await feePolicy.computePerpToUnderlyingVaultSwapFeePerc.returns(toPercFixedPtAmt("0.15"));
+        await vault.swapPerpsForUnderlying(toFixedPtAmt("800"));
+
+        const bond = await getDepositBond(perp);
+        const tranches = await getTranches(bond);
+        await depositIntoBond(bond, toFixedPtAmt("1000"), deployer);
+        await tranches[0].approve(perp.address, toFixedPtAmt("200"));
+        await perp.deposit(tranches[0].address, toFixedPtAmt("200"));
+        await expect(vault.swapPerpsForUnderlying(toFixedPtAmt("1"))).to.be.revertedWithCustomError(
+          vault,
+          "InsufficientLiquidity",
+        );
       });
     });
   });
