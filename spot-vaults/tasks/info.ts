@@ -32,7 +32,7 @@ task("info:BillBroker")
     const unitPerp = await billBroker.perpUnitAmt();
 
     const pricingStrategy = await hre.ethers.getContractAt(
-      "pricingStrategy",
+      "SpotAppraiser",
       await billBroker.pricingStrategy.staticCall(),
     );
     const pricingStrategyDecimals = await pricingStrategy.decimals();
