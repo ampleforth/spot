@@ -440,8 +440,9 @@ contract RolloverVault is
     function swapUnderlyingForPerps(uint256 underlyingAmtIn) external nonReentrant whenNotPaused returns (uint256) {
         // Calculates the fee adjusted perp amount to transfer to the user.
         // NOTE: This operation should precede any token transfers.
-        IERC20Upgradeable underlying_ = underlying;
         IPerpetualTranche perp_ = perp;
+        IERC20Upgradeable underlying_ = underlying;
+        uint256 underlyingBalPre = underlying_.balanceOf(address(this));
         (uint256 perpAmtOut, uint256 perpFeeAmtToBurn, SubscriptionParams memory s) = computeUnderlyingToPerpSwapAmt(
             underlyingAmtIn
         );
@@ -468,11 +469,14 @@ contract RolloverVault is
         // NOTE: In case this operation mints slightly more perps than that are required for the swap,
         // The vault continues to hold the perp dust until the subsequent `swapPerpsForUnderlying` or manual `recover(perp)`.
 
-        // Revert if vault liquidity is too low.
+        // If vault liquidity has reduced, revert if it reduced too much.
         //  - Absolute balance is strictly greater than `minUnderlyingBal`.
         //  - Ratio of the balance to the vault's TVL is strictly greater than `minUnderlyingPerc`.
-        uint256 underlyingBal = underlying_.balanceOf(address(this));
-        if (underlyingBal <= minUnderlyingBal || underlyingBal.mulDiv(ONE, s.vaultTVL) <= minUnderlyingPerc) {
+        uint256 underlyingBalPost = underlying_.balanceOf(address(this));
+        if (
+            underlyingBalPost < underlyingBalPre &&
+            (underlyingBalPost <= minUnderlyingBal || underlyingBalPost.mulDiv(ONE, s.vaultTVL) <= minUnderlyingPerc)
+        ) {
             revert InsufficientLiquidity();
         }
 
@@ -511,7 +515,7 @@ contract RolloverVault is
 
         // Revert if swap reduces vault's available liquidity.
         uint256 underlyingBalPost = underlying_.balanceOf(address(this));
-        if (underlyingBalPost <= underlyingBalPre) {
+        if (underlyingBalPost < underlyingBalPre) {
             revert InsufficientLiquidity();
         }
 
