@@ -110,13 +110,13 @@ describe("RolloverVault", function () {
   describe("#deploy", function () {
     describe("when usable balance is zero", function () {
       it("should revert", async function () {
-        await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "InsufficientLiquidity");
+        await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "InsufficientDeployment");
       });
     });
 
-    describe("when minUnderlyingBal is not set", function () {
+    describe("when reservedUnderlyingBal is not set", function () {
       beforeEach(async function () {
-        await vault.updateMinUnderlyingBal(toFixedPtAmt("0"));
+        await vault.updateReservedUnderlyingBal(toFixedPtAmt("0"));
       });
 
       describe("when usable balance is lower than the min deployment", function () {
@@ -140,18 +140,18 @@ describe("RolloverVault", function () {
       });
     });
 
-    describe("when minUnderlyingBal is set", function () {
+    describe("when reservedUnderlyingBal is set", function () {
       beforeEach(async function () {
-        await vault.updateMinUnderlyingBal(toFixedPtAmt("25"));
+        await vault.updateReservedUnderlyingBal(toFixedPtAmt("25"));
       });
 
-      describe("when usable balance is lower than the minUnderlyingBal", function () {
+      describe("when usable balance is lower than the reservedUnderlyingBal", function () {
         beforeEach(async function () {
           await collateralToken.transfer(vault.address, toFixedPtAmt("20"));
           await vault.updateMinDeploymentAmt(toFixedPtAmt("1"));
         });
         it("should revert", async function () {
-          await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "InsufficientLiquidity");
+          await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "InsufficientDeployment");
         });
       });
 

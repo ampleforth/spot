@@ -72,9 +72,9 @@ describe("RolloverVault", function () {
     });
 
     it("should set initial param values", async function () {
-      expect(await vault.minUnderlyingPerc()).to.eq(toPercFixedPtAmt("0.33333333"));
       expect(await vault.minDeploymentAmt()).to.eq("0");
-      expect(await vault.minUnderlyingBal()).to.eq("0");
+      expect(await vault.reservedUnderlyingBal()).to.eq("0");
+      expect(await vault.reservedSubscriptionPerc()).to.eq("0");
     });
 
     it("should initialize lists", async function () {
@@ -291,7 +291,7 @@ describe("RolloverVault", function () {
     });
   });
 
-  describe("#updateMinDeploymentAmt", function () {
+  describe("#updateReservedUnderlyingBal", function () {
     let tx: Transaction;
     beforeEach(async function () {
       await vault.connect(deployer).updateKeeper(await otherUser.getAddress());
@@ -299,7 +299,7 @@ describe("RolloverVault", function () {
 
     describe("when triggered by non-keeper", function () {
       it("should revert", async function () {
-        await expect(vault.connect(deployer).updateMinDeploymentAmt(0)).to.be.revertedWithCustomError(
+        await expect(vault.connect(deployer).updateReservedUnderlyingBal(0)).to.be.revertedWithCustomError(
           vault,
           "UnauthorizedCall",
         );
@@ -308,16 +308,16 @@ describe("RolloverVault", function () {
 
     describe("when triggered by keeper", function () {
       beforeEach(async function () {
-        tx = await vault.connect(otherUser).updateMinDeploymentAmt(toFixedPtAmt("1000"));
+        tx = await vault.connect(otherUser).updateReservedUnderlyingBal(toFixedPtAmt("1000"));
         await tx;
       });
       it("should update the min deployment amount", async function () {
-        expect(await vault.minDeploymentAmt()).to.eq(toFixedPtAmt("1000"));
+        expect(await vault.reservedUnderlyingBal()).to.eq(toFixedPtAmt("1000"));
       });
     });
   });
 
-  describe("#updateMinUnderlyingBal", function () {
+  describe("#updateReservedUnderlyingBal", function () {
     let tx: Transaction;
     beforeEach(async function () {
       await vault.connect(deployer).updateKeeper(await otherUser.getAddress());
@@ -325,7 +325,7 @@ describe("RolloverVault", function () {
 
     describe("when triggered by non-keeper", function () {
       it("should revert", async function () {
-        await expect(vault.connect(deployer).updateMinUnderlyingBal(0)).to.be.revertedWithCustomError(
+        await expect(vault.connect(deployer).updateReservedUnderlyingBal(0)).to.be.revertedWithCustomError(
           vault,
           "UnauthorizedCall",
         );
@@ -334,16 +334,16 @@ describe("RolloverVault", function () {
 
     describe("when triggered by keeper", function () {
       beforeEach(async function () {
-        tx = await vault.connect(otherUser).updateMinUnderlyingBal(toFixedPtAmt("1000"));
+        tx = await vault.connect(otherUser).updateReservedUnderlyingBal(toFixedPtAmt("1000"));
         await tx;
       });
       it("should update the min underlying balance", async function () {
-        expect(await vault.minUnderlyingBal()).to.eq(toFixedPtAmt("1000"));
+        expect(await vault.reservedUnderlyingBal()).to.eq(toFixedPtAmt("1000"));
       });
     });
   });
 
-  describe("#updateMinUnderlyingPerc", function () {
+  describe("#updateReservedSubscriptionPerc", function () {
     let tx: Transaction;
     beforeEach(async function () {
       await vault.connect(deployer).updateKeeper(await otherUser.getAddress());
@@ -351,7 +351,7 @@ describe("RolloverVault", function () {
 
     describe("when triggered by non-keeper", function () {
       it("should revert", async function () {
-        await expect(vault.connect(deployer).updateMinUnderlyingPerc(0)).to.be.revertedWithCustomError(
+        await expect(vault.connect(deployer).updateReservedSubscriptionPerc(0)).to.be.revertedWithCustomError(
           vault,
           "UnauthorizedCall",
         );
@@ -360,11 +360,11 @@ describe("RolloverVault", function () {
 
     describe("when triggered by keeper", function () {
       beforeEach(async function () {
-        tx = await vault.connect(otherUser).updateMinUnderlyingPerc(toPercFixedPtAmt("0.1"));
+        tx = await vault.connect(otherUser).updateReservedSubscriptionPerc(toPercFixedPtAmt("0.1"));
         await tx;
       });
       it("should update the min underlying balance", async function () {
-        expect(await vault.minUnderlyingPerc()).to.eq(toPercFixedPtAmt("0.1"));
+        expect(await vault.reservedSubscriptionPerc()).to.eq(toPercFixedPtAmt("0.1"));
       });
     });
   });

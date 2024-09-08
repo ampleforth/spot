@@ -6,7 +6,7 @@ import { IVault } from "./_interfaces/IVault.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
 import { IERC20Burnable } from "./_interfaces/IERC20Burnable.sol";
 import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/CommonTypes.sol";
-import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, OutOfBounds, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit, InvalidPerc, InsufficientLiquidity } from "./_interfaces/ProtocolErrors.sol";
+import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, OutOfBounds, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit, InsufficientLiquidity } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -84,6 +84,10 @@ contract RolloverVault is
     /// @dev The maximum number of deployed assets that can be held in this vault at any given time.
     uint8 public constant MAX_DEPLOYED_COUNT = 47;
 
+    // Replicating value used here:
+    // https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
+    uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
+
     /// @dev Immature redemption may result in some dust tranches when balances are not perfectly divisible by the tranche ratio.
     ///      Based on current the implementation of `computeRedeemableTrancheAmounts`,
     ///      the dust balances which remain after immature redemption will be *at most* {TRANCHE_RATIO_GRANULARITY} or 1000.
@@ -128,16 +132,24 @@ contract RolloverVault is
     /// @return The address of the keeper.
     address public keeper;
 
-    /// @notice The enforced minimum absolute balance of underlying tokens to be held by the vault.
-    /// @dev On deployment only the delta greater than this balance is deployed.
-    ///      `minUnderlyingBal` is enforced on deployment and swapping operations which reduce the underlying balance.
-    ///      This parameter ensures that the vault's tvl is never too low, which guards against the "share" manipulation attack.
-    uint256 public minUnderlyingBal;
+    //--------------------------------------------------------------------------
+    // The reserved liquidity is the subset of the vault's underlying tokens that it
+    // does not deploy for rolling over (or used for swaps) and simply holds.
+    // The existence of sufficient reserved liquidity ensures that
+    // a) The vault's TVL never goes too low and guards against the "share" manipulation attack.
+    // b) Not all of the vault's liquidity is locked up in tranches.
 
-    /// @notice The enforced minimum percentage of the vault's value to be held as underlying tokens.
-    /// @dev The percentage minimum is enforced after swaps which reduce the vault's underlying token liquidity.
-    ///      This ensures that the vault has sufficient liquid underlying tokens for upcoming rollovers.
-    uint256 public minUnderlyingPerc;
+    /// @notice The absolute amount of underlying tokens, reserved.
+    /// @custom:oz-upgrades-renamed-from minUnderlyingBal
+    uint256 public reservedUnderlyingBal;
+
+    /// @notice The percentage of the vault's "neutrally" subscribed TVL, reserved.
+    /// @dev A neutral subscription state implies the vault's TVL is exactly enough to
+    ///      rollover over the entire supply of perp tokens.
+    /// NOTE: A neutral subscription ratio of 1.0 is distinct from a deviation ratio (dr) of 1.0.
+    ///       For more details, refer to the fee policy documentation.
+    /// @custom:oz-upgrades-renamed-from minUnderlyingPerc
+    uint256 public reservedSubscriptionPerc;
 
     //--------------------------------------------------------------------------
     // Modifiers
@@ -190,8 +202,8 @@ contract RolloverVault is
 
         // setting initial parameter values
         minDeploymentAmt = 0;
-        minUnderlyingBal = 0;
-        minUnderlyingPerc = ONE / 3; // 33%
+        reservedUnderlyingBal = 0;
+        reservedSubscriptionPerc = 0;
 
         // sync underlying
         _syncAsset(underlying);
@@ -247,19 +259,16 @@ contract RolloverVault is
         minDeploymentAmt = minDeploymentAmt_;
     }
 
-    /// @notice Updates the minimum underlying balance requirement (Absolute number of underlying tokens).
-    /// @param minUnderlyingBal_ The new minimum underlying balance.
-    function updateMinUnderlyingBal(uint256 minUnderlyingBal_) external onlyKeeper {
-        minUnderlyingBal = minUnderlyingBal_;
+    /// @notice Updates absolute reserved underlying balance.
+    /// @param reservedUnderlyingBal_ The new reserved underlying balance.
+    function updateReservedUnderlyingBal(uint256 reservedUnderlyingBal_) external onlyKeeper {
+        reservedUnderlyingBal = reservedUnderlyingBal_;
     }
 
-    /// @notice Updates the minimum underlying percentage requirement (Expressed as a percentage).
-    /// @param minUnderlyingPerc_ The new minimum underlying percentage.
-    function updateMinUnderlyingPerc(uint256 minUnderlyingPerc_) external onlyKeeper {
-        if (minUnderlyingPerc_ > ONE) {
-            revert InvalidPerc();
-        }
-        minUnderlyingPerc = minUnderlyingPerc_;
+    /// @notice Updates the reserved subscription percentage.
+    /// @param reservedSubscriptionPerc_ The new reserved subscription percentage.
+    function updateReservedSubscriptionPerc(uint256 reservedSubscriptionPerc_) external onlyKeeper {
+        reservedSubscriptionPerc = reservedSubscriptionPerc_;
     }
 
     //--------------------------------------------------------------------------
@@ -274,20 +283,19 @@ contract RolloverVault is
 
     /// @inheritdoc IVault
     /// @dev Its safer to call `recover` before `deploy` so the full available balance can be deployed.
-    ///      The vault holds `minUnderlyingBal` as underlying tokens and deploys the rest.
+    ///      The vault holds the reserved balance of underlying tokens and deploys the rest.
     ///      Reverts if no funds are rolled over or enforced deployment threshold is not reached.
     function deploy() public override nonReentrant whenNotPaused {
         IERC20Upgradeable underlying_ = underlying;
         IPerpetualTranche perp_ = perp;
 
-        // `minUnderlyingBal` worth of underlying liquidity is excluded from the usable balance
-        uint256 usableBal = underlying_.balanceOf(address(this));
-        if (usableBal <= minUnderlyingBal) {
-            revert InsufficientLiquidity();
-        }
-        usableBal -= minUnderlyingBal;
+        // We calculate the usable underlying balance.
+        uint256 underlyingBal = underlying_.balanceOf(address(this));
+        uint256 reservedBal = _totalReservedBalance(perp_.getTVL(), perp_.getDepositTrancheRatio());
+        uint256 usableBal = (underlyingBal > reservedBal) ? underlyingBal - reservedBal : 0;
 
         // We ensure that at-least `minDeploymentAmt` amount of underlying tokens are deployed
+        // (i.e used productively for rollovers).
         if (usableBal <= minDeploymentAmt) {
             revert InsufficientDeployment();
         }
@@ -469,13 +477,12 @@ contract RolloverVault is
         // NOTE: In case this operation mints slightly more perps than that are required for the swap,
         // The vault continues to hold the perp dust until the subsequent `swapPerpsForUnderlying` or manual `recover(perp)`.
 
-        // If vault liquidity has reduced, revert if it reduced too much.
-        //  - Absolute balance is strictly greater than `minUnderlyingBal`.
-        //  - Ratio of the balance to the vault's TVL is strictly greater than `minUnderlyingPerc`.
+        // We ensure that the vault's underlying token liquidity
+        // remains above the reserved level after swap.
         uint256 underlyingBalPost = underlying_.balanceOf(address(this));
         if (
-            underlyingBalPost < underlyingBalPre &&
-            (underlyingBalPost <= minUnderlyingBal || underlyingBalPost.mulDiv(ONE, s.vaultTVL) <= minUnderlyingPerc)
+            (underlyingBalPost < underlyingBalPre) &&
+            (underlyingBalPost <= _totalReservedBalance((s.perpTVL + underlyingAmtIn), s.seniorTR))
         ) {
             revert InsufficientLiquidity();
         }
@@ -972,5 +979,14 @@ contract RolloverVault is
     ) private view returns (uint256) {
         (uint256 trancheClaim, uint256 trancheSupply) = tranche.getTrancheCollateralization(collateralToken);
         return trancheClaim.mulDiv(trancheAmt, trancheSupply, MathUpgradeable.Rounding.Up);
+    }
+
+    /// @dev Computes the balance of underlying tokens to NOT be used for any operation.
+    function _totalReservedBalance(uint256 perpTVL, uint256 seniorTR) private view returns (uint256) {
+        return
+            MathUpgradeable.max(
+                reservedUnderlyingBal,
+                perpTVL.mulDiv(TRANCHE_RATIO_GRANULARITY - seniorTR, seniorTR).mulDiv(reservedSubscriptionPerc, ONE)
+            );
     }
 }
