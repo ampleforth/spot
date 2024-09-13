@@ -303,8 +303,8 @@ describe("RolloverVault", function () {
 
     describe("when absolute liquidity is too low", function () {
       beforeEach(async function () {
-        await vault.updateMinUnderlyingBal(toFixedPtAmt("1000"));
-        await vault.updateMinUnderlyingPerc(0);
+        await vault.updateReservedUnderlyingBal(toFixedPtAmt("1000"));
+        await vault.updateReservedSubscriptionPerc(0);
       });
       it("should be reverted", async function () {
         await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("50"))).to.be.revertedWithCustomError(
@@ -317,15 +317,15 @@ describe("RolloverVault", function () {
 
     describe("when percentage of liquidity is too low", function () {
       beforeEach(async function () {
-        await vault.updateMinUnderlyingBal(0);
-        await vault.updateMinUnderlyingPerc(toPercFixedPtAmt("0.40"));
+        await vault.updateReservedUnderlyingBal(0);
+        await vault.updateReservedSubscriptionPerc(toPercFixedPtAmt("0.25"));
       });
       it("should be reverted", async function () {
         await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("100"))).to.be.revertedWithCustomError(
           vault,
           "InsufficientLiquidity",
         );
-        await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("99"))).not.to.be.reverted;
+        await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("50"))).not.to.be.reverted;
       });
     });
 
