@@ -157,7 +157,7 @@ __metadata:
     ethers: ^6.6.0
     ethers-v5: "npm:ethers@^5.7.0"
     ganache-cli: latest
-    hardhat: ^2.22.8
+    hardhat: ^2.22.10
     hardhat-gas-reporter: latest
     lodash: ^4.17.21
     prettier: ^2.7.1
@@ -9321,9 +9321,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"hardhat@npm:^2.22.8":
-  version: 2.22.8
-  resolution: "hardhat@npm:2.22.8"
+"hardhat@npm:^2.22.10":
+  version: 2.22.10
+  resolution: "hardhat@npm:2.22.10"
   dependencies:
     "@ethersproject/abi": ^5.1.2
     "@metamask/eth-sig-util": ^4.0.0
@@ -9378,7 +9378,7 @@ __metadata:
       optional: true
   bin:
     hardhat: internal/cli/bootstrap.js
-  checksum: 3731b510540f800b3b931e3ad7db4510dbd35eff18f34382875778db43de2a5ce1c52596c392aa694324f66392e844fede85954ab3cdc08df3da10f2a810135f
+  checksum: 2bb961a11f428fd025f990ea18472f4197c8352dd81f4231f27c04b7a8e94bc71d668262475102ae2c339ad83dd0e759b90ac7e4905f043be7bde471c04b5951
   languageName: node
   linkType: hard
 
