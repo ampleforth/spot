@@ -139,7 +139,7 @@ contract SpotPricer is IPerpPricer, IMetaOracle {
     // Owner only methods
 
     /// @notice Updates spot's discount factor.
-    /// @param p New discount factor.
+    /// @param d New discount factor.
     function updateSpotDiscountFactor(uint256 d) external onlyOwner {
         spotDiscountFactor = d;
     }
