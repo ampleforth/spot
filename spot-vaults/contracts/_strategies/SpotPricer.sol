@@ -179,7 +179,7 @@ contract SpotPricer is IPerpPricer, IMetaOracle {
     }
 
     /// @inheritdoc IPerpPricer
-    function perpBeta() external override returns (uint256, bool) {
+    function perpBeta() external view override returns (uint256, bool) {
         return (spotDiscountFactor, true);
     }
 
