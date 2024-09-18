@@ -1,6 +1,7 @@
-import { ethers } from "hardhat";
+import hre, { ethers } from "hardhat";
 import { Contract, ContractFactory } from "ethers";
 
+export const nowTS = () => parseInt(Date.now() / 1000);
 export const sciParseFloat = (a: string): BigInt =>
   a.includes("e") ? parseFloat(a).toFixed(18) : a;
 export const percFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 18);
@@ -8,7 +9,8 @@ export const priceFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a)
 
 export const usdFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 6);
 export const perpFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 9);
-export const lpAmtFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 24);
+export const bbLPAmtFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 24);
+export const stLPAmtFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 15);
 export const amplFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 9);
 export const wamplFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 18);
 export const wethFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 18);
@@ -17,6 +19,31 @@ export const ethOracleFP = (a: string): BigInt => ethers.parseUnits(sciParseFloa
 export const amplOracleFP = (a: string): BigInt =>
   ethers.parseUnits(sciParseFloat(a), 18);
 export const drFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 8);
+
+export const TimeHelpers = {
+  secondsFromNow: async (secondsFromNow: number): Promise<number> => {
+    return (await TimeHelpers.currentTime()) + secondsFromNow;
+  },
+
+  increaseTime: async (seconds: number): Promise<void> => {
+    await hre.network.provider.send("evm_increaseTime", [seconds]);
+    await hre.network.provider.send("evm_mine");
+  },
+
+  setNextBlockTimestamp: async (timestamp: number): Promise<void> => {
+    await ethers.provider.send("evm_setNextBlockTimestamp", [timestamp]);
+    await hre.network.provider.send("evm_mine");
+  },
+
+  currentTime: async (): Promise<number> => {
+    const res = await hre.network.provider.send("eth_getBlockByNumber", [
+      "latest",
+      false,
+    ]);
+    const timestamp = parseInt(res.timestamp, 16);
+    return timestamp;
+  },
+};
 
 export class DMock {
   private refArtifact: string;

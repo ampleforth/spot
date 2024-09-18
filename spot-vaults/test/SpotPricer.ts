@@ -12,9 +12,8 @@ import {
   amplFP,
   drFP,
   DMock,
+  nowTS,
 } from "./helpers";
-
-const nowTS = () => parseInt(Date.now() / 1000);
 
 describe("SpotPricer", function () {
   async function setupContracts() {
