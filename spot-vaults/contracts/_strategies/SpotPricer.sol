@@ -133,6 +133,8 @@ contract SpotPricer is IPerpPricer, IMetaOracle {
         IPerpetualTranche spot = IPerpetualTranche(usdcSpotPool.token1());
         SPOT = spot;
         AMPL = IERC20(spot.underlying());
+
+        spotDiscountFactor = ONE;
     }
 
     //--------------------------------------------------------------------------
