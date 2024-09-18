@@ -18,3 +18,6 @@ error UnacceptableSwap();
 
 /// @notice Expected usable external price.
 error UnreliablePrice();
+
+/// @notice Expected range to be strictly increasing.
+error InvalidRange();
