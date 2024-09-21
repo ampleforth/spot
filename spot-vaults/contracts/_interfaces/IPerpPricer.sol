@@ -6,7 +6,7 @@ interface IPerpPricer {
     /// @return Number of decimals representing the prices returned.
     function decimals() external pure returns (uint8);
 
-    /// @return price The price of reference USD tokens.
+    /// @return price The price of reference USD tokens in dollars.
     /// @return isValid True if the returned price is valid.
     function usdPrice() external returns (uint256 price, bool isValid);
 

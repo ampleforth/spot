@@ -6,10 +6,6 @@ interface IMetaOracle {
     /// @return Number of decimals representing the prices returned.
     function decimals() external pure returns (uint8);
 
-    /// @return price The price of USDC tokens in dollars.
-    /// @return isValid True if the returned price is valid.
-    function usdcPrice() external returns (uint256 price, bool isValid);
-
     /// @notice Computes the deviation between SPOT's market price and FMV price.
     /// @return deviation The computed deviation factor.
     /// @return isValid True if the returned deviation is valid.
@@ -43,4 +39,8 @@ interface IMetaOracle {
     /// @return price The ETH price in dollars.
     /// @return isValid True if the returned price is valid.
     function ethUsdPrice() external returns (uint256 price, bool isValid);
+
+    /// @return price The price of USDC tokens in dollars.
+    /// @return isValid True if the returned price is valid.
+    function usdcUsdPrice() external returns (uint256 price, bool isValid);
 }

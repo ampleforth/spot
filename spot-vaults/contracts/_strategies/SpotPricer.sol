@@ -51,7 +51,7 @@ contract SpotPricer is IPerpPricer, IMetaOracle {
     uint256 private constant CL_USDC_ORACLE_STALENESS_THRESHOLD_SEC = 3600 * 48; // 2 day
     uint256 private constant USDC_UPPER_BOUND = (101 * ONE) / 100; // 1.01$
     uint256 private constant USDC_LOWER_BOUND = (99 * ONE) / 100; // 0.99$
-    uint32 private constant TWAP_DURATION = 3600;
+    uint32 private constant UNIV3_TWAP_DURATION = 3600;
 
     //--------------------------------------------------------------------------
     // Modifiers
@@ -162,7 +162,7 @@ contract SpotPricer is IPerpPricer, IMetaOracle {
 
     /// @inheritdoc IPerpPricer
     function usdPrice() external view override returns (uint256, bool) {
-        return usdcPrice();
+        return usdcUsdPrice();
     }
 
     /// @inheritdoc IPerpPricer
@@ -189,7 +189,7 @@ contract SpotPricer is IPerpPricer, IMetaOracle {
     // IMetaOracle methods
 
     /// @inheritdoc IMetaOracle
-    function usdcPrice() public view override returns (uint256, bool) {
+    function usdcUsdPrice() public view override returns (uint256, bool) {
         (uint256 p, bool v) = _getCLOracleData(
             USDC_ORACLE,
             CL_USDC_ORACLE_STALENESS_THRESHOLD_SEC
@@ -226,12 +226,12 @@ contract SpotPricer is IPerpPricer, IMetaOracle {
     /// @inheritdoc IMetaOracle
     function spotUsdPrice() public view override returns (uint256, bool) {
         uint256 usdcPerSpot = UniswapV3PoolHelpers.calculateTwap(
-            UniswapV3PoolHelpers.getTwapTick(USDC_SPOT_POOL, TWAP_DURATION),
+            UniswapV3PoolHelpers.getTwapTick(USDC_SPOT_POOL, UNIV3_TWAP_DURATION),
             ONE_USDC,
             ONE_SPOT,
             ONE
         );
-        (, bool usdcPriceValid) = usdcPrice();
+        (, bool usdcPriceValid) = usdcUsdPrice();
         return (usdcPerSpot, usdcPriceValid);
     }
 
@@ -265,7 +265,7 @@ contract SpotPricer is IPerpPricer, IMetaOracle {
     /// @inheritdoc IMetaOracle
     function wamplUsdPrice() public view override returns (uint256, bool) {
         uint256 wethPerWampl = UniswapV3PoolHelpers.calculateTwap(
-            UniswapV3PoolHelpers.getTwapTick(WETH_WAMPL_POOL, TWAP_DURATION),
+            UniswapV3PoolHelpers.getTwapTick(WETH_WAMPL_POOL, UNIV3_TWAP_DURATION),
             ONE_WETH,
             ONE_WAMPL,
             ONE

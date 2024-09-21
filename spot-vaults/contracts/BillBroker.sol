@@ -940,12 +940,13 @@ contract BillBroker is
         uint256 cutoff
     ) private pure returns (uint256 feePerc) {
         if (arU <= cutoff) {
-            feePerc = fn1.avgY(arL, arU, 0, ONE);
+            feePerc = fn1.avgY(arL, arU);
         } else if (arL >= cutoff) {
-            feePerc = fn2.avgY(arL, arU, 0, ONE);
+            feePerc = fn2.avgY(arL, arU);
         } else {
-            feePerc = (fn1.avgY(arL, cutoff, 0, ONE).mulDiv(cutoff - arL, arU - arL) +
-                fn2.avgY(cutoff, arU, 0, ONE).mulDiv(arU - cutoff, arU - arL));
+            feePerc = (fn1.avgY(arL, cutoff).mulDiv(cutoff - arL, arU - arL) +
+                fn2.avgY(cutoff, arU).mulDiv(arU - cutoff, arU - arL));
         }
+        feePerc = MathUpgradeable.min(feePerc, ONE);
     }
 }
