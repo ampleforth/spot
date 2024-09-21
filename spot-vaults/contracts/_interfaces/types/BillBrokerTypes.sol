@@ -1,25 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.24;
 
-/// @notice A data structure to define a geometric Line with two points.
-struct Line {
-    /// @notice x-coordinate of the first point.
-    uint256 x1;
-    /// @notice y-coordinate of the first point.
-    uint256 y1;
-    /// @notice x-coordinate of the second point.
-    uint256 x2;
-    /// @notice y-coordinate of the second point.
-    uint256 y2;
-}
-
-/// @notice A data structure to define a numeric Range.
-struct Range {
-    /// @notice Lower bound of the range.
-    uint256 lower;
-    /// @notice Upper bound of the range.
-    uint256 upper;
-}
+import { Range } from "./CommonTypes.sol";
 
 /// @notice A data structure to store various fees associated with BillBroker operations.
 struct BillBrokerFees {
