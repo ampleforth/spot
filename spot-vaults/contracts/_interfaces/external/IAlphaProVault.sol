@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// solhint-disable-next-line compiler-version
-pragma solidity ^0.7.6;
+pragma solidity ^0.8.24;
 
 import { IUniswapV3Pool } from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 

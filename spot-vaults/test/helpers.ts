@@ -3,13 +3,20 @@ import { Contract, ContractFactory } from "ethers";
 
 export const sciParseFloat = (a: string): BigInt =>
   a.includes("e") ? parseFloat(a).toFixed(18) : a;
+export const percFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 18);
+export const priceFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 18);
+
 export const usdFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 6);
 export const perpFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 9);
-export const percentageFP = (a: string): BigInt =>
-  ethers.parseUnits(sciParseFloat(a), 18);
-export const priceFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 18);
 export const lpAmtFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 24);
-export const oracleAnsFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 8);
+export const amplFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 9);
+export const wamplFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 18);
+export const wethFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 18);
+export const usdOracleFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 8);
+export const ethOracleFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 18);
+export const amplOracleFP = (a: string): BigInt =>
+  ethers.parseUnits(sciParseFloat(a), 18);
+export const drFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 8);
 
 export class DMock {
   private refArtifact: string;
