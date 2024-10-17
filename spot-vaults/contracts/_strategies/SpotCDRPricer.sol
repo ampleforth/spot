@@ -6,7 +6,8 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IPerpetualTranche } from "@ampleforthorg/spot-contracts/contracts/_interfaces/IPerpetualTranche.sol";
 import { IChainlinkOracle } from "../_interfaces/external/IChainlinkOracle.sol";
-import { IAmpleforthOracle } from "../_interfaces/external/IAmpleforthOracle.sol";
+import { IAMPL } from "../_interfaces/external/IAMPL.sol";
+import { IAmpleforth } from "../_interfaces/external/IAmpleforth.sol";
 import { ISpotPricingStrategy } from "../_interfaces/ISpotPricingStrategy.sol";
 
 /**
@@ -51,11 +52,8 @@ contract SpotCDRPricer is ISpotPricingStrategy {
     /// @notice Number of decimals representing the prices returned by the chainlink oracle.
     uint256 public immutable USD_ORACLE_DECIMALS;
 
-    /// @notice Address of the Ampleforth CPI oracle. (provides the inflation-adjusted target price for AMPL).
-    IAmpleforthOracle public immutable AMPL_CPI_ORACLE;
-
-    /// @notice Number of decimals representing the prices returned by the ampleforth oracle.
-    uint256 public immutable AMPL_CPI_ORACLE_DECIMALS;
+    /// @notice Address of the Ampleforth monetary policy. (provides the inflation-adjusted target price for AMPL)
+    IAmpleforth public immutable AMPLEFORTH_POLICY;
 
     //-----------------------------------------------------------------------------
     // Constructor
@@ -63,20 +61,14 @@ contract SpotCDRPricer is ISpotPricingStrategy {
     /// @notice Contract constructor.
     /// @param spot Address of the SPOT token.
     /// @param usdOracle Address of the USD token market price oracle token.
-    /// @param cpiOracle Address of the Ampleforth CPI oracle.
-    constructor(
-        IPerpetualTranche spot,
-        IChainlinkOracle usdOracle,
-        IAmpleforthOracle cpiOracle
-    ) {
+    constructor(IPerpetualTranche spot, IChainlinkOracle usdOracle) {
         SPOT = spot;
         AMPL = IERC20(address(spot.underlying()));
 
         USD_ORACLE = usdOracle;
         USD_ORACLE_DECIMALS = usdOracle.decimals();
 
-        AMPL_CPI_ORACLE = cpiOracle;
-        AMPL_CPI_ORACLE_DECIMALS = cpiOracle.DECIMALS();
+        AMPLEFORTH_POLICY = IAmpleforth(IAMPL(address(AMPL)).monetaryPolicy());
     }
 
     //--------------------------------------------------------------------------
@@ -95,9 +87,9 @@ contract SpotCDRPricer is ISpotPricingStrategy {
     /// @return p The price of the spot token in dollar coins.
     /// @return v True if the price is valid and can be used by downstream consumers.
     function perpPrice() external override returns (uint256, bool) {
-        // NOTE: Since {DECIMALS} == {AMPL_CPI_ORACLE_DECIMALS} == 18
+        // NOTE: Since {DECIMALS} == {AMPLEFORTH_POLICY_DECIMALS} == 18
         // we don't adjust the returned values.
-        (uint256 targetPrice, bool targetPriceValid) = AMPL_CPI_ORACLE.getData();
+        (uint256 targetPrice, bool targetPriceValid) = AMPLEFORTH_POLICY.getTargetRate();
         uint256 p = targetPrice.mulDiv(SPOT.getTVL(), SPOT.totalSupply());
         return (p, targetPriceValid);
     }
