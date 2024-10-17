@@ -10,14 +10,9 @@ describe("SpotCDRPricer", function () {
     const accounts = await ethers.getSigners();
     const deployer = accounts[0];
 
-    const amplTargetOracle = new DMock("MedianOracle");
-    await amplTargetOracle.deploy();
-    await amplTargetOracle.mockMethod("getData()", [priceFP("1.15"), true]);
-    await amplTargetOracle.mockMethod("DECIMALS()", [18]);
-
-    const policy = new DMock("UFragmentsPolicy");
+    const policy = new DMock("IAmpleforth");
     await policy.deploy();
-    await policy.mockMethod("cpiOracle()", [amplTargetOracle.target]);
+    await policy.mockMethod("getTargetRate()", [priceFP("1.15"), true]);
 
     const ampl = new DMock("UFragments");
     await ampl.deploy();
@@ -42,30 +37,26 @@ describe("SpotCDRPricer", function () {
     ]);
 
     const SpotCDRPricer = await ethers.getContractFactory("SpotCDRPricer");
-    const strategy = await SpotCDRPricer.deploy(
-      spot.target,
-      usdPriceOrcle.target,
-      amplTargetOracle.target,
-    );
+    const strategy = await SpotCDRPricer.deploy(spot.target, usdPriceOrcle.target);
     return {
       deployer,
       ampl,
       spot,
       usdPriceOrcle,
-      amplTargetOracle,
+      policy,
       strategy,
     };
   }
 
   describe("init", function () {
     it("should initial params", async function () {
-      const { strategy, ampl, spot, usdPriceOrcle, amplTargetOracle } = await loadFixture(
+      const { strategy, ampl, spot, usdPriceOrcle, policy } = await loadFixture(
         setupContracts,
       );
       expect(await strategy.AMPL()).to.eq(ampl.target);
       expect(await strategy.SPOT()).to.eq(spot.target);
       expect(await strategy.USD_ORACLE()).to.eq(usdPriceOrcle.target);
-      expect(await strategy.AMPL_CPI_ORACLE()).to.eq(amplTargetOracle.target);
+      expect(await strategy.AMPLEFORTH_POLICY()).to.eq(policy.target);
       expect(await strategy.decimals()).to.eq(18);
     });
   });
@@ -130,8 +121,8 @@ describe("SpotCDRPricer", function () {
   describe("#perpPrice", function () {
     describe("when AMPL target data is invalid", function () {
       it("should return invalid", async function () {
-        const { strategy, amplTargetOracle } = await loadFixture(setupContracts);
-        await amplTargetOracle.mockMethod("getData()", [priceFP("1.2"), false]);
+        const { strategy, policy } = await loadFixture(setupContracts);
+        await policy.mockMethod("getTargetRate()", [priceFP("1.2"), false]);
         const p = await strategy.perpPrice.staticCall();
         expect(p[0]).to.eq(priceFP("1.2"));
         expect(p[1]).to.eq(false);
