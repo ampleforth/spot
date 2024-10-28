@@ -44,7 +44,6 @@ library AlphaVaultHelpers {
         if (percToRemove <= 0) {
             return;
         }
-
         int24 _fullLower = vault.fullLower();
         int24 _fullUpper = vault.fullUpper();
         int24 _baseLower = vault.baseLower();
@@ -61,8 +60,12 @@ library AlphaVaultHelpers {
         );
         // docs: https://learn.charm.fi/charm/technical-references/core/alphaprovault#emergencyburn
         // We remove the calculated percentage of base and full range liquidity.
-        vault.emergencyBurn(_fullLower, _fullUpper, fullLiquidityToBurn);
-        vault.emergencyBurn(_baseLower, _baseUpper, baseLiquidityToBurn);
+        if (fullLiquidityToBurn > 0) {
+            vault.emergencyBurn(_fullLower, _fullUpper, fullLiquidityToBurn);
+        }
+        if (baseLiquidityToBurn > 0) {
+            vault.emergencyBurn(_baseLower, _baseUpper, baseLiquidityToBurn);
+        }
     }
 
     /// @dev A low-level method, which interacts directly with the vault and executes
