@@ -4,8 +4,20 @@ import { TaskArguments } from "hardhat/types";
 import { sleep } from "./tools";
 
 task("validate_upgrade")
-  .addPositionalParam("factory", "the name of the factory", undefined, types.string, false)
-  .addPositionalParam("address", "the address of the deployed proxy contract", undefined, types.string, false)
+  .addPositionalParam(
+    "factory",
+    "the name of the factory",
+    undefined,
+    types.string,
+    false,
+  )
+  .addPositionalParam(
+    "address",
+    "the address of the deployed proxy contract",
+    undefined,
+    types.string,
+    false,
+  )
   .setAction(async function (args: TaskArguments, hre) {
     const { factory, address } = args;
     const Factory = await hre.ethers.getContractFactory(factory);
@@ -23,8 +35,20 @@ task("validate_upgrade")
   });
 
 task("prepare_upgrade")
-  .addPositionalParam("factory", "the name of the factory", undefined, types.string, false)
-  .addPositionalParam("address", "the address of the deployed proxy contract", undefined, types.string, false)
+  .addPositionalParam(
+    "factory",
+    "the name of the factory",
+    undefined,
+    types.string,
+    false,
+  )
+  .addPositionalParam(
+    "address",
+    "the address of the deployed proxy contract",
+    undefined,
+    types.string,
+    false,
+  )
   .addParam("fromIdx", "the index of sender", 0, types.int)
   .setAction(async function (args: TaskArguments, hre) {
     const { factory, address } = args;
@@ -52,8 +76,20 @@ task("prepare_upgrade")
   });
 
 task("upgrade:testnet")
-  .addPositionalParam("factory", "the name of the factory", undefined, types.string, false)
-  .addPositionalParam("address", "the address of the deployed proxy contract", undefined, types.string, false)
+  .addPositionalParam(
+    "factory",
+    "the name of the factory",
+    undefined,
+    types.string,
+    false,
+  )
+  .addPositionalParam(
+    "address",
+    "the address of the deployed proxy contract",
+    undefined,
+    types.string,
+    false,
+  )
   .addParam("fromIdx", "the index of sender", 0, types.int)
   .setAction(async function (args: TaskArguments, hre) {
     const signer = (await hre.ethers.getSigners())[args.fromIdx];
@@ -64,7 +100,10 @@ task("upgrade:testnet")
     const Factory = await hre.ethers.getContractFactory(factory);
 
     console.log("Proxy", address);
-    console.log("Current implementation", await getImplementationAddress(hre.ethers.provider, address));
+    console.log(
+      "Current implementation",
+      await getImplementationAddress(hre.ethers.provider, address),
+    );
 
     const impl = await hre.upgrades.upgradeProxy(address, Factory, {
       unsafeAllowRenames: true,
