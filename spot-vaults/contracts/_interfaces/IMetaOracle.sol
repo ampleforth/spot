@@ -10,12 +10,12 @@ interface IMetaOracle {
     /// @return isValid True if the returned price is valid.
     function usdcPrice() external returns (uint256 price, bool isValid);
 
-    /// @notice Computes the deviation between SPOT's market price and FMV price.
+    /// @notice Computes SPOT's market price over FMV price.
     /// @return deviation The computed deviation factor.
     /// @return isValid True if the returned deviation is valid.
     function spotPriceDeviation() external returns (uint256 deviation, bool isValid);
 
-    /// @notice Computes the deviation between AMPL's market price and price target.
+    /// @notice Computes AMPL's market price over price target.
     /// @return deviation The computed deviation factor.
     /// @return isValid True if the returned deviation is valid.
     function amplPriceDeviation() external returns (uint256 deviation, bool isValid);

@@ -11,7 +11,8 @@ import { IERC20 } from "../_interfaces/external/IERC20.sol";
 import { IWAMPL } from "../_interfaces/external/IWAMPL.sol";
 import { IPerpetualTranche } from "../_interfaces/external/IPerpetualTranche.sol";
 import { IChainlinkOracle } from "../_interfaces/external/IChainlinkOracle.sol";
-import { IAmpleforthOracle } from "../_interfaces/external/IAmpleforthOracle.sol";
+import { IAMPL } from "../_interfaces/external/IAMPL.sol";
+import { IAmpleforth } from "../_interfaces/external/IAmpleforth.sol";
 
 import { IPerpPricer } from "../_interfaces/IPerpPricer.sol";
 import { IMetaOracle } from "../_interfaces/IMetaOracle.sol";
@@ -23,11 +24,13 @@ import { IMetaOracle } from "../_interfaces/IMetaOracle.sol";
  *
  *         Internally aggregates prices from multiple oracles.
  *         Chainlink for USDC and ETH prices,
- *         The Ampleforth CPI oracle for the AMPL price target and
+ *         The Ampleforth monetary policy for the AMPL price target and
  *         UniV3 pools for current AMPL and SPOT market prices.
  *
  */
 contract SpotPricer is IPerpPricer, IMetaOracle {
+    using FullMath for uint256;
+
     //-------------------------------------------------------------------------
     // Constants
 
@@ -68,8 +71,9 @@ contract SpotPricer is IPerpPricer, IMetaOracle {
     /// @notice Address of the USD token market price oracle.
     IChainlinkOracle public immutable USDC_ORACLE;
 
-    /// @notice Address of the Ampleforth CPI oracle.
-    IAmpleforthOracle public immutable CPI_ORACLE;
+    /// @notice Address of the Ampleforth monetary policy.
+    ///         (provides the inflation-adjusted target price for AMPL)
+    IAmpleforth public immutable AMPLEFORTH_POLICY;
 
     /// @notice Address of the WAMPL ERC-20 token contract.
     IWAMPL public immutable WAMPL;
@@ -91,27 +95,27 @@ contract SpotPricer is IPerpPricer, IMetaOracle {
     /// @param usdcSpotPool Address of the USDC-SPOT univ3 pool.
     /// @param ethOracle Address of the ETH market price oracle.
     /// @param usdcOracle Address of the USD coin market price oracle.
-    /// @param cpiOracle Address Ampleforth's cpi oracle.
     constructor(
         IUniswapV3Pool wethWamplPool,
         IUniswapV3Pool usdcSpotPool,
         IChainlinkOracle ethOracle,
-        IChainlinkOracle usdcOracle,
-        IAmpleforthOracle cpiOracle
+        IChainlinkOracle usdcOracle
     ) {
         WETH_WAMPL_POOL = wethWamplPool;
         USDC_SPOT_POOL = usdcSpotPool;
 
         ETH_ORACLE = ethOracle;
         USDC_ORACLE = usdcOracle;
-        CPI_ORACLE = cpiOracle;
 
         WAMPL = IWAMPL(wethWamplPool.token1());
         USDC = IERC20(usdcSpotPool.token0());
 
         IPerpetualTranche spot = IPerpetualTranche(usdcSpotPool.token1());
         SPOT = spot;
-        AMPL = IERC20(spot.underlying());
+        address ampl = spot.underlying();
+        AMPL = IERC20(ampl);
+
+        AMPLEFORTH_POLICY = IAmpleforth(IAMPL(ampl).monetaryPolicy());
     }
 
     //--------------------------------------------------------------------------
@@ -162,9 +166,11 @@ contract SpotPricer is IPerpPricer, IMetaOracle {
         (uint256 marketPrice, bool marketPriceValid) = spotUsdPrice();
         (uint256 targetPrice, bool targetPriceValid) = spotFmvUsdPrice();
         uint256 deviation = (targetPrice > 0)
-            ? FullMath.mulDiv(marketPrice, ONE, targetPrice)
+            ? marketPrice.mulDiv(ONE, targetPrice)
             : type(uint256).max;
-        deviation = (deviation > MAX_DEVIATION) ? MAX_DEVIATION : deviation;
+        if (deviation > MAX_DEVIATION) {
+            deviation = MAX_DEVIATION;
+        }
         return (deviation, (marketPriceValid && targetPriceValid));
     }
 
@@ -172,12 +178,13 @@ contract SpotPricer is IPerpPricer, IMetaOracle {
     function amplPriceDeviation() public override returns (uint256, bool) {
         (uint256 marketPrice, bool marketPriceValid) = amplUsdPrice();
         (uint256 targetPrice, bool targetPriceValid) = amplTargetUsdPrice();
-        bool deviationValid = (marketPriceValid && targetPriceValid);
         uint256 deviation = (targetPrice > 0)
-            ? FullMath.mulDiv(marketPrice, ONE, targetPrice)
+            ? marketPrice.mulDiv(ONE, targetPrice)
             : type(uint256).max;
-        deviation = (deviation > MAX_DEVIATION) ? MAX_DEVIATION : deviation;
-        return (deviation, deviationValid);
+        if (deviation > MAX_DEVIATION) {
+            deviation = MAX_DEVIATION;
+        }
+        return (deviation, (marketPriceValid && targetPriceValid));
     }
 
     /// @inheritdoc IMetaOracle
@@ -195,8 +202,7 @@ contract SpotPricer is IPerpPricer, IMetaOracle {
     /// @inheritdoc IMetaOracle
     function amplUsdPrice() public view override returns (uint256, bool) {
         (uint256 wamplPrice, bool wamplPriceValid) = wamplUsdPrice();
-        uint256 amplPrice = FullMath.mulDiv(
-            wamplPrice,
+        uint256 amplPrice = wamplPrice.mulDiv(
             ONE_AMPL,
             WAMPL.wrapperToUnderlying(ONE_WAMPL)
         );
@@ -206,17 +212,14 @@ contract SpotPricer is IPerpPricer, IMetaOracle {
     /// @inheritdoc IMetaOracle
     function spotFmvUsdPrice() public override returns (uint256, bool) {
         (uint256 targetPrice, bool targetPriceValid) = amplTargetUsdPrice();
-        return (
-            FullMath.mulDiv(targetPrice, SPOT.getTVL(), SPOT.totalSupply()),
-            targetPriceValid
-        );
+        return (targetPrice.mulDiv(SPOT.getTVL(), SPOT.totalSupply()), targetPriceValid);
     }
 
     /// @inheritdoc IMetaOracle
     function amplTargetUsdPrice() public override returns (uint256, bool) {
-        // NOTE: Ampleforth oracle returns price as a fixed point number with 18 decimals.
-        //       Redenomination not required here.
-        return CPI_ORACLE.getData();
+        // NOTE: Since {DECIMALS} == {AMPLEFORTH_POLICY_DECIMALS} == 18
+        // we don't adjust the returned values.
+        return AMPLEFORTH_POLICY.getTargetRate();
     }
 
     /// @inheritdoc IMetaOracle
@@ -228,7 +231,7 @@ contract SpotPricer is IPerpPricer, IMetaOracle {
             ONE
         );
         (uint256 ethPrice, bool ethPriceValid) = ethUsdPrice();
-        uint256 wamplPrice = FullMath.mulDiv(ethPrice, wethPerWampl, ONE);
+        uint256 wamplPrice = ethPrice.mulDiv(wethPerWampl, ONE);
         return (wamplPrice, ethPriceValid);
     }
 
@@ -246,7 +249,7 @@ contract SpotPricer is IPerpPricer, IMetaOracle {
         uint256 stalenessThresholdSec
     ) private view returns (uint256, bool) {
         (, int256 p, , uint256 updatedAt, ) = oracle.latestRoundData();
-        uint256 price = FullMath.mulDiv(uint256(p), ONE, 10 ** oracle.decimals());
+        uint256 price = uint256(p).mulDiv(ONE, 10 ** oracle.decimals());
         return (price, (block.timestamp - updatedAt) <= stalenessThresholdSec);
     }
 }

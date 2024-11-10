@@ -18,10 +18,14 @@ const nowTS = () => parseInt(Date.now() / 1000);
 
 describe("SpotPricer", function () {
   async function setupContracts() {
-    const amplTargetOracle = new DMock("MedianOracle");
-    await amplTargetOracle.deploy();
-    await amplTargetOracle.mockMethod("getData()", [amplOracleFP("1.15"), true]);
-    await amplTargetOracle.mockMethod("DECIMALS()", [18]);
+    const amplPolicy = new DMock("IAmpleforth");
+    await amplPolicy.deploy();
+    await amplPolicy.mockMethod("getTargetRate()", [priceFP("1.15"), true]);
+
+    const ampl = new DMock("UFragments");
+    await ampl.deploy();
+    await ampl.mockMethod("decimals()", [9]);
+    await ampl.mockMethod("monetaryPolicy()", [amplPolicy.target]);
 
     const usdcPriceOrcle = new DMock("IChainlinkOracle");
     await usdcPriceOrcle.deploy();
@@ -47,9 +51,6 @@ describe("SpotPricer", function () {
 
     const usdc = new DMock("contracts/_interfaces/external/IERC20.sol:IERC20");
     await usdc.deploy();
-
-    const ampl = new DMock("UFragments");
-    await ampl.deploy();
 
     const wampl = new DMock("IWAMPL");
     await wampl.deploy();
@@ -122,10 +123,9 @@ describe("SpotPricer", function () {
       spotPool.target,
       ethPriceOrcle.target,
       usdcPriceOrcle.target,
-      amplTargetOracle.target,
     );
     return {
-      amplTargetOracle,
+      amplPolicy,
       ethPriceOrcle,
       usdcPriceOrcle,
       usdc,
@@ -144,7 +144,7 @@ describe("SpotPricer", function () {
   describe("init", function () {
     it("should initial params", async function () {
       const {
-        amplTargetOracle,
+        amplPolicy,
         ethPriceOrcle,
         usdcPriceOrcle,
         usdc,
@@ -160,7 +160,7 @@ describe("SpotPricer", function () {
 
       expect(await strategy.ETH_ORACLE()).to.eq(ethPriceOrcle.target);
       expect(await strategy.USDC_ORACLE()).to.eq(usdcPriceOrcle.target);
-      expect(await strategy.CPI_ORACLE()).to.eq(amplTargetOracle.target);
+      expect(await strategy.AMPLEFORTH_POLICY()).to.eq(amplPolicy.target);
 
       expect(await strategy.WAMPL()).to.eq(wampl.target);
       expect(await strategy.USDC()).to.eq(usdc.target);
@@ -230,8 +230,8 @@ describe("SpotPricer", function () {
   describe("#perpFmvUsdPrice", function () {
     describe("when AMPL target data is invalid", function () {
       it("should return invalid", async function () {
-        const { strategy, amplTargetOracle } = await loadFixture(setupContracts);
-        await amplTargetOracle.mockMethod("getData()", [amplOracleFP("1.2"), false]);
+        const { strategy, amplPolicy } = await loadFixture(setupContracts);
+        await amplPolicy.mockMethod("getTargetRate()", [amplOracleFP("1.2"), false]);
         const p = await strategy.perpFmvUsdPrice.staticCall();
         expect(p[0]).to.eq(amplOracleFP("1.2"));
         expect(p[1]).to.eq(false);
@@ -338,16 +338,16 @@ describe("SpotPricer", function () {
     });
 
     it("should compute spot price deviation", async function () {
-      const { strategy, amplTargetOracle } = await loadFixture(setupContracts);
-      await amplTargetOracle.mockMethod("getData()", [amplOracleFP("2"), true]);
+      const { strategy, amplPolicy } = await loadFixture(setupContracts);
+      await amplPolicy.mockMethod("getTargetRate()", [amplOracleFP("2"), true]);
       const p = await strategy.spotPriceDeviation.staticCall();
       expect(p[0]).to.eq(percFP("0.630048751767574000"));
       expect(p[1]).to.eq(true);
     });
 
     it("should compute spot price deviation", async function () {
-      const { strategy, amplTargetOracle } = await loadFixture(setupContracts);
-      await amplTargetOracle.mockMethod("getData()", [amplOracleFP("0"), false]);
+      const { strategy, amplPolicy } = await loadFixture(setupContracts);
+      await amplPolicy.mockMethod("getTargetRate()", [amplOracleFP("0"), false]);
       const p = await strategy.spotPriceDeviation.staticCall();
       expect(p[0]).to.eq(percFP("100"));
       expect(p[1]).to.eq(false);
@@ -361,16 +361,16 @@ describe("SpotPricer", function () {
     });
 
     it("should compute spot price deviation", async function () {
-      const { strategy, amplTargetOracle } = await loadFixture(setupContracts);
-      await amplTargetOracle.mockMethod("getData()", [amplOracleFP("1.5"), true]);
+      const { strategy, amplPolicy } = await loadFixture(setupContracts);
+      await amplPolicy.mockMethod("getTargetRate()", [amplOracleFP("1.5"), true]);
       const p = await strategy.amplPriceDeviation.staticCall();
       expect(p[0]).to.eq(percFP("0.790461837046199501"));
       expect(p[1]).to.eq(true);
     });
 
     it("should compute spot price deviation", async function () {
-      const { strategy, amplTargetOracle } = await loadFixture(setupContracts);
-      await amplTargetOracle.mockMethod("getData()", [amplOracleFP("0"), false]);
+      const { strategy, amplPolicy } = await loadFixture(setupContracts);
+      await amplPolicy.mockMethod("getTargetRate()", [amplOracleFP("0"), false]);
       const p = await strategy.amplPriceDeviation.staticCall();
       expect(p[0]).to.eq(percFP("100"));
       expect(p[1]).to.eq(false);
