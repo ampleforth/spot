@@ -5,17 +5,19 @@ import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/O
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
-import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
-import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
+
 import { ERC20BurnableUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import { IERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
-
+import { LineHelpers } from "./_utils/LineHelpers.sol";
+import { MathHelpers } from "./_utils/MathHelpers.sol";
 import { IPerpetualTranche } from "@ampleforthorg/spot-contracts/contracts/_interfaces/IPerpetualTranche.sol";
-import { ISpotPricingStrategy } from "./_interfaces/ISpotPricingStrategy.sol";
-import { ReserveState, BillBrokerFees, Line, Range } from "./_interfaces/BillBrokerTypes.sol";
-import { UnacceptableSwap, UnreliablePrice, UnexpectedDecimals, InvalidPerc, InvalidARBound, SlippageTooHigh, UnauthorizedCall, UnexpectedARDelta } from "./_interfaces/BillBrokerErrors.sol";
+import { IPerpPricer } from "./_interfaces/IPerpPricer.sol";
+import { ReserveState, BillBrokerFees } from "./_interfaces/types/BillBrokerTypes.sol";
+import { Line, Range } from "./_interfaces/types/CommonTypes.sol";
+import { UnacceptableSwap, UnreliablePrice, UnexpectedDecimals, InvalidPerc, SlippageTooHigh, UnauthorizedCall } from "./_interfaces/errors/CommonErrors.sol";
+import { InvalidARBound, UnexpectedARDelta } from "./_interfaces/errors/BillBrokerErrors.sol";
 
 /**
  *  @title BillBroker
@@ -70,9 +72,8 @@ contract BillBroker is
 
     // Math
     using MathUpgradeable for uint256;
-    using SafeCastUpgradeable for uint256;
-    using SafeCastUpgradeable for int256;
-    using SignedMathUpgradeable for int256;
+    using LineHelpers for Line;
+    using MathHelpers for int256;
 
     //-------------------------------------------------------------------------
     // Constants & Immutables
@@ -102,8 +103,8 @@ contract BillBroker is
     /// @return The address of the keeper.
     address public keeper;
 
-    /// @notice The pricing strategy.
-    ISpotPricingStrategy public pricingStrategy;
+    /// @notice The pricing oracle for perp and usd tokens.
+    IPerpPricer public oracle;
 
     /// @notice All of the system fees.
     BillBrokerFees public fees;
@@ -118,24 +119,24 @@ contract BillBroker is
     //--------------------------------------------------------------------------
     // Events
 
-    /// @notice Emitted when a user deposits USD tokens to mint LP tokens.
-    /// @param usdAmtIn The amount of USD tokens deposited.
-    /// @param preOpState The reserve state before the deposit operation.
+    /// @notice Emitted when a user deposits usd tokens to mint LP tokens.
+    /// @param usdAmtIn The amount of usd tokens deposited.
+    /// @param preOpState Pre-operation reserve state.
     event DepositUSD(uint256 usdAmtIn, ReserveState preOpState);
 
     /// @notice Emitted when a user deposits Perp tokens to mint LP tokens.
     /// @param perpAmtIn The amount of Perp tokens deposited.
-    /// @param preOpState The reserve state before the deposit operation.
+    /// @param preOpState Pre-operation reserve state.
     event DepositPerp(uint256 perpAmtIn, ReserveState preOpState);
 
-    /// @notice Emitted when a user swaps Perp tokens for USD tokens.
+    /// @notice Emitted when a user swaps Perp tokens for usd tokens.
     /// @param perpAmtIn The amount of Perp tokens swapped in.
-    /// @param preOpState The reserve state before the swap operation.
+    /// @param preOpState Pre-operation reserve state.
     event SwapPerpsForUSD(uint256 perpAmtIn, ReserveState preOpState);
 
-    /// @notice Emitted when a user swaps USD tokens for Perp tokens.
-    /// @param usdAmtIn The amount of USD tokens swapped in.
-    /// @param preOpState The reserve state before the swap operation.
+    /// @notice Emitted when a user swaps usd tokens for Perp tokens.
+    /// @param usdAmtIn The amount of usd tokens swapped in.
+    /// @param preOpState Pre-operation reserve state.
     event SwapUSDForPerps(uint256 usdAmtIn, ReserveState preOpState);
 
     //--------------------------------------------------------------------------
@@ -161,13 +162,13 @@ contract BillBroker is
     /// @param symbol ERC-20 Symbol of the Bill broker LP token.
     /// @param usd_ Address of the usd token.
     /// @param perp_ Address of the perp token.
-    /// @param pricingStrategy_ Address of the pricing strategy contract.
+    /// @param oracle_ Address of the oracle contract.
     function init(
         string memory name,
         string memory symbol,
         IERC20Upgradeable usd_,
         IPerpetualTranche perp_,
-        ISpotPricingStrategy pricingStrategy_
+        IPerpPricer oracle_
     ) public initializer {
         // initialize dependencies
         __ERC20_init(name, symbol);
@@ -183,7 +184,7 @@ contract BillBroker is
         perpUnitAmt = 10 ** IERC20MetadataUpgradeable(address(perp_)).decimals();
 
         updateKeeper(owner());
-        updatePricingStrategy(pricingStrategy_);
+        updateOracle(oracle_);
         updateFees(
             BillBrokerFees({
                 mintFeePerc: 0,
@@ -211,15 +212,13 @@ contract BillBroker is
         keeper = keeper_;
     }
 
-    /// @notice Updates the reference to the pricing strategy.
-    /// @param pricingStrategy_ The address of the new pricing strategy.
-    function updatePricingStrategy(
-        ISpotPricingStrategy pricingStrategy_
-    ) public onlyOwner {
-        if (pricingStrategy_.decimals() != DECIMALS) {
+    /// @notice Updates the reference to the oracle.
+    /// @param oracle_ The address of the new oracle.
+    function updateOracle(IPerpPricer oracle_) public onlyOwner {
+        if (oracle_.decimals() != DECIMALS) {
             revert UnexpectedDecimals();
         }
-        pricingStrategy = pricingStrategy_;
+        oracle = oracle_;
     }
 
     /// @notice Updates the system fees.
@@ -323,15 +322,10 @@ contract BillBroker is
         uint256 usdAmtIn,
         uint256 postOpAssetRatioMax
     ) external nonReentrant whenNotPaused returns (uint256 mintAmt) {
-        ReserveState memory preOpState = reserveState();
-        uint256 preOpAssetRatio = assetRatio(preOpState);
+        ReserveState memory s = reserveState();
+        uint256 preOpAssetRatio = assetRatio(s);
         uint256 postOpAssetRatio = assetRatio(
-            ReserveState({
-                usdBalance: preOpState.usdBalance + usdAmtIn,
-                perpBalance: preOpState.perpBalance,
-                usdPrice: preOpState.usdPrice,
-                perpPrice: preOpState.perpPrice
-            })
+            _updatedReserveState(s, s.usdBalance + usdAmtIn, s.perpBalance)
         );
 
         // We allow minting only pool is underweight usd
@@ -339,7 +333,7 @@ contract BillBroker is
             return 0;
         }
 
-        mintAmt = computeMintAmtWithUSD(usdAmtIn, preOpState);
+        mintAmt = computeMintAmtWithUSD(usdAmtIn, s);
         if (mintAmt <= 0) {
             return 0;
         }
@@ -354,7 +348,7 @@ contract BillBroker is
         _mint(msg.sender, mintAmt);
 
         // Emit deposit info
-        emit DepositUSD(usdAmtIn, preOpState);
+        emit DepositUSD(usdAmtIn, s);
     }
 
     /// @notice Single sided perp token deposit and mint LP tokens.
@@ -365,15 +359,10 @@ contract BillBroker is
         uint256 perpAmtIn,
         uint256 postOpAssetRatioMin
     ) external nonReentrant whenNotPaused returns (uint256 mintAmt) {
-        ReserveState memory preOpState = reserveState();
-        uint256 preOpAssetRatio = assetRatio(preOpState);
+        ReserveState memory s = reserveState();
+        uint256 preOpAssetRatio = assetRatio(s);
         uint256 postOpAssetRatio = assetRatio(
-            ReserveState({
-                usdBalance: preOpState.usdBalance,
-                perpBalance: preOpState.perpBalance + perpAmtIn,
-                usdPrice: preOpState.usdPrice,
-                perpPrice: preOpState.perpPrice
-            })
+            _updatedReserveState(s, s.usdBalance, s.perpBalance + perpAmtIn)
         );
 
         // We allow minting only pool is underweight perp
@@ -381,7 +370,7 @@ contract BillBroker is
             return 0;
         }
 
-        mintAmt = computeMintAmtWithPerp(perpAmtIn, preOpState);
+        mintAmt = computeMintAmtWithPerp(perpAmtIn, s);
         if (mintAmt <= 0) {
             return 0;
         }
@@ -396,7 +385,7 @@ contract BillBroker is
         _mint(msg.sender, mintAmt);
 
         // Emit deposit info
-        emit DepositPerp(perpAmtIn, preOpState);
+        emit DepositPerp(perpAmtIn, s);
     }
 
     /// @notice Burns LP tokens and redeems usd and perp tokens.
@@ -433,12 +422,9 @@ contract BillBroker is
         uint256 perpAmtMin
     ) external nonReentrant whenNotPaused returns (uint256 perpAmtOut) {
         // compute perp amount out
-        ReserveState memory preOpState = reserveState();
+        ReserveState memory s = reserveState();
         uint256 protocolFeePerpAmt;
-        (perpAmtOut, , protocolFeePerpAmt) = computeUSDToPerpSwapAmt(
-            usdAmtIn,
-            preOpState
-        );
+        (perpAmtOut, , protocolFeePerpAmt) = computeUSDToPerpSwapAmt(usdAmtIn, s);
         if (usdAmtIn <= 0 || perpAmtOut <= 0) {
             revert UnacceptableSwap();
         }
@@ -458,7 +444,7 @@ contract BillBroker is
         perp.safeTransfer(msg.sender, perpAmtOut);
 
         // Emit swap info
-        emit SwapUSDForPerps(usdAmtIn, preOpState);
+        emit SwapUSDForPerps(usdAmtIn, s);
     }
 
     /// @notice Swaps perp tokens from the user for usd tokens from the reserve.
@@ -470,9 +456,9 @@ contract BillBroker is
         uint256 usdAmtMin
     ) external nonReentrant whenNotPaused returns (uint256 usdAmtOut) {
         // Compute swap amount
-        ReserveState memory preOpState = reserveState();
+        ReserveState memory s = reserveState();
         uint256 protocolFeeUsdAmt;
-        (usdAmtOut, , protocolFeeUsdAmt) = computePerpToUSDSwapAmt(perpAmtIn, preOpState);
+        (usdAmtOut, , protocolFeeUsdAmt) = computePerpToUSDSwapAmt(perpAmtIn, s);
         if (perpAmtIn <= 0 || usdAmtOut <= 0) {
             revert UnacceptableSwap();
         }
@@ -492,7 +478,7 @@ contract BillBroker is
         usd.safeTransfer(msg.sender, usdAmtOut);
 
         // Emit swap info
-        emit SwapPerpsForUSD(perpAmtIn, preOpState);
+        emit SwapPerpsForUSD(perpAmtIn, s);
     }
 
     //-----------------------------------------------------------------------------
@@ -545,20 +531,20 @@ contract BillBroker is
             });
     }
 
-    /// @dev Reverts if the pricing strategy returns an invalid price.
-    /// @return The price of usd tokens from the pricing strategy.
+    /// @dev Reverts if the oracle returns an invalid price.
+    /// @return The price of usd tokens from the oracle.
     function usdPrice() public returns (uint256) {
-        (uint256 p, bool v) = pricingStrategy.usdPrice();
+        (uint256 p, bool v) = oracle.usdPrice();
         if (!v) {
             revert UnreliablePrice();
         }
         return p;
     }
 
-    /// @dev Reverts if the pricing strategy returns an invalid price.
-    /// @return The price of perp tokens from the pricing strategy.
+    /// @dev Reverts if the oracle returns an invalid price.
+    /// @return The price of perp tokens from the oracle.
     function perpPrice() public returns (uint256) {
-        (uint256 p, bool v) = pricingStrategy.perpPrice();
+        (uint256 p, bool v) = oracle.perpFmvUsdPrice();
         if (!v) {
             revert UnreliablePrice();
         }
@@ -652,10 +638,10 @@ contract BillBroker is
             return 0;
         }
 
+        // We compute equal value of perp tokens going out.
         uint256 valueIn = s.usdPrice.mulDiv(usdAmtIn, usdUnitAmt);
         uint256 totalReserveVal = (s.usdPrice.mulDiv(s.usdBalance, usdUnitAmt) +
             s.perpPrice.mulDiv(s.perpBalance, perpUnitAmt));
-
         return
             (totalReserveVal > 0)
                 ? valueIn.mulDiv(totalSupply(), totalReserveVal).mulDiv(
@@ -678,10 +664,10 @@ contract BillBroker is
             return 0;
         }
 
+        // We compute equal value of perp tokens coming in.
         uint256 valueIn = s.perpPrice.mulDiv(perpAmtIn, perpUnitAmt);
         uint256 totalReserveVal = (s.usdPrice.mulDiv(s.usdBalance, usdUnitAmt) +
             s.perpPrice.mulDiv(s.perpBalance, perpUnitAmt));
-
         return
             (totalReserveVal > 0)
                 ? valueIn.mulDiv(totalSupply(), totalReserveVal).mulDiv(
@@ -730,7 +716,7 @@ contract BillBroker is
         view
         returns (uint256 usdAmtOut, uint256 lpFeeUsdAmt, uint256 protocolFeeUsdAmt)
     {
-        // We compute equal value of usd tokens out given perp tokens in.
+        // We compute equal value tokens to swap out.
         usdAmtOut = perpAmtIn.mulDiv(s.perpPrice, s.usdPrice).mulDiv(
             usdUnitAmt,
             perpUnitAmt
@@ -740,12 +726,11 @@ contract BillBroker is
         uint256 totalFeePerc = computePerpToUSDSwapFeePerc(
             assetRatio(s),
             assetRatio(
-                ReserveState({
-                    usdBalance: s.usdBalance - usdAmtOut,
-                    perpBalance: s.perpBalance + perpAmtIn,
-                    usdPrice: s.usdPrice,
-                    perpPrice: s.perpPrice
-                })
+                _updatedReserveState(
+                    s,
+                    s.usdBalance - usdAmtOut,
+                    s.perpBalance + perpAmtIn
+                )
             )
         );
         if (totalFeePerc >= ONE) {
@@ -773,21 +758,21 @@ contract BillBroker is
         view
         returns (uint256 perpAmtOut, uint256 lpFeePerpAmt, uint256 protocolFeePerpAmt)
     {
-        // We compute equal value of perp tokens out given usd tokens in.
+        // We compute equal value tokens to swap out.
         perpAmtOut = usdAmtIn.mulDiv(s.usdPrice, s.perpPrice).mulDiv(
             perpUnitAmt,
             usdUnitAmt
         );
+
         // We compute the total fee percentage, lp fees and protocol fees
         uint256 totalFeePerc = computeUSDToPerpSwapFeePerc(
             assetRatio(s),
             assetRatio(
-                ReserveState({
-                    usdBalance: s.usdBalance + usdAmtIn,
-                    perpBalance: s.perpBalance - perpAmtOut,
-                    usdPrice: s.usdPrice,
-                    perpPrice: s.perpPrice
-                })
+                _updatedReserveState(
+                    s,
+                    s.usdBalance + usdAmtIn,
+                    s.perpBalance - perpAmtOut
+                )
             )
         );
         if (totalFeePerc >= ONE) {
@@ -931,6 +916,21 @@ contract BillBroker is
     //-----------------------------------------------------------------------------
     // Private methods
 
+    /// @dev Constructs the new reserve state based on provided balances.
+    function _updatedReserveState(
+        ReserveState memory s,
+        uint256 usdBalance_,
+        uint256 perpBalance_
+    ) private pure returns (ReserveState memory) {
+        return
+            ReserveState({
+                usdBalance: usdBalance_,
+                perpBalance: perpBalance_,
+                usdPrice: s.usdPrice,
+                perpPrice: s.perpPrice
+            });
+    }
+
     /// @dev The function assumes the fee curve is defined as a pair-wise linear function which merge at the cutoff point.
     ///      The swap fee is computed as avg height of the fee curve between {arL,arU}.
     function _computeFeePerc(
@@ -941,34 +941,12 @@ contract BillBroker is
         uint256 cutoff
     ) private pure returns (uint256 feePerc) {
         if (arU <= cutoff) {
-            feePerc = _avgY(fn1, arL, arU);
+            feePerc = fn1.avgY(arL, arU).clip(0, ONE);
         } else if (arL >= cutoff) {
-            feePerc = _avgY(fn2, arL, arU);
+            feePerc = fn2.avgY(arL, arU).clip(0, ONE);
         } else {
-            feePerc = (_avgY(fn1, arL, cutoff).mulDiv(cutoff - arL, arU - arL) +
-                _avgY(fn2, cutoff, arU).mulDiv(arU - cutoff, arU - arL));
+            feePerc += fn1.avgY(arL, cutoff).clip(0, ONE).mulDiv(cutoff - arL, arU - arL);
+            feePerc += fn2.avgY(cutoff, arU).clip(0, ONE).mulDiv(arU - cutoff, arU - arL);
         }
-        feePerc = MathUpgradeable.min(feePerc, ONE);
-    }
-
-    /// @dev We compute the average height of the line between {xL,xU}.
-    function _avgY(
-        Line memory fn,
-        uint256 xL,
-        uint256 xU
-    ) private pure returns (uint256) {
-        // if the line has a zero slope, return any y
-        if (fn.y1 == fn.y2) {
-            return fn.y2;
-        }
-
-        // m = dlY/dlX
-        // c = y2 - m . x2
-        // Avg height => (yL + yU) / 2
-        //            => m . ( xL + xU ) / 2 + c
-        int256 dlY = fn.y2.toInt256() - fn.y1.toInt256();
-        int256 dlX = fn.x2.toInt256() - fn.x1.toInt256();
-        int256 c = fn.y2.toInt256() - ((fn.x2.toInt256() * dlY) / dlX);
-        return ((((xL + xU).toInt256() * dlY) / (2 * dlX)) + c).abs();
     }
 }
