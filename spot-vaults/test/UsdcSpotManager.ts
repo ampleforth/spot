@@ -22,12 +22,27 @@ describe("UsdcSpotManager", function () {
     await mockPool.deploy();
     await mockPool.mockCall(
       "positions(bytes32)",
+      [univ3PositionKey(mockVault.target, -800000, 800000)],
+      [100000, 0, 0, 0, 0],
+    );
+    await mockPool.mockCall(
+      "positions(bytes32)",
+      [univ3PositionKey(mockVault.target, -1000, 1000)],
+      [0, 0, 0, 0, 0],
+    );
+    await mockPool.mockCall(
+      "positions(bytes32)",
       [univ3PositionKey(mockVault.target, 20000, 40000)],
       [50000, 0, 0, 0, 0],
     );
+    await mockVault.mockMethod("baseLower()", [-1000]);
+    await mockVault.mockMethod("baseUpper()", [1000]);
+    await mockVault.mockMethod("fullLower()", [-800000]);
+    await mockVault.mockMethod("fullUpper()", [800000]);
     await mockVault.mockMethod("limitLower()", [20000]);
     await mockVault.mockMethod("limitUpper()", [40000]);
     await mockVault.mockMethod("pool()", [mockPool.target]);
+    await mockVault.mockMethod("getTotalAmounts()", [usdcFP("500000"), spotFP("500000")]);
 
     const mockOracle = new DMock("IMetaOracle");
     await mockOracle.deploy();
@@ -79,8 +94,24 @@ describe("UsdcSpotManager", function () {
     await mockVault.mockMethod("getTwap()", [29999]);
   }
 
-  async function stubUnchangedLimitRange(mockVault) {
-    await mockVault.clearMockMethod("emergencyBurn(int24,int24,uint128)");
+  async function stubActiveZoneLiq(mockVault, fr, base, limit) {
+    await mockVault.mockCall("setFullRangeWeight(uint24)", [fr], []);
+    await mockVault.mockCall("setBaseThreshold(int24)", [base], []);
+    await mockVault.mockCall("setLimitThreshold(int24)", [limit], []);
+  }
+
+  async function stubInactiveLiq(mockVault) {
+    await mockVault.mockCall("setFullRangeWeight(uint24)", [1000000], []);
+    await mockVault.mockCall("setBaseThreshold(int24)", [48000], []);
+    await mockVault.mockCall("setLimitThreshold(int24)", [48000], []);
+  }
+
+  async function stubTrimFullRangeLiq(mockVault, burntLiq) {
+    await mockVault.mockCall(
+      "emergencyBurn(int24,int24,uint128)",
+      [-800000, 800000, burntLiq],
+      [],
+    );
   }
 
   async function stubRemovedLimitRange(mockVault) {
@@ -117,6 +148,16 @@ describe("UsdcSpotManager", function () {
       const { manager } = await loadFixture(setupContracts);
       expect(await manager.decimals()).to.eq(18);
     });
+
+    it("should set initial parameters", async function () {
+      const { manager } = await loadFixture(setupContracts);
+      expect(await manager.prevWithinActiveZone()).to.eq(false);
+      const r = await manager.activeZoneDeviation();
+      expect(r[0]).to.eq(percFP("0.95"));
+      expect(r[1]).to.eq(percFP("1.05"));
+      expect(await manager.concBandDeviationWidth()).to.eq(percFP("0.05"));
+      expect(await manager.fullRangeMaxUsdcBal()).to.eq(usdcFP("250000"));
+    });
   });
 
   describe("#updateOracle", function () {
@@ -150,20 +191,58 @@ describe("UsdcSpotManager", function () {
     });
   });
 
-  describe("#setLiquidityRanges", function () {
+  describe("#updateActiveZone", function () {
     it("should fail to when called by non-owner", async function () {
       const { manager, addr1 } = await loadFixture(setupContracts);
       await expect(
-        manager.connect(addr1).setLiquidityRanges(7200, 330000, 1200),
+        manager.connect(addr1).updateActiveZone([percFP("0.9"), percFP("1.1")]),
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
 
     it("should succeed when called by owner", async function () {
-      const { manager, mockVault } = await loadFixture(setupContracts);
-      await mockVault.mockCall("setBaseThreshold(int24)", [7200], []);
-      await mockVault.mockCall("setFullRangeWeight(uint24)", [330000], []);
-      await mockVault.mockCall("setLimitThreshold(int24)", [1200], []);
-      await manager.setLiquidityRanges(7200, 330000, 1200);
+      const { manager } = await loadFixture(setupContracts);
+      await manager.updateActiveZone([percFP("0.9"), percFP("1.1")]);
+      const r = await manager.activeZoneDeviation();
+      expect(r[0]).to.eq(percFP("0.9"));
+      expect(r[1]).to.eq(percFP("1.1"));
+    });
+  });
+
+  describe("#updateConcentratedBand", function () {
+    it("should fail to when called by non-owner", async function () {
+      const { manager, addr1 } = await loadFixture(setupContracts);
+      await expect(
+        manager.connect(addr1).updateConcentratedBand(percFP("0.1")),
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+
+    it("should succeed when called by owner", async function () {
+      const { manager } = await loadFixture(setupContracts);
+      await manager.updateConcentratedBand(percFP("0.1"));
+      expect(await manager.concBandDeviationWidth()).to.eq(percFP("0.1"));
+    });
+  });
+
+  describe("#updateFullRangeLiquidity", function () {
+    it("should fail to when called by non-owner", async function () {
+      const { manager, addr1 } = await loadFixture(setupContracts);
+      await expect(
+        manager.connect(addr1).updateFullRangeLiquidity(usdcFP("1000000"), percFP("0.2")),
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+
+    it("should fail to when param is invalid", async function () {
+      const { manager } = await loadFixture(setupContracts);
+      await expect(
+        manager.updateFullRangeLiquidity(usdcFP("1000000"), percFP("1.2")),
+      ).to.be.revertedWith("InvalidPerc");
+    });
+
+    it("should succeed when called by owner", async function () {
+      const { manager } = await loadFixture(setupContracts);
+      await manager.updateFullRangeLiquidity(usdcFP("1000000"), percFP("0.2"));
+      expect(await manager.fullRangeMaxUsdcBal()).to.eq(usdcFP("1000000"));
+      expect(await manager.fullRangeMaxPerc()).to.eq(percFP("0.2"));
     });
   });
 
@@ -221,135 +300,195 @@ describe("UsdcSpotManager", function () {
     });
   });
 
-  describe("shouldRemoveLimitRange", function () {
-    describe("is overweight spot", function () {
-      it("should return bool", async function () {
-        const { manager, mockVault } = await loadFixture(setupContracts);
-        await stubOverweightSpot(mockVault);
-        expect(await manager.shouldRemoveLimitRange(percFP("1.01"))).to.eq(false);
-        expect(await manager.shouldRemoveLimitRange(percFP("1"))).to.eq(false);
-        expect(await manager.shouldRemoveLimitRange(percFP("0.99"))).to.eq(true);
-      });
-    });
-
-    describe("is overweight usdc", function () {
-      it("should return bool", async function () {
-        const { manager, mockVault } = await loadFixture(setupContracts);
-        await stubOverweightUsdc(mockVault);
-        expect(await manager.shouldRemoveLimitRange(percFP("1.01"))).to.eq(true);
-        expect(await manager.shouldRemoveLimitRange(percFP("1"))).to.eq(false);
-        expect(await manager.shouldRemoveLimitRange(percFP("0.99"))).to.eq(false);
-      });
+  describe("activeZone", function () {
+    it("should return state", async function () {
+      const { manager } = await loadFixture(setupContracts);
+      expect(await manager.activeZone(percFP("0.949"))).to.eq(false);
+      expect(await manager.activeZone(percFP("0.95"))).to.eq(true);
+      expect(await manager.activeZone(percFP("0.975"))).to.eq(true);
+      expect(await manager.activeZone(percFP("1"))).to.eq(true);
+      expect(await manager.activeZone(percFP("1.025"))).to.eq(true);
+      expect(await manager.activeZone(percFP("1.05"))).to.eq(true);
+      expect(await manager.activeZone(percFP("1.051"))).to.eq(false);
     });
   });
 
-  describe("shouldForceRebalance", function () {
-    describe("when deviation crosses 1", function () {
-      it("should return true", async function () {
-        const { manager } = await loadFixture(setupContracts);
-        expect(await manager.shouldForceRebalance(percFP("0.9"), percFP("1.1"))).to.eq(
-          true,
-        );
-        expect(await manager.shouldForceRebalance(percFP("1.5"), percFP("0.99"))).to.eq(
-          true,
-        );
-        expect(await manager.shouldForceRebalance(percFP("1"), percFP("1.1"))).to.eq(
-          true,
-        );
-        expect(await manager.shouldForceRebalance(percFP("1"), percFP("0.99"))).to.eq(
-          true,
-        );
-      });
+  describe("activeFullRangePerc", function () {
+    it("should calculate full range perc", async function () {
+      const { manager, mockVault } = await loadFixture(setupContracts);
+      await manager.updateFullRangeLiquidity(usdcFP("25000"), percFP("0.2"));
+      await mockVault.mockMethod("getTotalAmounts()", [usdcFP("500000"), spotFP("0")]);
+      expect(await manager.activeFullRangePerc()).to.eq(percFP("0.05"));
     });
+    it("should calculate full range perc", async function () {
+      const { manager, mockVault } = await loadFixture(setupContracts);
+      await manager.updateFullRangeLiquidity(usdcFP("250000"), percFP("0.1"));
+      await mockVault.mockMethod("getTotalAmounts()", [usdcFP("500000"), spotFP("10")]);
+      expect(await manager.activeFullRangePerc()).to.eq(percFP("0.1"));
+    });
+    it("should calculate full range perc", async function () {
+      const { manager, mockVault } = await loadFixture(setupContracts);
+      await manager.updateFullRangeLiquidity(usdcFP("250000"), percFP("1"));
+      await mockVault.mockMethod("getTotalAmounts()", [
+        usdcFP("500000"),
+        spotFP("10000"),
+      ]);
+      expect(await manager.activeFullRangePerc()).to.eq(percFP("0.5"));
+    });
+  });
 
-    describe("when deviation does not cross 1", function () {
-      it("should return false", async function () {
-        const { manager } = await loadFixture(setupContracts);
-        expect(await manager.shouldForceRebalance(percFP("0.9"), percFP("0.99"))).to.eq(
-          false,
-        );
-        expect(await manager.shouldForceRebalance(percFP("1.5"), percFP("1.1"))).to.eq(
-          false,
-        );
-        expect(await manager.shouldForceRebalance(percFP("0.9"), percFP("1"))).to.eq(
-          false,
-        );
-        expect(await manager.shouldForceRebalance(percFP("1.5"), percFP("1"))).to.eq(
-          false,
-        );
-      });
+  describe("deviationToTicks", function () {
+    it("should return ticks", async function () {
+      const { manager } = await loadFixture(setupContracts);
+      expect(await manager.deviationToTicks(percFP("0.1"))).to.eq(1000);
+      expect(await manager.deviationToTicks(percFP("0.05"))).to.eq(400);
+      expect(await manager.deviationToTicks(percFP("0.025"))).to.eq(200);
+      expect(await manager.deviationToTicks(percFP("0.01"))).to.eq(200);
+      expect(await manager.deviationToTicks(percFP("0"))).to.eq(200);
     });
   });
 
   describe("#rebalance", function () {
-    it("should rebalance, update limit range and prev_deviation", async function () {
-      const { manager, mockVault, mockOracle } = await loadFixture(setupContracts);
+    describe("when price is inside active range, previously outside", function () {
+      it("should force rebalance and update liquidity", async function () {
+        const { manager, mockVault, mockOracle } = await loadFixture(setupContracts);
+        await mockOracle.mockMethod("spotPriceDeviation()", [priceFP("0.98"), true]);
 
-      await stubOverweightUsdc(mockVault);
-      await stubRebalance(mockVault);
-      await stubUnchangedLimitRange(mockVault);
-      await mockOracle.mockMethod("spotPriceDeviation()", [priceFP("0.99"), true]);
+        await stubOverweightUsdc(mockVault);
+        await stubActiveZoneLiq(mockVault, 500000, 400, 200);
+        await stubForceRebalance(mockVault);
 
-      expect(await manager.isOverweightSpot()).to.eq(false);
-      expect(await manager.prevDeviation()).to.eq("0");
-      await expect(manager.rebalance()).not.to.be.reverted;
-      expect(await manager.prevDeviation()).to.eq(percFP("0.99"));
+        expect(await manager.isOverweightSpot()).to.eq(false);
+        expect(await manager.prevWithinActiveZone()).to.eq(false);
+        await expect(manager.rebalance()).not.to.be.reverted;
+        expect(await manager.prevWithinActiveZone()).to.eq(true);
+      });
+
+      it("should force rebalance and update liquidity", async function () {
+        const { manager, mockVault, mockOracle } = await loadFixture(setupContracts);
+        await mockOracle.mockMethod("spotPriceDeviation()", [priceFP("0.98"), true]);
+
+        await stubOverweightSpot(mockVault);
+        await stubActiveZoneLiq(mockVault, 500000, 400, 600);
+        await stubForceRebalance(mockVault);
+
+        expect(await manager.isOverweightSpot()).to.eq(true);
+        expect(await manager.prevWithinActiveZone()).to.eq(false);
+        await expect(manager.rebalance()).not.to.be.reverted;
+        expect(await manager.prevWithinActiveZone()).to.eq(true);
+      });
     });
 
-    it("should rebalance, update limit range and prev_deviation", async function () {
-      const { manager, mockVault, mockOracle } = await loadFixture(setupContracts);
+    describe("when price is outside active range, previously inside", function () {
+      it("should rebalance and update liquidity", async function () {
+        const { manager, mockVault, mockOracle } = await loadFixture(setupContracts);
 
-      await stubOverweightSpot(mockVault);
-      await stubRebalance(mockVault);
-      await stubRemovedLimitRange(mockVault);
-      await mockOracle.mockMethod("spotPriceDeviation()", [priceFP("0.99"), true]);
+        await mockOracle.mockMethod("spotPriceDeviation()", [priceFP("1"), true]);
+        await stubOverweightUsdc(mockVault);
+        await stubActiveZoneLiq(mockVault, 500000, 400, 400);
+        await stubForceRebalance(mockVault);
+        await manager.rebalance();
 
-      expect(await manager.isOverweightSpot()).to.eq(true);
-      expect(await manager.prevDeviation()).to.eq("0");
-      await expect(manager.rebalance()).not.to.be.reverted;
-      expect(await manager.prevDeviation()).to.eq(percFP("0.99"));
+        await mockVault.mockMethod("getTotalAmounts()", [
+          usdcFP("1000000"),
+          spotFP("500000"),
+        ]);
+        await mockOracle.mockMethod("spotPriceDeviation()", [priceFP("0.5"), true]);
+        await stubInactiveLiq(mockVault);
+        await stubTrimFullRangeLiq(mockVault, 75000);
+        await stubRemovedLimitRange(mockVault);
+        await stubForceRebalance(mockVault);
+
+        expect(await manager.isOverweightSpot()).to.eq(false);
+        expect(await manager.prevWithinActiveZone()).to.eq(true);
+        await expect(manager.rebalance()).not.to.be.reverted;
+        expect(await manager.prevWithinActiveZone()).to.eq(false);
+      });
     });
 
-    it("should rebalance, update limit range and prev_deviation", async function () {
-      const { manager, mockVault, mockOracle } = await loadFixture(setupContracts);
+    describe("when price is inside active range, previously inside", function () {
+      it("should rebalance and update liquidity", async function () {
+        const { manager, mockVault, mockOracle } = await loadFixture(setupContracts);
 
-      await stubOverweightUsdc(mockVault);
-      await stubForceRebalance(mockVault);
-      await stubRemovedLimitRange(mockVault);
-      await mockOracle.mockMethod("spotPriceDeviation()", [priceFP("1.2"), true]);
+        await mockOracle.mockMethod("spotPriceDeviation()", [priceFP("1"), true]);
+        await stubOverweightUsdc(mockVault);
+        await stubActiveZoneLiq(mockVault, 500000, 400, 400);
+        await stubForceRebalance(mockVault);
+        await manager.rebalance();
 
-      expect(await manager.isOverweightSpot()).to.eq(false);
-      expect(await manager.prevDeviation()).to.eq("0");
-      await expect(manager.rebalance()).not.to.be.reverted;
-      expect(await manager.prevDeviation()).to.eq(percFP("1.2"));
+        await mockOracle.mockMethod("spotPriceDeviation()", [priceFP("1.02"), true]);
+        await stubActiveZoneLiq(mockVault, 500000, 400, 600);
+        await stubRebalance(mockVault);
+
+        expect(await manager.isOverweightSpot()).to.eq(false);
+        expect(await manager.prevWithinActiveZone()).to.eq(true);
+        await expect(manager.rebalance()).not.to.be.reverted;
+        expect(await manager.prevWithinActiveZone()).to.eq(true);
+      });
+
+      it("should rebalance and update liquidity", async function () {
+        const { manager, mockVault, mockOracle } = await loadFixture(setupContracts);
+
+        await mockOracle.mockMethod("spotPriceDeviation()", [priceFP("1"), true]);
+        await stubOverweightUsdc(mockVault);
+        await stubActiveZoneLiq(mockVault, 500000, 400, 400);
+        await stubForceRebalance(mockVault);
+        await manager.rebalance();
+
+        await mockOracle.mockMethod("spotPriceDeviation()", [priceFP("1.02"), true]);
+        await stubOverweightSpot(mockVault);
+        await stubActiveZoneLiq(mockVault, 500000, 400, 200);
+        await stubRebalance(mockVault);
+
+        expect(await manager.isOverweightSpot()).to.eq(true);
+        expect(await manager.prevWithinActiveZone()).to.eq(true);
+        await expect(manager.rebalance()).not.to.be.reverted;
+        expect(await manager.prevWithinActiveZone()).to.eq(true);
+      });
     });
 
-    it("should rebalance, update limit range and prev_deviation", async function () {
-      const { manager, mockVault, mockOracle } = await loadFixture(setupContracts);
+    describe("when price is outside active range, previously outside", function () {
+      it("should rebalance and update liquidity", async function () {
+        const { manager, mockVault, mockOracle } = await loadFixture(setupContracts);
 
-      await stubOverweightSpot(mockVault);
-      await stubForceRebalance(mockVault);
-      await stubUnchangedLimitRange(mockVault);
-      await mockOracle.mockMethod("spotPriceDeviation()", [priceFP("1.2"), true]);
+        await mockVault.mockMethod("getTotalAmounts()", [
+          usdcFP("2500000"),
+          spotFP("500000"),
+        ]);
+        await mockOracle.mockMethod("spotPriceDeviation()", [priceFP("0.75"), true]);
+        await stubOverweightUsdc(mockVault);
+        await stubInactiveLiq(mockVault);
+        await stubTrimFullRangeLiq(mockVault, 90000);
+        await stubRemovedLimitRange(mockVault);
+        await stubRebalance(mockVault);
 
-      expect(await manager.isOverweightSpot()).to.eq(true);
-      expect(await manager.prevDeviation()).to.eq("0");
-      await expect(manager.rebalance()).not.to.be.reverted;
-      expect(await manager.prevDeviation()).to.eq(percFP("1.2"));
+        expect(await manager.isOverweightSpot()).to.eq(false);
+        expect(await manager.prevWithinActiveZone()).to.eq(false);
+        await expect(manager.rebalance()).not.to.be.reverted;
+        expect(await manager.prevWithinActiveZone()).to.eq(false);
+      });
     });
 
-    it("should rebalance, remove limit range and not change prev_deviation", async function () {
-      const { manager, mockVault, mockOracle } = await loadFixture(setupContracts);
+    describe("when price is invalid", function () {
+      it("should rebalance and update liquidity", async function () {
+        const { manager, mockVault, mockOracle } = await loadFixture(setupContracts);
 
-      await stubOverweightSpot(mockVault);
-      await stubRebalance(mockVault);
-      await stubRemovedLimitRange(mockVault);
-      await mockOracle.mockMethod("spotPriceDeviation()", [priceFP("1.2"), false]);
+        await mockVault.mockMethod("getTotalAmounts()", [
+          usdcFP("2500000"),
+          spotFP("500000"),
+        ]);
+        await mockOracle.mockMethod("spotPriceDeviation()", [priceFP("0.75"), false]);
+        await stubOverweightUsdc(mockVault);
+        await stubInactiveLiq(mockVault);
+        await stubTrimFullRangeLiq(mockVault, 90000);
+        await stubRemovedLimitRange(mockVault);
+        await stubRebalance(mockVault);
 
-      expect(await manager.isOverweightSpot()).to.eq(true);
-      expect(await manager.prevDeviation()).to.eq("0");
-      await expect(manager.rebalance()).not.to.be.reverted;
-      expect(await manager.prevDeviation()).to.eq(percFP("0"));
+        expect(await manager.isOverweightSpot()).to.eq(false);
+        expect(await manager.prevWithinActiveZone()).to.eq(false);
+        await expect(manager.rebalance()).not.to.be.reverted;
+        expect(await manager.prevWithinActiveZone()).to.eq(false);
+      });
     });
   });
 });
