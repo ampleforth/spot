@@ -1,11 +1,22 @@
 import { log, ethereum, BigInt, BigDecimal, Address } from '@graphprotocol/graph-ts'
-import { Deposit, Withdraw, Snapshot } from '../generated/CharmVault/CharmVault'
-import { CharmVault as CharmVaultABI } from '../generated/CharmVault/CharmVault'
-import { UniV3Pool as UniV3PoolABI } from '../generated/CharmVault/UniV3Pool'
-import { ERC20 as ERC20ABI } from '../generated/CharmVault/ERC20'
-import { CharmVault, CharmVaultDailyStat } from '../generated/schema'
+import {
+  DepositCall,
+  RedeemCall,
+  DepositUSD,
+  DepositPerp,
+  SwapPerpsForUSD,
+  SwapUSDForPerps,
+} from '../generated/BillBroker/BillBroker'
+import {
+  BillBroker__computePerpToUSDSwapAmt1InputSStruct,
+  BillBroker__computeUSDToPerpSwapAmtInputSStruct,
+} from '../generated/BillBroker/BillBroker'
+import { BillBroker as BillBrokerABI } from '../generated/BillBroker/BillBroker'
+import { ERC20 as ERC20ABI } from '../generated/BillBroker/ERC20'
+import { BillBroker, BillBrokerDailyStat, BillBrokerSwap } from '../generated/schema'
 
 let BIGINT_ZERO = BigInt.fromI32(0)
+let BIGINT_ONE = BigInt.fromI32(1)
 let BIGDECIMAL_ZERO = BigDecimal.fromString('0')
 let BIGDECIMAL_ONE = BigDecimal.fromString('1')
 
@@ -27,188 +38,247 @@ const formatBalance = (wei: BigInt, decimals: BigInt): BigDecimal => {
   )
 }
 
-// https://github.com/Uniswap/v3-subgraph/blob/main/src/utils/index.ts#L30
-function exponentToBigDecimal(decimals: BigInt): BigDecimal {
-  let resultString = '1'
-  for (let i = 0; i < decimals.toI32(); i++) {
-    resultString += '0'
-  }
-  return BigDecimal.fromString(resultString)
-}
-function safeDiv(amount0: BigDecimal, amount1: BigDecimal): BigDecimal {
-  if (amount1.equals(BIGDECIMAL_ZERO)) {
-    return BIGDECIMAL_ZERO
-  } else {
-    return amount0.div(amount1)
-  }
-}
-function sqrtPriceX96ToTokenPrices(
-  sqrtPriceX96: BigInt,
-  token0Decimals: BigInt,
-  token1Decimals: BigInt,
-): BigDecimal[] {
-  let Q192 = BigInt.fromI32(2).pow(192 as u8)
-  let num = sqrtPriceX96.times(sqrtPriceX96).toBigDecimal()
-  let denom = BigDecimal.fromString(Q192.toString())
-  let price1 = num
-    .div(denom)
-    .times(exponentToBigDecimal(token0Decimals))
-    .div(exponentToBigDecimal(token1Decimals))
-  let price0 = safeDiv(BigDecimal.fromString('1'), price1)
-  return [price0, price1]
-}
-
-function fetchCharmVault(address: Address): CharmVault {
+function fetchBillBroker(address: Address): BillBroker {
   let id = address.toHexString()
-  let vault = CharmVault.load(id)
+  let vault = BillBroker.load(id)
   if (vault === null) {
-    vault = new CharmVault(id)
-    let vaultContract = CharmVaultABI.bind(address)
-    vault.pool = vaultContract.pool().toHexString()
+    vault = new BillBroker(id)
+    let vaultContract = BillBrokerABI.bind(address)
     vault.name = vaultContract.name()
     vault.symbol = vaultContract.symbol()
     vault.decimals = BigInt.fromI32(vaultContract.decimals())
 
-    let token0Address = vaultContract.token0()
-    let token0Contract = ERC20ABI.bind(token0Address)
-    vault.token0 = token0Address.toHexString()
-    vault.token0Name = token0Contract.name()
-    vault.token0Symbol = token0Contract.symbol()
-    vault.token0Decimals = BigInt.fromI32(token0Contract.decimals())
+    let perpAddress = vaultContract.perp()
+    let perpContract = ERC20ABI.bind(perpAddress)
+    vault.perp = perpAddress.toHexString()
+    vault.perpName = perpContract.name()
+    vault.perpSymbol = perpContract.symbol()
+    vault.perpDecimals = BigInt.fromI32(perpContract.decimals())
 
-    let token1Address = vaultContract.token1()
-    let token1Contract = ERC20ABI.bind(token1Address)
-    vault.token1 = token1Address.toHexString()
-    vault.token1Name = token1Contract.name()
-    vault.token1Symbol = token1Contract.symbol()
-    vault.token1Decimals = BigInt.fromI32(token1Contract.decimals())
+    let usdAddress = vaultContract.usd()
+    let usdContract = ERC20ABI.bind(usdAddress)
+    vault.usd = usdAddress.toHexString()
+    vault.usdName = usdContract.name()
+    vault.usdSymbol = usdContract.symbol()
+    vault.usdDecimals = BigInt.fromI32(usdContract.decimals())
 
-    vault.token0Bal = BIGDECIMAL_ZERO
-    vault.token1Bal = BIGDECIMAL_ZERO
-    vault.token0BalIn = BIGDECIMAL_ZERO
-    vault.token1BalIn = BIGDECIMAL_ZERO
-    vault.token0Price = BIGDECIMAL_ZERO
-    vault.token1Price = BIGDECIMAL_ZERO
-    vault.tvl = BIGDECIMAL_ZERO
-    vault.valueIn = BIGDECIMAL_ZERO
-    vault.price = BIGDECIMAL_ZERO
+    vault.perpBal = BIGDECIMAL_ZERO
+    vault.usdBal = BIGDECIMAL_ZERO
+    vault.perpPrice = BIGDECIMAL_ZERO
+    vault.usdPrice = BIGDECIMAL_ZERO
     vault.totalSupply = BIGDECIMAL_ZERO
-    vault.unusedToken0Bal = BIGDECIMAL_ZERO
-    vault.unusedToken1Bal = BIGDECIMAL_ZERO
-    vault.unusedTVL = BIGDECIMAL_ZERO
+    vault.tvl = BIGDECIMAL_ZERO
+    vault.price = BIGDECIMAL_ZERO
+    vault.swapNonce = BIGINT_ZERO
     vault.save()
   }
-  return vault as CharmVault
+  return vault as BillBroker
 }
 
-function fetchCharmVaultDailyStat(vault: CharmVault, timestamp: BigInt): CharmVaultDailyStat {
+function fetchBillBrokerDailyStat(vault: BillBroker, timestamp: BigInt): BillBrokerDailyStat {
   let id = vault.id.concat('-').concat(timestamp.toString())
-  let dailyStat = CharmVaultDailyStat.load(id)
+  let dailyStat = BillBrokerDailyStat.load(id)
   if (dailyStat === null) {
-    dailyStat = new CharmVaultDailyStat(id)
+    dailyStat = new BillBrokerDailyStat(id)
     dailyStat.vault = vault.id
     dailyStat.timestamp = timestamp
-    dailyStat.token0Bal = BIGDECIMAL_ZERO
-    dailyStat.token1Bal = BIGDECIMAL_ZERO
-    dailyStat.token0BalIn = BIGDECIMAL_ZERO
-    dailyStat.token1BalIn = BIGDECIMAL_ZERO
-    dailyStat.token0Price = BIGDECIMAL_ZERO
-    dailyStat.token1Price = BIGDECIMAL_ZERO
-    dailyStat.tvl = BIGDECIMAL_ZERO
-    dailyStat.valueIn = BIGDECIMAL_ZERO
-    dailyStat.price = BIGDECIMAL_ZERO
+    dailyStat.perpBal = BIGDECIMAL_ZERO
+    dailyStat.usdBal = BIGDECIMAL_ZERO
+    dailyStat.perpPrice = BIGDECIMAL_ZERO
+    dailyStat.usdPrice = BIGDECIMAL_ZERO
     dailyStat.totalSupply = BIGDECIMAL_ZERO
+    dailyStat.usdSwapAmt = BIGDECIMAL_ZERO
+    dailyStat.perpSwapAmt = BIGDECIMAL_ZERO
+    dailyStat.usdFeeAmt = BIGDECIMAL_ZERO
+    dailyStat.perpFeeAmt = BIGDECIMAL_ZERO
+    dailyStat.tvl = BIGDECIMAL_ZERO
+    dailyStat.price = BIGDECIMAL_ZERO
     dailyStat.save()
   }
-  return dailyStat as CharmVaultDailyStat
+  return dailyStat as BillBrokerDailyStat
 }
 
-function refreshCharmVaultStats(vault: CharmVault, dailyStat: CharmVaultDailyStat): void {
-  let vaultContract = CharmVaultABI.bind(stringToAddress(vault.id))
-  let tokenBals = vaultContract.getTotalAmounts()
-  let uniPoolContract = UniV3PoolABI.bind(stringToAddress(vault.pool))
-  let slot0 = uniPoolContract.slot0()
-  let sqrtPrice = slot0.value0
-  let prices = sqrtPriceX96ToTokenPrices(sqrtPrice, vault.token0Decimals, vault.token1Decimals)
+function fetchBillBrokerSwap(vault: BillBroker, nonce:BigInt): BillBrokerSwap {
+  let id = vault.id.concat('-').concat(nonce.toString())
+  let swap = BillBrokerSwap.load(id)
+  if (swap === null) {
+    swap = new BillBrokerSwap(id)
+    swap.vault = vault.id
+    swap.nonce = nonce
+    swap.type = ""
+    swap.swapAmt = BIGDECIMAL_ZERO
+    swap.feeAmt = BIGDECIMAL_ZERO
+    swap.tx = "0x"
+    swap.save()
+  }
+  return swap as BillBrokerSwap
+}
 
-  vault.token0Bal = formatBalance(tokenBals.value0, vault.token0Decimals)
-  vault.token1Bal = formatBalance(tokenBals.value1, vault.token1Decimals)
-  vault.token0Price = prices[0]
-  vault.token1Price = prices[1]
-  vault.tvl = vault.token0Bal.plus(vault.token1Bal.times(vault.token0Price))
+function refreshBillBrokerStats(vault: BillBroker, dailyStat: BillBrokerDailyStat): void {
+  let vaultContract = BillBrokerABI.bind(stringToAddress(vault.id))
+  vault.perpBal = formatBalance(vaultContract.perpBalance(), vault.perpDecimals)
+  vault.usdBal = formatBalance(vaultContract.usdBalance(), vault.usdDecimals)
   vault.totalSupply = formatBalance(vaultContract.totalSupply(), vault.decimals)
-  vault.price = vault.tvl.div(vault.totalSupply)
-  vault.unusedToken0Bal = formatBalance(vaultContract.getBalance0(), vault.token0Decimals)
-  vault.unusedToken1Bal = formatBalance(vaultContract.getBalance1(), vault.token1Decimals)
-  vault.unusedTVL = vault.unusedToken0Bal.plus(vault.unusedToken1Bal.times(vault.token0Price))
   vault.save()
 
-  dailyStat.token0Bal = vault.token0Bal
-  dailyStat.token1Bal = vault.token1Bal
-  dailyStat.token0Price = vault.token0Price
-  dailyStat.token1Price = vault.token1Price
-  dailyStat.tvl = vault.tvl
+  dailyStat.perpBal = vault.perpBal
+  dailyStat.usdBal = vault.usdBal
   dailyStat.totalSupply = vault.totalSupply
+  dailyStat.save()
+}
+
+export function handleDeposit(call: DepositCall): void {
+  log.debug('triggered deposit', [])
+  let vault = fetchBillBroker(call.to)
+  let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(call.block.timestamp))
+  refreshBillBrokerStats(vault, dailyStat)
+}
+
+export function handleRedeem(call: RedeemCall): void {
+  log.debug('triggered redeem', [])
+  let vault = fetchBillBroker(call.to)
+  let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(call.block.timestamp))
+  refreshBillBrokerStats(vault, dailyStat)
+}
+
+export function handleSwapPerpsForUSD(event: SwapPerpsForUSD): void {
+  log.debug('triggered swap perps', [])
+  let vault = fetchBillBroker(event.address)
+  let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(event.block.timestamp))
+  let swap = fetchBillBrokerSwap(vault, vault.swapNonce.plus(BIGINT_ONE))
+  refreshBillBrokerStats(vault, dailyStat)
+
+  vault.perpPrice = formatBalance(event.params.preOpState.perpPrice, vault.decimals)
+  vault.usdPrice = formatBalance(event.params.preOpState.usdPrice, vault.decimals)
+  vault.tvl = vault.usdBal.times(vault.usdPrice).plus(vault.perpBal.times(vault.perpPrice))
+  vault.price = vault.tvl.div(vault.totalSupply)
+  vault.save()
+
+  dailyStat.perpPrice = vault.perpPrice
+  dailyStat.usdPrice = vault.usdPrice
+  dailyStat.tvl = vault.tvl
+  dailyStat.price = vault.price
+  dailyStat.save()
+
+  swap.type = "perps"
+  swap.swapAmt = formatBalance(event.params.perpAmtIn, vault.perpDecimals)
+  swap.tx = event.transaction.hash.toHex()
+  swap.save()
+
+  let vaultContract = BillBrokerABI.bind(stringToAddress(vault.id))
+  let reserveStateValues: Array<ethereum.Value> = [
+    ethereum.Value.fromUnsignedBigInt(event.params.preOpState.usdBalance),
+    ethereum.Value.fromUnsignedBigInt(event.params.preOpState.perpBalance),
+    ethereum.Value.fromUnsignedBigInt(event.params.preOpState.usdPrice),
+    ethereum.Value.fromUnsignedBigInt(event.params.preOpState.perpPrice),
+  ]
+  let reserveStateTuple = changetype<ethereum.Tuple>(reserveStateValues)
+  let reserveStateStruct = changetype<BillBroker__computePerpToUSDSwapAmt1InputSStruct>(
+    reserveStateTuple,
+  )
+  let r = vaultContract.try_computePerpToUSDSwapAmt1(event.params.perpAmtIn, reserveStateStruct)
+  if (!r.reverted) {
+    let swapAmts = r.value
+    dailyStat.perpSwapAmt = dailyStat.perpSwapAmt.plus(
+      formatBalance(event.params.perpAmtIn, vault.perpDecimals),
+    )
+    dailyStat.usdFeeAmt = dailyStat.usdFeeAmt.plus(
+      formatBalance(swapAmts.value1, vault.usdDecimals),
+    )
+    dailyStat.save()
+
+    swap.feeAmt = dailyStat.usdFeeAmt
+    swap.save()
+  }
+
+}
+
+export function handleSwapUSDForPerps(event: SwapUSDForPerps): void {
+  log.debug('triggered swap usd', [])
+  let vault = fetchBillBroker(event.address)
+  let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(event.block.timestamp))
+  let swap = fetchBillBrokerSwap(vault, vault.swapNonce.plus(BIGINT_ONE))
+  refreshBillBrokerStats(vault, dailyStat)
+
+  vault.perpPrice = formatBalance(event.params.preOpState.perpPrice, vault.decimals)
+  vault.usdPrice = formatBalance(event.params.preOpState.usdPrice, vault.decimals)
+  vault.tvl = vault.usdBal.times(vault.usdPrice).plus(vault.perpBal.times(vault.perpPrice))
+  vault.price = vault.tvl.div(vault.totalSupply)
+  vault.save()
+
+  dailyStat.perpPrice = vault.perpPrice
+  dailyStat.usdPrice = vault.usdPrice
+  dailyStat.tvl = vault.tvl
+  dailyStat.price = vault.price
+  dailyStat.save()
+
+  swap.type = "usd"
+  swap.swapAmt = formatBalance(event.params.usdAmtIn, vault.perpDecimals)
+  swap.tx = event.transaction.hash.toHex()
+  swap.save()
+
+  let vaultContract = BillBrokerABI.bind(stringToAddress(vault.id))
+  let reserveStateValues: Array<ethereum.Value> = [
+    ethereum.Value.fromUnsignedBigInt(event.params.preOpState.usdBalance),
+    ethereum.Value.fromUnsignedBigInt(event.params.preOpState.perpBalance),
+    ethereum.Value.fromUnsignedBigInt(event.params.preOpState.usdPrice),
+    ethereum.Value.fromUnsignedBigInt(event.params.preOpState.perpPrice),
+  ]
+  let reserveStateTuple = changetype<ethereum.Tuple>(reserveStateValues)
+  let reserveStateStruct = changetype<BillBroker__computeUSDToPerpSwapAmtInputSStruct>(
+    reserveStateTuple,
+  )
+  let r = vaultContract.try_computeUSDToPerpSwapAmt(event.params.usdAmtIn, reserveStateStruct)
+  if (!r.reverted) {
+    let swapAmts = r.value
+    dailyStat.usdSwapAmt = dailyStat.usdSwapAmt.plus(
+      formatBalance(event.params.usdAmtIn, vault.usdDecimals),
+    )
+    dailyStat.perpFeeAmt = dailyStat.perpFeeAmt.plus(
+      formatBalance(swapAmts.value1, vault.perpDecimals),
+    )
+    dailyStat.save()
+
+    swap.feeAmt = dailyStat.perpFeeAmt
+    swap.save()
+  }
+}
+
+export function handleDepositUSD(event: DepositUSD): void {
+  log.debug('triggered single sided deposit', [])
+  let vault = fetchBillBroker(event.address)
+  let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(event.block.timestamp))
+  refreshBillBrokerStats(vault, dailyStat)
+
+  vault.perpPrice = formatBalance(event.params.preOpState.perpPrice, vault.decimals)
+  vault.usdPrice = formatBalance(event.params.preOpState.usdPrice, vault.decimals)
+  vault.tvl = vault.usdBal.times(vault.usdPrice).plus(vault.perpBal.times(vault.perpPrice))
+  vault.price = vault.tvl.div(vault.totalSupply)
+  vault.save()
+
+  dailyStat.perpPrice = vault.perpPrice
+  dailyStat.usdPrice = vault.usdPrice
+  dailyStat.tvl = vault.tvl
   dailyStat.price = vault.price
   dailyStat.save()
 }
 
-export function handleDeposit(event: Deposit): void {
-  log.debug('triggered deposit', [])
-  let vault = fetchCharmVault(event.address)
-  let dailyStat = fetchCharmVaultDailyStat(vault, dayTimestamp(event.block.timestamp))
-  refreshCharmVaultStats(vault, dailyStat)
-  vault.token0BalIn = vault.token0BalIn.plus(
-    formatBalance(event.params.amount0, vault.token0Decimals),
-  )
-  vault.token1BalIn = vault.token1BalIn.plus(
-    formatBalance(event.params.amount1, vault.token1Decimals),
-  )
-  vault.valueIn = vault.token0BalIn.plus(vault.token1BalIn.times(vault.token0Price))
+
+export function handleDepositPerp(event: DepositPerp): void {
+  log.debug('triggered single sided deposit', [])
+  let vault = fetchBillBroker(event.address)
+  let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(event.block.timestamp))
+  refreshBillBrokerStats(vault, dailyStat)
+
+  vault.perpPrice = formatBalance(event.params.preOpState.perpPrice, vault.decimals)
+  vault.usdPrice = formatBalance(event.params.preOpState.usdPrice, vault.decimals)
+  vault.tvl = vault.usdBal.times(vault.usdPrice).plus(vault.perpBal.times(vault.perpPrice))
+  vault.price = vault.tvl.div(vault.totalSupply)
   vault.save()
 
-  dailyStat.token0BalIn = vault.token0BalIn
-  dailyStat.token1BalIn = vault.token1BalIn
-  dailyStat.valueIn = vault.valueIn
+  dailyStat.perpPrice = vault.perpPrice
+  dailyStat.usdPrice = vault.usdPrice
+  dailyStat.tvl = vault.tvl
+  dailyStat.price = vault.price
   dailyStat.save()
-}
-
-export function handleWithdraw(event: Withdraw): void {
-  log.debug('triggered withdraw', [])
-  let vault = fetchCharmVault(event.address)
-  let dailyStat = fetchCharmVaultDailyStat(vault, dayTimestamp(event.block.timestamp))
-  refreshCharmVaultStats(vault, dailyStat)
-  vault.token0BalIn = vault.token0BalIn.minus(
-    formatBalance(event.params.amount0, vault.token0Decimals),
-  )
-  vault.token1BalIn = vault.token1BalIn.minus(
-    formatBalance(event.params.amount1, vault.token1Decimals),
-  )
-  vault.valueIn = vault.token0BalIn.plus(vault.token1BalIn.times(vault.token0Price))
-  vault.save()
-
-  dailyStat.token0BalIn = vault.token0BalIn
-  dailyStat.token1BalIn = vault.token1BalIn
-  dailyStat.valueIn = vault.valueIn
-  dailyStat.save()
-  dailyStat.save()
-}
-
-export function handleSnapshot(event: Snapshot): void {
-  log.debug('triggered snapshot', [])
-  let vault = fetchCharmVault(event.address)
-  let dailyStat = fetchCharmVaultDailyStat(vault, dayTimestamp(event.block.timestamp))
-  refreshCharmVaultStats(vault, dailyStat)
-}
-
-export function refreshStore(block: ethereum.Block): void {
-  let timeForUpdate =
-    block.number.gt(CHARM_VAULT_UPDATE_BLOCK) &&
-    block.number.mod(BLOCK_UPDATE_INTERVAL).equals(BIGINT_ZERO)
-  if (timeForUpdate) {
-    log.debug('triggered store refresh', [])
-    let vault = fetchCharmVault(stringToAddress(CHARM_VAULT_ID))
-    let dailyStat = fetchCharmVaultDailyStat(vault, dayTimestamp(block.timestamp))
-    refreshCharmVaultStats(vault, dailyStat)
-  }
 }
