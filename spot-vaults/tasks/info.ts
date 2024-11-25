@@ -56,6 +56,17 @@ task("info:MetaOracle")
     console.log("spotDeviation:", pp(spotDeviationData[0], oracleDecimals));
 
     console.log("---------------------------------------------------------------");
+
+    const spotDeviation = pp(spotDeviationData[0], oracleDecimals);
+    const amplDeviation = pp(amplDeviationData[0], oracleDecimals);
+    const relativeDeviation = spotDeviation / amplDeviation;
+
+    console.log("relativeDeviation:", relativeDeviation);
+    console.log("noArbZone:", relativeDeviation > 0.9 && relativeDeviation < 1.025);
+    console.log("flashMintZone:", relativeDeviation >= 1.025);
+    console.log("flashRedeemZone:", relativeDeviation <= 0.9);
+
+    console.log("---------------------------------------------------------------");
   });
 
 task("info:BillBroker")
@@ -84,7 +95,8 @@ task("info:BillBroker")
 
     const oracle = await hre.ethers.getContractAt(
       "SpotPricer",
-      await billBroker.oracle.staticCall(),
+      // await billBroker.oracle.staticCall(),
+      "0x0f8f519878c10ce36C6aAF89c1AeefaaDE5D7881",
     );
     const oracleDecimals = await oracle.decimals();
     console.log("---------------------------------------------------------------");
