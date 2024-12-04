@@ -7,6 +7,7 @@
     "codegen": "graph codegen --output-dir ./generated",
     "build": "graph build",
     "lint": "yarn prettier --config .prettierrc --write '**/*.ts'",
+    "deploy": "yarn codegen && yarn build && yarn graph deploy spot-staking --node https://subgraphs.alchemy.com/api/subgraphs/deploy --deploy-key $GRAPH_AUTH",
     "create-local": "graph create --node http://localhost:8020/ ampleforth/spot-staking",
     "remove-local": "graph remove --node http://localhost:8020/ ampleforth/spot-staking",
     "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 ampleforth/spot-staking",
