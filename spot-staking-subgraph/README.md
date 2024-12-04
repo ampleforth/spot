@@ -8,8 +8,6 @@ yarn codegen
 
 yarn build
 
-yarn graph deploy spot-staking \
-  --node https://subgraphs.alchemy.com/api/subgraphs/deploy \
-  --deploy-key $GRAPH_AUTH \
-  --ipfs https://ipfs.satsuma.xyz
+export GRAPH_AUTH="SET_KEY"
+yarn deploy
 ```
