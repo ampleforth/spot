@@ -1,4 +1,12 @@
-import { log, ethereum, BigInt, BigDecimal, Address } from '@graphprotocol/graph-ts'
+import {
+  log,
+  ethereum,
+  BigInt,
+  BigDecimal,
+  Address,
+  DataSourceContext,
+} from '@graphprotocol/graph-ts'
+import { RebasingERC20 } from '../generated/templates'
 import {
   DepositCall,
   RedeemCall,
@@ -14,31 +22,18 @@ import {
 import { BillBroker as BillBrokerABI } from '../generated/BillBroker/BillBroker'
 import { ERC20 as ERC20ABI } from '../generated/BillBroker/ERC20'
 import { BillBroker, BillBrokerDailyStat, BillBrokerSwap } from '../generated/schema'
+import {
+  BIGINT_ZERO,
+  BIGINT_ONE,
+  BIGDECIMAL_ZERO,
+  BIGDECIMAL_ONE,
+  dayTimestamp,
+  stringToAddress,
+  formatBalance,
+  getUnderlyingAddress,
+} from './utils'
 
-let BIGINT_ZERO = BigInt.fromI32(0)
-let BIGINT_ONE = BigInt.fromI32(1)
-let BIGDECIMAL_ZERO = BigDecimal.fromString('0')
-let BIGDECIMAL_ONE = BigDecimal.fromString('1')
-
-let BLOCK_UPDATE_INTERVAL = BigInt.fromI32(240)
-let CHARM_VAULT_ID = '0x2dcaff0f75765d7867887fc402b71c841b3a4bfb'
-let CHARM_VAULT_UPDATE_BLOCK = BigInt.fromI32(19798270)
-
-const dayTimestamp = (timestamp: BigInt): BigInt => {
-  return timestamp.minus(timestamp % BigInt.fromI32(24 * 3600))
-}
-const stringToAddress = (id: string): Address => {
-  return Address.fromString(id)
-}
-const formatBalance = (wei: BigInt, decimals: BigInt): BigDecimal => {
-  return wei.toBigDecimal().div(
-    BigInt.fromI32(10)
-      .pow(decimals.toI32() as u8)
-      .toBigDecimal(),
-  )
-}
-
-function fetchBillBroker(address: Address): BillBroker {
+export function fetchBillBroker(address: Address): BillBroker {
   let id = address.toHexString()
   let vault = BillBroker.load(id)
   if (vault === null) {
@@ -70,12 +65,16 @@ function fetchBillBroker(address: Address): BillBroker {
     vault.tvl = BIGDECIMAL_ZERO
     vault.price = BIGDECIMAL_ZERO
     vault.swapNonce = BIGINT_ZERO
+
+    let context = new DataSourceContext()
+    context.setString('billBroker', id)
+    RebasingERC20.createWithContext(getUnderlyingAddress(perpAddress), context)
     vault.save()
   }
   return vault as BillBroker
 }
 
-function fetchBillBrokerDailyStat(vault: BillBroker, timestamp: BigInt): BillBrokerDailyStat {
+export function fetchBillBrokerDailyStat(vault: BillBroker, timestamp: BigInt): BillBrokerDailyStat {
   let id = vault.id.concat('-').concat(timestamp.toString())
   let dailyStat = BillBrokerDailyStat.load(id)
   if (dailyStat === null) {
@@ -98,23 +97,23 @@ function fetchBillBrokerDailyStat(vault: BillBroker, timestamp: BigInt): BillBro
   return dailyStat as BillBrokerDailyStat
 }
 
-function fetchBillBrokerSwap(vault: BillBroker, nonce:BigInt): BillBrokerSwap {
+export function fetchBillBrokerSwap(vault: BillBroker, nonce: BigInt): BillBrokerSwap {
   let id = vault.id.concat('-').concat(nonce.toString())
   let swap = BillBrokerSwap.load(id)
   if (swap === null) {
     swap = new BillBrokerSwap(id)
     swap.vault = vault.id
     swap.nonce = nonce
-    swap.type = ""
+    swap.type = ''
     swap.swapAmt = BIGDECIMAL_ZERO
     swap.feeAmt = BIGDECIMAL_ZERO
-    swap.tx = "0x"
+    swap.tx = '0x'
     swap.save()
   }
   return swap as BillBrokerSwap
 }
 
-function refreshBillBrokerStats(vault: BillBroker, dailyStat: BillBrokerDailyStat): void {
+export function refreshBillBrokerStats(vault: BillBroker, dailyStat: BillBrokerDailyStat): void {
   let vaultContract = BillBrokerABI.bind(stringToAddress(vault.id))
   vault.perpBal = formatBalance(vaultContract.perpBalance(), vault.perpDecimals)
   vault.usdBal = formatBalance(vaultContract.usdBalance(), vault.usdDecimals)
@@ -128,21 +127,21 @@ function refreshBillBrokerStats(vault: BillBroker, dailyStat: BillBrokerDailySta
 }
 
 export function handleDeposit(call: DepositCall): void {
-  log.debug('triggered deposit', [])
+  log.warning('triggered deposit', [])
   let vault = fetchBillBroker(call.to)
   let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(call.block.timestamp))
   refreshBillBrokerStats(vault, dailyStat)
 }
 
 export function handleRedeem(call: RedeemCall): void {
-  log.debug('triggered redeem', [])
+  log.warning('triggered redeem', [])
   let vault = fetchBillBroker(call.to)
   let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(call.block.timestamp))
   refreshBillBrokerStats(vault, dailyStat)
 }
 
 export function handleSwapPerpsForUSD(event: SwapPerpsForUSD): void {
-  log.debug('triggered swap perps', [])
+  log.warning('triggered swap perps', [])
   let vault = fetchBillBroker(event.address)
   let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(event.block.timestamp))
   let swap = fetchBillBrokerSwap(vault, vault.swapNonce.plus(BIGINT_ONE))
@@ -160,7 +159,7 @@ export function handleSwapPerpsForUSD(event: SwapPerpsForUSD): void {
   dailyStat.price = vault.price
   dailyStat.save()
 
-  swap.type = "perps"
+  swap.type = 'perps'
   swap.swapAmt = formatBalance(event.params.perpAmtIn, vault.perpDecimals)
   swap.tx = event.transaction.hash.toHex()
   swap.save()
@@ -190,11 +189,10 @@ export function handleSwapPerpsForUSD(event: SwapPerpsForUSD): void {
     swap.feeAmt = dailyStat.usdFeeAmt
     swap.save()
   }
-
 }
 
 export function handleSwapUSDForPerps(event: SwapUSDForPerps): void {
-  log.debug('triggered swap usd', [])
+  log.warning('triggered swap usd', [])
   let vault = fetchBillBroker(event.address)
   let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(event.block.timestamp))
   let swap = fetchBillBrokerSwap(vault, vault.swapNonce.plus(BIGINT_ONE))
@@ -212,7 +210,7 @@ export function handleSwapUSDForPerps(event: SwapUSDForPerps): void {
   dailyStat.price = vault.price
   dailyStat.save()
 
-  swap.type = "usd"
+  swap.type = 'usd'
   swap.swapAmt = formatBalance(event.params.usdAmtIn, vault.perpDecimals)
   swap.tx = event.transaction.hash.toHex()
   swap.save()
@@ -245,7 +243,7 @@ export function handleSwapUSDForPerps(event: SwapUSDForPerps): void {
 }
 
 export function handleDepositUSD(event: DepositUSD): void {
-  log.debug('triggered single sided deposit', [])
+  log.warning('triggered single sided deposit', [])
   let vault = fetchBillBroker(event.address)
   let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(event.block.timestamp))
   refreshBillBrokerStats(vault, dailyStat)
@@ -263,9 +261,8 @@ export function handleDepositUSD(event: DepositUSD): void {
   dailyStat.save()
 }
 
-
 export function handleDepositPerp(event: DepositPerp): void {
-  log.debug('triggered single sided deposit', [])
+  log.warning('triggered single sided deposit', [])
   let vault = fetchBillBroker(event.address)
   let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(event.block.timestamp))
   refreshBillBrokerStats(vault, dailyStat)
