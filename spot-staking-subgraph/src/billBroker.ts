@@ -30,7 +30,7 @@ import {
   dayTimestamp,
   stringToAddress,
   formatBalance,
-  getPerpUnderlyingAddress,
+  getUnderlyingAddress,
 } from './utils'
 
 export function fetchBillBroker(address: Address): BillBroker {
@@ -68,7 +68,7 @@ export function fetchBillBroker(address: Address): BillBroker {
 
     let context = new DataSourceContext()
     context.setString('billBroker', id)
-    RebasingERC20.createWithContext(getPerpUnderlyingAddress(perpAddress), context)
+    RebasingERC20.createWithContext(getUnderlyingAddress(perpAddress), context)
     vault.save()
   }
   return vault as BillBroker
@@ -127,21 +127,21 @@ export function refreshBillBrokerStats(vault: BillBroker, dailyStat: BillBrokerD
 }
 
 export function handleDeposit(call: DepositCall): void {
-  log.warn('triggered deposit', [])
+  log.warning('triggered deposit', [])
   let vault = fetchBillBroker(call.to)
   let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(call.block.timestamp))
   refreshBillBrokerStats(vault, dailyStat)
 }
 
 export function handleRedeem(call: RedeemCall): void {
-  log.warn('triggered redeem', [])
+  log.warning('triggered redeem', [])
   let vault = fetchBillBroker(call.to)
   let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(call.block.timestamp))
   refreshBillBrokerStats(vault, dailyStat)
 }
 
 export function handleSwapPerpsForUSD(event: SwapPerpsForUSD): void {
-  log.warn('triggered swap perps', [])
+  log.warning('triggered swap perps', [])
   let vault = fetchBillBroker(event.address)
   let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(event.block.timestamp))
   let swap = fetchBillBrokerSwap(vault, vault.swapNonce.plus(BIGINT_ONE))
@@ -192,7 +192,7 @@ export function handleSwapPerpsForUSD(event: SwapPerpsForUSD): void {
 }
 
 export function handleSwapUSDForPerps(event: SwapUSDForPerps): void {
-  log.warn('triggered swap usd', [])
+  log.warning('triggered swap usd', [])
   let vault = fetchBillBroker(event.address)
   let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(event.block.timestamp))
   let swap = fetchBillBrokerSwap(vault, vault.swapNonce.plus(BIGINT_ONE))
@@ -243,7 +243,7 @@ export function handleSwapUSDForPerps(event: SwapUSDForPerps): void {
 }
 
 export function handleDepositUSD(event: DepositUSD): void {
-  log.warn('triggered single sided deposit', [])
+  log.warning('triggered single sided deposit', [])
   let vault = fetchBillBroker(event.address)
   let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(event.block.timestamp))
   refreshBillBrokerStats(vault, dailyStat)
@@ -262,7 +262,7 @@ export function handleDepositUSD(event: DepositUSD): void {
 }
 
 export function handleDepositPerp(event: DepositPerp): void {
-  log.warn('triggered single sided deposit', [])
+  log.warning('triggered single sided deposit', [])
   let vault = fetchBillBroker(event.address)
   let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(event.block.timestamp))
   refreshBillBrokerStats(vault, dailyStat)

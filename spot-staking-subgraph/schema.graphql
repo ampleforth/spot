@@ -60,24 +60,21 @@ type CharmVault @entity {
   name: String!
   symbol: String!
   decimals: BigInt!
-  usd: String!
-  usdName: String!
-  usdSymbol: String!
-  usdDecimals: BigInt!
-  perp: String!
-  perpName: String!
-  perpSymbol: String!
-  perpDecimals: BigInt!
-  usdBal: BigDecimal!
-  perpBal: BigDecimal!
-  usdPrice: BigDecimal!
-  perpPrice: BigDecimal!
+  token0: String!
+  token0Name: String!
+  token0Symbol: String!
+  token0Decimals: BigInt!
+  token1: String!
+  token1Name: String!
+  token1Symbol: String!
+  token1Decimals: BigInt!
+  token0Bal: BigDecimal!
+  token1Bal: BigDecimal!
+  token0Price: BigDecimal!
+  token1Price: BigDecimal!
   tvl: BigDecimal!
   price: BigDecimal!
   totalSupply: BigDecimal!
-  unusedToken0Bal: BigDecimal!
-  unusedToken1Bal: BigDecimal!
-  unusedTVL: BigDecimal!
   dailyStats: [CharmVaultDailyStat!]! @derivedFrom(field: "vault")
 }
 
@@ -86,11 +83,15 @@ type CharmVaultDailyStat @entity {
   id: ID!
   vault: CharmVault!
   timestamp: BigInt!
-  usdBal: BigDecimal!
-  perpBal: BigDecimal!
-  usdPrice: BigDecimal!
-  perpPrice: BigDecimal!
+  token0Bal: BigDecimal!
+  token1Bal: BigDecimal!
+  token0Price: BigDecimal!
+  token1Price: BigDecimal!
   tvl: BigDecimal!
   price: BigDecimal!
   totalSupply: BigDecimal!
+  token0Fees: BigDecimal!
+  token1Fees: BigDecimal!
+  totalFeeVal: BigDecimal!
+  feeYield: BigDecimal!
 }

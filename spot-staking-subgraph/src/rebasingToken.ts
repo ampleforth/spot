@@ -8,7 +8,7 @@ function _handleRebase(address: Address, timestamp: BigInt): void {
   let context = dataSource.context()
   if (context.get('billBroker') != null) {
     let id = context.getString('billBroker')
-    log.warn('billBrokerRefresh: {}', [id])
+    log.warning('billBrokerRefresh: {}', [id])
     let vault = fetchBillBroker(stringToAddress(id))
     let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(timestamp))
     refreshBillBrokerStats(vault, dailyStat)
@@ -16,7 +16,7 @@ function _handleRebase(address: Address, timestamp: BigInt): void {
 
   if (context.get('charmVault') != null) {
     let id = context.getString('charmVault')
-    log.warn('charmVaultRefresh: {}', [id])
+    log.warning('charmVaultRefresh: {}', [id])
     let vault = fetchCharmVault(stringToAddress(id))
     let dailyStat = fetchCharmVaultDailyStat(vault, dayTimestamp(timestamp))
     refreshCharmVaultStats(vault, dailyStat)
@@ -24,11 +24,11 @@ function _handleRebase(address: Address, timestamp: BigInt): void {
 }
 
 export function handleRebase(event: Rebase): void {
-  log.warn('triggered handleRebase', [])
+  log.warning('triggered handleRebase', [])
   _handleRebase(event.address, event.block.timestamp)
 }
 
 export function handleLogRebase(event: LogRebase): void {
-  log.warn('triggered handleLogRebase', [])
+  log.warning('triggered handleLogRebase', [])
   _handleRebase(event.address, event.block.timestamp)
 }

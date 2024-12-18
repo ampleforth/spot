@@ -1,7 +1,6 @@
 import { BigInt, BigDecimal, Address } from '@graphprotocol/graph-ts'
 
-import { PerpetualTranche as PerpetualTrancheABI } from '../generated/templates/RebasingERC20/PerpetualTranche'
-import { PerpetualTrancheV1 as PerpetualTrancheABIV1 } from '../generated/templates/RebasingERC20/PerpetualTrancheV1'
+import { Wrapper as WrapperABI } from '../generated/CharmSPOTVault/Wrapper'
 
 export let BIGINT_ZERO = BigInt.fromI32(0)
 export let BIGINT_ONE = BigInt.fromI32(1)
@@ -57,15 +56,15 @@ export function sqrtPriceX96ToTokenPrices(
   return [price0, price1]
 }
 
-export function getPerpUnderlyingAddress(perpAddress: Address): Address {
-  let perpContract = PerpetualTrancheABI.bind(perpAddress)
-  let r = perpContract.try_underlying()
-  let underlyingAddress: Address
-  if (r.reverted) {
-    let perpContractV1 = PerpetualTrancheABIV1.bind(perpAddress)
-    underlyingAddress = perpContractV1.collateral()
-  } else {
-    underlyingAddress = r.value
+export function getUnderlyingAddress(tokenAddress: Address): Address {
+  let wrapperContract = WrapperABI.bind(tokenAddress)
+  let underlyingResult = wrapperContract.try_underlying()
+  if (!underlyingResult.reverted) {
+    return underlyingResult.value
   }
-  return underlyingAddress
+  let collateralResult = wrapperContract.try_collateral()
+  if (!collateralResult.reverted) {
+    return collateralResult.value
+  }
+  return Address.fromString('0x0000000000000000000000000000000000000000')
 }
