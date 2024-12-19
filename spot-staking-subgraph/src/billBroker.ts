@@ -97,7 +97,7 @@ export function fetchBillBrokerDailyStat(vault: BillBroker, timestamp: BigInt): 
   return dailyStat as BillBrokerDailyStat
 }
 
-export function fetchBillBrokerSwap(vault: BillBroker, nonce: BigInt): BillBrokerSwap {
+function fetchBillBrokerSwap(vault: BillBroker, nonce: BigInt): BillBrokerSwap {
   let id = vault.id.concat('-').concat(nonce.toString())
   let swap = BillBrokerSwap.load(id)
   if (swap === null) {
