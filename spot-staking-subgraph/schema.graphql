@@ -46,6 +46,7 @@ type BillBrokerSwap @entity {
   "<vault address>-<nonce>"
   id: ID!
   vault: BillBroker!
+  timestamp: BigInt!
   nonce: BigInt!
   type: String!
   swapAmt: BigDecimal!
