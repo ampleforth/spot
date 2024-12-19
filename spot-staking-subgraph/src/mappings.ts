@@ -163,6 +163,7 @@ export function handleSwapPerpsForUSD(event: SwapPerpsForUSD): void {
   swap.type = "perps"
   swap.swapAmt = formatBalance(event.params.perpAmtIn, vault.perpDecimals)
   swap.tx = event.transaction.hash.toHex()
+  swap.timestamp = event.block.timestamp
   swap.save()
 
   let vaultContract = BillBrokerABI.bind(stringToAddress(vault.id))
@@ -215,6 +216,7 @@ export function handleSwapUSDForPerps(event: SwapUSDForPerps): void {
   swap.type = "usd"
   swap.swapAmt = formatBalance(event.params.usdAmtIn, vault.perpDecimals)
   swap.tx = event.transaction.hash.toHex()
+  swap.timestamp = event.block.timestamp
   swap.save()
 
   let vaultContract = BillBrokerABI.bind(stringToAddress(vault.id))
