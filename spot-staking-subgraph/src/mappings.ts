@@ -98,17 +98,17 @@ function fetchBillBrokerDailyStat(vault: BillBroker, timestamp: BigInt): BillBro
   return dailyStat as BillBrokerDailyStat
 }
 
-function fetchBillBrokerSwap(vault: BillBroker, nonce:BigInt): BillBrokerSwap {
+function fetchBillBrokerSwap(vault: BillBroker, nonce: BigInt): BillBrokerSwap {
   let id = vault.id.concat('-').concat(nonce.toString())
   let swap = BillBrokerSwap.load(id)
   if (swap === null) {
     swap = new BillBrokerSwap(id)
     swap.vault = vault.id
     swap.nonce = nonce
-    swap.type = ""
+    swap.type = ''
     swap.swapAmt = BIGDECIMAL_ZERO
     swap.feeAmt = BIGDECIMAL_ZERO
-    swap.tx = "0x"
+    swap.tx = '0x'
     swap.save()
   }
   return swap as BillBrokerSwap
@@ -160,7 +160,7 @@ export function handleSwapPerpsForUSD(event: SwapPerpsForUSD): void {
   dailyStat.price = vault.price
   dailyStat.save()
 
-  swap.type = "perps"
+  swap.type = 'perps'
   swap.swapAmt = formatBalance(event.params.perpAmtIn, vault.perpDecimals)
   swap.tx = event.transaction.hash.toHex()
   swap.timestamp = event.block.timestamp
@@ -191,7 +191,6 @@ export function handleSwapPerpsForUSD(event: SwapPerpsForUSD): void {
     swap.feeAmt = dailyStat.usdFeeAmt
     swap.save()
   }
-
 }
 
 export function handleSwapUSDForPerps(event: SwapUSDForPerps): void {
@@ -213,7 +212,7 @@ export function handleSwapUSDForPerps(event: SwapUSDForPerps): void {
   dailyStat.price = vault.price
   dailyStat.save()
 
-  swap.type = "usd"
+  swap.type = 'usd'
   swap.swapAmt = formatBalance(event.params.usdAmtIn, vault.perpDecimals)
   swap.tx = event.transaction.hash.toHex()
   swap.timestamp = event.block.timestamp
@@ -264,7 +263,6 @@ export function handleDepositUSD(event: DepositUSD): void {
   dailyStat.price = vault.price
   dailyStat.save()
 }
-
 
 export function handleDepositPerp(event: DepositPerp): void {
   log.debug('triggered single sided deposit', [])
