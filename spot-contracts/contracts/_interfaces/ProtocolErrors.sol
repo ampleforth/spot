@@ -75,6 +75,3 @@ error InvalidTargetSRBounds();
 
 /// @notice Expected deviation ratio bounds to be valid.
 error InvalidDRBounds();
-
-/// @notice Expected sigmoid asymptotes to be within defined bounds.
-error InvalidSigmoidAsymptotes();
