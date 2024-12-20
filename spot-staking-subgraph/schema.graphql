@@ -52,3 +52,46 @@ type BillBrokerSwap @entity {
   feeAmt: BigDecimal!
   tx: String!
 }
+
+type CharmVault @entity {
+  " the vault address "
+  id: ID!
+  pool: String!
+  name: String!
+  symbol: String!
+  decimals: BigInt!
+  token0: String!
+  token0Name: String!
+  token0Symbol: String!
+  token0Decimals: BigInt!
+  token1: String!
+  token1Name: String!
+  token1Symbol: String!
+  token1Decimals: BigInt!
+  token0Bal: BigDecimal!
+  token1Bal: BigDecimal!
+  token0Price: BigDecimal!
+  token1Price: BigDecimal!
+  tvl: BigDecimal!
+  price: BigDecimal!
+  totalSupply: BigDecimal!
+  dailyStats: [CharmVaultDailyStat!]! @derivedFrom(field: "vault")
+}
+
+type CharmVaultDailyStat @entity {
+  "<vault address>-<day timestamp>"
+  id: ID!
+  vault: CharmVault!
+  timestamp: BigInt!
+  token0Bal: BigDecimal!
+  token1Bal: BigDecimal!
+  token0Price: BigDecimal!
+  token1Price: BigDecimal!
+  tvl: BigDecimal!
+  price: BigDecimal!
+  totalSupply: BigDecimal!
+  token0Fees: BigDecimal!
+  token1Fees: BigDecimal!
+  totalFeeVal: BigDecimal!
+  feeYield: BigDecimal!
+}
