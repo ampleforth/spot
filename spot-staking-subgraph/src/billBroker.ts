@@ -108,6 +108,7 @@ function fetchBillBrokerSwap(vault: BillBroker, nonce: BigInt): BillBrokerSwap {
     swap.swapAmt = BIGDECIMAL_ZERO
     swap.feeAmt = BIGDECIMAL_ZERO
     swap.tx = '0x'
+    swap.timestamp = BIGINT_ZERO
     swap.save()
   }
   return swap as BillBrokerSwap
