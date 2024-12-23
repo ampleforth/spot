@@ -97,7 +97,7 @@ export function fetchBillBrokerDailyStat(vault: BillBroker, timestamp: BigInt): 
   return dailyStat as BillBrokerDailyStat
 }
 
-export function fetchBillBrokerSwap(vault: BillBroker, nonce: BigInt): BillBrokerSwap {
+function fetchBillBrokerSwap(vault: BillBroker, nonce: BigInt): BillBrokerSwap {
   let id = vault.id.concat('-').concat(nonce.toString())
   let swap = BillBrokerSwap.load(id)
   if (swap === null) {
@@ -108,6 +108,7 @@ export function fetchBillBrokerSwap(vault: BillBroker, nonce: BigInt): BillBroke
     swap.swapAmt = BIGDECIMAL_ZERO
     swap.feeAmt = BIGDECIMAL_ZERO
     swap.tx = '0x'
+    swap.timestamp = BIGINT_ZERO
     swap.save()
   }
   return swap as BillBrokerSwap
@@ -162,6 +163,7 @@ export function handleSwapPerpsForUSD(event: SwapPerpsForUSD): void {
   swap.type = 'perps'
   swap.swapAmt = formatBalance(event.params.perpAmtIn, vault.perpDecimals)
   swap.tx = event.transaction.hash.toHex()
+  swap.timestamp = event.block.timestamp
   swap.save()
 
   let vaultContract = BillBrokerABI.bind(stringToAddress(vault.id))
@@ -213,6 +215,7 @@ export function handleSwapUSDForPerps(event: SwapUSDForPerps): void {
   swap.type = 'usd'
   swap.swapAmt = formatBalance(event.params.usdAmtIn, vault.perpDecimals)
   swap.tx = event.transaction.hash.toHex()
+  swap.timestamp = event.block.timestamp
   swap.save()
 
   let vaultContract = BillBrokerABI.bind(stringToAddress(vault.id))
