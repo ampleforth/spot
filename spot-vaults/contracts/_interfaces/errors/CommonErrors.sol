@@ -18,3 +18,9 @@ error UnacceptableSwap();
 
 /// @notice Expected usable external price.
 error UnreliablePrice();
+
+/// @notice Range upper is larger than lower
+error InvalidRange();
+
+/// @notice Expected range delta to be smaller.
+error UnexpectedRangeDelta();

@@ -17,7 +17,7 @@ import { IPerpPricer } from "./_interfaces/IPerpPricer.sol";
 import { ReserveState, BillBrokerFees } from "./_interfaces/types/BillBrokerTypes.sol";
 import { Line, Range } from "./_interfaces/types/CommonTypes.sol";
 import { UnacceptableSwap, UnreliablePrice, UnexpectedDecimals, InvalidPerc, SlippageTooHigh, UnauthorizedCall } from "./_interfaces/errors/CommonErrors.sol";
-import { InvalidARBound, UnexpectedARDelta } from "./_interfaces/errors/BillBrokerErrors.sol";
+import { InvalidARBound } from "./_interfaces/errors/BillBrokerErrors.sol";
 
 /**
  *  @title BillBroker
@@ -72,16 +72,20 @@ contract BillBroker is
 
     // Math
     using MathUpgradeable for uint256;
-    using LineHelpers for Line;
     using MathHelpers for int256;
+    using LineHelpers for Line;
 
     //-------------------------------------------------------------------------
     // Constants & Immutables
 
     uint256 public constant DECIMALS = 18;
     uint256 public constant ONE = (10 ** DECIMALS);
+    uint256 public constant TWO = ONE * 2;
     uint256 private constant INITIAL_RATE = 1000000;
     uint256 public constant MINIMUM_LIQUIDITY = 10 ** 22;
+    uint256 public constant MAX_FEE_FACTOR = TWO; // 2 or 100%
+    uint256 public constant MIN_FEE_FACTOR = ((ONE * 4) / 5); // 0.8 or -20%
+    uint256 public constant MAX_ASSET_RATIO = uint256(type(int256).max);
 
     //-------------------------------------------------------------------------
     // Storage
@@ -113,7 +117,7 @@ contract BillBroker is
     Range public arHardBound;
 
     /// @notice The asset ratio bounds outside which swapping is still functional but,
-    ///         the swap fees transition from a flat percentage fee to a linear function.
+    ///         the swap fees transition from a constant fee to a linear function.
     Range public arSoftBound;
 
     //--------------------------------------------------------------------------
@@ -189,17 +193,23 @@ contract BillBroker is
             BillBrokerFees({
                 mintFeePerc: 0,
                 burnFeePerc: 0,
-                perpToUSDSwapFeePercs: Range({ lower: ONE, upper: ONE }),
-                usdToPerpSwapFeePercs: Range({ lower: ONE, upper: ONE }),
+                perpToUSDSwapFeeFactors: Range({
+                    lower: MAX_FEE_FACTOR,
+                    upper: MAX_FEE_FACTOR
+                }),
+                usdToPerpSwapFeeFactors: Range({
+                    lower: MAX_FEE_FACTOR,
+                    upper: MAX_FEE_FACTOR
+                }),
                 protocolSwapSharePerc: 0
             })
         );
 
         updateARBounds(
             // Soft bound
-            Range({ lower: 0, upper: type(uint256).max }),
+            Range({ lower: 0, upper: MAX_ASSET_RATIO }),
             // Hard bound
-            Range({ lower: 0, upper: type(uint256).max })
+            Range({ lower: 0, upper: MAX_ASSET_RATIO })
         );
     }
 
@@ -227,8 +237,10 @@ contract BillBroker is
         if (
             fees_.mintFeePerc > ONE ||
             fees_.burnFeePerc > ONE ||
-            fees_.perpToUSDSwapFeePercs.lower > fees_.perpToUSDSwapFeePercs.upper ||
-            fees_.usdToPerpSwapFeePercs.lower > fees_.usdToPerpSwapFeePercs.upper ||
+            fees_.perpToUSDSwapFeeFactors.lower > fees_.perpToUSDSwapFeeFactors.upper ||
+            fees_.perpToUSDSwapFeeFactors.lower < ONE ||
+            fees_.usdToPerpSwapFeeFactors.lower > fees_.usdToPerpSwapFeeFactors.upper ||
+            fees_.usdToPerpSwapFeeFactors.lower < ONE ||
             fees_.protocolSwapSharePerc > ONE
         ) {
             revert InvalidPerc();
@@ -424,7 +436,7 @@ contract BillBroker is
         // compute perp amount out
         ReserveState memory s = reserveState();
         uint256 protocolFeePerpAmt;
-        (perpAmtOut, , protocolFeePerpAmt) = computeUSDToPerpSwapAmt(usdAmtIn, s);
+        (perpAmtOut, protocolFeePerpAmt) = computeUSDToPerpSwapAmt(usdAmtIn, s);
         if (usdAmtIn <= 0 || perpAmtOut <= 0) {
             revert UnacceptableSwap();
         }
@@ -458,7 +470,7 @@ contract BillBroker is
         // Compute swap amount
         ReserveState memory s = reserveState();
         uint256 protocolFeeUsdAmt;
-        (usdAmtOut, , protocolFeeUsdAmt) = computePerpToUSDSwapAmt(perpAmtIn, s);
+        (usdAmtOut, protocolFeeUsdAmt) = computePerpToUSDSwapAmt(perpAmtIn, s);
         if (perpAmtIn <= 0 || usdAmtOut <= 0) {
             revert UnacceptableSwap();
         }
@@ -507,7 +519,7 @@ contract BillBroker is
     function computePerpToUSDSwapAmt(
         uint256 perpAmtIn
     ) public returns (uint256 usdAmtOut) {
-        (usdAmtOut, , ) = computePerpToUSDSwapAmt(perpAmtIn, reserveState());
+        (usdAmtOut, ) = computePerpToUSDSwapAmt(perpAmtIn, reserveState());
     }
 
     /// @notice Computes the amount of perp tokens swapped out,
@@ -517,7 +529,7 @@ contract BillBroker is
     function computeUSDToPerpSwapAmt(
         uint256 usdAmtIn
     ) public returns (uint256 perpAmtOut) {
-        (perpAmtOut, , ) = computeUSDToPerpSwapAmt(usdAmtIn, reserveState());
+        (perpAmtOut, ) = computeUSDToPerpSwapAmt(usdAmtIn, reserveState());
     }
 
     /// @return s The reserve usd and perp token balances and prices.
@@ -633,22 +645,36 @@ contract BillBroker is
     function computeMintAmtWithUSD(
         uint256 usdAmtIn,
         ReserveState memory s
-    ) public view returns (uint256) {
+    ) public view returns (uint256 mintAmt) {
         if (usdAmtIn <= 0) {
             return 0;
         }
 
         // We compute equal value of perp tokens going out.
+        uint256 totalSupply_ = totalSupply();
         uint256 valueIn = s.usdPrice.mulDiv(usdAmtIn, usdUnitAmt);
         uint256 totalReserveVal = (s.usdPrice.mulDiv(s.usdBalance, usdUnitAmt) +
             s.perpPrice.mulDiv(s.perpBalance, perpUnitAmt));
-        return
-            (totalReserveVal > 0)
-                ? valueIn.mulDiv(totalSupply(), totalReserveVal).mulDiv(
-                    ONE - fees.mintFeePerc,
-                    ONE
-                )
-                : 0;
+        if (totalReserveVal == 0 || totalSupply_ == 0) {
+            return 0;
+        }
+
+        // Compute mint amount.
+        mintAmt = valueIn.mulDiv(totalSupply_, totalReserveVal);
+
+        // Apply a combination of swap and mint fees.
+        uint256 percOfAmtInSwapped = ONE.mulDiv(
+            usdAmtIn - mintAmt.mulDiv(s.usdBalance, totalSupply_),
+            usdAmtIn
+        );
+        uint256 feeFactor = computeUSDToPerpSwapFeeFactor(
+            assetRatio(s),
+            assetRatio(_updatedReserveState(s, s.usdBalance + usdAmtIn, s.perpBalance))
+        );
+        mintAmt =
+            mintAmt.mulDiv(percOfAmtInSwapped, ONE).mulDiv(TWO - feeFactor, ONE) +
+            mintAmt.mulDiv(ONE - percOfAmtInSwapped, ONE);
+        mintAmt = mintAmt.mulDiv(ONE - fees.mintFeePerc, ONE);
     }
 
     /// @notice Computes the amount of LP tokens minted,
@@ -659,22 +685,38 @@ contract BillBroker is
     function computeMintAmtWithPerp(
         uint256 perpAmtIn,
         ReserveState memory s
-    ) public view returns (uint256) {
+    ) public view returns (uint256 mintAmt) {
         if (perpAmtIn <= 0) {
             return 0;
         }
 
         // We compute equal value of perp tokens coming in.
+        uint256 totalSupply_ = totalSupply();
         uint256 valueIn = s.perpPrice.mulDiv(perpAmtIn, perpUnitAmt);
         uint256 totalReserveVal = (s.usdPrice.mulDiv(s.usdBalance, usdUnitAmt) +
             s.perpPrice.mulDiv(s.perpBalance, perpUnitAmt));
-        return
-            (totalReserveVal > 0)
-                ? valueIn.mulDiv(totalSupply(), totalReserveVal).mulDiv(
-                    ONE - fees.mintFeePerc,
-                    ONE
-                )
-                : 0;
+        if (totalReserveVal == 0 || totalSupply_ == 0) {
+            return 0;
+        }
+
+        // Compute mint amount.
+        mintAmt = (totalReserveVal > 0)
+            ? valueIn.mulDiv(totalSupply_, totalReserveVal)
+            : 0;
+
+        // Apply a combination of swap and mint fees.
+        uint256 percOfAmtInSwapped = ONE.mulDiv(
+            perpAmtIn - mintAmt.mulDiv(s.perpBalance, totalSupply_),
+            perpAmtIn
+        );
+        uint256 feeFactor = computePerpToUSDSwapFeeFactor(
+            assetRatio(s),
+            assetRatio(_updatedReserveState(s, s.usdBalance, s.perpBalance + perpAmtIn))
+        );
+        mintAmt =
+            mintAmt.mulDiv(percOfAmtInSwapped, ONE).mulDiv(TWO - feeFactor, ONE) +
+            mintAmt.mulDiv(ONE - percOfAmtInSwapped, ONE);
+        mintAmt = mintAmt.mulDiv(ONE - fees.mintFeePerc, ONE);
     }
 
     /// @notice Computes the amount of usd and perp tokens redeemed,
@@ -706,24 +748,19 @@ contract BillBroker is
     /// @param s The current reserve state.
     /// @dev Quoted usd token amount out includes the fees withheld.
     /// @return usdAmtOut The amount of usd tokens swapped out.
-    /// @return lpFeeUsdAmt The amount of usd tokens charged as swap fees by LPs.
     /// @return protocolFeeUsdAmt The amount of usd tokens charged as protocol fees.
     function computePerpToUSDSwapAmt(
         uint256 perpAmtIn,
         ReserveState memory s
-    )
-        public
-        view
-        returns (uint256 usdAmtOut, uint256 lpFeeUsdAmt, uint256 protocolFeeUsdAmt)
-    {
+    ) public view returns (uint256 usdAmtOut, uint256 protocolFeeUsdAmt) {
         // We compute equal value tokens to swap out.
         usdAmtOut = perpAmtIn.mulDiv(s.perpPrice, s.usdPrice).mulDiv(
             usdUnitAmt,
             perpUnitAmt
         );
 
-        // We compute the total fee percentage, lp fees and protocol fees
-        uint256 totalFeePerc = computePerpToUSDSwapFeePerc(
+        // We compute the fee factor
+        uint256 feeFactor = computePerpToUSDSwapFeeFactor(
             assetRatio(s),
             assetRatio(
                 _updatedReserveState(
@@ -733,13 +770,12 @@ contract BillBroker is
                 )
             )
         );
-        if (totalFeePerc >= ONE) {
-            return (0, 0, 0);
+        if (feeFactor >= ONE) {
+            protocolFeeUsdAmt = usdAmtOut
+                .mulDiv(feeFactor - ONE, ONE, MathUpgradeable.Rounding.Up)
+                .mulDiv(fees.protocolSwapSharePerc, ONE, MathUpgradeable.Rounding.Up);
         }
-        uint256 totalFeeUsdAmt = usdAmtOut.mulDiv(totalFeePerc, ONE);
-        usdAmtOut -= totalFeeUsdAmt;
-        protocolFeeUsdAmt = totalFeeUsdAmt.mulDiv(fees.protocolSwapSharePerc, ONE);
-        lpFeeUsdAmt = totalFeeUsdAmt - protocolFeeUsdAmt;
+        usdAmtOut = usdAmtOut.mulDiv(TWO - feeFactor, ONE);
     }
 
     /// @notice Computes the amount of perp tokens swapped out,
@@ -748,24 +784,19 @@ contract BillBroker is
     /// @param s The current reserve state.
     /// @dev Quoted perp token amount out includes the fees withheld.
     /// @return perpAmtOut The amount of perp tokens swapped out.
-    /// @return lpFeePerpAmt The amount of perp tokens charged as swap fees by LPs.
     /// @return protocolFeePerpAmt The amount of perp tokens charged as protocol fees.
     function computeUSDToPerpSwapAmt(
         uint256 usdAmtIn,
         ReserveState memory s
-    )
-        public
-        view
-        returns (uint256 perpAmtOut, uint256 lpFeePerpAmt, uint256 protocolFeePerpAmt)
-    {
+    ) public view returns (uint256 perpAmtOut, uint256 protocolFeePerpAmt) {
         // We compute equal value tokens to swap out.
         perpAmtOut = usdAmtIn.mulDiv(s.usdPrice, s.perpPrice).mulDiv(
             perpUnitAmt,
             usdUnitAmt
         );
 
-        // We compute the total fee percentage, lp fees and protocol fees
-        uint256 totalFeePerc = computeUSDToPerpSwapFeePerc(
+        // We compute the fee factor
+        uint256 feeFactor = computeUSDToPerpSwapFeeFactor(
             assetRatio(s),
             assetRatio(
                 _updatedReserveState(
@@ -775,122 +806,90 @@ contract BillBroker is
                 )
             )
         );
-        if (totalFeePerc >= ONE) {
-            return (0, 0, 0);
+        if (feeFactor >= ONE) {
+            protocolFeePerpAmt = perpAmtOut
+                .mulDiv(feeFactor - ONE, ONE, MathUpgradeable.Rounding.Up)
+                .mulDiv(fees.protocolSwapSharePerc, ONE, MathUpgradeable.Rounding.Up);
         }
-        uint256 totalFeePerpAmt = perpAmtOut.mulDiv(totalFeePerc, ONE);
-        perpAmtOut -= totalFeePerpAmt;
-        protocolFeePerpAmt = totalFeePerpAmt.mulDiv(fees.protocolSwapSharePerc, ONE);
-        lpFeePerpAmt = totalFeePerpAmt - protocolFeePerpAmt;
+        perpAmtOut = perpAmtOut.mulDiv(TWO - feeFactor, ONE);
     }
 
-    /// @notice Computes the swap fee percentage when swapping from perp to usd tokens.
+    /// @notice Computes the swap fee factor when swapping from perp to usd tokens.
     /// @dev Swapping from perp to usd tokens, leaves the system with more perp and fewer usd tokens
     ///      thereby decreasing the system's `assetRatio`. Thus arPost < arPre.
     /// @param arPre The asset ratio of the system before swapping.
     /// @param arPost The asset ratio of the system after swapping.
-    /// @return The fee percentage.
-    function computePerpToUSDSwapFeePerc(
+    /// @return The fee factor.
+    function computePerpToUSDSwapFeeFactor(
         uint256 arPre,
         uint256 arPost
     ) public view returns (uint256) {
-        if (arPost > arPre) {
-            revert UnexpectedARDelta();
+        // When the ar decreases below the lower bound swaps are halted.
+        if (arPost < arHardBound.lower) {
+            return MAX_FEE_FACTOR;
         }
 
-        // When the ar decreases below the lower bound,
-        // swaps are effectively halted by setting fees to 100%.
-        if (arPost < arHardBound.lower) {
-            return ONE;
-        }
-        // When the ar is between the soft and hard bound, a linear function is applied.
-        // When the ar is above the soft bound, a flat percentage fee is applied.
-        //
-        //   fee
-        //    ^
-        //    |
-        // fh |    \          |
-        //    |     \         |
-        //    |      \        |
-        //    |       \       |
-        //    |        \      |
-        //    |         \     |
-        // fl |          \__________
-        //    |               |
-        //    |               |
-        //    |               |
-        //    +---------------------------> ar
-        //       arHL  arSL  1.0
-        //
-        Range memory swapFeePercs = fees.perpToUSDSwapFeePercs;
+        Range memory f1 = fees.perpToUSDSwapFeeFactors;
+        Range memory f2 = fees.usdToPerpSwapFeeFactors;
         return
-            _computeFeePerc(
-                Line({
-                    x1: arHardBound.lower,
-                    y1: swapFeePercs.upper,
-                    x2: arSoftBound.lower,
-                    y2: swapFeePercs.lower
-                }),
-                Line({ x1: 0, y1: swapFeePercs.lower, x2: ONE, y2: swapFeePercs.lower }),
-                arPost,
-                arPre,
-                arSoftBound.lower
-            );
+            LineHelpers
+                .computePiecewiseAvgY(
+                    Line({
+                        x1: arHardBound.lower,
+                        y1: f1.upper,
+                        x2: arSoftBound.lower,
+                        y2: f1.lower
+                    }),
+                    Line({ x1: 0, y1: f1.lower, x2: ONE, y2: f1.lower }),
+                    Line({
+                        x1: arSoftBound.upper,
+                        y1: f1.lower,
+                        x2: arHardBound.upper,
+                        y2: (f1.lower + f2.lower - f2.upper)
+                    }),
+                    arSoftBound,
+                    Range({ lower: arPost, upper: arPre })
+                )
+                .clip(MIN_FEE_FACTOR, MAX_FEE_FACTOR);
     }
 
-    /// @notice Computes the swap fee percentage when swapping from usd to perp tokens.
+    /// @notice Computes the swap fee factor when swapping from usd to perp tokens.
     /// @dev Swapping from usd to perp tokens, leaves the system with more usd and fewer perp tokens
     ///      thereby increasing the system's `assetRatio`. Thus arPost > arPre.
     /// @param arPre The asset ratio of the system before swapping.
     /// @param arPost The asset ratio of the system after swapping.
-    /// @return The fee percentage.
-    function computeUSDToPerpSwapFeePerc(
+    /// @return The fee factor.
+    function computeUSDToPerpSwapFeeFactor(
         uint256 arPre,
         uint256 arPost
     ) public view returns (uint256) {
-        if (arPost < arPre) {
-            revert UnexpectedARDelta();
-        }
-
-        // When the ar increases above the hard bound,
-        // swaps are effectively halted by setting fees to 100%.
+        // When the ar increases above the hard bound, swaps are halted.
         if (arPost > arHardBound.upper) {
-            return ONE;
+            return MAX_FEE_FACTOR;
         }
 
-        // When the ar is between the soft and hard bound, a linear function is applied.
-        // When the ar is below the soft bound, a flat percentage fee is applied.
-        //
-        //   fee
-        //    ^
-        //    |
-        // fh |         |           /
-        //    |         |          /
-        //    |         |         /
-        //    |         |        /
-        //    |         |       /
-        //    |         |      /
-        // fl |     __________/
-        //    |         |
-        //    |         |
-        //    |         |
-        //    +---------------------------> ar
-        //              1.0  arSU   arHU
-        //
-        Range memory swapFeePercs = fees.usdToPerpSwapFeePercs;
+        Range memory f1 = fees.usdToPerpSwapFeeFactors;
+        Range memory f2 = fees.perpToUSDSwapFeeFactors;
         return
-            _computeFeePerc(
-                Line({ x1: 0, y1: swapFeePercs.lower, x2: ONE, y2: swapFeePercs.lower }),
-                Line({
-                    x1: arSoftBound.upper,
-                    y1: swapFeePercs.lower,
-                    x2: arHardBound.upper,
-                    y2: swapFeePercs.upper
-                }),
-                arPre,
-                arPost,
-                arSoftBound.upper
-            );
+            LineHelpers
+                .computePiecewiseAvgY(
+                    Line({
+                        x1: arSoftBound.lower,
+                        y1: f1.lower,
+                        x2: arHardBound.lower,
+                        y2: (f1.lower + f2.lower - f2.upper)
+                    }),
+                    Line({ x1: 0, y1: f1.lower, x2: ONE, y2: f1.lower }),
+                    Line({
+                        x1: arSoftBound.upper,
+                        y1: f1.lower,
+                        x2: arHardBound.upper,
+                        y2: f1.upper
+                    }),
+                    arSoftBound,
+                    Range({ lower: arPre, upper: arPost })
+                )
+                .clip(MIN_FEE_FACTOR, MAX_FEE_FACTOR);
     }
 
     /// @param s The system reserve state.
@@ -904,7 +903,7 @@ contract BillBroker is
                         s.perpBalance.mulDiv(s.perpPrice, perpUnitAmt)
                     )
                 )
-                : type(uint256).max;
+                : MAX_ASSET_RATIO;
     }
 
     /// @notice The address which holds any revenue extracted by protocol.
@@ -929,24 +928,5 @@ contract BillBroker is
                 usdPrice: s.usdPrice,
                 perpPrice: s.perpPrice
             });
-    }
-
-    /// @dev The function assumes the fee curve is defined as a pair-wise linear function which merge at the cutoff point.
-    ///      The swap fee is computed as avg height of the fee curve between {arL,arU}.
-    function _computeFeePerc(
-        Line memory fn1,
-        Line memory fn2,
-        uint256 arL,
-        uint256 arU,
-        uint256 cutoff
-    ) private pure returns (uint256 feePerc) {
-        if (arU <= cutoff) {
-            feePerc = fn1.avgY(arL, arU).clip(0, ONE);
-        } else if (arL >= cutoff) {
-            feePerc = fn2.avgY(arL, arU).clip(0, ONE);
-        } else {
-            feePerc += fn1.avgY(arL, cutoff).clip(0, ONE).mulDiv(cutoff - arL, arU - arL);
-            feePerc += fn2.avgY(cutoff, arU).clip(0, ONE).mulDiv(arU - cutoff, arU - arL);
-        }
     }
 }
