@@ -62,7 +62,7 @@
     "ethers": "^6.6.0",
     "ethers-v5": "npm:ethers@^5.7.0",
     "ganache-cli": "latest",
-    "hardhat": "^2.22.10",
+    "hardhat": "^2.22.17",
     "hardhat-gas-reporter": "latest",
     "lodash": "^4.17.21",
     "prettier": "^2.7.1",
