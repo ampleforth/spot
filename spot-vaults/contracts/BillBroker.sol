@@ -662,9 +662,13 @@ contract BillBroker is
         // Compute mint amount.
         mintAmt = valueIn.mulDiv(totalSupply_, totalReserveVal);
 
-        // Apply a combination of swap and mint fees.
+        // A single sided deposit is a combination of swap and mint.
+        // We first calculate the amount of usd swapped into perps and
+        // apply the swap fee only for that portion.
+        // The mint fees are waived, because single sided deposits
+        // push the pool back into balance.
         uint256 percOfAmtInSwapped = ONE.mulDiv(
-            usdAmtIn - mintAmt.mulDiv(s.usdBalance, totalSupply_),
+            usdAmtIn - (s.usdBalance + usdAmtIn).mulDiv(mintAmt, totalSupply_),
             usdAmtIn
         );
         uint256 feeFactor = computeUSDToPerpSwapFeeFactor(
@@ -674,7 +678,6 @@ contract BillBroker is
         mintAmt =
             mintAmt.mulDiv(percOfAmtInSwapped, ONE).mulDiv(TWO - feeFactor, ONE) +
             mintAmt.mulDiv(ONE - percOfAmtInSwapped, ONE);
-        mintAmt = mintAmt.mulDiv(ONE - fees.mintFeePerc, ONE);
     }
 
     /// @notice Computes the amount of LP tokens minted,
@@ -704,9 +707,13 @@ contract BillBroker is
             ? valueIn.mulDiv(totalSupply_, totalReserveVal)
             : 0;
 
-        // Apply a combination of swap and mint fees.
+        // A single sided deposit is a combination of swap and mint.
+        // We first calculate the amount of perps swapped into usd and
+        // apply the swap fee only for that portion.
+        // The mint fees are waived, because single sided deposits
+        // push the pool back into balance.
         uint256 percOfAmtInSwapped = ONE.mulDiv(
-            perpAmtIn - mintAmt.mulDiv(s.perpBalance, totalSupply_),
+            perpAmtIn - (s.perpBalance + perpAmtIn).mulDiv(mintAmt, totalSupply_),
             perpAmtIn
         );
         uint256 feeFactor = computePerpToUSDSwapFeeFactor(
@@ -716,7 +723,6 @@ contract BillBroker is
         mintAmt =
             mintAmt.mulDiv(percOfAmtInSwapped, ONE).mulDiv(TWO - feeFactor, ONE) +
             mintAmt.mulDiv(ONE - percOfAmtInSwapped, ONE);
-        mintAmt = mintAmt.mulDiv(ONE - fees.mintFeePerc, ONE);
     }
 
     /// @notice Computes the amount of usd and perp tokens redeemed,
@@ -829,23 +835,29 @@ contract BillBroker is
             return MAX_FEE_FACTOR;
         }
 
-        Range memory f1 = fees.perpToUSDSwapFeeFactors;
-        Range memory f2 = fees.usdToPerpSwapFeeFactors;
+        Range memory feeP2U = fees.perpToUSDSwapFeeFactors;
+        Range memory feeU2P = fees.usdToPerpSwapFeeFactors;
+        uint256 feeU2PDelta = feeU2P.upper - feeU2P.lower;
         return
             LineHelpers
                 .computePiecewiseAvgY(
                     Line({
                         x1: arHardBound.lower,
-                        y1: f1.upper,
+                        y1: feeP2U.upper,
                         x2: arSoftBound.lower,
-                        y2: f1.lower
+                        y2: feeP2U.lower
                     }),
-                    Line({ x1: 0, y1: f1.lower, x2: ONE, y2: f1.lower }),
+                    Line({
+                        x1: arSoftBound.lower,
+                        y1: feeP2U.lower,
+                        x2: arSoftBound.upper,
+                        y2: feeP2U.lower
+                    }),
                     Line({
                         x1: arSoftBound.upper,
-                        y1: f1.lower,
+                        y1: feeP2U.lower,
                         x2: arHardBound.upper,
-                        y2: (f1.lower + f2.lower - f2.upper)
+                        y2: (feeP2U.lower - feeU2PDelta)
                     }),
                     arSoftBound,
                     Range({ lower: arPost, upper: arPre })
@@ -868,23 +880,29 @@ contract BillBroker is
             return MAX_FEE_FACTOR;
         }
 
-        Range memory f1 = fees.usdToPerpSwapFeeFactors;
-        Range memory f2 = fees.perpToUSDSwapFeeFactors;
+        Range memory feeU2P = fees.usdToPerpSwapFeeFactors;
+        Range memory feeP2U = fees.perpToUSDSwapFeeFactors;
+        uint256 feeP2UDelta = feeP2U.upper - feeP2U.lower;
         return
             LineHelpers
                 .computePiecewiseAvgY(
                     Line({
-                        x1: arSoftBound.lower,
-                        y1: f1.lower,
-                        x2: arHardBound.lower,
-                        y2: (f1.lower + f2.lower - f2.upper)
+                        x1: arHardBound.lower,
+                        y1: (feeU2P.lower - feeP2UDelta),
+                        x2: arSoftBound.lower,
+                        y2: feeU2P.lower
                     }),
-                    Line({ x1: 0, y1: f1.lower, x2: ONE, y2: f1.lower }),
+                    Line({
+                        x1: arSoftBound.lower,
+                        y1: feeU2P.lower,
+                        x2: arSoftBound.upper,
+                        y2: feeU2P.lower
+                    }),
                     Line({
                         x1: arSoftBound.upper,
-                        y1: f1.lower,
+                        y1: feeU2P.lower,
                         x2: arHardBound.upper,
-                        y2: f1.upper
+                        y2: feeU2P.upper
                     }),
                     arSoftBound,
                     Range({ lower: arPre, upper: arPost })
