@@ -72,6 +72,7 @@ contract BillBroker is
 
     // Math
     using MathUpgradeable for uint256;
+    using MathHelpers for uint256;
     using MathHelpers for int256;
     using LineHelpers for Line;
 
@@ -83,8 +84,7 @@ contract BillBroker is
     uint256 public constant TWO = ONE * 2;
     uint256 private constant INITIAL_RATE = 1000000;
     uint256 public constant MINIMUM_LIQUIDITY = 10 ** 22;
-    uint256 public constant MAX_FEE_FACTOR = TWO; // 2 or 100%
-    uint256 public constant MIN_FEE_FACTOR = ((ONE * 4) / 5); // 0.8 or -20%
+    uint256 public constant MAX_FEE_FACTOR = ((ONE * 6) / 5); // 1.2 or 20%
     uint256 public constant MAX_ASSET_RATIO = uint256(type(int256).max);
 
     //-------------------------------------------------------------------------
@@ -193,14 +193,8 @@ contract BillBroker is
             BillBrokerFees({
                 mintFeePerc: 0,
                 burnFeePerc: 0,
-                perpToUSDSwapFeeFactors: Range({
-                    lower: MAX_FEE_FACTOR,
-                    upper: MAX_FEE_FACTOR
-                }),
-                usdToPerpSwapFeeFactors: Range({
-                    lower: MAX_FEE_FACTOR,
-                    upper: MAX_FEE_FACTOR
-                }),
+                perpToUSDSwapFeeFactors: Range({ lower: ONE, upper: ONE }),
+                usdToPerpSwapFeeFactors: Range({ lower: ONE, upper: ONE }),
                 protocolSwapSharePerc: 0
             })
         );
@@ -237,11 +231,23 @@ contract BillBroker is
         if (
             fees_.mintFeePerc > ONE ||
             fees_.burnFeePerc > ONE ||
+            fees_.protocolSwapSharePerc > ONE
+        ) {
+            revert InvalidPerc();
+        }
+
+        if (
             fees_.perpToUSDSwapFeeFactors.lower > fees_.perpToUSDSwapFeeFactors.upper ||
             fees_.perpToUSDSwapFeeFactors.lower < ONE ||
+            fees_.perpToUSDSwapFeeFactors.upper > MAX_FEE_FACTOR
+        ) {
+            revert InvalidPerc();
+        }
+
+        if (
             fees_.usdToPerpSwapFeeFactors.lower > fees_.usdToPerpSwapFeeFactors.upper ||
             fees_.usdToPerpSwapFeeFactors.lower < ONE ||
-            fees_.protocolSwapSharePerc > ONE
+            fees_.usdToPerpSwapFeeFactors.upper > MAX_FEE_FACTOR
         ) {
             revert InvalidPerc();
         }
@@ -831,13 +837,14 @@ contract BillBroker is
         uint256 arPost
     ) public view returns (uint256) {
         // When the ar decreases below the lower bound swaps are halted.
+        // Fees are set to 100% or a fee factor of 2.0
         if (arPost < arHardBound.lower) {
-            return MAX_FEE_FACTOR;
+            return TWO;
         }
 
         Range memory feeP2U = fees.perpToUSDSwapFeeFactors;
-        Range memory feeU2P = fees.usdToPerpSwapFeeFactors;
-        uint256 feeU2PDelta = feeU2P.upper - feeU2P.lower;
+        // The maximum -ve fee, inferred from fees for the other swap direction.
+        uint256 feeU2PUpperInv = (TWO - fees.usdToPerpSwapFeeFactors.upper);
         return
             LineHelpers
                 .computePiecewiseAvgY(
@@ -857,12 +864,12 @@ contract BillBroker is
                         x1: arSoftBound.upper,
                         y1: feeP2U.lower,
                         x2: arHardBound.upper,
-                        y2: (feeP2U.lower - feeU2PDelta)
+                        y2: feeU2PUpperInv
                     }),
                     arSoftBound,
                     Range({ lower: arPost, upper: arPre })
                 )
-                .clip(MIN_FEE_FACTOR, MAX_FEE_FACTOR);
+                .clip(feeU2PUpperInv, feeP2U.upper);
     }
 
     /// @notice Computes the swap fee factor when swapping from usd to perp tokens.
@@ -876,19 +883,20 @@ contract BillBroker is
         uint256 arPost
     ) public view returns (uint256) {
         // When the ar increases above the hard bound, swaps are halted.
+        // Fees are set to 100% or a fee factor of 2.0
         if (arPost > arHardBound.upper) {
-            return MAX_FEE_FACTOR;
+            return TWO;
         }
 
         Range memory feeU2P = fees.usdToPerpSwapFeeFactors;
-        Range memory feeP2U = fees.perpToUSDSwapFeeFactors;
-        uint256 feeP2UDelta = feeP2U.upper - feeP2U.lower;
+        // The maximum -ve fee, inferred from fees for the other swap direction.
+        uint256 feeP2UUpperInv = (TWO - fees.perpToUSDSwapFeeFactors.upper);
         return
             LineHelpers
                 .computePiecewiseAvgY(
                     Line({
                         x1: arHardBound.lower,
-                        y1: (feeU2P.lower - feeP2UDelta),
+                        y1: feeP2UUpperInv,
                         x2: arSoftBound.lower,
                         y2: feeU2P.lower
                     }),
@@ -907,7 +915,7 @@ contract BillBroker is
                     arSoftBound,
                     Range({ lower: arPre, upper: arPost })
                 )
-                .clip(MIN_FEE_FACTOR, MAX_FEE_FACTOR);
+                .clip(feeP2UUpperInv, feeU2P.upper);
     }
 
     /// @param s The system reserve state.

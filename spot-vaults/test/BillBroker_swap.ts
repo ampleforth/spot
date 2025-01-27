@@ -181,7 +181,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await checkUSDToPerpSwapAmt(
@@ -197,7 +197,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await checkUSDToPerpSwapAmt(
@@ -213,14 +213,14 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await checkUSDToPerpSwapAmt(
           billBroker,
           usdFP("100"),
           [usdFP("100000"), perpFP("100000"), priceFP("1"), priceFP("0.9")],
-          [perpFP("101.46047038"), 0n],
+          [perpFP("104.190527093"), 0n],
         );
       });
 
@@ -229,14 +229,14 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await checkUSDToPerpSwapAmt(
           billBroker,
           usdFP("10000"),
           [usdFP("100000"), perpFP("100000"), priceFP("1"), priceFP("1")],
-          [perpFP("8491.666666666"), 0n],
+          [perpFP("9163.888888888"), 0n],
         );
       });
 
@@ -245,7 +245,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await checkUSDToPerpSwapAmt(
@@ -265,7 +265,7 @@ describe("BillBroker", function () {
           },
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await billBroker.updateARBounds(
@@ -276,7 +276,7 @@ describe("BillBroker", function () {
           billBroker,
           usdFP("10000"),
           [usdFP("1000"), perpFP("100000"), priceFP("1"), priceFP("1")],
-          [perpFP("10074.652777777"), 0n],
+          [perpFP("10649.305555555"), 0n],
         );
       });
     });
@@ -287,7 +287,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: percFP("0.1"),
         });
@@ -393,7 +393,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await checkPerpToUSDSwapAmt(
@@ -409,7 +409,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await checkPerpToUSDSwapAmt(
@@ -425,14 +425,14 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await checkPerpToUSDSwapAmt(
           billBroker,
           perpFP("14285"),
           [usdFP("100000"), perpFP("100000"), priceFP("1"), priceFP("1")],
-          [usdFP("11142.47499"), 0n],
+          [usdFP("12427.993747"), 0n],
         );
       });
 
@@ -441,7 +441,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await checkPerpToUSDSwapAmt(
@@ -457,14 +457,14 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await checkPerpToUSDSwapAmt(
           billBroker,
           perpFP("100"),
           [usdFP("100000"), perpFP("100000"), priceFP("1"), priceFP("0.9")],
-          [usdFP("81"), 0n],
+          [usdFP("81.603396"), 0n],
         );
       });
 
@@ -473,11 +473,11 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.025"),
-            upper: percFP("1.75"),
+            upper: percFP("1.2"),
           },
         });
         await billBroker.updateARBounds(
@@ -488,7 +488,7 @@ describe("BillBroker", function () {
           billBroker,
           perpFP("50000"),
           [usdFP("100000"), perpFP("1000"), priceFP("1"), priceFP("1")],
-          [usdFP("60000"), 0n],
+          [usdFP("52271.287128"), 0n],
         );
       });
     });
@@ -499,7 +499,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: percFP("0.1"),
         });
@@ -633,7 +633,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await expect(() =>
@@ -645,7 +645,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await expect(() =>
@@ -657,7 +657,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         expect(await assetRatio(billBroker)).to.eq(percFP("1"));
@@ -669,7 +669,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await billBroker.swapUSDForPerps(usdFP("115"), perpFP("95"));
@@ -682,7 +682,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         const r = await billBroker.reserveState.staticCall();
@@ -698,7 +698,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: percFP("0.1"),
         });
@@ -713,7 +713,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: percFP("0.1"),
         });
@@ -729,7 +729,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: percFP("0.1"),
         });
@@ -743,7 +743,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: percFP("0.1"),
         });
@@ -756,7 +756,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: percFP("0.1"),
         });
@@ -770,7 +770,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: percFP("0.1"),
         });
@@ -787,7 +787,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await expect(() =>
@@ -799,7 +799,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await expect(() =>
@@ -812,7 +812,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         expect(await assetRatio(billBroker)).to.eq(percFP("1"));
@@ -824,7 +824,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await billBroker.swapUSDForPerps(usdFP("3795"), perpFP("3130"));
@@ -837,7 +837,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         const r = await billBroker.reserveState.staticCall();
@@ -857,7 +857,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           usdToPerpSwapFeeFactors: {
             lower: percFP("1.05"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await expect(
@@ -983,7 +983,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await expect(() =>
@@ -995,7 +995,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await expect(() =>
@@ -1007,7 +1007,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         expect(await assetRatio(billBroker)).to.eq(percFP("1"));
@@ -1019,7 +1019,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await billBroker.swapPerpsForUSD(perpFP("100"), usdFP("103"));
@@ -1032,7 +1032,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         const r = await billBroker.reserveState.staticCall();
@@ -1048,7 +1048,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: percFP("0.1"),
         });
@@ -1063,7 +1063,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: percFP("0.1"),
         });
@@ -1077,7 +1077,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: percFP("0.1"),
         });
@@ -1091,7 +1091,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: percFP("0.1"),
         });
@@ -1104,7 +1104,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: percFP("0.1"),
         });
@@ -1118,7 +1118,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: percFP("0.1"),
         });
@@ -1135,7 +1135,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await expect(() =>
@@ -1147,7 +1147,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await expect(() =>
@@ -1159,7 +1159,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         expect(await assetRatio(billBroker)).to.eq(percFP("1"));
@@ -1171,7 +1171,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await billBroker.swapPerpsForUSD(perpFP("3600"), usdFP("3700"));
@@ -1191,7 +1191,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
         });
         await expect(
@@ -1203,7 +1203,7 @@ describe("BillBroker", function () {
         await updateFees(billBroker, {
           perpToUSDSwapFeeFactors: {
             lower: percFP("1.1"),
-            upper: percFP("1.5"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: percFP("0.1"),
         });
