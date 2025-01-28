@@ -148,6 +148,6 @@ export function handleFees(event: CollectFees): void {
   dailyStat.token0Fees = dailyStat.token0Fees.plus(formatBalance(event.params.feesToVault0, vault.token0Decimals))
   dailyStat.token1Fees = dailyStat.token1Fees.plus(formatBalance(event.params.feesToVault1, vault.token1Decimals))
   dailyStat.totalFeeVal = dailyStat.token1Fees.times(dailyStat.token1Price).plus(dailyStat.token0Fees.times(dailyStat.token0Price))
-  dailyStat.feeYield = dailyStat.totalFeeVal.div(dailyStat.tvl)
+  dailyStat.feeYield = dailyStat.totalFeeVal.div(dailyStat.tvl.minus(dailyStat.totalFeeVal))
   dailyStat.save()
 }
