@@ -31,13 +31,13 @@ describe("BillBroker", function () {
     await billBroker.updateFees({
       mintFeePerc: 0n,
       burnFeePerc: 0n,
-      perpToUSDSwapFeePercs: {
-        lower: 0n,
-        upper: 0n,
+      perpToUSDSwapFeeFactors: {
+        lower: percFP("1"),
+        upper: percFP("1"),
       },
-      usdToPerpSwapFeePercs: {
-        lower: 0n,
-        upper: 0n,
+      usdToPerpSwapFeeFactors: {
+        lower: percFP("1"),
+        upper: percFP("1"),
       },
       protocolSwapSharePerc: 0n,
     });
@@ -147,13 +147,13 @@ describe("BillBroker", function () {
         await billBroker.updateFees({
           mintFeePerc: percFP("0.1"),
           burnFeePerc: 0n,
-          perpToUSDSwapFeePercs: {
-            lower: 0n,
-            upper: 0n,
+          perpToUSDSwapFeeFactors: {
+            lower: percFP("1"),
+            upper: percFP("1"),
           },
-          usdToPerpSwapFeePercs: {
-            lower: 0n,
-            upper: 0n,
+          usdToPerpSwapFeeFactors: {
+            lower: percFP("1"),
+            upper: percFP("1"),
           },
           protocolSwapSharePerc: 0n,
         });
@@ -180,7 +180,7 @@ describe("BillBroker", function () {
         await billBroker.swapUSDForPerps(usdFP("115"), 0n);
         expect(await perp.balanceOf(billBroker.target)).to.eq(0n);
 
-        expect(await assetRatio(billBroker)).to.eq(ethers.MaxUint256);
+        expect(await assetRatio(billBroker)).to.eq(ethers.MaxInt256);
 
         const r = await billBroker.computeMintAmt.staticCall(usdFP("100"), 0n);
         expect(r[0]).to.eq(lpAmtFP("93.478260869565217391304347"));
@@ -234,45 +234,49 @@ describe("BillBroker", function () {
       it("should return the mint amount", async function () {
         const { billBroker, usd, perp } = await loadFixture(setupContracts);
         await usd.approve(billBroker.target, usdFP("115"));
-        await perp.approve(billBroker.target, perpFP("200"));
+        await perp.approve(billBroker.target, perpFP("2000"));
         await billBroker.deposit(
           usdFP("115"),
-          perpFP("200"),
+          perpFP("2000"),
           usdFP("115"),
-          perpFP("200"),
+          perpFP("2000"),
         );
         expect(await billBroker.computeMintAmtWithUSD.staticCall(usdFP("11.5"))).to.eq(
-          lpAmtFP("10.5"),
+          lpAmtFP("10.071428571428571428571427"),
         );
       });
     });
 
-    describe("when fee > 0", function () {
+    describe("when swapFee > 0", function () {
       it("should return the mint amount", async function () {
         const { billBroker, usd, perp } = await loadFixture(setupContracts);
+        await billBroker.updateARBounds(
+          [percFP("0.9"), percFP("1.1")],
+          [percFP("0.25"), percFP("4")],
+        );
         await usd.approve(billBroker.target, usdFP("115"));
-        await perp.approve(billBroker.target, perpFP("200"));
+        await perp.approve(billBroker.target, perpFP("2000"));
         await billBroker.deposit(
           usdFP("115"),
-          perpFP("200"),
+          perpFP("2000"),
           usdFP("115"),
-          perpFP("200"),
+          perpFP("2000"),
         );
         await billBroker.updateFees({
-          mintFeePerc: percFP("0.1"),
+          mintFeePerc: 0n,
           burnFeePerc: 0n,
-          perpToUSDSwapFeePercs: {
-            lower: 0n,
-            upper: 0n,
+          perpToUSDSwapFeeFactors: {
+            lower: percFP("1"),
+            upper: percFP("1.2"),
           },
-          usdToPerpSwapFeePercs: {
-            lower: 0n,
-            upper: 0n,
+          usdToPerpSwapFeeFactors: {
+            lower: percFP("1.025"),
+            upper: percFP("1.15"),
           },
           protocolSwapSharePerc: 0n,
         });
         expect(await billBroker.computeMintAmtWithUSD.staticCall(usdFP("11.5"))).to.eq(
-          lpAmtFP("9.45"),
+          lpAmtFP("11.980204248447204967542855"),
         );
       });
     });
@@ -321,46 +325,50 @@ describe("BillBroker", function () {
     describe("when fee = 0", function () {
       it("should return the mint amount", async function () {
         const { billBroker, usd, perp } = await loadFixture(setupContracts);
-        await usd.approve(billBroker.target, usdFP("200"));
+        await usd.approve(billBroker.target, usdFP("2000"));
         await perp.approve(billBroker.target, perpFP("100"));
         await billBroker.deposit(
-          usdFP("200"),
+          usdFP("2000"),
           perpFP("100"),
-          usdFP("200"),
+          usdFP("2000"),
           perpFP("100"),
         );
         expect(await billBroker.computeMintAmtWithPerp.staticCall(perpFP("10.5"))).to.eq(
-          lpAmtFP("11.5"),
+          lpAmtFP("11.989361702127659574468084"),
         );
       });
     });
 
-    describe("when fee > 0", function () {
+    describe("when swapFee > 0", function () {
       it("should return the mint amount", async function () {
         const { billBroker, usd, perp } = await loadFixture(setupContracts);
-        await usd.approve(billBroker.target, usdFP("200"));
+        await billBroker.updateARBounds(
+          [percFP("0.9"), percFP("1.1")],
+          [percFP("0.25"), percFP("4")],
+        );
+        await usd.approve(billBroker.target, usdFP("2000"));
         await perp.approve(billBroker.target, perpFP("100"));
         await billBroker.deposit(
-          usdFP("200"),
+          usdFP("2000"),
           perpFP("100"),
-          usdFP("200"),
+          usdFP("2000"),
           perpFP("100"),
         );
         await billBroker.updateFees({
-          mintFeePerc: percFP("0.1"),
+          mintFeePerc: 0n,
           burnFeePerc: 0n,
-          perpToUSDSwapFeePercs: {
-            lower: 0n,
-            upper: 0n,
+          perpToUSDSwapFeeFactors: {
+            lower: percFP("1.025"),
+            upper: percFP("1.1"),
           },
-          usdToPerpSwapFeePercs: {
-            lower: 0n,
-            upper: 0n,
+          usdToPerpSwapFeeFactors: {
+            lower: percFP("1"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: 0n,
         });
         expect(await billBroker.computeMintAmtWithPerp.staticCall(perpFP("10.5"))).to.eq(
-          lpAmtFP("10.35"),
+          lpAmtFP("14.243163296689361701442552"),
         );
       });
     });
@@ -381,7 +389,7 @@ describe("BillBroker", function () {
         await billBroker.swapUSDForPerps(usdFP("115"), 0n);
         expect(await perp.balanceOf(billBroker.target)).to.eq(0n);
 
-        expect(await assetRatio(billBroker)).to.eq(ethers.MaxUint256);
+        expect(await assetRatio(billBroker)).to.eq(ethers.MaxInt256);
         expect(await billBroker.computeMintAmtWithPerp.staticCall(perpFP("100"))).to.eq(
           lpAmtFP("107.5"),
         );
@@ -565,15 +573,15 @@ describe("BillBroker", function () {
       it("should withhold fees and mint lp tokens", async function () {
         const { billBroker, usd, perp, deployer } = await loadFixture(setupContracts);
         await billBroker.updateFees({
-          mintFeePerc: percFP("0.1"),
+          mintFeePerc: 0n,
           burnFeePerc: 0n,
-          perpToUSDSwapFeePercs: {
-            lower: 0n,
-            upper: 0n,
+          perpToUSDSwapFeeFactors: {
+            lower: percFP("1"),
+            upper: percFP("1"),
           },
-          usdToPerpSwapFeePercs: {
-            lower: 0n,
-            upper: 0n,
+          usdToPerpSwapFeeFactors: {
+            lower: percFP("1"),
+            upper: percFP("1"),
           },
           protocolSwapSharePerc: 0n,
         });
@@ -581,7 +589,7 @@ describe("BillBroker", function () {
         await perp.approve(billBroker.target, perpFP("100"));
         await expect(() =>
           billBroker.deposit(usdFP("115"), perpFP("100"), usdFP("115"), perpFP("100")),
-        ).to.changeTokenBalance(billBroker, deployer, lpAmtFP("193.49"));
+        ).to.changeTokenBalance(billBroker, deployer, lpAmtFP("214.99"));
       });
     });
 
@@ -601,7 +609,7 @@ describe("BillBroker", function () {
         await billBroker.swapUSDForPerps(usdFP("115"), 0n);
         expect(await perp.balanceOf(billBroker.target)).to.eq(0n);
 
-        expect(await assetRatio(billBroker)).to.eq(ethers.MaxUint256);
+        expect(await assetRatio(billBroker)).to.eq(ethers.MaxInt256);
 
         await usd.approve(billBroker.target, usdFP("115"));
         await expect(() =>
@@ -670,7 +678,7 @@ describe("BillBroker", function () {
         );
         await usd.approve(billBroker.target, usdFP("100"));
         expect(
-          await billBroker.depositUSD.staticCall(usdFP("100"), ethers.MaxUint256),
+          await billBroker.depositUSD.staticCall(usdFP("100"), ethers.MaxInt256),
         ).to.eq(0n);
       });
     });
@@ -688,7 +696,7 @@ describe("BillBroker", function () {
         );
         await usd.approve(billBroker.target, usdFP("100"));
         expect(
-          await billBroker.depositUSD.staticCall(usdFP("100"), ethers.MaxUint256),
+          await billBroker.depositUSD.staticCall(usdFP("100"), ethers.MaxInt256),
         ).to.eq(0n);
       });
     });
@@ -706,7 +714,7 @@ describe("BillBroker", function () {
         );
         await usd.approve(billBroker.target, usdFP("1"));
         expect(
-          await billBroker.depositUSD.staticCall(usdFP("1"), ethers.MaxUint256),
+          await billBroker.depositUSD.staticCall(usdFP("1"), ethers.MaxInt256),
         ).to.eq(0n);
       });
     });
@@ -724,7 +732,7 @@ describe("BillBroker", function () {
         );
         await usd.approve(billBroker.target, usdFP("115"));
         expect(
-          await billBroker.depositUSD.staticCall(usdFP("115"), ethers.MaxUint256),
+          await billBroker.depositUSD.staticCall(usdFP("115"), ethers.MaxInt256),
         ).to.eq(lpAmtFP("105"));
       });
     });
@@ -783,10 +791,10 @@ describe("BillBroker", function () {
         ).to.changeTokenBalance(
           billBroker,
           deployer,
-          lpAmtFP("9.130434782608695652173913"),
+          lpAmtFP("9.130434782608695652173912"),
         );
         expect(await billBroker.totalSupply()).to.eq(
-          lpAmtFP("324.130434782608695652173913"),
+          lpAmtFP("324.130434782608695652173912"),
         );
       });
 
@@ -806,7 +814,7 @@ describe("BillBroker", function () {
           .to.emit(billBroker, "DepositUSD")
           .withArgs(usdFP("10"), r);
         expect(await billBroker.totalSupply()).to.eq(
-          lpAmtFP("324.130434782608695652173913"),
+          lpAmtFP("324.130434782608695652173912"),
         );
       });
 
@@ -823,7 +831,7 @@ describe("BillBroker", function () {
 
         await usd.approve(billBroker.target, usdFP("10"));
         const r = await billBroker.depositUSD.staticCall(usdFP("10"), percFP("1"));
-        expect(r).to.eq(lpAmtFP("9.130434782608695652173913"));
+        expect(r).to.eq(lpAmtFP("9.130434782608695652173912"));
       });
     });
 
@@ -831,15 +839,15 @@ describe("BillBroker", function () {
       it("should withhold fees and mint lp tokens", async function () {
         const { billBroker, usd, perp, deployer } = await loadFixture(setupContracts);
         await billBroker.updateFees({
-          mintFeePerc: percFP("0.1"),
+          mintFeePerc: 0n,
           burnFeePerc: 0n,
-          perpToUSDSwapFeePercs: {
-            lower: 0n,
-            upper: 0n,
+          perpToUSDSwapFeeFactors: {
+            lower: percFP("1.025"),
+            upper: percFP("1.2"),
           },
-          usdToPerpSwapFeePercs: {
-            lower: 0n,
-            upper: 0n,
+          usdToPerpSwapFeeFactors: {
+            lower: percFP("1.025"),
+            upper: percFP("1.1"),
           },
           protocolSwapSharePerc: 0n,
         });
@@ -859,8 +867,56 @@ describe("BillBroker", function () {
         ).to.changeTokenBalance(
           billBroker,
           deployer,
-          lpAmtFP("7.395652173913043478260868"),
+          lpAmtFP("8.984877117391304347826085"),
         );
+
+        const r = await billBroker.computeRedemptionAmts.staticCall(
+          lpAmtFP("8.984877117391304347826085"),
+        );
+        expect(r[0]).to.eq(usdFP("3.466549"));
+        expect(r[1]).to.eq(perpFP("5.546479327"));
+      });
+
+      it("should be roughly equivalent to swap+deposit", async function () {
+        const { billBroker, usd, perp, deployer } = await loadFixture(setupContracts);
+        await billBroker.updateFees({
+          mintFeePerc: 0n,
+          burnFeePerc: 0n,
+          perpToUSDSwapFeeFactors: {
+            lower: percFP("1.025"),
+            upper: percFP("1.2"),
+          },
+          usdToPerpSwapFeeFactors: {
+            lower: percFP("1.025"),
+            upper: percFP("1.1"),
+          },
+          protocolSwapSharePerc: 0n,
+        });
+
+        await usd.approve(billBroker.target, usdFP("115"));
+        await perp.approve(billBroker.target, perpFP("200"));
+        await billBroker.deposit(
+          usdFP("115"),
+          perpFP("200"),
+          usdFP("115"),
+          perpFP("200"),
+        );
+
+        await usd.approve(billBroker.target, usdFP("10"));
+        await perp.approve(billBroker.target, perpFP("10"));
+        await billBroker.swapUSDForPerps(usdFP("6.535"), 0n);
+        await expect(() =>
+          billBroker.deposit(usdFP("3.465"), percFP("10"), 0n, 0n),
+        ).to.changeTokenBalance(
+          billBroker,
+          deployer,
+          lpAmtFP("8.980746287077796519521125"),
+        );
+        const r = await billBroker.computeRedemptionAmts.staticCall(
+          lpAmtFP("8.980746287077796519521125"),
+        );
+        expect(r[0]).to.eq(usdFP("3.464999"));
+        expect(r[1]).to.eq(perpFP("5.544098565"));
       });
     });
   });
@@ -938,7 +994,7 @@ describe("BillBroker", function () {
         await billBroker.deposit(usdFP("115"), perpFP("90"), usdFP("115"), perpFP("90"));
         await perp.approve(billBroker.target, perpFP("10"));
         expect(await billBroker.depositPerp.staticCall(perpFP("10"), 0n)).to.eq(
-          lpAmtFP("10.789473684210526315789473"),
+          lpAmtFP("10.789473684210526315789472"),
         );
       });
     });
@@ -1047,22 +1103,69 @@ describe("BillBroker", function () {
         );
 
         await billBroker.updateFees({
-          mintFeePerc: percFP("0.1"),
+          mintFeePerc: 0n,
           burnFeePerc: 0n,
-          perpToUSDSwapFeePercs: {
-            lower: 0n,
-            upper: 0n,
+          perpToUSDSwapFeeFactors: {
+            lower: percFP("1.025"),
+            upper: percFP("1.1"),
           },
-          usdToPerpSwapFeePercs: {
-            lower: 0n,
-            upper: 0n,
+          usdToPerpSwapFeeFactors: {
+            lower: percFP("1.025"),
+            upper: percFP("1.2"),
           },
           protocolSwapSharePerc: 0n,
         });
         await perp.approve(billBroker.target, perpFP("10"));
         await expect(() =>
           billBroker.depositPerp(perpFP("10"), percFP("1")),
-        ).to.changeTokenBalance(billBroker, deployer, lpAmtFP("9.9"));
+        ).to.changeTokenBalance(billBroker, deployer, lpAmtFP("10.825833333315"));
+
+        const r = await billBroker.computeRedemptionAmts.staticCall(
+          lpAmtFP("10.825833333315"),
+        );
+        expect(r[0]).to.eq(usdFP("7.305613"));
+        expect(r[1]).to.eq(perpFP("3.493988865"));
+      });
+
+      it("should be roughly equivalent to swap+deposit", async function () {
+        const { billBroker, usd, perp, deployer } = await loadFixture(setupContracts);
+        await usd.approve(billBroker.target, usdFP("230"));
+        await perp.approve(billBroker.target, perpFP("100"));
+        await billBroker.deposit(
+          usdFP("230"),
+          perpFP("100"),
+          usdFP("230"),
+          perpFP("100"),
+        );
+
+        await billBroker.updateFees({
+          mintFeePerc: 0n,
+          burnFeePerc: 0n,
+          perpToUSDSwapFeeFactors: {
+            lower: percFP("1.025"),
+            upper: percFP("1.1"),
+          },
+          usdToPerpSwapFeeFactors: {
+            lower: percFP("1.025"),
+            upper: percFP("1.2"),
+          },
+          protocolSwapSharePerc: 0n,
+        });
+        await perp.approve(billBroker.target, perpFP("15"));
+        await usd.approve(billBroker.target, usdFP("15"));
+        await billBroker.swapPerpsForUSD(perpFP("6"), 0n);
+        await expect(() =>
+          billBroker.deposit(usdFP("7.30"), percFP("5"), 0n, 0n),
+        ).to.changeTokenBalance(
+          billBroker,
+          deployer,
+          lpAmtFP("10.789506096809951964527651"),
+        );
+        const r = await billBroker.computeRedemptionAmts.staticCall(
+          lpAmtFP("10.789506096809951964527651"),
+        );
+        expect(r[0]).to.eq(usdFP("7.299999"));
+        expect(r[1]).to.eq(perpFP("3.465720140"));
       });
     });
   });
@@ -1125,13 +1228,13 @@ describe("BillBroker", function () {
         await billBroker.updateFees({
           mintFeePerc: 0n,
           burnFeePerc: percFP("0.1"),
-          perpToUSDSwapFeePercs: {
-            lower: 0n,
-            upper: 0n,
+          perpToUSDSwapFeeFactors: {
+            lower: percFP("1"),
+            upper: percFP("1"),
           },
-          usdToPerpSwapFeePercs: {
-            lower: 0n,
-            upper: 0n,
+          usdToPerpSwapFeeFactors: {
+            lower: percFP("1"),
+            upper: percFP("1"),
           },
           protocolSwapSharePerc: 0n,
         });
@@ -1165,7 +1268,7 @@ describe("BillBroker", function () {
         await billBroker.swapUSDForPerps(usdFP("115"), 0n);
         expect(await perp.balanceOf(billBroker.target)).to.eq(0n);
 
-        expect(await assetRatio(billBroker)).to.eq(ethers.MaxUint256);
+        expect(await assetRatio(billBroker)).to.eq(ethers.MaxInt256);
 
         const r = await billBroker.computeRedemptionAmts.staticCall(lpAmtFP("100"));
         expect(r[0]).to.eq(usdFP("106.976744"));
@@ -1405,7 +1508,7 @@ describe("BillBroker", function () {
         await billBroker.swapUSDForPerps(usdFP("115"), 0n);
         expect(await perp.balanceOf(billBroker.target)).to.eq(0n);
 
-        expect(await assetRatio(billBroker)).to.eq(ethers.MaxUint256);
+        expect(await assetRatio(billBroker)).to.eq(ethers.MaxInt256);
 
         const perpBal = await perp.balanceOf(await deployer.getAddress());
         await expect(() => billBroker.redeem(lpAmtFP("100"))).to.changeTokenBalance(

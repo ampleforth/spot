@@ -16,6 +16,11 @@ library MathHelpers {
 
     /// @dev Clips a given integer number between provided min and max unsigned integer.
     function clip(int256 n, uint256 min, uint256 max) internal pure returns (uint256) {
-        return Math.min(Math.max((n >= 0) ? n.toUint256() : 0, min), max);
+        return clip(n > 0 ? n.toUint256() : 0, min, max);
+    }
+
+    /// @dev Clips a given unsigned integer between provided min and max unsigned integer.
+    function clip(uint256 n, uint256 min, uint256 max) internal pure returns (uint256) {
+        return Math.min(Math.max(n, min), max);
     }
 }
