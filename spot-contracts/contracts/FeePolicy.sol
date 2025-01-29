@@ -3,13 +3,11 @@ pragma solidity ^0.8.20;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
 import { SubscriptionParams } from "./_interfaces/CommonTypes.sol";
-import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds, InvalidSigmoidAsymptotes } from "./_interfaces/ProtocolErrors.sol";
+import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds } from "./_interfaces/ProtocolErrors.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import { Sigmoid } from "./_utils/Sigmoid.sol";
-
 /**
  *  @title FeePolicy
  *
@@ -39,8 +37,7 @@ import { Sigmoid } from "./_utils/Sigmoid.sol";
  *
  *
  *          The rollover fees are signed and can flow in either direction based on the `deviationRatio`.
- *          The fee is a percentage is computed through a sigmoid function.
- *          The slope and asymptotes are set by the owner.
+ *          The fee function parameters are set by the owner.
  *
  *          CRITICAL: The rollover fee percentage is NOT annualized, the fee percentage is applied per rollover.
  *          The number of rollovers per year changes based on the duration of perp's minting bond.
@@ -54,6 +51,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     // Libraries
     using MathUpgradeable for uint256;
     using SafeCastUpgradeable for uint256;
+    using SafeCastUpgradeable for int256;
 
     // Replicating value used here:
     // https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
@@ -66,10 +64,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @notice Fixed point representation of 1.0 or 100%.
     uint256 public constant ONE = (1 * 10 ** DECIMALS);
-
-    /// @notice Sigmoid asymptote bound.
-    /// @dev Set to 0.05 or 5%, i.e) the rollover fee can be at most 5% on either direction.
-    uint256 public constant SIGMOID_BOUND = ONE / 20;
 
     /// @notice Target subscription ratio lower bound, 0.75 or 75%.
     uint256 public constant TARGET_SR_LOWER_BOUND = (ONE * 75) / 100;
@@ -100,17 +94,28 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice The percentage fee charged on burning perp tokens.
     uint256 public perpBurnFeePerc;
 
-    struct RolloverFeeSigmoidParams {
-        /// @notice Lower asymptote
-        int256 lower;
-        /// @notice Upper asymptote
-        int256 upper;
-        /// @notice sigmoid slope
-        int256 growth;
+    /// @dev NOTE: We updated the type of the parameters from int256 to uint256, which is an upgrade safe operation.
+    struct RolloverFeeParams {
+        /// @notice The maximum debasement rate for perp,
+        ///         i.e) the maximum rate perp pays the vault for rollovers.
+        /// @dev This is represented as fixed point number with {DECIMALS} places.
+        ///      For example, setting this to (0.1 / 13), would mean that the yearly perp debasement rate is capped at ~10%.
+        uint256 maxPerpDebasementPerc;
+        /// @notice The slope of the linear fee curve when (dr <= 1).
+        /// @dev This is represented as fixed point number with {DECIMALS} places.
+        ///      Setting it to (1.0 / 13), would mean that it would take 1 year for dr to increase to 1.0.
+        ///      (assuming no other changes to the system)
+        uint256 m1;
+        /// @notice The slope of the linear fee curve when (dr > 1).
+        /// @dev This is represented as fixed point number with {DECIMALS} places.
+        ///      Setting it to (1.0 / 13), would mean that it would take 1 year for dr to decrease to 1.0.
+        ///      (assuming no other changes to the system)
+        uint256 m2;
     }
 
-    /// @notice Parameters which control the asymptotes and the slope of the perp token's rollover fee.
-    RolloverFeeSigmoidParams public perpRolloverFee;
+    /// @notice Parameters which control the perp rollover fee,
+    ///         i.e) the funding rate for holding perps.
+    RolloverFeeParams public perpRolloverFee;
 
     //-----------------------------------------------------------------------------
 
@@ -151,9 +156,9 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         vaultPerpToUnderlyingSwapFeePerc = ONE;
 
         // NOTE: With the current bond length of 28 days, rollover rate is annualized by dividing by: 365/28 ~= 13
-        perpRolloverFee.lower = -int256(ONE) / (30 * 13); // -0.033/13 = -0.00253 (3.3% annualized)
-        perpRolloverFee.upper = int256(ONE) / (10 * 13); // 0.1/13 = 0.00769 (10% annualized)
-        perpRolloverFee.growth = 5 * int256(ONE); // 5.0
+        perpRolloverFee.maxPerpDebasementPerc = ONE / (10 * 13); // 0.1/13 = 0.0077 (10% annualized)
+        perpRolloverFee.m1 = ONE / (3 * 13); // 0.025
+        perpRolloverFee.m2 = ONE / (3 * 13); // 0.025
 
         targetSubscriptionRatio = (ONE * 133) / 100; // 1.33
         deviationRatioBoundLower = (ONE * 75) / 100; // 0.75
@@ -206,17 +211,11 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         perpBurnFeePerc = perpBurnFeePerc_;
     }
 
-    /// @notice Update the parameters determining the slope and asymptotes of the sigmoid fee curve.
-    /// @param p Lower, Upper and Growth sigmoid paramters are fixed point numbers with {DECIMALS} places.
-    function updatePerpRolloverFees(RolloverFeeSigmoidParams calldata p) external onlyOwner {
-        // If the bond duration is 28 days and 13 rollovers happen per year,
-        // perp can be inflated or enriched up to ~65% annually.
-        if (p.lower < -int256(SIGMOID_BOUND) || p.upper > int256(SIGMOID_BOUND) || p.lower > p.upper) {
-            revert InvalidSigmoidAsymptotes();
-        }
-        perpRolloverFee.lower = p.lower;
-        perpRolloverFee.upper = p.upper;
-        perpRolloverFee.growth = p.growth;
+    /// @notice Update the parameters determining the rollover fee curve.
+    /// @dev Back into the per-rollover percentage based on the bond duration, and thus number of rollovers per year.
+    /// @param p Paramters are fixed point numbers with {DECIMALS} places.
+    function updatePerpRolloverFees(RolloverFeeParams calldata p) external onlyOwner {
+        perpRolloverFee = p;
     }
 
     /// @notice Updates the vault mint fee parameters.
@@ -274,14 +273,16 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @inheritdoc IFeePolicy
     function computePerpRolloverFeePerc(uint256 dr) external view override returns (int256) {
-        return
-            Sigmoid.compute(
-                dr.toInt256(),
-                perpRolloverFee.lower,
-                perpRolloverFee.upper,
-                perpRolloverFee.growth,
-                ONE.toInt256()
+        if (dr <= ONE) {
+            uint256 negPerpRate = MathUpgradeable.min(
+                perpRolloverFee.m1.mulDiv(ONE - dr, ONE),
+                perpRolloverFee.maxPerpDebasementPerc
             );
+            return -1 * negPerpRate.toInt256();
+        } else {
+            uint256 perpRate = perpRolloverFee.m2.mulDiv(dr - ONE, ONE);
+            return perpRate.toInt256();
+        }
     }
 
     /// @inheritdoc IFeePolicy
