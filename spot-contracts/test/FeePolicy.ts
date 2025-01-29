@@ -165,7 +165,7 @@ describe("FeePolicy", function () {
       it("should revert", async function () {
         await expect(
           feePolicy.connect(otherUser).updatePerpRolloverFees({
-            perpDebasementLim: toPerc("0.01"),
+            maxPerpDebasementPerc: toPerc("0.01"),
             m1: toPerc("0.01"),
             m2: toPerc("0.01"),
           }),
@@ -176,12 +176,12 @@ describe("FeePolicy", function () {
     describe("when triggered by owner", function () {
       it("should update parameters", async function () {
         await feePolicy.connect(deployer).updatePerpRolloverFees({
-          perpDebasementLim: toPerc("0.01"),
+          maxPerpDebasementPerc: toPerc("0.01"),
           m1: toPerc("0.02"),
           m2: toPerc("0.03"),
         });
         const p = await feePolicy.perpRolloverFee();
-        expect(p.perpDebasementLim).to.eq(toPerc("0.01"));
+        expect(p.maxPerpDebasementPerc).to.eq(toPerc("0.01"));
         expect(p.m1).to.eq(toPerc("0.02"));
         expect(p.m2).to.eq(toPerc("0.03"));
       });
@@ -304,7 +304,7 @@ describe("FeePolicy", function () {
       await feePolicy.updatePerpMintFees(toPerc("0.025"));
       await feePolicy.updatePerpBurnFees(toPerc("0.035"));
       await feePolicy.updatePerpRolloverFees({
-        perpDebasementLim: toPerc("0.1"),
+        maxPerpDebasementPerc: toPerc("0.1"),
         m1: toPerc("0.3"),
         m2: toPerc("0.6"),
       });

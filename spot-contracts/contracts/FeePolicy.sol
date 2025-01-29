@@ -94,13 +94,22 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice The percentage fee charged on burning perp tokens.
     uint256 public perpBurnFeePerc;
 
+    /// @dev NOTE: We updated the type of the parameters from int256 to uint256, which is an upgrade safe operation.
     struct RolloverFeeParams {
         /// @notice The maximum debasement rate for perp,
         ///         i.e) the maximum rate perp pays the vault for rollovers.
-        uint256 perpDebasementLim;
+        /// @dev This is represented as fixed point number with {DECIMALS} places.
+        ///      For example, setting this to (0.1 / 13), would mean that the yearly perp debasement rate is capped at ~10%.
+        uint256 maxPerpDebasementPerc;
         /// @notice The slope of the linear fee curve when (dr <= 1).
+        /// @dev This is represented as fixed point number with {DECIMALS} places.
+        ///      Setting it to (1.0 / 13), would mean that it would take 1 year for dr to increase to 1.0.
+        ///      (assuming no other changes to the system)
         uint256 m1;
         /// @notice The slope of the linear fee curve when (dr > 1).
+        /// @dev This is represented as fixed point number with {DECIMALS} places.
+        ///      Setting it to (1.0 / 13), would mean that it would take 1 year for dr to decrease to 1.0.
+        ///      (assuming no other changes to the system)
         uint256 m2;
     }
 
@@ -147,7 +156,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         vaultPerpToUnderlyingSwapFeePerc = ONE;
 
         // NOTE: With the current bond length of 28 days, rollover rate is annualized by dividing by: 365/28 ~= 13
-        perpRolloverFee.perpDebasementLim = ONE / (10 * 13); // 0.1/13 = 0.0077 (10% annualized)
+        perpRolloverFee.maxPerpDebasementPerc = ONE / (10 * 13); // 0.1/13 = 0.0077 (10% annualized)
         perpRolloverFee.m1 = ONE / (3 * 13); // 0.025
         perpRolloverFee.m2 = ONE / (3 * 13); // 0.025
 
@@ -203,6 +212,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @notice Update the parameters determining the rollover fee curve.
+    /// @dev Back into the per-rollover percentage based on the bond duration, and thus number of rollovers per year.
     /// @param p Paramters are fixed point numbers with {DECIMALS} places.
     function updatePerpRolloverFees(RolloverFeeParams calldata p) external onlyOwner {
         perpRolloverFee = p;
@@ -264,11 +274,11 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @inheritdoc IFeePolicy
     function computePerpRolloverFeePerc(uint256 dr) external view override returns (int256) {
         if (dr <= ONE) {
-            uint256 perpRate = MathUpgradeable.min(
+            uint256 negPerpRate = MathUpgradeable.min(
                 perpRolloverFee.m1.mulDiv(ONE - dr, ONE),
-                perpRolloverFee.perpDebasementLim
+                perpRolloverFee.maxPerpDebasementPerc
             );
-            return -1 * perpRate.toInt256();
+            return -1 * negPerpRate.toInt256();
         } else {
             uint256 perpRate = perpRolloverFee.m2.mulDiv(dr - ONE, ONE);
             return perpRate.toInt256();
