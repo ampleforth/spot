@@ -24,9 +24,13 @@ describe("FeePolicy", function () {
 
   describe("#init", function () {
     it("should return the initial parameters", async function () {
-      expect(await feePolicy.targetSubscriptionRatio()).to.eq(toPerc("1.33"));
-      expect(await feePolicy.deviationRatioBoundLower()).to.eq(toPerc("0.75"));
-      expect(await feePolicy.deviationRatioBoundUpper()).to.eq(toPerc("2"));
+      expect(await feePolicy.targetSubscriptionRatio()).to.eq(toPerc("1.5"));
+      expect(await feePolicy.deviationRatioBoundLower()).to.eq(toPerc("0.9"));
+      expect(await feePolicy.deviationRatioBoundUpper()).to.eq(toPerc("4"));
+      const r = await feePolicy.perpRolloverFee();
+      expect(await r.minRolloverFeePerc).to.eq(toPerc("-0.07692307"));
+      expect(await r.perpDebasementSlope).to.eq(toPerc("0.07692307"));
+      expect(await r.perpEnrichmentSlope).to.eq(toPerc("0.07692307"));
     });
     it("should return owner", async function () {
       expect(await feePolicy.owner()).to.eq(await deployer.getAddress());
@@ -63,7 +67,7 @@ describe("FeePolicy", function () {
 
     describe("when triggered by owner", function () {
       it("should update the target sr", async function () {
-        expect(await feePolicy.targetSubscriptionRatio()).to.eq(toPerc("1.33"));
+        expect(await feePolicy.targetSubscriptionRatio()).to.eq(toPerc("1.5"));
         await feePolicy.connect(deployer).updateTargetSubscriptionRatio(toPerc("1.25"));
         expect(await feePolicy.targetSubscriptionRatio()).to.eq(toPerc("1.25"));
       });
@@ -97,8 +101,8 @@ describe("FeePolicy", function () {
 
     describe("when triggered by owner", function () {
       it("should update the target sr", async function () {
-        expect(await feePolicy.deviationRatioBoundLower()).to.eq(toPerc("0.75"));
-        expect(await feePolicy.deviationRatioBoundUpper()).to.eq(toPerc("2"));
+        expect(await feePolicy.deviationRatioBoundLower()).to.eq(toPerc("0.9"));
+        expect(await feePolicy.deviationRatioBoundUpper()).to.eq(toPerc("4"));
         await feePolicy.connect(deployer).updateDeviationRatioBounds(toPerc("0.5"), toPerc("1.5"));
         expect(await feePolicy.deviationRatioBoundLower()).to.eq(toPerc("0.5"));
         expect(await feePolicy.deviationRatioBoundUpper()).to.eq(toPerc("1.5"));
@@ -165,9 +169,9 @@ describe("FeePolicy", function () {
       it("should revert", async function () {
         await expect(
           feePolicy.connect(otherUser).updatePerpRolloverFees({
-            maxPerpDebasementPerc: toPerc("0.01"),
-            m1: toPerc("0.01"),
-            m2: toPerc("0.01"),
+            minRolloverFeePerc: toPerc("-0.01"),
+            perpDebasementSlope: toPerc("0.01"),
+            perpEnrichmentSlope: toPerc("0.01"),
           }),
         ).to.be.revertedWith("Ownable: caller is not the owner");
       });
@@ -176,14 +180,14 @@ describe("FeePolicy", function () {
     describe("when triggered by owner", function () {
       it("should update parameters", async function () {
         await feePolicy.connect(deployer).updatePerpRolloverFees({
-          maxPerpDebasementPerc: toPerc("0.01"),
-          m1: toPerc("0.02"),
-          m2: toPerc("0.03"),
+          minRolloverFeePerc: toPerc("-0.01"),
+          perpDebasementSlope: toPerc("0.02"),
+          perpEnrichmentSlope: toPerc("0.03"),
         });
         const p = await feePolicy.perpRolloverFee();
-        expect(p.maxPerpDebasementPerc).to.eq(toPerc("0.01"));
-        expect(p.m1).to.eq(toPerc("0.02"));
-        expect(p.m2).to.eq(toPerc("0.03"));
+        expect(p.minRolloverFeePerc).to.eq(toPerc("-0.01"));
+        expect(p.perpDebasementSlope).to.eq(toPerc("0.02"));
+        expect(p.perpEnrichmentSlope).to.eq(toPerc("0.03"));
       });
     });
   });
@@ -304,9 +308,9 @@ describe("FeePolicy", function () {
       await feePolicy.updatePerpMintFees(toPerc("0.025"));
       await feePolicy.updatePerpBurnFees(toPerc("0.035"));
       await feePolicy.updatePerpRolloverFees({
-        maxPerpDebasementPerc: toPerc("0.1"),
-        m1: toPerc("0.3"),
-        m2: toPerc("0.6"),
+        minRolloverFeePerc: toPerc("-0.8"),
+        perpDebasementSlope: toPerc("1"),
+        perpEnrichmentSlope: toPerc("2"),
       });
       await feePolicy.updateVaultUnderlyingToPerpSwapFeePerc(toPerc("0.1"));
       await feePolicy.updateVaultPerpToUnderlyingSwapFeePerc(toPerc("0.15"));
@@ -447,25 +451,25 @@ describe("FeePolicy", function () {
 
     describe("rollover fee", function () {
       it("should compute fees as expected", async function () {
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0"))).to.eq(toPerc("-0.1"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.01"))).to.eq(toPerc("-0.1"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.25"))).to.eq(toPerc("-0.1"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.5"))).to.eq(toPerc("-0.1"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.66"))).to.eq(toPerc("-0.1"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.7"))).to.eq(toPerc("-0.09"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.8"))).to.eq(toPerc("-0.06"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.9"))).to.eq(toPerc("-0.03"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.99"))).to.eq(toPerc("-0.003"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0"))).to.eq(toPerc("-0.8"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.01"))).to.eq(toPerc("-0.8"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.25"))).to.eq(toPerc("-0.75"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.5"))).to.eq(toPerc("-0.5"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.66"))).to.eq(toPerc("-0.34"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.7"))).to.eq(toPerc("-0.3"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.8"))).to.eq(toPerc("-0.2"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.9"))).to.eq(toPerc("-0.1"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.99"))).to.eq(toPerc("-0.01"));
         expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1"))).to.eq("0");
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.01"))).to.eq(toPerc("0.006"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.05"))).to.eq(toPerc("0.03"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.1"))).to.eq(toPerc("0.06"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.25"))).to.eq(toPerc("0.15"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.5"))).to.eq(toPerc("0.3"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.75"))).to.eq(toPerc("0.45"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("2"))).to.eq(toPerc("0.6"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("5"))).to.eq(toPerc("2.4"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("10"))).to.eq(toPerc("5.4"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.01"))).to.eq(toPerc("0.02"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.05"))).to.eq(toPerc("0.1"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.1"))).to.eq(toPerc("0.2"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.25"))).to.eq(toPerc("0.5"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.5"))).to.eq(toPerc("1"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.75"))).to.eq(toPerc("1.5"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("2"))).to.eq(toPerc("2"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("5"))).to.eq(toPerc("8"));
+        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("10"))).to.eq(toPerc("18"));
       });
     });
   });
