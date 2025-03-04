@@ -34,6 +34,9 @@ error OutOfBounds();
 /// @notice Expected the number of reserve assets to be under the limit.
 error ReserveCountOverLimit();
 
+/// @notice Expected range to be non-decreasing.
+error InvalidRange();
+
 //-------------------------------------------------------------------------
 // Perp
 
