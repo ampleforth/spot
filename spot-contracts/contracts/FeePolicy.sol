@@ -6,6 +6,7 @@ import { SubscriptionParams } from "./_interfaces/CommonTypes.sol";
 import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds } from "./_interfaces/ProtocolErrors.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
+import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 /**
@@ -100,6 +101,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         /// @dev This is represented as signed fixed point number with {DECIMALS} places.
         ///      The rollover fee percentage returned by the fee policy will be no lower than
         ///      this specified value.
+        ///      The parameter effectively controls perp's maximum debasement amount.
         int256 minRolloverFeePerc;
         /// @notice The slope of the linear rollover fee curve when (dr <= 1).
         /// @dev This is represented as fixed point number with {DECIMALS} places.
@@ -276,16 +278,19 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     function computePerpRolloverFeePerc(uint256 dr) external view override returns (int256 rolloverFeePerc) {
         RolloverFeeParams memory c = perpRolloverFee;
         if (dr <= ONE) {
-            // NOTE: when the vault is under-subscribed, only part of perp's collateral is rolled over.
-            uint256 sr = MathUpgradeable.min(dr * targetSubscriptionRatio, ONE);
-            uint256 negRolloverFeePerc = sr > 0
-                ? (ONE - dr).mulDiv(c.perpDebasementSlope, sr, MathUpgradeable.Rounding.Up)
+            // The cappedSr is the essentially the percentage of perp's collateral which can be rolled over
+            // given the vault's current liquidity level.
+            // Said simply, if cappedSr is 0.5 only 50% of the perp's collateral can be rolled over.
+            // If cappedSr is 1.0, all of perp's collateral can be rolled over.
+            uint256 cappedSr = MathUpgradeable.min(dr * targetSubscriptionRatio, ONE);
+            uint256 negRolloverFeePerc = cappedSr > 0
+                ? (ONE - dr).mulDiv(c.perpDebasementSlope, cappedSr, MathUpgradeable.Rounding.Up)
                 : c.perpDebasementSlope;
-            rolloverFeePerc = -1 * negRolloverFeePerc.toInt256();
+            rolloverFeePerc = -negRolloverFeePerc.toInt256();
         } else {
             rolloverFeePerc = (dr - ONE).mulDiv(c.perpEnrichmentSlope, ONE).toInt256();
         }
-        rolloverFeePerc = (rolloverFeePerc > c.minRolloverFeePerc) ? rolloverFeePerc : c.minRolloverFeePerc;
+        rolloverFeePerc = SignedMathUpgradeable.max(rolloverFeePerc, c.minRolloverFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
