@@ -6,6 +6,7 @@ import { SubscriptionParams } from "./_interfaces/CommonTypes.sol";
 import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds } from "./_interfaces/ProtocolErrors.sol";
 
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
+import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 /**
@@ -96,21 +97,22 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @dev NOTE: We updated the type of the parameters from int256 to uint256, which is an upgrade safe operation.
     struct RolloverFeeParams {
-        /// @notice The maximum debasement rate for perp,
-        ///         i.e) the maximum rate perp pays the vault for rollovers.
+        /// @notice The minimum rollover fee percentage enforced by the contract.
+        /// @dev This is represented as signed fixed point number with {DECIMALS} places.
+        ///      The rollover fee percentage returned by the fee policy will be no lower than
+        ///      this specified value.
+        ///      The parameter effectively controls perp's maximum debasement amount.
+        int256 minRolloverFeePerc;
+        /// @notice The slope of the linear rollover fee curve when (dr <= 1).
         /// @dev This is represented as fixed point number with {DECIMALS} places.
-        ///      For example, setting this to (0.1 / 13), would mean that the yearly perp debasement rate is capped at ~10%.
-        uint256 maxPerpDebasementPerc;
-        /// @notice The slope of the linear fee curve when (dr <= 1).
-        /// @dev This is represented as fixed point number with {DECIMALS} places.
-        ///      Setting it to (1.0 / 13), would mean that it would take 1 year for dr to increase to 1.0.
+        ///      Setting it to say (28 / 365), given a 28 day bond cycle it would take 1 year for dr to increase to 1.0.
         ///      (assuming no other changes to the system)
-        uint256 m1;
-        /// @notice The slope of the linear fee curve when (dr > 1).
+        uint256 perpDebasementSlope;
+        /// @notice The slope of the linear rollover fee curve when (dr > 1).
         /// @dev This is represented as fixed point number with {DECIMALS} places.
-        ///      Setting it to (1.0 / 13), would mean that it would take 1 year for dr to decrease to 1.0.
+        ///      Setting it to say (28 / 365), given a 28 day bond cycle it would take 1 year for dr to decrease to 1.0.
         ///      (assuming no other changes to the system)
-        uint256 m2;
+        uint256 perpEnrichmentSlope;
     }
 
     /// @notice Parameters which control the perp rollover fee,
@@ -155,14 +157,15 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         vaultUnderlyingToPerpSwapFeePerc = ONE;
         vaultPerpToUnderlyingSwapFeePerc = ONE;
 
-        // NOTE: With the current bond length of 28 days, rollover rate is annualized by dividing by: 365/28 ~= 13
-        perpRolloverFee.maxPerpDebasementPerc = ONE / (10 * 13); // 0.1/13 = 0.0077 (10% annualized)
-        perpRolloverFee.m1 = ONE / (3 * 13); // 0.025
-        perpRolloverFee.m2 = ONE / (3 * 13); // 0.025
+        // NOTE: With the current bond length of 28 days,
+        // rollover fee percentages are annualized by dividing by: 365/28 ~= 13
+        perpRolloverFee.minRolloverFeePerc = -int256(ONE) / 13; // 0.077 (-100% annualized)
+        perpRolloverFee.perpDebasementSlope = ONE / 13; // 0.077
+        perpRolloverFee.perpEnrichmentSlope = ONE / 13; // 0.077
 
-        targetSubscriptionRatio = (ONE * 133) / 100; // 1.33
-        deviationRatioBoundLower = (ONE * 75) / 100; // 0.75
-        deviationRatioBoundUpper = 2 * ONE; // 2.0
+        targetSubscriptionRatio = (ONE * 150) / 100; // 1.5
+        deviationRatioBoundLower = (ONE * 90) / 100; // 0.9
+        deviationRatioBoundUpper = 4 * ONE; // 4.0
     }
 
     //-----------------------------------------------------------------------------
@@ -272,17 +275,22 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computePerpRolloverFeePerc(uint256 dr) external view override returns (int256) {
+    function computePerpRolloverFeePerc(uint256 dr) external view override returns (int256 rolloverFeePerc) {
+        RolloverFeeParams memory c = perpRolloverFee;
         if (dr <= ONE) {
-            uint256 negPerpRate = MathUpgradeable.min(
-                perpRolloverFee.m1.mulDiv(ONE - dr, ONE),
-                perpRolloverFee.maxPerpDebasementPerc
-            );
-            return -1 * negPerpRate.toInt256();
+            // The cappedSr is the essentially the percentage of perp's collateral which can be rolled over
+            // given the vault's current liquidity level.
+            // Said simply, if cappedSr is 0.5 only 50% of the perp's collateral can be rolled over.
+            // If cappedSr is 1.0, all of perp's collateral can be rolled over.
+            uint256 cappedSr = MathUpgradeable.min(dr * targetSubscriptionRatio, ONE);
+            uint256 negRolloverFeePerc = cappedSr > 0
+                ? (ONE - dr).mulDiv(c.perpDebasementSlope, cappedSr, MathUpgradeable.Rounding.Up)
+                : c.perpDebasementSlope;
+            rolloverFeePerc = -negRolloverFeePerc.toInt256();
         } else {
-            uint256 perpRate = perpRolloverFee.m2.mulDiv(dr - ONE, ONE);
-            return perpRate.toInt256();
+            rolloverFeePerc = (dr - ONE).mulDiv(c.perpEnrichmentSlope, ONE).toInt256();
         }
+        rolloverFeePerc = SignedMathUpgradeable.max(rolloverFeePerc, c.minRolloverFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
