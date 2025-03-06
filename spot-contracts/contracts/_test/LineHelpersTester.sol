@@ -2,10 +2,9 @@
 pragma solidity ^0.8.20;
 
 import { LineHelpers } from "../_utils/LineHelpers.sol";
-import { Line } from "../_interfaces/CommonTypes.sol";
+import { Line, Range } from "../_interfaces/CommonTypes.sol";
 
 contract LineHelpersTester {
-    // Expose the library functions as public wrappers for testing.
     function computePiecewiseAvgY(
         Line memory fn1,
         Line memory fn2,

@@ -23,7 +23,7 @@ library LineHelpers {
      *      If the x-range spans `xBreakPt`, it computes a weighted average of the two sub-ranges, weighted by their lengths.
      * @param fn1 The linear function used for x-values below `xBreakPt`.
      * @param fn2 The linear function used for x-values above or equal to `xBreakPt`.
-     * @param xRange The x-range over which to compute the average. Expected to have `lower` and `upper` bounds.
+     * @param xRange The x-range over which to compute the average.
      * @param xBreakPt The x-coordinate where the piecewise function transitions from `fn1` to `fn2`.
      * @return yVal The computed weighted average y-value over the x-range.
      */
@@ -36,6 +36,7 @@ library LineHelpers {
         if (xRange.lower > xRange.upper) {
             revert InvalidRange();
         }
+
         if (xRange.upper <= xBreakPt) {
             // Entire range is below the breakpoint.
             yVal = avgY(fn1, xRange.lower, xRange.upper);
