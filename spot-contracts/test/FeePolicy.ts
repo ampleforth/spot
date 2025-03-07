@@ -1,10 +1,8 @@
-import { expect, use } from "chai";
+import { expect } from "chai";
 import { ethers, upgrades } from "hardhat";
 import { Contract, Signer } from "ethers";
-import { smock } from "@defi-wonderland/smock";
 
 import { toPercFixedPtAmt, toFixedPtAmt } from "./helpers";
-use(smock.matchers);
 
 let feePolicy: Contract, deployer: Signer, otherUser: Signer;
 const toPerc = toPercFixedPtAmt;

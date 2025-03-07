@@ -12,7 +12,6 @@ task("deploy:MockAMPL")
 
     const UFragments = await getContractFactoryFromExternalArtifacts(hre.ethers, "UFragments");
     const ampl = (await UFragments.connect(signer).deploy()).connect(signer);
-    await ampl.deployed();
 
     const tx1 = await ampl["initialize(address)"](signerAddress);
     await tx1.wait();
@@ -23,7 +22,7 @@ task("deploy:MockAMPL")
     if (args.verify) {
       try {
         await hre.run("verify:contract", {
-          address: ampl.address,
+          address: ampl.target,
         });
       } catch (e) {
         console.log("Unable to verify on etherscan", e);
@@ -32,5 +31,5 @@ task("deploy:MockAMPL")
       console.log("Skipping verification");
     }
 
-    console.log("AMPL", ampl.address);
+    console.log("AMPL", ampl.target);
   });

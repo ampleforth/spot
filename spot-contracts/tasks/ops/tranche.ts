@@ -10,7 +10,7 @@ async function matureBond(bond: Contract, signer: Signer) {
   }
   try {
     console.log("Invoking Mature");
-    await bond.connect(signer).callStatic.mature();
+    await bond.connect(signer).mature.staticCall();
     const tx = await bond.connect(signer).mature();
     await tx.wait();
     console.log("Tx:", tx.hash);
@@ -103,8 +103,8 @@ task("ops:redeemTranches")
         for (let j = 0; j < bt.length; j++) {
           const b = await bt[j][0].balanceOf(signerAddress);
           if (b.gt(0)) {
-            console.log("Redeeming mature tranche", bt[j][0].address);
-            const tx = await bond.connect(signer).redeemMature(bt[j][0].address, b);
+            console.log("Redeeming mature tranche", bt[j][0].target);
+            const tx = await bond.connect(signer).redeemMature(bt[j][0].target, b);
             await tx.wait();
             console.log("Tx:", tx.hash);
           }
@@ -133,9 +133,9 @@ task("ops:preview_tx:redeemTranches")
     const txs: ProposedTransaction[] = [];
     const bondIssuer = await hre.ethers.getContractAt("BondIssuer", bondIssuerAddress);
 
-    const issuedCount = await bondIssuer.callStatic.issuedCount();
+    const issuedCount = await bondIssuer.issuedCount.staticCall();
     for (let i = issuedCount - 1; i > 0 && issuedCount - 1 - i < depth; i--) {
-      const bondAddress = await bondIssuer.callStatic.issuedBondAt(i);
+      const bondAddress = await bondIssuer.issuedBondAt.staticCall(i);
       const bond = await hre.ethers.getContractAt("IBondController", bondAddress);
 
       const bt = await getTranches(hre, bond);
@@ -148,7 +148,7 @@ task("ops:preview_tx:redeemTranches")
             txs.push({
               contract: bond,
               method: "redeemMature",
-              args: [bt[j][0].address, b.toString()],
+              args: [bt[j][0].target, b.toString()],
             });
           }
         }
@@ -168,7 +168,7 @@ task("ops:preview_tx:redeemTranches")
     console.log("Execute the following transactions");
 
     for (let i = 0; i < txs.length; i++) {
-      console.log({ to: txs[i].contract.address, method: txs[i].method, args: txs[i].args });
+      console.log({ to: txs[i].contract.target, method: txs[i].method, args: txs[i].args });
     }
 
     console.log("Wrote tx batch to file:", "RedeemBatch.json");

@@ -20,7 +20,6 @@ describe("LineHelpers", function () {
   before(async function () {
     const TestFactory = await ethers.getContractFactory("LineHelpersTester");
     lineHelpersTest = await TestFactory.deploy();
-    await lineHelpersTest.deployed();
   });
 
   describe("computePiecewiseAvgY", function () {

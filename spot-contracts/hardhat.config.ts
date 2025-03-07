@@ -1,7 +1,7 @@
 import { HardhatUserConfig } from "hardhat/config";
 import { Wallet } from "ethers";
 
-import "@nomiclabs/hardhat-ethers";
+import "@nomicfoundation/hardhat-ethers";
 import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomicfoundation/hardhat-verify";
 import "@openzeppelin/hardhat-upgrades";

@@ -1,7 +1,6 @@
 import { getAdminAddress, getImplementationAddress } from "@openzeppelin/upgrades-core";
 import { task, types } from "hardhat/config";
 import { TaskArguments } from "hardhat/types";
-import { utils } from "ethers";
 
 task("ops:perp:info")
   .addPositionalParam("perpAddress", "the address of the perp contract", undefined, types.string, false)
@@ -13,90 +12,90 @@ task("ops:perp:info")
     const percDecimals = await perp.PERC_DECIMALS();
 
     const bondIssuer = await hre.ethers.getContractAt("BondIssuer", await perp.bondIssuer());
-    const latestBond = await hre.ethers.getContractAt("IBondController", await bondIssuer.callStatic.getLatestBond());
+    const latestBond = await hre.ethers.getContractAt("IBondController", await bondIssuer.getLatestBond.staticCall());
 
     const collateralToken = await hre.ethers.getContractAt("MockERC20", await perp.underlying());
     const feePolicy = await hre.ethers.getContractAt("FeePolicy", await perp.feePolicy());
-    const depositBond = await hre.ethers.getContractAt("IBondController", await perp.callStatic.getDepositBond());
-    const issued = (await hre.ethers.provider.getCode(depositBond.address)) !== "0x";
+    const depositBond = await hre.ethers.getContractAt("IBondController", await perp.getDepositBond.staticCall());
+    const issued = (await hre.ethers.provider.getCode(depositBond.target)) !== "0x";
     const perpSupply = await perp.totalSupply();
-    const perpTVL = await perp.callStatic.getTVL();
-    const perpPrice = perpSupply.gt("0") ? perpTVL.mul(1000).div(perpSupply) : 0;
+    const perpTVL = await perp.getTVL.staticCall();
+    const perpPrice = perpSupply > 0n ? (perpTVL * 1000n) / perpSupply : 0;
     const proxyAdminAddress = await getAdminAddress(hre.ethers.provider, perpAddress);
     const implAddress = await getImplementationAddress(hre.ethers.provider, perpAddress);
 
     console.log("---------------------------------------------------------------");
-    console.log("BondIssuer:", bondIssuer.address);
+    console.log("BondIssuer:", bondIssuer.target);
     console.log("bondFactory:", await bondIssuer.bondFactory());
     console.log("collateral:", await bondIssuer.collateral());
-    console.log("issuedCount:", utils.formatUnits(await bondIssuer.issuedCount()), 0);
-    console.log("maxMaturityDuration:", utils.formatUnits(await bondIssuer.maxMaturityDuration(), 0));
-    console.log("minIssueTimeIntervalSec:", utils.formatUnits(await bondIssuer.minIssueTimeIntervalSec(), 0));
-    console.log("issueWindowOffsetSec:", utils.formatUnits(await bondIssuer.issueWindowOffsetSec(), 0));
+    console.log("issuedCount:", hre.ethers.formatUnits(await bondIssuer.issuedCount()), 0);
+    console.log("maxMaturityDuration:", hre.ethers.formatUnits(await bondIssuer.maxMaturityDuration(), 0));
+    console.log("minIssueTimeIntervalSec:", hre.ethers.formatUnits(await bondIssuer.minIssueTimeIntervalSec(), 0));
+    console.log("issueWindowOffsetSec:", hre.ethers.formatUnits(await bondIssuer.issueWindowOffsetSec(), 0));
     let i = 0;
     while (true) {
       try {
-        console.log(`trancheRatios(${i}):`, utils.formatUnits(await bondIssuer.trancheRatios(i), 3));
+        console.log(`trancheRatios(${i}):`, hre.ethers.formatUnits(await bondIssuer.trancheRatios(i), 3));
         i++;
       } catch (e) {
         break;
       }
     }
-    console.log("lastIssueWindowTimestamp:", utils.formatUnits(await bondIssuer.lastIssueWindowTimestamp(), 0));
-    console.log("latestBond:", latestBond.address);
+    console.log("lastIssueWindowTimestamp:", hre.ethers.formatUnits(await bondIssuer.lastIssueWindowTimestamp(), 0));
+    console.log("latestBond:", latestBond.target);
 
     console.log("---------------------------------------------------------------");
-    console.log("feePolicy:", feePolicy.address);
+    console.log("feePolicy:", feePolicy.target);
     console.log("owner", await feePolicy.owner());
-    console.log("perpMintFeePerc:", utils.formatUnits(await feePolicy.perpMintFeePerc(), percDecimals));
-    console.log("perpBurnFeePerc:", utils.formatUnits(await feePolicy.perpBurnFeePerc(), percDecimals));
+    console.log("perpMintFeePerc:", hre.ethers.formatUnits(await feePolicy.perpMintFeePerc(), percDecimals));
+    console.log("perpBurnFeePerc:", hre.ethers.formatUnits(await feePolicy.perpBurnFeePerc(), percDecimals));
     const r = await feePolicy.perpRolloverFee();
-    console.log("perpRolloverFeeLower:", utils.formatUnits(r.lower, percDecimals));
-    console.log("perpRolloverFeeUpper:", utils.formatUnits(r.upper, percDecimals));
-    console.log("perpRolloverFeeGrowth:", utils.formatUnits(r.growth, percDecimals));
+    console.log("minRolloverFeePerc:", hre.ethers.formatUnits(r.minRolloverFeePerc, percDecimals));
+    console.log("perpDebasementSlope:", hre.ethers.formatUnits(r.perpDebasementSlope, percDecimals));
+    console.log("perpEnrichmentSlope:", hre.ethers.formatUnits(r.perpEnrichmentSlope, percDecimals));
 
     console.log("---------------------------------------------------------------");
-    console.log("PerpetualTranche:", perp.address);
+    console.log("PerpetualTranche:", perp.target);
     console.log("proxyAdmin:", proxyAdminAddress);
     console.log("implementation:", implAddress);
     console.log("owner:", await perp.owner());
     console.log("keeper:", await perp.keeper());
     console.log("paused:", await perp.paused());
-    console.log("collateralToken:", collateralToken.address);
+    console.log("collateralToken:", collateralToken.target);
     console.log("---------------------------------------------------------------");
     console.log(`maturityTolarance: [${await perp.minTrancheMaturitySec()}, ${await perp.maxTrancheMaturitySec()}]`);
-    console.log("maxSupply:", utils.formatUnits(await perp.maxSupply(), await perp.decimals()));
+    console.log("maxSupply:", hre.ethers.formatUnits(await perp.maxSupply(), await perp.decimals()));
     console.log(
       "maxDepositTrancheValuePerc:",
-      utils.formatUnits(await perp.maxDepositTrancheValuePerc(), percDecimals),
+      hre.ethers.formatUnits(await perp.maxDepositTrancheValuePerc(), percDecimals),
     );
     console.log("---------------------------------------------------------------");
-    console.log("depositBond:", depositBond.address);
+    console.log("depositBond:", depositBond.target);
     console.log("issued:", issued);
-    console.log("TotalSupply:", utils.formatUnits(perpSupply, perpDecimals));
-    console.log("TVL:", utils.formatUnits(perpTVL, perpDecimals));
-    console.log("deviationRatio:", utils.formatUnits(await perp.callStatic.deviationRatio(), percDecimals));
+    console.log("TotalSupply:", hre.ethers.formatUnits(perpSupply, perpDecimals));
+    console.log("TVL:", hre.ethers.formatUnits(perpTVL, perpDecimals));
+    console.log("deviationRatio:", hre.ethers.formatUnits(await perp.deviationRatio.staticCall(), percDecimals));
     console.log("---------------------------------------------------------------");
     console.log("Reserve:");
-    const reserveCount = (await perp.callStatic.getReserveCount()).toNumber();
-    const upForRollover = await perp.callStatic.getReserveTokensUpForRollover();
+    const reserveCount = await perp.getReserveCount.staticCall();
+    const upForRollover = await perp.getReserveTokensUpForRollover.staticCall();
     const data = [];
     for (let i = 0; i < reserveCount; i++) {
-      const tokenAddress = await perp.callStatic.getReserveAt(i);
-      const balance = await perp.callStatic.getReserveTokenBalance(tokenAddress);
-      const value = await perp.callStatic.getReserveTokenValue(tokenAddress);
-      const price = balance.gt("0") ? value.mul(1000).div(balance) : 0;
+      const tokenAddress = await perp.getReserveAt.staticCall(i);
+      const balance = await perp.getReserveTokenBalance.staticCall(tokenAddress);
+      const value = await perp.getReserveTokenValue.staticCall(tokenAddress);
+      const price = balance > 0n ? (value * balance * 1000) / 10n ** perpDecimals / 10n ** percDecimals : 0n;
       data.push({
         token: tokenAddress,
-        balance: utils.formatUnits(balance, await perp.decimals()),
-        price: utils.formatUnits(price, 3),
-        upForRollover: balance.gt("0") && upForRollover.find(t => t === tokenAddress) !== undefined,
+        balance: hre.ethers.formatUnits(balance, await perp.decimals()),
+        price: hre.ethers.formatUnits(price, 3),
+        upForRollover: balance > 0n && upForRollover.find(t => t === tokenAddress) !== undefined,
       });
     }
     console.table(data);
 
     console.log("reserveCount:", reserveCount);
-    console.log("price:", utils.formatUnits(perpPrice, 3));
+    console.log("price:", hre.ethers.formatUnits(perpPrice, 3));
     console.log("---------------------------------------------------------------");
   });
 
@@ -190,9 +189,9 @@ task("ops:perp:trancheAndDeposit")
     const bondIssuer = await hre.ethers.getContractAt("BondIssuer", await perp.bondIssuer());
     const collateralToken = await hre.ethers.getContractAt("MockERC20", await bondIssuer.collateral());
 
-    const fixedPtCollateralAmount = utils.parseUnits(collateralAmount, await collateralToken.decimals());
-    const [depositBondAddress, depositTranches] = await router.callStatic.previewTranche(
-      perp.address,
+    const fixedPtCollateralAmount = hre.ethers.parseUnits(collateralAmount, await collateralToken.decimals());
+    const [depositBondAddress, depositTranches] = await router.previewTranche.staticCall(
+      perp.target,
       fixedPtCollateralAmount,
     );
     console.log(depositBondAddress, depositTranches);
@@ -202,18 +201,18 @@ task("ops:perp:trancheAndDeposit")
     console.log(
       "tranches(0):",
       depositTranches[0].token,
-      utils.formatUnits(depositTranches[0].amount.toString(), await collateralToken.decimals()),
+      hre.ethers.formatUnits(depositTranches[0].amount.toString(), await collateralToken.decimals()),
     );
     console.log(
       "tranches(1):",
       depositTranches[1].token,
-      utils.formatUnits(depositTranches[1].amount.toString(), await collateralToken.decimals()),
+      hre.ethers.formatUnits(depositTranches[1].amount.toString(), await collateralToken.decimals()),
     );
 
     console.log("---------------------------------------------------------------");
     console.log("Preview mint:", collateralAmount);
-    const totalMintAmt = await perp.callStatic.computeMintAmt(depositTranches[0].token, depositTranches[0].amount);
-    console.log("mintAmt", utils.formatUnits(totalMintAmt, await perp.decimals()));
+    const totalMintAmt = await perp.computeMintAmt.staticCall(depositTranches[0].token, depositTranches[0].amount);
+    console.log("mintAmt", hre.ethers.formatUnits(totalMintAmt, await perp.decimals()));
     if (totalMintAmt.eq("0")) {
       throw Error("No perp minted");
     }
@@ -225,9 +224,9 @@ task("ops:perp:trancheAndDeposit")
     console.log("Signer", signerAddress);
 
     console.log("Approving router to spend tokens:");
-    const allowance = await collateralToken.allowance(signerAddress, router.address);
+    const allowance = await collateralToken.allowance(signerAddress, router.target);
     if (allowance.lt(fixedPtCollateralAmount)) {
-      const tx1 = await collateralToken.connect(signer).approve(router.address, fixedPtCollateralAmount);
+      const tx1 = await collateralToken.connect(signer).approve(router.target, fixedPtCollateralAmount);
       await tx1.wait();
       console.log("Tx", tx1.hash);
     }
@@ -235,11 +234,11 @@ task("ops:perp:trancheAndDeposit")
     console.log("Tranche and deposit:");
     const tx2 = await router
       .connect(signer)
-      .trancheAndDeposit(perp.address, depositBondAddress, fixedPtCollateralAmount);
+      .trancheAndDeposit(perp.target, depositBondAddress, fixedPtCollateralAmount);
     await tx2.wait();
     console.log("Tx", tx2.hash);
 
-    console.log("Signer balance", utils.formatUnits(await perp.balanceOf(signerAddress), await perp.decimals()));
+    console.log("Signer balance", hre.ethers.formatUnits(await perp.balanceOf(signerAddress), await perp.decimals()));
   });
 
 task("ops:perp:redeem")
@@ -252,18 +251,18 @@ task("ops:perp:redeem")
 
     const router = await hre.ethers.getContractAt("RouterV2", routerAddress);
     const perp = await hre.ethers.getContractAt("PerpetualTranche", perpAddress);
-    const fixedPtAmount = utils.parseUnits(amount, await perp.decimals());
+    const fixedPtAmount = hre.ethers.parseUnits(amount, await perp.decimals());
 
     console.log("---------------------------------------------------------------");
     console.log("Preview redeem:", amount);
-    const reserveTokens = await perp.callStatic.computeRedemptionAmts(fixedPtAmount);
+    const reserveTokens = await perp.computeRedemptionAmts.staticCall(fixedPtAmount);
     console.log("burnAmt", amount);
     console.log("reserve token redeemed");
     for (let i = 0; i < reserveTokens.length; i++) {
       console.log(
         `reserve(${i}):`,
         reserveTokens[i].token,
-        utils.formatUnits(reserveTokens[i].amount.toString(), await perp.decimals()),
+        hre.ethers.formatUnits(reserveTokens[i].amount.toString(), await perp.decimals()),
       );
     }
 
@@ -274,8 +273,8 @@ task("ops:perp:redeem")
     console.log("Signer", signerAddress);
 
     console.log("Approving router to spend tokens:");
-    if ((await perp.allowance(signerAddress, router.address)).lt(fixedPtAmount)) {
-      const tx1 = await perp.connect(signer).approve(router.address, fixedPtAmount);
+    if ((await perp.allowance(signerAddress, router.target)).lt(fixedPtAmount)) {
+      const tx1 = await perp.connect(signer).approve(router.target, fixedPtAmount);
       await tx1.wait();
       console.log("Tx", tx1.hash);
     }
@@ -285,5 +284,5 @@ task("ops:perp:redeem")
     await tx2.wait();
     console.log("Tx", tx2.hash);
 
-    console.log("Signer balance", utils.formatUnits(await perp.balanceOf(signerAddress), await perp.decimals()));
+    console.log("Signer balance", hre.ethers.formatUnits(await perp.balanceOf(signerAddress), await perp.decimals()));
   });
