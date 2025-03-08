@@ -280,7 +280,6 @@ describe("RolloverVault", function () {
 
     describe("when fee is not zero", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpMintFeePerc()", [toPercFixedPtAmt("0.05")]);
         await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [
           toPercFixedPtAmt("0.1"),
         ]);
@@ -288,8 +287,8 @@ describe("RolloverVault", function () {
 
       it("should compute swap amount", async function () {
         const s = await vault.computeUnderlyingToPerpSwapAmt.staticCall(toFixedPtAmt("100"));
-        expect(s[0]).to.eq(toFixedPtAmt("85"));
-        expect(s[1]).to.eq(toFixedPtAmt("5"));
+        expect(s[0]).to.eq(toFixedPtAmt("90"));
+        expect(s[1]).to.eq(toFixedPtAmt("0"));
         expect(s[2].perpTVL).to.eq(toFixedPtAmt("800"));
         expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2000"));
         expect(s[2].seniorTR).to.eq("200");
@@ -332,7 +331,6 @@ describe("RolloverVault", function () {
 
     describe("when fee is 100%", function () {
       it("should be reverted", async function () {
-        await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
         await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [toPercFixedPtAmt("1")]);
         await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("100"))).to.be.revertedWithCustomError(
           vault,
@@ -343,7 +341,6 @@ describe("RolloverVault", function () {
 
     describe("when fee is greater than 100%", function () {
       it("should be reverted", async function () {
-        await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
         await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [
           toPercFixedPtAmt("1.01"),
         ]);
@@ -411,10 +408,9 @@ describe("RolloverVault", function () {
       });
     });
 
-    describe("on successful swap with zero perp fees", function () {
+    describe("on successful swap with flash fees", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
         await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [
           toPercFixedPtAmt("0.1"),
         ]);
@@ -475,78 +471,9 @@ describe("RolloverVault", function () {
       });
     });
 
-    describe("on successful swap", function () {
-      let txFn: Promise<Transaction>;
-      beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpMintFeePerc()", [toPercFixedPtAmt("0.05")]);
-        await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [
-          toPercFixedPtAmt("0.1"),
-        ]);
-        txFn = () => vault.swapUnderlyingForPerps(toFixedPtAmt("100"));
-      });
-
-      it("should mint perps for swap and leave none left over", async function () {
-        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("800"));
-        await expect(txFn()).to.emit(perp, "Transfer").withArgs(ethers.ZeroAddress, vault.target, toFixedPtAmt("90"));
-        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("885"));
-        expect(await perp.balanceOf(vault.target)).to.eq(0);
-      });
-
-      it("should burn perps as fee", async function () {
-        await expect(txFn()).to.emit(perp, "Transfer").withArgs(vault.target, ethers.ZeroAddress, toFixedPtAmt("5"));
-      });
-
-      it("should return the perp amt", async function () {
-        expect(await vault.swapUnderlyingForPerps.staticCall(toFixedPtAmt("100"))).to.eq(toFixedPtAmt("85"));
-      });
-
-      it("should transfer underlying from the user", async function () {
-        await expect(txFn).to.changeTokenBalances(collateralToken, [deployer], [toFixedPtAmt("-100")]);
-      });
-
-      it("should transfer back perps to the user", async function () {
-        await expect(txFn).to.changeTokenBalances(perp, [deployer], [toFixedPtAmt("85")]);
-      });
-
-      it("should update the vault assets", async function () {
-        await checkPerpComposition(
-          perp,
-          [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
-        );
-
-        await checkVaultComposition(
-          vault,
-          [collateralToken, currentTranchesIn[1]],
-          [toFixedPtAmt("1200"), toFixedPtAmt("800")],
-        );
-
-        await txFn();
-
-        await checkPerpComposition(
-          perp,
-          [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("290")],
-        );
-
-        await checkVaultComposition(
-          vault,
-          [collateralToken, currentTranchesIn[1]],
-          [toFixedPtAmt("850"), toFixedPtAmt("1160")],
-        );
-      });
-
-      it("should update the vault tvl", async function () {
-        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2000"));
-        await txFn();
-        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2010"));
-      });
-    });
-
     describe("on successful swap with imperfect rounding", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpMintFeePerc()", [toPercFixedPtAmt("0.1")]);
         await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [
           toPercFixedPtAmt("0.1"),
         ]);
@@ -558,17 +485,13 @@ describe("RolloverVault", function () {
         await expect(txFn())
           .to.emit(perp, "Transfer")
           .withArgs(ethers.ZeroAddress, vault.target, toFixedPtAmt("90.899999999999999999"));
-        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("880.799999999999999999"));
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("890.899999999999999999"));
         expect(await perp.balanceOf(vault.target)).to.eq(0);
-      });
-
-      it("should burn perps as fee", async function () {
-        await expect(txFn()).to.emit(perp, "Transfer").withArgs(vault.target, ethers.ZeroAddress, toFixedPtAmt("10.1"));
       });
 
       it("should return the perp amt", async function () {
         expect(await vault.swapUnderlyingForPerps.staticCall(toFixedPtAmt("100.999999999999999999"))).to.eq(
-          toFixedPtAmt("80.799999999999999999"),
+          toFixedPtAmt("90.899999999999999999"),
         );
       });
 
@@ -581,7 +504,7 @@ describe("RolloverVault", function () {
       });
 
       it("should transfer back perps to the user", async function () {
-        await expect(txFn).to.changeTokenBalances(perp, [deployer], [toFixedPtAmt("80.799999999999999999")]);
+        await expect(txFn).to.changeTokenBalances(perp, [deployer], [toFixedPtAmt("90.899999999999999999")]);
       });
 
       it("should update the vault assets", async function () {
@@ -623,7 +546,6 @@ describe("RolloverVault", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
         await advancePerpQueueToBondMaturity(perp, await getDepositBond(perp));
-        await feePolicy.mockMethod("computePerpMintFeePerc()", [toPercFixedPtAmt("0.05")]);
         await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [
           toPercFixedPtAmt("0.1"),
         ]);
@@ -633,16 +555,12 @@ describe("RolloverVault", function () {
       it("should mint perps for swap and leave none left over", async function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("800"));
         await expect(txFn()).to.emit(perp, "Transfer").withArgs(ethers.ZeroAddress, vault.target, toFixedPtAmt("90"));
-        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("885"));
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("890"));
         expect(await perp.balanceOf(vault.target)).to.eq(0);
       });
 
-      it("should burn perps as fee", async function () {
-        await expect(txFn()).to.emit(perp, "Transfer").withArgs(vault.target, ethers.ZeroAddress, toFixedPtAmt("5"));
-      });
-
       it("should return the perp amt", async function () {
-        expect(await vault.swapUnderlyingForPerps.staticCall(toFixedPtAmt("100"))).to.eq(toFixedPtAmt("85"));
+        expect(await vault.swapUnderlyingForPerps.staticCall(toFixedPtAmt("100"))).to.eq(toFixedPtAmt("90"));
       });
 
       it("should transfer underlying from the user", async function () {
@@ -650,7 +568,7 @@ describe("RolloverVault", function () {
       });
 
       it("should transfer back perps to the user", async function () {
-        await expect(txFn).to.changeTokenBalances(perp, [deployer], [toFixedPtAmt("85")]);
+        await expect(txFn).to.changeTokenBalances(perp, [deployer], [toFixedPtAmt("90")]);
       });
 
       it("should update the vault assets", async function () {
@@ -690,7 +608,6 @@ describe("RolloverVault", function () {
   describe("#swapPerpsForUnderlying", function () {
     describe("when fee is zero", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
         await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [0]);
       });
 
@@ -736,7 +653,6 @@ describe("RolloverVault", function () {
 
     describe("when fee is not zero", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpBurnFeePerc()", [toPercFixedPtAmt("0.05")]);
         await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [
           toPercFixedPtAmt("0.15"),
         ]);
@@ -744,8 +660,8 @@ describe("RolloverVault", function () {
 
       it("should compute swap amount", async function () {
         const s = await vault.computePerpToUnderlyingSwapAmt.staticCall(toFixedPtAmt("100"));
-        expect(s[0]).to.eq(toFixedPtAmt("80"));
-        expect(s[1]).to.eq(toFixedPtAmt("5"));
+        expect(s[0]).to.eq(toFixedPtAmt("85"));
+        expect(s[1]).to.eq(toFixedPtAmt("0"));
         expect(s[2].perpTVL).to.eq(toFixedPtAmt("800"));
         expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2000"));
         expect(s[2].seniorTR).to.eq("200");
@@ -760,7 +676,6 @@ describe("RolloverVault", function () {
 
     describe("when fee is 100%", function () {
       it("should be reverted", async function () {
-        await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
         await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [toPercFixedPtAmt("1")]);
         await expect(vault.swapPerpsForUnderlying(toFixedPtAmt("100"))).to.be.revertedWithCustomError(
           vault,
@@ -771,7 +686,6 @@ describe("RolloverVault", function () {
 
     describe("when fee is greater than 100%", function () {
       it("should be reverted", async function () {
-        await feePolicy.mockMethod("computePerpBurnFeePerc()", [toPercFixedPtAmt("0.05")]);
         await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [toPercFixedPtAmt("1")]);
         await expect(vault.swapPerpsForUnderlying(toFixedPtAmt("100"))).to.be.reverted;
       });
@@ -837,12 +751,11 @@ describe("RolloverVault", function () {
       });
     });
 
-    describe("on successful swap with zero perp fees", function () {
+    describe("on successful swap with flash fees", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
         await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [
-          toPercFixedPtAmt("0.1"),
+          toPercFixedPtAmt("0.15"),
         ]);
         txFn = () => vault.swapPerpsForUnderlying(toFixedPtAmt("100"));
       });
@@ -855,7 +768,7 @@ describe("RolloverVault", function () {
       });
 
       it("should return the underlying amt", async function () {
-        expect(await vault.swapPerpsForUnderlying.staticCall(toFixedPtAmt("100"))).to.eq(toFixedPtAmt("90"));
+        expect(await vault.swapPerpsForUnderlying.staticCall(toFixedPtAmt("100"))).to.eq(toFixedPtAmt("85"));
       });
 
       it("should transfer perps from the user", async function () {
@@ -863,7 +776,7 @@ describe("RolloverVault", function () {
       });
 
       it("should transfer back underlying to the user", async function () {
-        await expect(txFn).to.changeTokenBalances(collateralToken, [deployer], [toFixedPtAmt("90")]);
+        await expect(txFn).to.changeTokenBalances(collateralToken, [deployer], [toFixedPtAmt("85")]);
       });
 
       it("should update the vault assets", async function () {
@@ -890,102 +803,20 @@ describe("RolloverVault", function () {
         await checkVaultComposition(
           vault,
           [collateralToken, currentTranchesIn[1], ...reserveTranches.slice(-3)],
-          [toFixedPtAmt("1235"), toFixedPtAmt("700"), toFixedPtAmt("25"), toFixedPtAmt("25"), toFixedPtAmt("25")],
+          [toFixedPtAmt("1240"), toFixedPtAmt("700"), toFixedPtAmt("25"), toFixedPtAmt("25"), toFixedPtAmt("25")],
         );
       });
 
       it("should update the vault tvl", async function () {
         expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2000"));
         await txFn();
-        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2010"));
-      });
-    });
-
-    describe("on successful swap", function () {
-      let txFn: Promise<Transaction>;
-      beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpBurnFeePerc()", [toPercFixedPtAmt("0.1")]);
-        await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [
-          toPercFixedPtAmt("0.15"),
-        ]);
-        txFn = () => vault.swapPerpsForUnderlying(toFixedPtAmt("100"));
-      });
-
-      it("should redeem perps for swap and leave none left over", async function () {
-        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("800"));
-        await expect(txFn()).to.emit(perp, "Transfer").withArgs(vault.target, ethers.ZeroAddress, toFixedPtAmt("90"));
-        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("700"));
-        expect(await perp.balanceOf(vault.target)).to.eq(0);
-      });
-
-      it("should burn perps as fee", async function () {
-        await expect(txFn()).to.emit(perp, "Transfer").withArgs(vault.target, ethers.ZeroAddress, toFixedPtAmt("10"));
-      });
-
-      it("should return the underlying amt", async function () {
-        expect(await vault.swapPerpsForUnderlying.staticCall(toFixedPtAmt("100"))).to.eq(toFixedPtAmt("75"));
-      });
-
-      it("should transfer perps from the user", async function () {
-        await expect(txFn).to.changeTokenBalances(perp, [deployer], [toFixedPtAmt("-100")]);
-      });
-
-      it("should transfer back underlying to the user", async function () {
-        await expect(txFn).to.changeTokenBalances(collateralToken, [deployer], [toFixedPtAmt("75")]);
-      });
-
-      it("should update the vault assets", async function () {
-        await checkPerpComposition(
-          perp,
-          [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          [0, toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200"), toFixedPtAmt("200")],
-        );
-
-        await checkVaultComposition(
-          vault,
-          [collateralToken, currentTranchesIn[1]],
-          [toFixedPtAmt("1200"), toFixedPtAmt("800")],
-        );
-
-        await txFn();
-
-        await checkPerpComposition(
-          perp,
-          [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          [
-            0,
-            toFixedPtAmt("177.215189873417721519"),
-            toFixedPtAmt("177.215189873417721519"),
-            toFixedPtAmt("177.215189873417721519"),
-            toFixedPtAmt("177.215189873417721519"),
-          ],
-        );
-
-        await checkVaultComposition(
-          vault,
-          [collateralToken, currentTranchesIn[1], ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          [
-            toFixedPtAmt("1238.924050632911392"),
-            toFixedPtAmt("708.8607594936708864"),
-            toFixedPtAmt("22.784810126582278481"),
-            toFixedPtAmt("22.784810126582278481"),
-            toFixedPtAmt("22.784810126582278481"),
-            toFixedPtAmt("0.000000000000000081"),
-          ],
-        );
-      });
-
-      it("should update the vault tvl", async function () {
-        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2000"));
-        await txFn();
-        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2016.139240506329113843"));
+        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2015"));
       });
     });
 
     describe("on successful swap with imperfect rounding", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpBurnFeePerc()", [toPercFixedPtAmt("0.1")]);
         await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [
           toPercFixedPtAmt("0.1"),
         ]);
@@ -996,18 +827,14 @@ describe("RolloverVault", function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("800"));
         await expect(txFn())
           .to.emit(perp, "Transfer")
-          .withArgs(vault.target, ethers.ZeroAddress, toFixedPtAmt("90.899999999999999999"));
+          .withArgs(vault.target, ethers.ZeroAddress, toFixedPtAmt("100.999999999999999999"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("699.000000000000000001"));
         expect(await perp.balanceOf(vault.target)).to.eq(0);
       });
 
-      it("should burn perps as fee", async function () {
-        await expect(txFn()).to.emit(perp, "Transfer").withArgs(vault.target, ethers.ZeroAddress, toFixedPtAmt("10.1"));
-      });
-
       it("should return the underlying amt", async function () {
         expect(await vault.swapPerpsForUnderlying.staticCall(toFixedPtAmt("100.999999999999999999"))).to.eq(
-          toFixedPtAmt("80.799999999999999999"),
+          toFixedPtAmt("90.899999999999999999"),
         );
       });
 
@@ -1016,7 +843,7 @@ describe("RolloverVault", function () {
       });
 
       it("should transfer back underlying to the user", async function () {
-        await expect(txFn).to.changeTokenBalances(collateralToken, [deployer], [toFixedPtAmt("80.799999999999999999")]);
+        await expect(txFn).to.changeTokenBalances(collateralToken, [deployer], [toFixedPtAmt("90.899999999999999999")]);
       });
 
       it("should update the vault assets", async function () {
@@ -1039,10 +866,10 @@ describe("RolloverVault", function () {
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
           [
             0,
-            toFixedPtAmt("176.984428408659323966"),
-            toFixedPtAmt("176.984428408659323966"),
-            toFixedPtAmt("176.984428408659323966"),
-            toFixedPtAmt("176.984428408659323966"),
+            toFixedPtAmt("174.750000000000000001"),
+            toFixedPtAmt("174.750000000000000001"),
+            toFixedPtAmt("174.750000000000000001"),
+            toFixedPtAmt("174.750000000000000001"),
           ],
         );
 
@@ -1050,12 +877,12 @@ describe("RolloverVault", function () {
           vault,
           [collateralToken, currentTranchesIn[1], ...reserveTranches.slice(-3), currentTranchesIn[0]],
           [
-            toFixedPtAmt("1234.277857956703380001"),
-            toFixedPtAmt("707.937713634637296000"),
-            toFixedPtAmt("23.015571591340676034"),
-            toFixedPtAmt("23.015571591340676034"),
-            toFixedPtAmt("23.015571591340676034"),
-            toFixedPtAmt("0.000000000000000034"),
+            toFixedPtAmt("1235.349999999999999001"),
+            toFixedPtAmt("699.000000000000000800"),
+            toFixedPtAmt("25.249999999999999999"),
+            toFixedPtAmt("25.249999999999999999"),
+            toFixedPtAmt("25.249999999999999999"),
+            toFixedPtAmt("0.000000000000000199"),
           ],
         );
       });
@@ -1063,14 +890,13 @@ describe("RolloverVault", function () {
       it("should update the vault tvl", async function () {
         expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2000"));
         await txFn();
-        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2011.262286365362704103"));
+        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2010.099999999999999798"));
       });
     });
 
     describe("on successful swap with some the juniors in the vault", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpBurnFeePerc()", [toPercFixedPtAmt("0.1")]);
         await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [
           toPercFixedPtAmt("0.15"),
         ]);
@@ -1082,17 +908,13 @@ describe("RolloverVault", function () {
 
       it("should redeem perps for swap and leave none left over", async function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("800"));
-        await expect(txFn()).to.emit(perp, "Transfer").withArgs(vault.target, ethers.ZeroAddress, toFixedPtAmt("180"));
+        await expect(txFn()).to.emit(perp, "Transfer").withArgs(vault.target, ethers.ZeroAddress, toFixedPtAmt("200"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("600"));
         expect(await perp.balanceOf(vault.target)).to.eq(0);
       });
 
-      it("should burn perps as fee", async function () {
-        await expect(txFn()).to.emit(perp, "Transfer").withArgs(vault.target, ethers.ZeroAddress, toFixedPtAmt("20"));
-      });
-
       it("should return the underlying amt", async function () {
-        expect(await vault.swapPerpsForUnderlying.staticCall(toFixedPtAmt("200"))).to.eq(toFixedPtAmt("150"));
+        expect(await vault.swapPerpsForUnderlying.staticCall(toFixedPtAmt("200"))).to.eq(toFixedPtAmt("170"));
       });
 
       it("should transfer perps from the user", async function () {
@@ -1100,7 +922,7 @@ describe("RolloverVault", function () {
       });
 
       it("should transfer back underlying to the user", async function () {
-        await expect(txFn).to.changeTokenBalances(collateralToken, [deployer], [toFixedPtAmt("150")]);
+        await expect(txFn).to.changeTokenBalances(collateralToken, [deployer], [toFixedPtAmt("170")]);
       });
 
       it("should update the vault assets", async function () {
@@ -1121,40 +943,26 @@ describe("RolloverVault", function () {
         await checkPerpComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          [
-            0,
-            toFixedPtAmt("153.846153846153846154"),
-            toFixedPtAmt("153.846153846153846154"),
-            toFixedPtAmt("153.846153846153846154"),
-            toFixedPtAmt("153.846153846153846154"),
-          ],
+          [0, toFixedPtAmt("150"), toFixedPtAmt("150"), toFixedPtAmt("150"), toFixedPtAmt("150")],
         );
 
         await checkVaultComposition(
           vault,
-          [collateralToken, currentTranchesIn[1], ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          [
-            toFixedPtAmt("1655.769230769230769000"),
-            toFixedPtAmt("615.384615384615384800"),
-            toFixedPtAmt("21.153846153846153846"),
-            toFixedPtAmt("21.153846153846153846"),
-            toFixedPtAmt("21.153846153846153846"),
-            toFixedPtAmt("0.000000000000000046"),
-          ],
+          [collateralToken, currentTranchesIn[1], ...reserveTranches.slice(-3)],
+          [toFixedPtAmt("1655"), toFixedPtAmt("600"), toFixedPtAmt("25"), toFixedPtAmt("25"), toFixedPtAmt("25")],
         );
       });
 
       it("should update the vault tvl", async function () {
         expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2000"));
         await txFn();
-        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2334.615384615384615338"));
+        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2330"));
       });
     });
 
     describe("on successful swap with all the juniors in the vault", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpBurnFeePerc()", [toPercFixedPtAmt("0.1")]);
         await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [
           toPercFixedPtAmt("0.15"),
         ]);
@@ -1168,17 +976,13 @@ describe("RolloverVault", function () {
 
       it("should redeem perps for swap and leave none left over", async function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("800"));
-        await expect(txFn()).to.emit(perp, "Transfer").withArgs(vault.target, ethers.ZeroAddress, toFixedPtAmt("180"));
+        await expect(txFn()).to.emit(perp, "Transfer").withArgs(vault.target, ethers.ZeroAddress, toFixedPtAmt("200"));
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("600"));
         expect(await perp.balanceOf(vault.target)).to.eq(0);
       });
 
-      it("should burn perps as fee", async function () {
-        await expect(txFn()).to.emit(perp, "Transfer").withArgs(vault.target, ethers.ZeroAddress, toFixedPtAmt("20"));
-      });
-
       it("should return the underlying amt", async function () {
-        expect(await vault.swapPerpsForUnderlying.staticCall(toFixedPtAmt("200"))).to.eq(toFixedPtAmt("150"));
+        expect(await vault.swapPerpsForUnderlying.staticCall(toFixedPtAmt("200"))).to.eq(toFixedPtAmt("170"));
       });
 
       it("should transfer perps from the user", async function () {
@@ -1186,7 +990,7 @@ describe("RolloverVault", function () {
       });
 
       it("should transfer back underlying to the user", async function () {
-        await expect(txFn).to.changeTokenBalances(collateralToken, [deployer], [toFixedPtAmt("150")]);
+        await expect(txFn).to.changeTokenBalances(collateralToken, [deployer], [toFixedPtAmt("170")]);
       });
 
       it("should update the vault assets", async function () {
@@ -1207,13 +1011,7 @@ describe("RolloverVault", function () {
         await checkPerpComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          [
-            0,
-            toFixedPtAmt("153.846153846153846154"),
-            toFixedPtAmt("153.846153846153846154"),
-            toFixedPtAmt("153.846153846153846154"),
-            toFixedPtAmt("153.846153846153846154"),
-          ],
+          [0, toFixedPtAmt("150"), toFixedPtAmt("150"), toFixedPtAmt("150"), toFixedPtAmt("150")],
         );
 
         await checkVaultComposition(
@@ -1224,33 +1022,20 @@ describe("RolloverVault", function () {
             remainingJuniorTranches[1],
             remainingJuniorTranches[2],
             remainingJuniorTranches[3],
-            ...reserveTranches.slice(-3),
-            currentTranchesIn[0],
           ],
-          [
-            toFixedPtAmt("1973.076923076923076"),
-            toFixedPtAmt("615.3846153846153848"),
-            toFixedPtAmt("615.3846153846153848"),
-            toFixedPtAmt("615.3846153846153848"),
-            toFixedPtAmt("615.3846153846153848"),
-            toFixedPtAmt("0.000000000000000046"),
-            toFixedPtAmt("0.000000000000000046"),
-            toFixedPtAmt("0.000000000000000046"),
-            toFixedPtAmt("0.000000000000000046"),
-          ],
+          [toFixedPtAmt("2030"), toFixedPtAmt("600"), toFixedPtAmt("600"), toFixedPtAmt("600"), toFixedPtAmt("600")],
         );
       });
 
       it("should update the vault tvl", async function () {
-        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2000")); // + 2400 transferred in
+        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2000"));
         await txFn();
-        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("4434.6153846153846152"));
+        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("4430"));
       });
     });
 
     describe("when vault reduces underlying liquidity", function () {
       it("should be reverted", async function () {
-        await feePolicy.mockMethod("computePerpBurnFeePerc()", [toPercFixedPtAmt("0.1")]);
         await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [
           toPercFixedPtAmt("0.15"),
         ]);

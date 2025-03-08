@@ -616,11 +616,15 @@ describe("PerpetualTranche", function () {
 
       it("should update the total supply", async function () {
         await txFn();
-        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("500"));
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("550"));
       });
 
       it("should burn perp tokens", async function () {
         await expect(txFn).to.changeTokenBalances(perp, [deployer], [toFixedPtAmt("-500")]);
+      });
+
+      it("should transfer fees to the vault", async function () {
+        await expect(txFn).to.changeTokenBalances(perp, [await perp.vault()], [toFixedPtAmt("50")]);
       });
     });
 
