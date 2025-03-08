@@ -494,6 +494,19 @@ describe("PerpetualTranche", function () {
         const r = await perp.computeMintAmt.staticCall(depositTrancheA.target, toFixedPtAmt("500"));
         expect(r).to.eq(toFixedPtAmt("495"));
       });
+
+      it("should update the total supply", async function () {
+        await perp.deposit(depositTrancheA.target, toFixedPtAmt("500"));
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("500"));
+      });
+
+      it("should mint fees to the vault", async function () {
+        await expect(() => perp.deposit(depositTrancheA.target, toFixedPtAmt("500"))).to.changeTokenBalances(
+          perp,
+          [await perp.vault()],
+          [toFixedPtAmt("5")],
+        );
+      });
     });
 
     describe("when fee is set and caller is the vault", function () {

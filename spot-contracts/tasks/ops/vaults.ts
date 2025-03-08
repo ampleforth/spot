@@ -94,9 +94,9 @@ task("ops:vault:info")
     console.log("targetSubscriptionRatio:", hre.ethers.formatUnits(targetSubscriptionRatio, feeDecimals));
     console.log("targetDeviationRatio:", hre.ethers.formatUnits(feeOne, feeDecimals));
 
-    const drHardBounds = await feePolicy.drHardBounds();
-    console.log("deviationRatioBoundLower:", hre.ethers.formatUnits(drHardBounds.lower, feeDecimals));
-    console.log("deviationRatioBoundUpper:", hre.ethers.formatUnits(drHardBounds.upper, feeDecimals));
+    const drHardBound = await feePolicy.drHardBound();
+    console.log("deviationRatioBoundLower:", hre.ethers.formatUnits(drHardBound.lower, feeDecimals));
+    console.log("deviationRatioBoundUpper:", hre.ethers.formatUnits(drHardBound.upper, feeDecimals));
     console.log("deviationRatio:", hre.ethers.formatUnits(deviationRatio, feeDecimals));
 
     console.log("---------------------------------------------------------------");

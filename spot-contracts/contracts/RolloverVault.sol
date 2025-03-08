@@ -4,7 +4,6 @@ pragma solidity ^0.8.20;
 import { IERC20Upgradeable, IPerpetualTranche, IBondController, ITranche, IFeePolicy } from "./_interfaces/IPerpetualTranche.sol";
 import { IVault } from "./_interfaces/IVault.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
-import { IERC20Burnable } from "./_interfaces/IERC20Burnable.sol";
 import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/CommonTypes.sol";
 import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, OutOfBounds, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit, InsufficientLiquidity } from "./_interfaces/ProtocolErrors.sol";
 
@@ -451,9 +450,7 @@ contract RolloverVault is
         IPerpetualTranche perp_ = perp;
         IERC20Upgradeable underlying_ = underlying;
         uint256 underlyingBalPre = underlying_.balanceOf(address(this));
-        (uint256 perpAmtOut, uint256 perpFeeAmtToBurn, SubscriptionParams memory s) = computeUnderlyingToPerpSwapAmt(
-            underlyingAmtIn
-        );
+        (uint256 perpAmtOut, , SubscriptionParams memory s) = computeUnderlyingToPerpSwapAmt(underlyingAmtIn);
 
         // Revert if insufficient tokens are swapped in or out
         if (perpAmtOut <= 0 || underlyingAmtIn <= 0) {
@@ -464,12 +461,7 @@ contract RolloverVault is
         underlying_.safeTransferFrom(msg.sender, address(this), underlyingAmtIn);
 
         // tranche and mint perps as needed
-        _trancheAndMintPerps(perp_, underlying_, s.perpTVL, s.seniorTR, perpAmtOut + perpFeeAmtToBurn);
-
-        // Pay perp's fee share by burning some of the minted perps
-        if (perpFeeAmtToBurn > 0) {
-            IERC20Burnable(address(perp_)).burn(perpFeeAmtToBurn);
-        }
+        _trancheAndMintPerps(perp_, underlying_, s.perpTVL, s.seniorTR, perpAmtOut);
 
         // transfer remaining perps out to the user
         IERC20Upgradeable(address(perp_)).safeTransfer(msg.sender, perpAmtOut);
@@ -499,7 +491,7 @@ contract RolloverVault is
         IPerpetualTranche perp_ = perp;
         IERC20Upgradeable underlying_ = underlying;
         uint256 underlyingBalPre = underlying_.balanceOf(address(this));
-        (uint256 underlyingAmtOut, uint256 perpFeeAmtToBurn, ) = computePerpToUnderlyingSwapAmt(perpAmtIn);
+        (uint256 underlyingAmtOut, , ) = computePerpToUnderlyingSwapAmt(perpAmtIn);
 
         // Revert if insufficient tokens are swapped in or out
         if (underlyingAmtOut <= 0 || perpAmtIn <= 0) {
@@ -508,11 +500,6 @@ contract RolloverVault is
 
         // transfer perps in
         IERC20Upgradeable(perp_).safeTransferFrom(msg.sender, address(this), perpAmtIn);
-
-        // Pay perp's fee share by burning some of the transferred perps
-        if (perpFeeAmtToBurn > 0) {
-            IERC20Burnable(address(perp_)).burn(perpFeeAmtToBurn);
-        }
 
         // Meld incoming perps
         _meldPerps(perp_);
@@ -552,8 +539,7 @@ contract RolloverVault is
         //-----------------------------------------------------------------------------
         // When user swaps underlying for vault's perps -> perps are minted by the vault
         // We thus compute fees based on the post-mint subscription state.
-        uint256 perpFeePerc = feePolicy.computePerpMintFeePerc();
-        uint256 vaultFeePerc = feePolicy.computeUnderlyingToPerpVaultSwapFeePerc(
+        uint256 feePerc = feePolicy.computeUnderlyingToPerpVaultSwapFeePerc(
             feePolicy.computeDeviationRatio(s),
             feePolicy.computeDeviationRatio(
                 SubscriptionParams({ perpTVL: s.perpTVL + underlyingAmtIn, vaultTVL: s.vaultTVL, seniorTR: s.seniorTR })
@@ -561,13 +547,10 @@ contract RolloverVault is
         );
         //-----------------------------------------------------------------------------
 
-        // Calculate perp fee share to be paid by the vault
-        uint256 perpFeeAmtToBurn = perpAmtOut.mulDiv(perpFeePerc, ONE, MathUpgradeable.Rounding.Up);
-
         // We deduct fees by transferring out fewer perp tokens
-        perpAmtOut = perpAmtOut.mulDiv(ONE - (perpFeePerc + vaultFeePerc), ONE);
+        perpAmtOut = perpAmtOut.mulDiv(ONE - feePerc, ONE);
 
-        return (perpAmtOut, perpFeeAmtToBurn, s);
+        return (perpAmtOut, 0, s);
     }
 
     /// @inheritdoc IRolloverVault
@@ -582,8 +565,7 @@ contract RolloverVault is
         //-----------------------------------------------------------------------------
         // When user swaps perps for vault's underlying -> perps are redeemed by the vault
         // We thus compute fees based on the post-burn subscription state.
-        uint256 perpFeePerc = feePolicy.computePerpBurnFeePerc();
-        uint256 vaultFeePerc = feePolicy.computePerpToUnderlyingVaultSwapFeePerc(
+        uint256 feePerc = feePolicy.computePerpToUnderlyingVaultSwapFeePerc(
             feePolicy.computeDeviationRatio(s),
             feePolicy.computeDeviationRatio(
                 SubscriptionParams({
@@ -595,13 +577,10 @@ contract RolloverVault is
         );
         //-----------------------------------------------------------------------------
 
-        // Calculate perp fee share to be paid by the vault
-        uint256 perpFeeAmtToBurn = perpAmtIn.mulDiv(perpFeePerc, ONE, MathUpgradeable.Rounding.Up);
-
         // We deduct fees by transferring out fewer underlying tokens
-        underlyingAmtOut = underlyingAmtOut.mulDiv(ONE - (perpFeePerc + vaultFeePerc), ONE);
+        underlyingAmtOut = underlyingAmtOut.mulDiv(ONE - feePerc, ONE);
 
-        return (underlyingAmtOut, perpFeeAmtToBurn, s);
+        return (underlyingAmtOut, 0, s);
     }
 
     //--------------------------------------------------------------------------
