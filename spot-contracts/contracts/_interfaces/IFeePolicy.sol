@@ -6,10 +6,12 @@ import { SubscriptionParams } from "./CommonTypes.sol";
 interface IFeePolicy {
     /// @return The percentage of the mint perp tokens to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
+    /// @dev Perp mint fees are paid to the vault.
     function computePerpMintFeePerc() external view returns (uint256);
 
     /// @return The percentage of the burnt perp tokens to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
+    /// @dev Perp burn fees are paid to the vault.
     function computePerpBurnFeePerc() external view returns (uint256);
 
     /// @param dr The current system deviation ratio.

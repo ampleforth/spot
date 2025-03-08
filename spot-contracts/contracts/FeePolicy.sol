@@ -81,8 +81,12 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     uint256 public targetSubscriptionRatio;
 
     /// @notice The lower and upper deviation ratio bounds outside which
-    ///         some operations (like flash swaps) which move dr away from 1.0 are disabled.
-    Range public drHardBounds;
+    ///         flash swaps which move dr away from 1.0 are disabled.
+    Range public drHardBound;
+
+    /// @notice The deviation ratio bounds outside which flash swaps are still functional but,
+    ///         the swap fees transition from a constant fee to a linear function. disabled.
+    Range public drSoftBound;
 
     //-----------------------------------------------------------------------------
     // Perp fee parameters
@@ -144,9 +148,13 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         __Ownable_init();
 
         targetSubscriptionRatio = (ONE * 150) / 100; // 1.5
-        drHardBounds = Range({
+        drHardBound = Range({
+            lower: (ONE * 75) / 100, // 0.75
+            upper: 2 * ONE // 2.0
+        });
+        drSoftBound = Range({
             lower: (ONE * 90) / 100, // 0.9
-            upper: 4 * ONE // 4.0
+            upper: (5 * ONE) / 4 // 1.25
         });
 
         // initializing fees
@@ -180,12 +188,17 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @notice Updates the deviation ratio bounds.
-    /// @param drHardBounds_ The new hard lower and upper deviation ratio bound as fixed point number with {DECIMALS} places.
-    function updateDRHardBounds(Range memory drHardBounds_) external onlyOwner {
-        if (drHardBounds_.lower > ONE || drHardBounds_.upper < ONE) {
+    /// @param drHardBound_ The new hard lower and upper deviation ratio bound as fixed point number with {DECIMALS} places.
+    /// @param drSoftBound_ The new soft lower and upper deviation ratio bound as fixed point number with {DECIMALS} places.
+    function updateDRBounds(Range memory drHardBound_, Range memory drSoftBound_) external onlyOwner {
+        bool validBounds = (drHardBound_.lower <= drSoftBound_.lower &&
+            drSoftBound_.lower <= drSoftBound_.upper &&
+            drSoftBound_.upper <= drHardBound_.upper);
+        if (!validBounds) {
             revert InvalidDRBounds();
         }
-        drHardBounds = drHardBounds_;
+        drHardBound = drHardBound_;
+        drSoftBound = drSoftBound_;
     }
 
     /// @notice Updates the perp mint fee parameters.
@@ -304,16 +317,26 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     ) external view override returns (uint256) {
         // When the after op deviation ratio is below the bound,
         // swapping is disabled. (fees are set to 100%)
-        if (drPost <= drHardBounds.lower) {
+        if (drPost <= drHardBound.lower) {
             return ONE;
         }
         return
             LineHelpers
                 .computePiecewiseAvgY(
-                    Line({ x1: drHardBounds.lower, y1: flashMintFeePercs.upper, x2: ONE, y2: flashMintFeePercs.lower }),
-                    Line({ x1: ONE, y1: flashMintFeePercs.lower, x2: drHardBounds.upper, y2: flashMintFeePercs.lower }),
+                    Line({
+                        x1: drHardBound.lower,
+                        y1: flashMintFeePercs.upper,
+                        x2: drSoftBound.lower,
+                        y2: flashMintFeePercs.lower
+                    }),
+                    Line({
+                        x1: drSoftBound.lower,
+                        y1: flashMintFeePercs.lower,
+                        x2: drHardBound.upper,
+                        y2: flashMintFeePercs.lower
+                    }),
                     Range({ lower: drPost, upper: drPre }),
-                    ONE
+                    drSoftBound.lower
                 )
                 .toUint256();
     }
@@ -326,26 +349,26 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     ) external view override returns (uint256) {
         // When the after op deviation ratio is above the bound,
         // swapping is disabled. (fees are set to 100%)
-        if (drPost >= drHardBounds.upper) {
+        if (drPost >= drHardBound.upper) {
             return ONE;
         }
         return
             LineHelpers
                 .computePiecewiseAvgY(
                     Line({
-                        x1: drHardBounds.lower,
+                        x1: drHardBound.lower,
                         y1: flashRedeemFeePercs.lower,
-                        x2: ONE,
+                        x2: drSoftBound.upper,
                         y2: flashRedeemFeePercs.lower
                     }),
                     Line({
-                        x1: ONE,
+                        x1: drSoftBound.upper,
                         y1: flashRedeemFeePercs.lower,
-                        x2: drHardBounds.upper,
+                        x2: drHardBound.upper,
                         y2: flashRedeemFeePercs.upper
                     }),
                     Range({ lower: drPre, upper: drPost }),
-                    ONE
+                    drSoftBound.upper
                 )
                 .toUint256();
     }
