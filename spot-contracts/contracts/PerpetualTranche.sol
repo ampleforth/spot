@@ -382,7 +382,7 @@ contract PerpetualTranche is
 
         // Calculates the fee adjusted amount of perp tokens minted when depositing `trancheInAmt` of tranche tokens
         // NOTE: This operation should precede any token transfers.
-        uint256 perpAmtMint = _computeMintAmt(trancheIn, trancheInAmt);
+        (uint256 perpAmtMint, uint256 perpFeeAmt) = _computeMintAmt(trancheIn, trancheInAmt);
         if (trancheInAmt <= 0 || perpAmtMint <= 0) {
             return 0;
         }
@@ -393,6 +393,9 @@ contract PerpetualTranche is
         // mints perp tokens to the sender
         _mint(msg.sender, perpAmtMint);
 
+        // mint fees are paid to the vault by minting perp tokens.
+        _mint(address(vault), perpFeeAmt);
+
         // post-deposit checks
         _enforceMintCaps(trancheIn);
 
@@ -401,19 +404,22 @@ contract PerpetualTranche is
 
     /// @inheritdoc IPerpetualTranche
     function redeem(
-        uint256 perpAmtBurnt
+        uint256 perpAmt
     ) external override afterStateUpdate nonReentrant whenNotPaused returns (TokenAmount[] memory) {
         // verifies if burn amount is acceptable
-        if (perpAmtBurnt <= 0) {
+        if (perpAmt <= 0) {
             return new TokenAmount[](0);
         }
 
         // Calculates the fee adjusted share of reserve tokens to be redeemed
         // NOTE: This operation should precede any token transfers.
-        TokenAmount[] memory tokensOut = _computeRedemptionAmts(perpAmtBurnt);
+        (TokenAmount[] memory tokensOut, uint256 perpFeeAmt) = _computeRedemptionAmts(perpAmt);
 
         // burns perp tokens from the sender
-        _burn(msg.sender, perpAmtBurnt);
+        _burn(msg.sender, perpAmt - perpFeeAmt);
+
+        // redemption fees are paid to transferring perp tokens
+        transfer(address(vault), perpFeeAmt);
 
         // transfers reserve tokens out
         uint8 tokensOutCount = uint8(tokensOut.length);
@@ -564,14 +570,14 @@ contract PerpetualTranche is
         if (!_isDepositTranche(trancheIn)) {
             revert UnexpectedAsset();
         }
-        return _computeMintAmt(trancheIn, trancheInAmt);
+        (uint256 perpAmtMint, ) = _computeMintAmt(trancheIn, trancheInAmt);
+        return perpAmtMint;
     }
 
     /// @inheritdoc IPerpetualTranche
-    function computeRedemptionAmts(
-        uint256 perpAmtBurnt
-    ) external override afterStateUpdate returns (TokenAmount[] memory) {
-        return _computeRedemptionAmts(perpAmtBurnt);
+    function computeRedemptionAmts(uint256 perpAmt) external override afterStateUpdate returns (TokenAmount[] memory) {
+        (TokenAmount[] memory tokensOut, ) = _computeRedemptionAmts(perpAmt);
+        return tokensOut;
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -724,7 +730,10 @@ contract PerpetualTranche is
     }
 
     /// @dev Computes the fee adjusted perp mint amount for given amount of tranche tokens deposited into the reserve.
-    function _computeMintAmt(ITranche trancheIn, uint256 trancheInAmt) private view returns (uint256) {
+    function _computeMintAmt(
+        ITranche trancheIn,
+        uint256 trancheInAmt
+    ) private view returns (uint256 perpAmtMint, uint256 perpFeeAmt) {
         uint256 valueIn = _computeReserveTrancheValue(
             trancheIn,
             _depositBond,
@@ -740,21 +749,22 @@ contract PerpetualTranche is
 
         // Compute mint amt
         uint256 perpSupply = totalSupply();
-        uint256 perpAmtMint = valueIn;
+        perpAmtMint = valueIn;
         if (perpSupply > 0) {
             perpAmtMint = perpAmtMint.mulDiv(perpSupply, _reserveValue());
         }
 
-        // The mint fees are settled by simply minting fewer perps.
+        // Compute the fee amount
         if (feePerc > 0) {
-            perpAmtMint = perpAmtMint.mulDiv(ONE - feePerc, ONE);
+            perpFeeAmt = perpAmtMint.mulDiv(feePerc, ONE, MathUpgradeable.Rounding.Up);
+            perpAmtMint -= perpFeeAmt;
         }
-
-        return perpAmtMint;
     }
 
     /// @dev Computes the reserve token amounts redeemed when a given number of perps are burnt.
-    function _computeRedemptionAmts(uint256 perpAmtBurnt) private view returns (TokenAmount[] memory) {
+    function _computeRedemptionAmts(
+        uint256 perpAmt
+    ) private view returns (TokenAmount[] memory reserveTokens, uint256 perpFeeAmt) {
         uint256 perpSupply = totalSupply();
 
         //-----------------------------------------------------------------------------
@@ -762,23 +772,24 @@ contract PerpetualTranche is
         uint256 feePerc = _isProtocolCaller() ? 0 : feePolicy.computePerpBurnFeePerc();
         //-----------------------------------------------------------------------------
 
+        // Compute the fee amount
+        if (feePerc > 0) {
+            perpFeeAmt = perpAmt.mulDiv(feePerc, ONE, MathUpgradeable.Rounding.Up);
+            perpAmt -= perpFeeAmt;
+        }
+
         // Compute redemption amounts
         uint8 reserveCount = uint8(_reserves.length());
-        TokenAmount[] memory reserveTokens = new TokenAmount[](reserveCount);
+        reserveTokens = new TokenAmount[](reserveCount);
         for (uint8 i = 0; i < reserveCount; ++i) {
             IERC20Upgradeable tokenOut = _reserveAt(i);
             reserveTokens[i] = TokenAmount({
                 token: tokenOut,
-                amount: tokenOut.balanceOf(address(this)).mulDiv(perpAmtBurnt, perpSupply)
+                amount: tokenOut.balanceOf(address(this)).mulDiv(perpAmt, perpSupply)
             });
-
-            // The burn fees are settled by simply redeeming for fewer tranches.
-            if (feePerc > 0) {
-                reserveTokens[i].amount = reserveTokens[i].amount.mulDiv(ONE - feePerc, ONE);
-            }
         }
 
-        return (reserveTokens);
+        return (reserveTokens, perpFeeAmt);
     }
 
     /// @dev Computes the amount of reserve tokens that can be rolled out for the given amount of tranches deposited.
