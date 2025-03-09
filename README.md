@@ -12,6 +12,7 @@ Security contact: [dev-support@ampleforth.org](mailto:dev-support@ampleforth.org
 ### Package organization
 
 * [spot-contracts](./spot-contracts): SPOT protocol smart contracts. 
+* [spot-vaults](./spot-vaults): Vault strategies leveraging the SPOT system. 
 * [spot-subgraph](./spot-subgraph): Subgraph to index SPOT protocol on-chain data. 
 
 ## Licensing

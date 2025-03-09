@@ -1,25 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.24;
 
-/// @notice A data structure to define a geometric Line with two points.
-struct Line {
-    /// @notice x-coordinate of the first point.
-    uint256 x1;
-    /// @notice y-coordinate of the first point.
-    uint256 y1;
-    /// @notice x-coordinate of the second point.
-    uint256 x2;
-    /// @notice y-coordinate of the second point.
-    uint256 y2;
-}
-
-/// @notice A data structure to define a numeric Range.
-struct Range {
-    /// @notice Lower bound of the range.
-    uint256 lower;
-    /// @notice Upper bound of the range.
-    uint256 upper;
-}
+import { Range } from "./CommonTypes.sol";
 
 /// @notice A data structure to store various fees associated with BillBroker operations.
 struct BillBrokerFees {
@@ -27,10 +9,11 @@ struct BillBrokerFees {
     uint256 mintFeePerc;
     /// @notice The percentage fee charged for burning BillBroker LP tokens.
     uint256 burnFeePerc;
-    /// @notice Range of fee percentages for swapping from perp tokens to USD.
-    Range perpToUSDSwapFeePercs;
-    /// @notice Range of fee percentages for swapping from USD to perp tokens.
-    Range usdToPerpSwapFeePercs;
+    /// @notice Range of fee factors for swapping from perp tokens to USD.
+    /// @dev Factor of 1.02 implies a +2% fees, and 0.98 implies a -2% fees.
+    Range perpToUSDSwapFeeFactors;
+    /// @notice Range of fee factors for swapping from USD to perp tokens.
+    Range usdToPerpSwapFeeFactors;
     /// @notice The percentage of the swap fees that goes to the protocol.
     uint256 protocolSwapSharePerc;
 }

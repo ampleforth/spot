@@ -1,3 +1,59 @@
+type BillBroker @entity {
+  " the vault address "
+  id: ID!
+  name: String!
+  symbol: String!
+  decimals: BigInt!
+  perp: String!
+  perpName: String!
+  perpSymbol: String!
+  perpDecimals: BigInt!
+  usd: String!
+  usdName: String!
+  usdSymbol: String!
+  usdDecimals: BigInt!
+  perpBal: BigDecimal!
+  usdBal: BigDecimal!
+  perpPrice: BigDecimal!
+  usdPrice: BigDecimal!
+  totalSupply: BigDecimal!
+  tvl:BigDecimal!
+  price:BigDecimal!
+  dailyStats: [BillBrokerDailyStat!]! @derivedFrom(field: "vault")
+  swapNonce: BigInt!
+  swaps: [BillBrokerSwap!]! @derivedFrom(field: "vault")
+}
+
+type BillBrokerDailyStat @entity {
+  "<vault address>-<day timestamp>"
+  id: ID!
+  vault: BillBroker!
+  timestamp: BigInt!
+  perpBal: BigDecimal!
+  usdBal: BigDecimal!
+  perpPrice: BigDecimal!
+  usdPrice: BigDecimal!
+  totalSupply: BigDecimal!
+  usdSwapAmt: BigDecimal!
+  perpSwapAmt: BigDecimal!
+  usdFeeAmt: BigDecimal!
+  perpFeeAmt: BigDecimal!
+  tvl:BigDecimal!
+  price:BigDecimal!
+}
+
+type BillBrokerSwap @entity {
+  "<vault address>-<nonce>"
+  id: ID!
+  vault: BillBroker!
+  timestamp: BigInt!
+  nonce: BigInt!
+  type: String!
+  swapAmt: BigDecimal!
+  feeAmt: BigDecimal!
+  tx: String!
+}
+
 type CharmVault @entity {
   " the vault address "
   id: ID!
@@ -15,17 +71,11 @@ type CharmVault @entity {
   token1Decimals: BigInt!
   token0Bal: BigDecimal!
   token1Bal: BigDecimal!
-  token0BalIn: BigDecimal!
-  token1BalIn: BigDecimal!
   token0Price: BigDecimal!
   token1Price: BigDecimal!
   tvl: BigDecimal!
-  valueIn: BigDecimal!
   price: BigDecimal!
   totalSupply: BigDecimal!
-  unusedToken0Bal: BigDecimal!
-  unusedToken1Bal: BigDecimal!
-  unusedTVL: BigDecimal!
   dailyStats: [CharmVaultDailyStat!]! @derivedFrom(field: "vault")
 }
 
@@ -36,12 +86,13 @@ type CharmVaultDailyStat @entity {
   timestamp: BigInt!
   token0Bal: BigDecimal!
   token1Bal: BigDecimal!
-  token0BalIn: BigDecimal!
-  token1BalIn: BigDecimal!
   token0Price: BigDecimal!
   token1Price: BigDecimal!
   tvl: BigDecimal!
-  valueIn: BigDecimal!
   price: BigDecimal!
   totalSupply: BigDecimal!
+  token0Fees: BigDecimal!
+  token1Fees: BigDecimal!
+  totalFeeVal: BigDecimal!
+  feeYield: BigDecimal!
 }
