@@ -35,7 +35,7 @@ import { BondHelpers } from "./_utils/BondHelpers.sol";
  *          into the reserve. At any time, the reserve holds at most 2 classes of tokens
  *          i.e) the seniors and the underlying collateral.
  *
- *          Incentivized parties can "rollover" tranches approaching maturity or the underlying collateral,
+ *          The rollover vault can "rollover" tranches approaching maturity or the underlying collateral,
  *          for newer seniors (which expire further out in the future) that belong to the updated "depositBond".
  *
  *
@@ -45,6 +45,8 @@ import { BondHelpers } from "./_utils/BondHelpers.sol";
  *      This brings the system storage state up to date.
  *
  *      CRITICAL: On the 3 main system operations: deposit, redeem and rollover;
+ *
+ *      The system charges a fee for minting and burning perp tokens, which are paid to the vault.
  *      We first compute fees before executing any transfers in or out of the system.
  *      The ordering of operations is very important as the fee computation logic,
  *      requires the system TVL as an input and which should be recorded prior to any value
@@ -56,6 +58,12 @@ import { BondHelpers } from "./_utils/BondHelpers.sol";
  *
  *      When computing the value of assets in the system, the code always over-values by
  *      rounding up. When computing the value of incoming assets, the code rounds down.
+ *
+ * @dev With release v5.0, we remove rollover fees entirely. Demand imbalance between perp and the vault
+ *      is restored through a "rebalancing" mechanism. When value needs to flow from perp to the vault,
+ *      the system debases the value of perp tokens by minting perp tokens to the vault.
+ *      When value needs to flow from the vault to perp, the underlying collateral tokens are
+ *      transferred from the vault into perp's reserve thereby enriching the value of perp tokens.
  *
  */
 contract PerpetualTranche is
@@ -381,7 +389,7 @@ contract PerpetualTranche is
         }
 
         // Calculates the fee adjusted amount of perp tokens minted when depositing `trancheInAmt` of tranche tokens
-        // NOTE: This operation should precede any token transfers.
+        // NOTE: This calculation should precede any token transfers.
         (uint256 perpAmtMint, uint256 perpFeeAmt) = _computeMintAmt(trancheIn, trancheInAmt);
         if (trancheInAmt <= 0 || perpAmtMint <= 0) {
             return 0;
@@ -412,7 +420,7 @@ contract PerpetualTranche is
         }
 
         // Calculates the fee adjusted share of reserve tokens to be redeemed
-        // NOTE: This operation should precede any token transfers.
+        // NOTE: This calculation should precede any token transfers.
         (TokenAmount[] memory tokensOut, uint256 perpFeeAmt) = _computeRedemptionAmts(perpAmt);
 
         // burns perp tokens from the sender
@@ -443,8 +451,8 @@ contract PerpetualTranche is
             revert UnacceptableRollover();
         }
 
-        // Calculates the fee adjusted amount of tranches exchanged during a rolled over
-        // NOTE: This operation should precede any token transfers.
+        // Calculates the amount of tranches exchanged during a rolled over
+        // NOTE: This calculation should precede any token transfers.
         RolloverData memory r = _computeRolloverAmt(trancheIn, tokenOut, trancheInAmtAvailable);
 
         // Verifies if rollover amount is acceptable
@@ -793,25 +801,11 @@ contract PerpetualTranche is
     }
 
     /// @dev Computes the amount of reserve tokens that can be rolled out for the given amount of tranches deposited.
-    ///      The relative ratios of tokens In/Out are adjusted based on the current rollover fee perc.
     function _computeRolloverAmt(
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable
     ) private view returns (RolloverData memory) {
-        //-----------------------------------------------------------------------------
-        // The rollover fees are settled by, adjusting the exchange rate
-        // between `trancheInAmt` and `tokenOutAmt`.
-        //
-        int256 feePerc = feePolicy.computePerpRolloverFeePerc(
-            feePolicy.computeDeviationRatio(
-                SubscriptionParams({
-                    perpTVL: _reserveValue(),
-                    vaultTVL: vault.getTVL(),
-                    seniorTR: _depositBond.getSeniorTrancheRatio()
-                })
-            )
-        );
         //-----------------------------------------------------------------------------
 
         // We compute "price" as the value of a unit token.
@@ -843,8 +837,8 @@ contract PerpetualTranche is
             return RolloverData({ trancheInAmt: 0, tokenOutAmt: 0 });
         }
         //-----------------------------------------------------------------------------
-        // Basic rollover with fees:
-        // (1 +/- f) . (trancheInAmt . trancheInPrice) = (tokenOutAmt . tokenOutPrice)
+        // Basic rollover:
+        // (trancheInAmt . trancheInPrice) = (tokenOutAmt . tokenOutPrice)
         //-----------------------------------------------------------------------------
 
         // Using perp's tokenOutBalance, we calculate the amount of tokens in to rollover
@@ -855,17 +849,6 @@ contract PerpetualTranche is
             trancheInAmt: tokenOutBalance.mulDiv(tokenOutPrice, trancheInPrice, MathUpgradeable.Rounding.Up)
         });
 
-        // A positive fee percentage implies that perp charges rotators by
-        // offering tranchesOut for a premium, i.e) more tranches in.
-        if (feePerc > 0) {
-            r.trancheInAmt = r.trancheInAmt.mulDiv(ONE, ONE - feePerc.toUint256(), MathUpgradeable.Rounding.Up);
-        }
-        // A negative fee percentage (or a reward) implies that perp pays the rotators by
-        // offering tranchesOut at a discount, i.e) fewer tranches in.
-        else if (feePerc < 0) {
-            r.trancheInAmt = r.trancheInAmt.mulDiv(ONE, ONE + feePerc.abs(), MathUpgradeable.Rounding.Up);
-        }
-
         //-----------------------------------------------------------------------------
 
         // When the trancheInAmt exceeds trancheInAmtAvailable:
@@ -875,19 +858,6 @@ contract PerpetualTranche is
             // Given the amount of tranches In, we compute the amount of tokens out
             r.trancheInAmt = trancheInAmtAvailable;
             r.tokenOutAmt = trancheInAmtAvailable.mulDiv(trancheInPrice, tokenOutPrice);
-
-            // A positive fee percentage implies that perp charges rotators by
-            // accepting tranchesIn at a discount, i.e) fewer tokens out.
-            // This results in perp enrichment.
-            if (feePerc > 0) {
-                r.tokenOutAmt = r.tokenOutAmt.mulDiv(ONE - feePerc.abs(), ONE);
-            }
-            // A negative fee percentage (or a reward) implies that perp pays the rotators by
-            // accepting tranchesIn at a premium, i.e) more tokens out.
-            // This results in perp debasement.
-            else if (feePerc < 0) {
-                r.tokenOutAmt = r.tokenOutAmt.mulDiv(ONE + feePerc.abs(), ONE);
-            }
         }
 
         return r;
