@@ -2,14 +2,16 @@
 pragma solidity ^0.8.20;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
-import { SubscriptionParams } from "./_interfaces/CommonTypes.sol";
+import { SubscriptionParams, Range, Line } from "./_interfaces/CommonTypes.sol";
 import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds } from "./_interfaces/ProtocolErrors.sol";
 
+import { LineHelpers } from "./_utils/LineHelpers.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 /**
+ *
  *  @title FeePolicy
  *
  *  @notice This contract determines fees for interacting with the perp and vault systems.
@@ -78,13 +80,9 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     ///      Adds a safety buffer to ensure that rollovers are better sustained.
     uint256 public targetSubscriptionRatio;
 
-    /// @notice The lower bound of deviation ratio, below which some operations (which decrease the dr) are disabled.
-    uint256 public deviationRatioBoundLower;
-
-    /// @notice The upper bound of deviation ratio, above which some operations (which increase the dr) are disabled.
-    uint256 public deviationRatioBoundUpper;
-
-    //-----------------------------------------------------------------------------
+    /// @notice The lower and upper deviation ratio bounds outside which
+    ///         some operations (like flash swaps) which move dr away from 1.0 are disabled.
+    Range public drHardBounds;
 
     //-----------------------------------------------------------------------------
     // Perp fee parameters
@@ -120,8 +118,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     RolloverFeeParams public perpRolloverFee;
 
     //-----------------------------------------------------------------------------
-
-    //-----------------------------------------------------------------------------
     // Vault fee parameters
 
     /// @notice The percentage fee charged on minting vault notes.
@@ -130,11 +126,11 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice The percentage fee charged on burning vault notes.
     uint256 public vaultBurnFeePerc;
 
-    /// @notice The percentage fee charged by the vault to swap underlying tokens for perp tokens.
-    uint256 public vaultUnderlyingToPerpSwapFeePerc;
+    /// @notice Lower and upper fee percentages for flash minting.
+    Range public flashMintFeePercs;
 
-    /// @notice The percentage fee charged by the vault to swap perp tokens for underlying tokens.
-    uint256 public vaultPerpToUnderlyingSwapFeePerc;
+    /// @notice Lower and upper fee percentages for flash redemption.
+    Range public flashRedeemFeePercs;
 
     //-----------------------------------------------------------------------------
 
@@ -147,15 +143,15 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     function init() external initializer {
         __Ownable_init();
 
-        // initializing mint/burn fees to zero
+        targetSubscriptionRatio = (ONE * 150) / 100; // 1.5
+        drHardBounds = Range({
+            lower: (ONE * 90) / 100, // 0.9
+            upper: 4 * ONE // 4.0
+        });
+
+        // initializing fees
         perpMintFeePerc = 0;
         perpBurnFeePerc = 0;
-        vaultMintFeePerc = 0;
-        vaultBurnFeePerc = 0;
-
-        // initializing swap fees to 100%, to disable swapping initially
-        vaultUnderlyingToPerpSwapFeePerc = ONE;
-        vaultPerpToUnderlyingSwapFeePerc = ONE;
 
         // NOTE: With the current bond length of 28 days,
         // rollover fee percentages are annualized by dividing by: 365/28 ~= 13
@@ -163,9 +159,12 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         perpRolloverFee.perpDebasementSlope = ONE / 13; // 0.077
         perpRolloverFee.perpEnrichmentSlope = ONE / 13; // 0.077
 
-        targetSubscriptionRatio = (ONE * 150) / 100; // 1.5
-        deviationRatioBoundLower = (ONE * 90) / 100; // 0.9
-        deviationRatioBoundUpper = 4 * ONE; // 4.0
+        vaultMintFeePerc = 0;
+        vaultBurnFeePerc = 0;
+
+        // initializing swap fees to 100%, to disable swapping initially
+        flashMintFeePercs = Range({ lower: ONE, upper: ONE });
+        flashRedeemFeePercs = Range({ lower: ONE, upper: ONE });
     }
 
     //-----------------------------------------------------------------------------
@@ -181,17 +180,12 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @notice Updates the deviation ratio bounds.
-    /// @param deviationRatioBoundLower_ The new lower deviation ratio bound as fixed point number with {DECIMALS} places.
-    /// @param deviationRatioBoundUpper_ The new upper deviation ratio bound as fixed point number with {DECIMALS} places.
-    function updateDeviationRatioBounds(
-        uint256 deviationRatioBoundLower_,
-        uint256 deviationRatioBoundUpper_
-    ) external onlyOwner {
-        if (deviationRatioBoundLower_ > ONE || deviationRatioBoundUpper_ < ONE) {
+    /// @param drHardBounds_ The new hard lower and upper deviation ratio bound as fixed point number with {DECIMALS} places.
+    function updateDRHardBounds(Range memory drHardBounds_) external onlyOwner {
+        if (drHardBounds_.lower > ONE || drHardBounds_.upper < ONE) {
             revert InvalidDRBounds();
         }
-        deviationRatioBoundLower = deviationRatioBoundLower_;
-        deviationRatioBoundUpper = deviationRatioBoundUpper_;
+        drHardBounds = drHardBounds_;
     }
 
     /// @notice Updates the perp mint fee parameters.
@@ -241,22 +235,20 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         vaultBurnFeePerc = vaultBurnFeePerc_;
     }
 
-    /// @notice Updates the vault's share of the underlying to perp swap fee.
-    /// @param feePerc The new fee percentage.
-    function updateVaultUnderlyingToPerpSwapFeePerc(uint256 feePerc) external onlyOwner {
-        if (feePerc > ONE) {
+    /// @notice Updates the vault flash swap fee percentages.
+    /// @param flashMintFeePercs_ The lower and upper flash mint fee percentages as a fixed point numbers with {DECIMALS} places.
+    /// @param flashRedeemFeePercs_ The lower and upper flash redemption fee percentages  as a fixed point numbers with {DECIMALS} places.
+    function updateFlashFees(Range memory flashMintFeePercs_, Range memory flashRedeemFeePercs_) external onlyOwner {
+        if (
+            flashMintFeePercs_.lower > ONE ||
+            flashMintFeePercs_.upper > ONE ||
+            flashRedeemFeePercs_.lower > ONE ||
+            flashRedeemFeePercs_.upper > ONE
+        ) {
             revert InvalidPerc();
         }
-        vaultUnderlyingToPerpSwapFeePerc = feePerc;
-    }
-
-    /// @notice Updates the vault's share of the perp to underlying swap fee.
-    /// @param feePerc The new fee percentage.
-    function updateVaultPerpToUnderlyingSwapFeePerc(uint256 feePerc) external onlyOwner {
-        if (feePerc > ONE) {
-            revert InvalidPerc();
-        }
-        vaultPerpToUnderlyingSwapFeePerc = feePerc;
+        flashMintFeePercs = flashMintFeePercs_;
+        flashRedeemFeePercs = flashRedeemFeePercs_;
     }
 
     //-----------------------------------------------------------------------------
@@ -307,23 +299,55 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @inheritdoc IFeePolicy
     /// @dev Swapping by minting perps reduces system dr, i.e) drPost < drPre.
     function computeUnderlyingToPerpVaultSwapFeePerc(
-        uint256 /*drPre*/,
+        uint256 drPre,
         uint256 drPost
     ) external view override returns (uint256) {
         // When the after op deviation ratio is below the bound,
         // swapping is disabled. (fees are set to 100%)
-        return (drPost < deviationRatioBoundLower ? ONE : vaultUnderlyingToPerpSwapFeePerc);
+        if (drPost <= drHardBounds.lower) {
+            return ONE;
+        }
+        return
+            LineHelpers
+                .computePiecewiseAvgY(
+                    Line({ x1: drHardBounds.lower, y1: flashMintFeePercs.upper, x2: ONE, y2: flashMintFeePercs.lower }),
+                    Line({ x1: ONE, y1: flashMintFeePercs.lower, x2: drHardBounds.upper, y2: flashMintFeePercs.lower }),
+                    Range({ lower: drPost, upper: drPre }),
+                    ONE
+                )
+                .toUint256();
     }
 
     /// @inheritdoc IFeePolicy
     /// @dev Swapping by burning perps increases system dr, i.e) drPost > drPre.
     function computePerpToUnderlyingVaultSwapFeePerc(
-        uint256 /*drPre*/,
+        uint256 drPre,
         uint256 drPost
     ) external view override returns (uint256) {
         // When the after op deviation ratio is above the bound,
         // swapping is disabled. (fees are set to 100%)
-        return (drPost > deviationRatioBoundUpper ? ONE : vaultPerpToUnderlyingSwapFeePerc);
+        if (drPost >= drHardBounds.upper) {
+            return ONE;
+        }
+        return
+            LineHelpers
+                .computePiecewiseAvgY(
+                    Line({
+                        x1: drHardBounds.lower,
+                        y1: flashRedeemFeePercs.lower,
+                        x2: ONE,
+                        y2: flashRedeemFeePercs.lower
+                    }),
+                    Line({
+                        x1: ONE,
+                        y1: flashRedeemFeePercs.lower,
+                        x2: drHardBounds.upper,
+                        y2: flashRedeemFeePercs.upper
+                    }),
+                    Range({ lower: drPre, upper: drPost }),
+                    ONE
+                )
+                .toUint256();
     }
 
     /// @inheritdoc IFeePolicy
