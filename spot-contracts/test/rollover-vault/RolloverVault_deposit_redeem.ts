@@ -65,7 +65,7 @@ describe("RolloverVault", function () {
     await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
     await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
     await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
-    await feePolicy.mockMethod("computePerpRolloverFeePerc(uint256)", [0]);
+
     await feePolicy.mockMethod("computeVaultMintFeePerc()", [0]);
     await feePolicy.mockMethod("computeVaultBurnFeePerc()", [0]);
     await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [0]);

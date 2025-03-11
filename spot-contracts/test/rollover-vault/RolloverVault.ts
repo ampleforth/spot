@@ -41,7 +41,7 @@ describe("RolloverVault", function () {
     await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
     await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
     await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
-    await feePolicy.mockMethod("computePerpRolloverFeePerc(uint256)", [0]);
+
     await feePolicy.mockMethod("computeVaultMintFeePerc()", [0]);
     await feePolicy.mockMethod("computeVaultBurnFeePerc()", [0]);
     await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [0]);
@@ -81,6 +81,7 @@ describe("RolloverVault", function () {
       expect(await vault.minDeploymentAmt()).to.eq("0");
       expect(await vault.reservedUnderlyingBal()).to.eq("0");
       expect(await vault.reservedSubscriptionPerc()).to.eq("0");
+      expect(await vault.lastRebalanceTimestampSec()).not.to.eq("0");
     });
 
     it("should initialize lists", async function () {
@@ -169,6 +170,47 @@ describe("RolloverVault", function () {
         await expect(tx)
           .to.emit(vault, "Unpaused")
           .withArgs(await otherUser.getAddress());
+      });
+    });
+  });
+
+  describe("#stopRebalance", function () {
+    beforeEach(async function () {
+      await vault.updateKeeper(await otherUser.getAddress());
+    });
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(vault.connect(deployer).stopRebalance()).to.be.revertedWithCustomError(vault, "UnauthorizedCall");
+      });
+    });
+
+    describe("when valid", function () {
+      it("should stop rebalance", async function () {
+        await vault.connect(otherUser).stopRebalance();
+        expect(await vault.lastRebalanceTimestampSec()).to.eq(ethers.MaxUint256 - 86400n);
+      });
+    });
+  });
+
+  describe("#restartRebalance", function () {
+    beforeEach(async function () {
+      await vault.updateKeeper(await otherUser.getAddress());
+    });
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(vault.connect(deployer).restartRebalance()).to.be.revertedWithCustomError(
+          vault,
+          "UnauthorizedCall",
+        );
+      });
+    });
+
+    describe("when valid", function () {
+      it("should restart rebalance", async function () {
+        await vault.connect(otherUser).restartRebalance();
+        expect(await vault.lastRebalanceTimestampSec()).to.lt(ethers.MaxUint256);
       });
     });
   });

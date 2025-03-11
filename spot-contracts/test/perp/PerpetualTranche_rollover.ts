@@ -61,7 +61,6 @@ describe("PerpetualTranche", function () {
     await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
     await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
     await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
-    await feePolicy.mockMethod("computePerpRolloverFeePerc(uint256)", [0]);
 
     const MockVault = await ethers.getContractFactory("MockVault");
     mockVault = await MockVault.deploy();
@@ -416,10 +415,8 @@ describe("PerpetualTranche", function () {
       });
     });
 
-    describe("when fee is zero", function () {
-      beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpRolloverFeePerc(uint256)", [0]);
-      });
+    describe("when typical rollover", function () {
+      beforeEach(async function () {});
       it("should transfer the tranches in", async function () {
         await expect(() =>
           mockVault.rollover(perp.target, rolloverInTranche.target, reserveTranche.target, toFixedPtAmt("500")),
@@ -443,60 +440,6 @@ describe("PerpetualTranche", function () {
         );
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
-      });
-    });
-
-    describe("when fee > 0", function () {
-      beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpRolloverFeePerc(uint256)", [toPercFixedPtAmt("0.01")]);
-      });
-      it("should transfer the tranches in", async function () {
-        await expect(() =>
-          mockVault.rollover(perp.target, rolloverInTranche.target, reserveTranche.target, toFixedPtAmt("500")),
-        ).to.changeTokenBalances(rolloverInTranche, [deployer, perp], [toFixedPtAmt("-500"), toFixedPtAmt("500")]);
-      });
-      it("should transfer the tranches out", async function () {
-        await expect(() =>
-          mockVault.rollover(perp.target, rolloverInTranche.target, reserveTranche.target, toFixedPtAmt("500")),
-        ).to.changeTokenBalances(reserveTranche, [deployer, perp], [toFixedPtAmt("495"), toFixedPtAmt("-495")]);
-      });
-      it("should calculate rollover amt", async function () {
-        const r = await perp.computeRolloverAmt.staticCall(
-          rolloverInTranche.target,
-          reserveTranche.target,
-          toFixedPtAmt("500"),
-        );
-        expect(r.tokenOutAmt).to.eq(toFixedPtAmt("495"));
-        expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
-      });
-    });
-
-    describe("when fee < 0", function () {
-      beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpRolloverFeePerc(uint256)", [toPercFixedPtAmt("-0.01")]);
-      });
-      it("should transfer the tranches in", async function () {
-        await expect(() =>
-          mockVault.rollover(perp.target, rolloverInTranche.target, reserveTranche.target, toFixedPtAmt("500")),
-        ).to.changeTokenBalances(
-          rolloverInTranche,
-          [deployer, perp],
-          [toFixedPtAmt("-495.049504950495049505"), toFixedPtAmt("495.049504950495049505")],
-        );
-      });
-      it("should transfer the tranches out", async function () {
-        await expect(() =>
-          mockVault.rollover(perp.target, rolloverInTranche.target, reserveTranche.target, toFixedPtAmt("500")),
-        ).to.changeTokenBalances(reserveTranche, [deployer, perp], [toFixedPtAmt("500"), toFixedPtAmt("-500")]);
-      });
-      it("should calculate rollover amt", async function () {
-        const r = await perp.computeRolloverAmt.staticCall(
-          rolloverInTranche.target,
-          reserveTranche.target,
-          toFixedPtAmt("500"),
-        );
-        expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-        expect(r.trancheInAmt).to.eq(toFixedPtAmt("495.049504950495049505"));
       });
     });
 
@@ -794,74 +737,6 @@ describe("PerpetualTranche", function () {
       it("should compute the rollover amounts", async function () {
         expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
         expect(r.trancheInAmt).to.eq(toFixedPtAmt("500"));
-      });
-    });
-
-    describe("when tokenOut is NOT covered and fee > 0", async function () {
-      let tx: Transaction, r: any;
-      beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpRolloverFeePerc(uint256)", [toPercFixedPtAmt("0.01")]);
-        r = await perp.computeRolloverAmt.staticCall(
-          rolloverInTranche.target,
-          reserveTranche.target,
-          toFixedPtAmt("2000"),
-        );
-        tx = mockVault.rollover(perp.target, rolloverInTranche.target, reserveTranche.target, toFixedPtAmt("2000"));
-        await tx;
-      });
-
-      it("should update the reserve (only transfers covered amount)", async function () {
-        await checkPerpComposition(
-          perp,
-          [collateralToken, rolloverInTranche],
-          [toFixedPtAmt("500"), toFixedPtAmt("1005.050505050505050506")],
-        );
-      });
-
-      it("should emit reserve synced", async function () {
-        await expect(tx)
-          .to.emit(perp, "ReserveSynced")
-          .withArgs(rolloverInTranche.target, toFixedPtAmt("1005.050505050505050506"))
-          .to.emit(perp, "ReserveSynced")
-          .withArgs(reserveTranche.target, "0");
-      });
-      it("should compute the rollover amounts", async function () {
-        expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-        expect(r.trancheInAmt).to.eq(toFixedPtAmt("505.050505050505050506"));
-      });
-    });
-
-    describe("when tokenOut is NOT covered and fee < 0", async function () {
-      let tx: Transaction, r: any;
-      beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpRolloverFeePerc(uint256)", [toPercFixedPtAmt("-0.01")]);
-        r = await perp.computeRolloverAmt.staticCall(
-          rolloverInTranche.target,
-          reserveTranche.target,
-          toFixedPtAmt("2000"),
-        );
-        tx = mockVault.rollover(perp.target, rolloverInTranche.target, reserveTranche.target, toFixedPtAmt("2000"));
-        await tx;
-      });
-
-      it("should update the reserve (only transfers covered amount)", async function () {
-        await checkPerpComposition(
-          perp,
-          [collateralToken, rolloverInTranche],
-          [toFixedPtAmt("500"), toFixedPtAmt("995.049504950495049505")],
-        );
-      });
-
-      it("should emit reserve synced", async function () {
-        await expect(tx)
-          .to.emit(perp, "ReserveSynced")
-          .withArgs(rolloverInTranche.target, toFixedPtAmt("995.049504950495049505"))
-          .to.emit(perp, "ReserveSynced")
-          .withArgs(reserveTranche.target, "0");
-      });
-      it("should compute the rollover amounts", async function () {
-        expect(r.tokenOutAmt).to.eq(toFixedPtAmt("500"));
-        expect(r.trancheInAmt).to.eq(toFixedPtAmt("495.049504950495049505"));
       });
     });
 

@@ -54,7 +54,6 @@ describe("PerpetualTranche", function () {
     await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
     await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
     await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
-    await feePolicy.mockMethod("computePerpRolloverFeePerc(uint256)", [0]);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
