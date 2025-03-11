@@ -470,6 +470,13 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
+    /// @dev CAUTION: Only the whitelisted vault can call this function. The logic controlling the frequency
+    ///      and magnitude of debasement should be thoroughly vetted.
+    function debase(uint256 perpAmtMint) external override onlyVault afterStateUpdate nonReentrant whenNotPaused {
+        _mint(address(vault), perpAmtMint);
+    }
+
+    /// @inheritdoc IPerpetualTranche
     function getDepositBond() external override afterStateUpdate returns (IBondController) {
         return _depositBond;
     }

@@ -5,6 +5,10 @@ import { IVault } from "./IVault.sol";
 import { SubscriptionParams } from "./CommonTypes.sol";
 
 interface IRolloverVault is IVault {
+    /// @notice Gradually transfers value between the perp and vault, to bring the system back into balance.
+    /// @dev The rebalance function can be executed at-most once a day.
+    function rebalance() external;
+
     /// @notice Allows users to swap their underlying tokens for perps held by the vault.
     /// @param underlyingAmtIn The amount of underlying tokens swapped in.
     /// @return The amount of perp tokens swapped out.

@@ -2,51 +2,43 @@
 pragma solidity ^0.8.20;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
-import { SubscriptionParams, Range, Line } from "./_interfaces/CommonTypes.sol";
-import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds } from "./_interfaces/ProtocolErrors.sol";
+import { SubscriptionParams, Range, Line, RebalanceData } from "./_interfaces/CommonTypes.sol";
+import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds, ValueTooLow } from "./_interfaces/ProtocolErrors.sol";
 
 import { LineHelpers } from "./_utils/LineHelpers.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
-import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+
 /**
- *
  *  @title FeePolicy
  *
- *  @notice This contract determines fees for interacting with the perp and vault systems.
+ *  @notice This contract determines fees and incentives for interacting with the perp and vault systems.
  *
  *          The fee policy attempts to balance the demand for holding perp tokens with
  *          the demand for holding vault tokens; such that the total collateral in the vault
  *          supports rolling over all mature collateral backing perps.
  *
- *          Fees are computed based on the deviation between the system's current subscription ratio
- *          and the target subscription ratio.
+ *          The system's balance is defined by it's `deviationRatio` which is defined as follows.
  *              - `subscriptionRatio`   = (vaultTVL * seniorTR) / (perpTVL * 1-seniorTR)
  *              - `deviationRatio` (dr) = subscriptionRatio / targetSubscriptionRatio
  *
- *          When the system is "under-subscribed" (dr <= 1):
- *              - Rollover fees flow from perp holders to vault note holders.
- *              - Fees are charged for minting new perps.
- *              - No fees are charged for redeeming perps.
+ *          When the dr = 1, the system is considered perfectly balanced.
+ *          When the dr < 1, it's considered "under-subscribed".
+ *          When the dr > 1, it's considered "over-subscribed".
  *
- *          When the system is "over-subscribed" (dr > 1):
- *              - Rollover fees flow from vault note holders to perp holders.
- *              - No fees are charged for minting new perps.
- *              - Fees are charged for redeeming perps.
+ *          Fees:
+ *          - The system charges users a static "entry" and "exit fees", i.e) fees when users mint/redeem perps and vault notes.
+ *          - The rollover vault rents out excess liquidity if available for flash swaps for which it charges a fee.
  *
- *          Regardless of the `deviationRatio`, the system charges a fixed percentage fee
- *          for minting and redeeming vault notes.
- *
- *
- *          The rollover fees are signed and can flow in either direction based on the `deviationRatio`.
- *          The fee function parameters are set by the owner.
- *
- *          CRITICAL: The rollover fee percentage is NOT annualized, the fee percentage is applied per rollover.
- *          The number of rollovers per year changes based on the duration of perp's minting bond.
- *
- *          We consider a `deviationRatio` of greater than 1.0 healthy (or "over-subscribed").
- *          In general, the system favors an elastic perp supply and an inelastic vault note supply.
+ *          Incentives:
+ *          - When the system is "under-subscribed", value is transferred from perp to the vault at a predefined rate.
+ *            This debases perp tokens gradually and their redeemable value goes down.
+ *          - When the system is "over-subscribed", value is transferred from the vault to perp at a predefined rate.
+ *            This enriches perp tokens gradually and their redeemable value goes up.
+ *          - This transfer is implemented through a daily "rebalance" operation (executed by the vault),
+ *            gradually nudges the system back into balance. On rebalance, the vault queries this policy
+ *            to compute the magnitude and direction of value transfer.
  *
  *
  */
@@ -74,6 +66,12 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Target subscription ratio higher bound, 2.0 or 200%.
     uint256 public constant TARGET_SR_UPPER_BOUND = 2 * ONE;
 
+    /// @notice Enforced maximum percentage of perp's TVL changed by debasement or enrichment (per rebalance operation).
+    uint256 public constant MAX_REBALANCE_VALUE_CHANGE_PERC = ONE / 100; // 0.01 or 1%
+
+    /// @notice Minimum configurable value of debasement and enrichment lag.
+    uint256 public constant MIN_LAG = 28;
+
     //-----------------------------------------------------------------------------
     /// @notice The target subscription ratio i.e) the normalization factor.
     /// @dev The ratio under which the system is considered "under-subscribed".
@@ -89,40 +87,13 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     Range public drSoftBound;
 
     //-----------------------------------------------------------------------------
-    // Perp fee parameters
+    // Fee parameters
 
     /// @notice The percentage fee charged on minting perp tokens.
     uint256 public perpMintFeePerc;
 
     /// @notice The percentage fee charged on burning perp tokens.
     uint256 public perpBurnFeePerc;
-
-    /// @dev NOTE: We updated the type of the parameters from int256 to uint256, which is an upgrade safe operation.
-    struct RolloverFeeParams {
-        /// @notice The minimum rollover fee percentage enforced by the contract.
-        /// @dev This is represented as signed fixed point number with {DECIMALS} places.
-        ///      The rollover fee percentage returned by the fee policy will be no lower than
-        ///      this specified value.
-        ///      The parameter effectively controls perp's maximum debasement amount.
-        int256 minRolloverFeePerc;
-        /// @notice The slope of the linear rollover fee curve when (dr <= 1).
-        /// @dev This is represented as fixed point number with {DECIMALS} places.
-        ///      Setting it to say (28 / 365), given a 28 day bond cycle it would take 1 year for dr to increase to 1.0.
-        ///      (assuming no other changes to the system)
-        uint256 perpDebasementSlope;
-        /// @notice The slope of the linear rollover fee curve when (dr > 1).
-        /// @dev This is represented as fixed point number with {DECIMALS} places.
-        ///      Setting it to say (28 / 365), given a 28 day bond cycle it would take 1 year for dr to decrease to 1.0.
-        ///      (assuming no other changes to the system)
-        uint256 perpEnrichmentSlope;
-    }
-
-    /// @notice Parameters which control the perp rollover fee,
-    ///         i.e) the funding rate for holding perps.
-    RolloverFeeParams public perpRolloverFee;
-
-    //-----------------------------------------------------------------------------
-    // Vault fee parameters
 
     /// @notice The percentage fee charged on minting vault notes.
     uint256 public vaultMintFeePerc;
@@ -135,6 +106,23 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @notice Lower and upper fee percentages for flash redemption.
     Range public flashRedeemFeePercs;
+
+    //-----------------------------------------------------------------------------
+    // Incentive parameters
+
+    /// @notice The debasement lag, dampens the rebalance adjustment on debasement by a factor of {1/debasementLag}
+    /// @dev Its set as a natural number with no decimal places.
+    uint256 public debasementLag;
+
+    /// @notice The enrichment lag, dampens the rebalance adjustment on enrichment by a factor of {1/debasementLag}
+    /// @dev Its set as a natural number with no decimal places.
+    uint256 public enrichmentLag;
+
+    /// @notice The percentage of the debasement value charged by the protocol as fees.
+    uint256 public debasementProtocolSharePerc;
+
+    /// @notice The percentage of the enrichment value charged by the protocol as fees.
+    uint256 public enrichmentProtocolSharePerc;
 
     //-----------------------------------------------------------------------------
 
@@ -160,19 +148,18 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         // initializing fees
         perpMintFeePerc = 0;
         perpBurnFeePerc = 0;
-
-        // NOTE: With the current bond length of 28 days,
-        // rollover fee percentages are annualized by dividing by: 365/28 ~= 13
-        perpRolloverFee.minRolloverFeePerc = -int256(ONE) / 13; // 0.077 (-100% annualized)
-        perpRolloverFee.perpDebasementSlope = ONE / 13; // 0.077
-        perpRolloverFee.perpEnrichmentSlope = ONE / 13; // 0.077
-
         vaultMintFeePerc = 0;
         vaultBurnFeePerc = 0;
 
         // initializing swap fees to 100%, to disable swapping initially
         flashMintFeePercs = Range({ lower: ONE, upper: ONE });
         flashRedeemFeePercs = Range({ lower: ONE, upper: ONE });
+
+        // initializing incentives
+        enrichmentLag = 180;
+        debasementLag = 180;
+        debasementProtocolSharePerc = 0;
+        enrichmentProtocolSharePerc = 0;
     }
 
     //-----------------------------------------------------------------------------
@@ -221,13 +208,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         perpBurnFeePerc = perpBurnFeePerc_;
     }
 
-    /// @notice Update the parameters determining the rollover fee curve.
-    /// @dev Back into the per-rollover percentage based on the bond duration, and thus number of rollovers per year.
-    /// @param p Paramters are fixed point numbers with {DECIMALS} places.
-    function updatePerpRolloverFees(RolloverFeeParams calldata p) external onlyOwner {
-        perpRolloverFee = p;
-    }
-
     /// @notice Updates the vault mint fee parameters.
     /// @param vaultMintFeePerc_ The new vault mint fee ceiling percentage
     ///        as a fixed point number with {DECIMALS} places.
@@ -264,6 +244,32 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         flashRedeemFeePercs = flashRedeemFeePercs_;
     }
 
+    /// @notice Updates the rebalance reaction lag.
+    /// @param debasementLag_ The dampening factor which controls the magnitude of the daily debasement.
+    /// @param enrichmentLag_ The dampening factor which controls the magnitude of the daily enrichment.
+    function updateRebalanceLag(uint256 debasementLag_, uint256 enrichmentLag_) external onlyOwner {
+        if (debasementLag_ <= MIN_LAG || enrichmentLag_ <= MIN_LAG) {
+            revert ValueTooLow();
+        }
+        debasementLag = debasementLag_;
+        enrichmentLag = enrichmentLag_;
+    }
+
+    /// @notice Updates the protocol cut of the daily debasement and enrichment.
+    /// @param debasementProtocolSharePerc_ The share of the debasement which goes to the protocol.
+    /// @param enrichmentProtocolSharePerc_ The share of the enrichment which goes to the protocol.
+    function updateProtocolSharePerc(
+        uint256 debasementProtocolSharePerc_,
+        uint256 enrichmentProtocolSharePerc_
+    ) external onlyOwner {
+        if (debasementProtocolSharePerc_ > ONE || enrichmentProtocolSharePerc_ > ONE) {
+            revert InvalidPerc();
+        }
+
+        debasementProtocolSharePerc = debasementProtocolSharePerc_;
+        enrichmentProtocolSharePerc = enrichmentProtocolSharePerc_;
+    }
+
     //-----------------------------------------------------------------------------
     // Public methods
 
@@ -277,25 +283,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @dev Burning perps increases system dr, i.e) drPost > drPre.
     function computePerpBurnFeePerc() public view override returns (uint256) {
         return perpBurnFeePerc;
-    }
-
-    /// @inheritdoc IFeePolicy
-    function computePerpRolloverFeePerc(uint256 dr) external view override returns (int256 rolloverFeePerc) {
-        RolloverFeeParams memory c = perpRolloverFee;
-        if (dr <= ONE) {
-            // The cappedSr is the essentially the percentage of perp's collateral which can be rolled over
-            // given the vault's current liquidity level.
-            // Said simply, if cappedSr is 0.5 only 50% of the perp's collateral can be rolled over.
-            // If cappedSr is 1.0, all of perp's collateral can be rolled over.
-            uint256 cappedSr = MathUpgradeable.min(dr * targetSubscriptionRatio, ONE);
-            uint256 negRolloverFeePerc = cappedSr > 0
-                ? (ONE - dr).mulDiv(c.perpDebasementSlope, cappedSr, MathUpgradeable.Rounding.Up)
-                : c.perpDebasementSlope;
-            rolloverFeePerc = -negRolloverFeePerc.toInt256();
-        } else {
-            rolloverFeePerc = (dr - ONE).mulDiv(c.perpEnrichmentSlope, ONE).toInt256();
-        }
-        rolloverFeePerc = SignedMathUpgradeable.max(rolloverFeePerc, c.minRolloverFeePerc);
     }
 
     /// @inheritdoc IFeePolicy
@@ -379,9 +366,47 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computeDeviationRatio(SubscriptionParams memory s) public view returns (uint256) {
+    function computeDeviationRatio(SubscriptionParams memory s) public view override returns (uint256) {
         // NOTE: We assume that perp's TVL and vault's TVL values have the same base denomination.
         uint256 juniorTR = TRANCHE_RATIO_GRANULARITY - s.seniorTR;
         return (s.vaultTVL * s.seniorTR).mulDiv(ONE, (s.perpTVL * juniorTR)).mulDiv(ONE, targetSubscriptionRatio);
+    }
+
+    /// @inheritdoc IFeePolicy
+    function computeRebalanceData(SubscriptionParams memory s) external view override returns (RebalanceData memory r) {
+        uint256 perpValueChangePerc = 0;
+        (r.perpDebasement, perpValueChangePerc) = computePerpEquilibriumPerc(s);
+        perpValueChangePerc = perpValueChangePerc / (r.perpDebasement ? debasementLag : enrichmentLag);
+        perpValueChangePerc = MathUpgradeable.min(perpValueChangePerc, MAX_REBALANCE_VALUE_CHANGE_PERC);
+
+        r.underlyingAmtToTransfer = s.perpTVL.mulDiv(perpValueChangePerc, ONE);
+        r.protocolFeeUnderlyingAmt = r.underlyingAmtToTransfer.mulDiv(
+            (r.perpDebasement ? debasementProtocolSharePerc : enrichmentProtocolSharePerc),
+            ONE
+        );
+        r.underlyingAmtToTransfer -= r.protocolFeeUnderlyingAmt;
+    }
+
+    /// @notice Computes the percentage change in perpTVL (to or from the vault) to bring the system to equilibrium.
+    /// @param s The subscription parameters of both the perp and vault systems.
+    /// @return debasement True, when value has to flow from perp into the vault and False when value has to flow from the vault into perp.
+    /// @return valueChangePerc The percentage of the perpTVL that has to flow out of perp (into the vault) or into perp (from the vault)
+    ///                         to make the system perfectly balanced (to make dr = 1.0).
+    function computePerpEquilibriumPerc(
+        SubscriptionParams memory s
+    ) public view returns (bool debasement, uint256 valueChangePerc) {
+        uint256 juniorTR = TRANCHE_RATIO_GRANULARITY - s.seniorTR;
+        uint256 dr = computeDeviationRatio(s);
+        uint256 perpAdjFactor = ONE.mulDiv(
+            (juniorTR * targetSubscriptionRatio),
+            (juniorTR * targetSubscriptionRatio) + (s.seniorTR * ONE)
+        );
+        if (dr <= ONE) {
+            debasement = true;
+            valueChangePerc = perpAdjFactor.mulDiv(ONE - dr, ONE);
+        } else {
+            debasement = false;
+            valueChangePerc = perpAdjFactor.mulDiv(dr - ONE, ONE);
+        }
     }
 }
