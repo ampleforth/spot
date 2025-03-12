@@ -82,5 +82,5 @@ error InvalidTargetSRBounds();
 /// @notice Expected deviation ratio bounds to be valid.
 error InvalidDRBounds();
 
-/// @notice Expected higher value.
-error ValueTooLow();
+/// @notice Expected lower value.
+error ValueTooHigh();

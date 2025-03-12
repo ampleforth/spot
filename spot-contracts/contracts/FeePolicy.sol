@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
 import { SubscriptionParams, Range, Line, RebalanceData } from "./_interfaces/CommonTypes.sol";
-import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds, ValueTooLow } from "./_interfaces/ProtocolErrors.sol";
+import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds, ValueTooHigh } from "./_interfaces/ProtocolErrors.sol";
 
 import { LineHelpers } from "./_utils/LineHelpers.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
@@ -41,6 +41,9 @@ import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/O
  *            to compute the magnitude and direction of value transfer.
  *
  *
+ *          NOTE: All parameters are stored as fixed point numbers with {DECIMALS} decimal places.
+ *
+ *
  */
 contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     // Libraries
@@ -66,11 +69,8 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Target subscription ratio higher bound, 2.0 or 200%.
     uint256 public constant TARGET_SR_UPPER_BOUND = 2 * ONE;
 
-    /// @notice Enforced maximum percentage of perp's TVL changed by debasement or enrichment (per rebalance operation).
-    uint256 public constant MAX_REBALANCE_VALUE_CHANGE_PERC = ONE / 100; // 0.01 or 1%
-
-    /// @notice Minimum configurable value of debasement and enrichment lag.
-    uint256 public constant MIN_LAG = 28;
+    /// @notice The enforced maximum change in perp's value per rebalance operation.
+    uint256 public constant MAX_PERP_VALUE_CHANGE_PERC = ONE / 100; // 0.01 or 1%
 
     //-----------------------------------------------------------------------------
     /// @notice The target subscription ratio i.e) the normalization factor.
@@ -110,13 +110,11 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     //-----------------------------------------------------------------------------
     // Incentive parameters
 
-    /// @notice The debasement lag, dampens the rebalance adjustment on debasement by a factor of {1/debasementLag}
-    /// @dev Its set as a natural number with no decimal places.
-    uint256 public debasementLag;
+    /// @notice The magnitude of perp's daily debasement (when dr <= 1).
+    uint256 public debasementValueChangePerc;
 
-    /// @notice The enrichment lag, dampens the rebalance adjustment on enrichment by a factor of {1/debasementLag}
-    /// @dev Its set as a natural number with no decimal places.
-    uint256 public enrichmentLag;
+    /// @notice The magnitude of perp's daily enrichment (when dr > 1).
+    uint256 public enrichmentValueChangePerc;
 
     /// @notice The percentage of the debasement value charged by the protocol as fees.
     uint256 public debasementProtocolSharePerc;
@@ -156,8 +154,8 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         flashRedeemFeePercs = Range({ lower: ONE, upper: ONE });
 
         // initializing incentives
-        enrichmentLag = 180;
-        debasementLag = 180;
+        debasementValueChangePerc = ONE / 1000; // 0.1% or 10 bps
+        enrichmentValueChangePerc = ONE / 666; // ~0.15% or 15 bps
         debasementProtocolSharePerc = 0;
         enrichmentProtocolSharePerc = 0;
     }
@@ -245,14 +243,20 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @notice Updates the rebalance reaction lag.
-    /// @param debasementLag_ The dampening factor which controls the magnitude of the daily debasement.
-    /// @param enrichmentLag_ The dampening factor which controls the magnitude of the daily enrichment.
-    function updateRebalanceLag(uint256 debasementLag_, uint256 enrichmentLag_) external onlyOwner {
-        if (debasementLag_ <= MIN_LAG || enrichmentLag_ <= MIN_LAG) {
-            revert ValueTooLow();
+    /// @param debasementValueChangePerc_ The magnitude of the daily debasement.
+    /// @param enrichmentValueChangePerc_ The magnitude of the daily enrichment.
+    function updateRebalanceRate(
+        uint256 debasementValueChangePerc_,
+        uint256 enrichmentValueChangePerc_
+    ) external onlyOwner {
+        if (
+            debasementValueChangePerc_ > MAX_PERP_VALUE_CHANGE_PERC ||
+            enrichmentValueChangePerc_ > MAX_PERP_VALUE_CHANGE_PERC
+        ) {
+            revert ValueTooHigh();
         }
-        debasementLag = debasementLag_;
-        enrichmentLag = enrichmentLag_;
+        debasementValueChangePerc = debasementValueChangePerc_;
+        enrichmentValueChangePerc = enrichmentValueChangePerc_;
     }
 
     /// @notice Updates the protocol cut of the daily debasement and enrichment.
@@ -376,9 +380,10 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     function computeRebalanceData(SubscriptionParams memory s) external view override returns (RebalanceData memory r) {
         uint256 perpValueChangePerc = 0;
         (r.perpDebasement, perpValueChangePerc) = computePerpEquilibriumPerc(s);
-        perpValueChangePerc = perpValueChangePerc / (r.perpDebasement ? debasementLag : enrichmentLag);
-        perpValueChangePerc = MathUpgradeable.min(perpValueChangePerc, MAX_REBALANCE_VALUE_CHANGE_PERC);
-
+        perpValueChangePerc = MathUpgradeable.min(
+            perpValueChangePerc,
+            (r.perpDebasement ? debasementValueChangePerc : enrichmentValueChangePerc)
+        );
         r.underlyingAmtToTransfer = s.perpTVL.mulDiv(perpValueChangePerc, ONE);
         r.protocolFeeUnderlyingAmt = r.underlyingAmtToTransfer.mulDiv(
             (r.perpDebasement ? debasementProtocolSharePerc : enrichmentProtocolSharePerc),
