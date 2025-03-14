@@ -307,7 +307,7 @@ contract RolloverVault is
         if (block.timestamp <= lastRebalanceTimestampSec + DAY_SEC) {
             revert LastRebalanceTooRecent();
         }
-        _execRebalance(perp, underlying);
+        _rebalance(perp, underlying);
         lastRebalanceTimestampSec = block.timestamp;
     }
 
@@ -351,13 +351,16 @@ contract RolloverVault is
 
     /// @inheritdoc IVault
     function recover() public override nonReentrant whenNotPaused {
-        // Redeem deployed tranches
-        uint8 deployedCount_ = uint8(_deployed.length());
-        if (deployedCount_ <= 0) {
-            return;
+        // In case the vault holds perp tokens, from rebalancing or fees,
+        // we deconstruct them into tranches.
+        {
+            IPerpetualTranche perp_ = perp;
+            _meldPerps(perp_);
+            _syncAsset(perp_);
         }
 
-        // execute redemption on each deployed asset
+        // Redeem deployed tranches
+        uint8 deployedCount_ = uint8(_deployed.length());
         for (uint8 i = 0; i < deployedCount_; ++i) {
             ITranche tranche = ITranche(_deployed.at(i));
             uint256 trancheBalance = tranche.balanceOf(address(this));
@@ -410,14 +413,12 @@ contract RolloverVault is
 
         IPerpetualTranche perp_ = perp;
         if (address(token) == address(perp_)) {
-            // In case the vault holds perp tokens after swaps or if transferred in erroneously,
-            // anyone can execute this function to recover perps into tranches.
-            // This is not part of the regular recovery flow.
             _meldPerps(perp_);
             _syncAsset(perp_);
             _syncAsset(underlying);
             return;
         }
+
         revert UnexpectedAsset();
     }
 
@@ -747,11 +748,16 @@ contract RolloverVault is
     //--------------------------------------------------------------------------
     // Private write methods
 
-    /// @dev Low-level method which executes a system-level rebalance. Transfers value between
-    ///      the perp reserve and the vault such that the system moves gently toward balance.
+    /// @dev Executes a system-level rebalance. This operation transfers value between
+    ///      the perp reserve and the vault such that the system moves toward balance.
     ///      Settles protocol fees, charged as a percentage of the bi-directional flow in value.
     ///      Performs some book-keeping to keep track of the vault and perp's assets.
-    function _execRebalance(IPerpetualTranche perp_, IERC20Upgradeable underlying_) private {
+    function _rebalance(IPerpetualTranche perp_, IERC20Upgradeable underlying_) private {
+        // If the vault has any perp tokens we deconstruct it
+        // such that it's value reflects in the vault's TVL,
+        // before the rebalance calculation.
+        _meldPerps(perp_);
+
         SubscriptionParams memory s = _querySubscriptionState(perp_);
         RebalanceData memory r = feePolicy.computeRebalanceData(s);
         if (r.perpDebasement) {
@@ -765,18 +771,21 @@ contract RolloverVault is
                 perp_.debase(protocolFeePerpAmt);
                 IERC20Upgradeable(address(perp_)).safeTransfer(owner(), protocolFeePerpAmt);
             }
+
+            // We immediately deconstruct perp tokens minted to the vault.
+            _meldPerps(perp_);
         } else {
             // We transfer value from the vault to perp, by transferring underlying collateral tokens to perp.
             underlying_.safeTransfer(address(perp), r.underlyingAmtToTransfer);
             if (r.protocolFeeUnderlyingAmt > 0) {
                 underlying_.safeTransfer(owner(), r.protocolFeeUnderlyingAmt);
             }
+            perp_.updateState(); // Trigger perp book-keeping
         }
 
-        // Token balance book-keeping
-        _syncAsset(underlying_);
+        // Sync token balances.
         _syncAsset(perp_);
-        perp_.updateState();
+        _syncAsset(underlying_);
     }
 
     /// @dev Redeems tranche tokens held by the vault, for underlying.

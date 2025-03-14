@@ -148,18 +148,28 @@ describe("RolloverVault", function () {
       beforeEach(async function () {
         await feePolicy.mockMethod("computeRebalanceData((uint256,uint256,uint256))", [[true, toFixedPtAmt("10"), 0n]]);
       });
-      it("should mint perps to the vault", async function () {
+      it("should transfer value to the vault (by minting and melding perps)", async function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("800"));
-        await expect(() => vault.rebalance()).to.changeTokenBalances(perp, [vault], [toFixedPtAmt("10")]);
-        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("810"));
+        expect(await perp.getTVL.staticCall()).to.eq(toFixedPtAmt("800"));
+        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2000"));
+        await expect(() => vault.rebalance()).to.changeTokenBalances(perp, [vault], [toFixedPtAmt("0")]);
+        expect(await perp.getTVL.staticCall()).to.eq(toFixedPtAmt("790.123456790123456792"));
+        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2009.876543209876543204"));
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("800"));
       });
-      it("should not change the vault balance", async function () {
-        await expect(() => vault.rebalance()).to.changeTokenBalances(collateralToken, [vault], [0n]);
+      it("should update the vault balance (after melding)", async function () {
+        await expect(() => vault.rebalance()).to.changeTokenBalances(
+          collateralToken,
+          [vault],
+          [toFixedPtAmt("24.691358024691358")],
+        );
       });
       it("should sync token balances", async function () {
         const tx = vault.rebalance();
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.target, toFixedPtAmt("200"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(perp.target, toFixedPtAmt("10"));
+        await expect(tx)
+          .to.emit(vault, "AssetSynced")
+          .withArgs(collateralToken.target, toFixedPtAmt("224.691358024691358"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(perp.target, toFixedPtAmt("0"));
       });
     });
 
@@ -169,22 +179,31 @@ describe("RolloverVault", function () {
           [true, toFixedPtAmt("9"), toFixedPtAmt("1")],
         ]);
       });
-      it("should mint perps to the vault", async function () {
+      it("should transfer value to the vault (by minting and melding perps)", async function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("800"));
-        await expect(() => vault.rebalance()).to.changeTokenBalances(
-          perp,
-          [vault, deployer],
-          [toFixedPtAmt("9"), toFixedPtAmt("1")],
-        );
-        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("810"));
+        expect(await perp.getTVL.staticCall()).to.eq(toFixedPtAmt("800"));
+        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2000"));
+        await expect(() => vault.rebalance()).to.changeTokenBalances(perp, [vault], [toFixedPtAmt("0")]);
+        expect(await perp.getTVL.staticCall()).to.eq(toFixedPtAmt("791.111111111111111112"));
+        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("2008.888888888888888844"));
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("801"));
       });
-      it("should not change the vault balance", async function () {
-        await expect(() => vault.rebalance()).to.changeTokenBalances(collateralToken, [vault], [0n]);
+      it("should pay the protocol fee", async function () {
+        await expect(() => vault.rebalance()).to.changeTokenBalances(perp, [deployer], [toFixedPtAmt("1")]);
+      });
+      it("should update the vault balance (after melding)", async function () {
+        await expect(() => vault.rebalance()).to.changeTokenBalances(
+          collateralToken,
+          [vault],
+          [toFixedPtAmt("22.222222222222222")],
+        );
       });
       it("should sync token balances", async function () {
         const tx = vault.rebalance();
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.target, toFixedPtAmt("200"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(perp.target, toFixedPtAmt("9"));
+        await expect(tx)
+          .to.emit(vault, "AssetSynced")
+          .withArgs(collateralToken.target, toFixedPtAmt("222.222222222222222"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(perp.target, toFixedPtAmt("0"));
       });
     });
 
@@ -226,6 +245,9 @@ describe("RolloverVault", function () {
           [vault, perp, deployer],
           [toFixedPtAmt("-25"), toFixedPtAmt("20"), toFixedPtAmt("5")],
         );
+      });
+      it("should pay the protocol fee", async function () {
+        await expect(() => vault.rebalance()).to.changeTokenBalances(collateralToken, [deployer], [toFixedPtAmt("5")]);
       });
       it("should not change perp supply", async function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("800"));
