@@ -66,7 +66,14 @@ describe("PerpetualTranche", function () {
     );
     await advancePerpQueue(perp, 3600);
 
-    const vault = new DMock(await ethers.getContractFactory("RolloverVault"));
+    const TrancheManager = await ethers.getContractFactory("TrancheManager");
+    const trancheManager = await TrancheManager.deploy();
+    const RolloverVault = await ethers.getContractFactory("RolloverVault", {
+      libraries: {
+        TrancheManager: trancheManager.target,
+      },
+    });
+    const vault = new DMock(RolloverVault);
     await vault.deploy();
     await vault.mockMethod("getTVL()", [0]);
     await perp.updateVault(vault.target);
