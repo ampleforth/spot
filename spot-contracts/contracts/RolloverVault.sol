@@ -18,6 +18,7 @@ import { BondTranches, BondTranchesHelpers } from "./_utils/BondTranchesHelpers.
 import { TrancheHelpers } from "./_utils/TrancheHelpers.sol";
 import { BondHelpers } from "./_utils/BondHelpers.sol";
 import { PerpHelpers } from "./_utils/PerpHelpers.sol";
+import { TrancheManager } from "./_utils/TrancheManager.sol";
 
 /*
  *  @title RolloverVault
@@ -70,6 +71,9 @@ contract RolloverVault is
 
     // math
     using MathUpgradeable for uint256;
+
+    /// Allow linking TrancheManager
+    /// @custom:oz-upgrades-unsafe-allow external-library-linking
 
     //-------------------------------------------------------------------------
     // Events
@@ -375,7 +379,7 @@ contract RolloverVault is
             // if bond has matured, redeem the tranche token
             if (bond.secondsToMaturity() <= 0) {
                 // execute redemption
-                _execMatureTrancheRedemption(bond, tranche, trancheBalance);
+                TrancheManager.execMatureTrancheRedemption(bond, tranche, trancheBalance);
             }
             // if not redeem using proportional balances
             // redeems this tranche and it's siblings if the vault holds balances.
@@ -384,7 +388,7 @@ contract RolloverVault is
             // We also skip if the tranche balance is too low as immature redemption will be a no-op.
             else if (tranche == bt.tranches[0] && trancheBalance > TRANCHE_DUST_AMT) {
                 // execute redemption
-                _execImmatureTrancheRedemption(bond, bt);
+                TrancheManager.execImmatureTrancheRedemption(bond, bt);
             }
         }
 
@@ -784,7 +788,7 @@ contract RolloverVault is
             ITranche tranche = ITranche(_deployed.at(i));
             uint256 balance = tranche.balanceOf(address(this));
             if (balance > TRANCHE_DUST_AMT) {
-                totalValue += _computeVaultTrancheValue(tranche, underlying, balance);
+                totalValue += TrancheManager.computeTrancheValue(address(tranche), address(underlying), balance);
             }
         }
 
@@ -803,7 +807,10 @@ contract RolloverVault is
         // Deployed asset
         else if (_deployed.contains(address(token))) {
             ITranche tranche = ITranche(address(token));
-            return (balance > TRANCHE_DUST_AMT) ? _computeVaultTrancheValue(tranche, underlying, balance) : 0;
+            return
+                (balance > TRANCHE_DUST_AMT)
+                    ? TrancheManager.computeTrancheValue(address(tranche), address(underlying), balance)
+                    : 0;
         }
 
         // Not a vault asset, so returning zero
@@ -889,7 +896,7 @@ contract RolloverVault is
         // if bond has matured, redeem the tranche token
         if (bond.secondsToMaturity() <= 0) {
             // execute redemption
-            _execMatureTrancheRedemption(bond, tranche, trancheBalance);
+            TrancheManager.execMatureTrancheRedemption(bond, tranche, trancheBalance);
 
             // sync deployed asset
             _syncDeployedAsset(tranche);
@@ -900,7 +907,7 @@ contract RolloverVault is
         else if (trancheBalance > TRANCHE_DUST_AMT) {
             // execute redemption
             BondTranches memory bt = bond.getTranches();
-            _execImmatureTrancheRedemption(bond, bt);
+            TrancheManager.execImmatureTrancheRedemption(bond, bt);
 
             // sync deployed asset, i.e) current tranche and its sibling.
             _syncDeployedAsset(bt.tranches[0]);
@@ -932,7 +939,7 @@ contract RolloverVault is
         }
     }
 
-    /// @dev Tranches the vault's underlying to mint perps..
+    /// @dev Tranches the vault's underlying to mint perps.
     ///      Performs some book-keeping to keep track of the vault's assets.
     function _trancheAndMintPerps(
         IPerpetualTranche perp_,
@@ -958,27 +965,11 @@ contract RolloverVault is
         _tranche(depositBond, underlying_, underylingAmtToTranche);
 
         // Mint perps
-        _checkAndApproveMax(trancheIntoPerp, address(perp_), seniorAmtToDeposit);
+        TrancheManager.checkAndApproveMax(trancheIntoPerp, address(perp_), seniorAmtToDeposit);
         perp_.deposit(trancheIntoPerp, seniorAmtToDeposit);
 
         // sync holdings
         _syncDeployedAsset(trancheIntoPerp);
-    }
-
-    /// @dev Given a bond and its tranche data, deposits the provided amount into the bond
-    ///      and receives tranche tokens in return.
-    ///      Performs some book-keeping to keep track of the vault's assets.
-    function _tranche(IBondController bond, IERC20Upgradeable underlying_, uint256 underlyingAmt) private {
-        // Get bond tranches
-        BondTranches memory bt = bond.getTranches();
-
-        // amount is tranched
-        _checkAndApproveMax(underlying_, address(bond), underlyingAmt);
-        bond.deposit(underlyingAmt);
-
-        // sync holdings
-        _syncDeployedAsset(bt.tranches[0]);
-        _syncDeployedAsset(bt.tranches[1]);
     }
 
     /// @dev Rolls over freshly tranched tokens from the given bond for older tranches (close to maturity) from perp.
@@ -1000,7 +991,7 @@ contract RolloverVault is
         uint256 trancheInAmtAvailable = trancheIntoPerp.balanceOf(address(this));
 
         // Approve once for all rollovers
-        _checkAndApproveMax(trancheIntoPerp, address(perp_), trancheInAmtAvailable);
+        TrancheManager.checkAndApproveMax(trancheIntoPerp, address(perp_), trancheInAmtAvailable);
 
         // We pair the senior tranche token held by the vault (from the deposit bond)
         // with each of the perp's tokens available for rollovers and execute a rollover.
@@ -1039,31 +1030,17 @@ contract RolloverVault is
         return (rollover);
     }
 
-    /// @dev Low level method that redeems the given mature tranche for the underlying asset.
-    ///      It interacts with the button-wood bond contract.
-    ///      This function should NOT be called directly, use `recover()` or `_redeemTranche(tranche)`
-    ///      which wrap this function with the internal book-keeping necessary,
-    ///      to keep track of the vault's assets.
-    function _execMatureTrancheRedemption(IBondController bond, ITranche tranche, uint256 amount) private {
-        if (!bond.isMature()) {
-            bond.mature();
-        }
-        bond.redeemMature(address(tranche), amount);
-    }
+    /// @dev Given a bond, deposits the provided amount into the bond
+    ///      and receives tranche tokens in return.
+    ///      Performs some book-keeping to keep track of the vault's assets.
+    function _tranche(IBondController bond, IERC20Upgradeable underlying_, uint256 underlyingAmt) private {
+        // Tranche
+        TrancheManager.execTranche(bond, underlying_, underlyingAmt);
 
-    /// @dev Low level method that redeems the given tranche for the underlying asset, before maturity.
-    ///      If the vault holds sibling tranches with proportional balances, those will also get redeemed.
-    ///      It interacts with the button-wood bond contract.
-    ///      This function should NOT be called directly, use `recover()` or `recover(tranche)`
-    ///      which wrap this function with the internal book-keeping necessary,
-    ///      to keep track of the vault's assets.
-    function _execImmatureTrancheRedemption(IBondController bond, BondTranches memory bt) private {
-        uint256[] memory trancheAmts = bt.computeRedeemableTrancheAmounts(address(this));
-
-        // NOTE: It is guaranteed that if one tranche amount is zero, all amounts are zeros.
-        if (trancheAmts[0] > 0) {
-            bond.redeem(trancheAmts);
-        }
+        // sync holdings
+        BondTranches memory bt = bond.getTranches();
+        _syncDeployedAsset(bt.tranches[0]);
+        _syncDeployedAsset(bt.tranches[1]);
     }
 
     /// @dev Syncs balance and updates the deployed list based on the vault's token balance.
@@ -1089,14 +1066,6 @@ contract RolloverVault is
         emit AssetSynced(token, token.balanceOf(address(this)));
     }
 
-    /// @dev Checks if the spender has sufficient allowance. If not, approves the maximum possible amount.
-    function _checkAndApproveMax(IERC20Upgradeable token, address spender, uint256 amount) private {
-        uint256 allowance = token.allowance(address(this), spender);
-        if (allowance < amount) {
-            token.safeApprove(spender, type(uint256).max);
-        }
-    }
-
     /// @dev Queries the current subscription state of the perp and vault systems.
     function _querySubscriptionState(IPerpetualTranche perp_) private returns (SubscriptionParams memory) {
         return
@@ -1108,21 +1077,10 @@ contract RolloverVault is
     }
 
     //--------------------------------------------------------------------------
-    // Private methods
-
-    /// @dev Computes the value of the given amount of tranche tokens, based on it's current CDR.
-    ///      Value is denominated in the underlying collateral.
-    function _computeVaultTrancheValue(
-        ITranche tranche,
-        IERC20Upgradeable collateralToken,
-        uint256 trancheAmt
-    ) private view returns (uint256) {
-        (uint256 trancheClaim, uint256 trancheSupply) = tranche.getTrancheCollateralization(collateralToken);
-        return trancheClaim.mulDiv(trancheAmt, trancheSupply, MathUpgradeable.Rounding.Up);
-    }
+    // Private view methods
 
     /// @dev Computes the balance of underlying tokens to NOT be used for any operation.
-    function _totalReservedBalance(uint256 perpTVL, uint256 seniorTR) private view returns (uint256) {
+    function _totalReservedBalance(uint256 perpTVL, uint256 seniorTR) internal view returns (uint256) {
         return
             MathUpgradeable.max(
                 reservedUnderlyingBal,
