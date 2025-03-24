@@ -24,9 +24,18 @@ describe("FeePolicy", function () {
     it("should return the initial parameters", async function () {
       expect(await feePolicy.targetSubscriptionRatio()).to.eq(toPerc("1.5"));
 
-      const s = await feePolicy.drHardBounds();
-      expect(s[0]).to.eq(toPerc("0.9"));
-      expect(s[1]).to.eq(toPerc("4"));
+      const s1 = await feePolicy.drHardBound();
+      expect(s1[0]).to.eq(toPerc("0.75"));
+      expect(s1[1]).to.eq(toPerc("2"));
+
+      const s2 = await feePolicy.drSoftBound();
+      expect(s2[0]).to.eq(toPerc("0.9"));
+      expect(s2[1]).to.eq(toPerc("1.25"));
+
+      expect(await feePolicy.perpMintFeePerc()).to.eq(0n);
+      expect(await feePolicy.perpBurnFeePerc()).to.eq(0n);
+      expect(await feePolicy.vaultMintFeePerc()).to.eq(0n);
+      expect(await feePolicy.vaultBurnFeePerc()).to.eq(0n);
 
       const r = await feePolicy.perpRolloverFee();
       expect(await r.minRolloverFeePerc).to.eq(toPerc("-0.07692307"));
@@ -82,40 +91,41 @@ describe("FeePolicy", function () {
     });
   });
 
-  describe("#updateDRHardBounds", function () {
+  describe("#updateDRBounds", function () {
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
-        await expect(feePolicy.connect(otherUser).updateDRHardBounds([toPerc("1"), toPerc("1")])).to.be.revertedWith(
-          "Ownable: caller is not the owner",
-        );
+        await expect(
+          feePolicy.connect(otherUser).updateDRBounds([toPerc("1"), toPerc("1")], [toPerc("1"), toPerc("1")]),
+        ).to.be.revertedWith("Ownable: caller is not the owner");
       });
     });
 
     describe("when parameters are invalid", function () {
       it("should revert", async function () {
         await expect(
-          feePolicy.connect(deployer).updateDRHardBounds([toPerc("1.01"), toPerc("2")]),
+          feePolicy.connect(deployer).updateDRBounds([toPerc("0.9"), toPerc("2")], [toPerc("0.75"), toPerc("1.5")]),
         ).to.be.revertedWithCustomError(feePolicy, "InvalidDRBounds");
-      });
-    });
-
-    describe("when parameters are invalid", function () {
-      it("should revert", async function () {
         await expect(
-          feePolicy.connect(deployer).updateDRHardBounds([toPerc("0.5"), toPerc("0.99")]),
+          feePolicy.connect(deployer).updateDRBounds([toPerc("0.5"), toPerc("2")], [toPerc("2"), toPerc("1.5")]),
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidDRBounds");
+        await expect(
+          feePolicy.connect(deployer).updateDRBounds([toPerc("0.5"), toPerc("2")], [toPerc("0.75"), toPerc("0.6")]),
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidDRBounds");
+        await expect(
+          feePolicy.connect(deployer).updateDRBounds([toPerc("0.5"), toPerc("2")], [toPerc("0.75"), toPerc("2.5")]),
         ).to.be.revertedWithCustomError(feePolicy, "InvalidDRBounds");
       });
     });
 
     describe("when triggered by owner", function () {
       it("should update dr hard bounds", async function () {
-        const r = await feePolicy.drHardBounds();
-        expect(r[0]).to.eq(toPerc("0.9"));
-        expect(r[1]).to.eq(toPerc("4"));
-        await feePolicy.connect(deployer).updateDRHardBounds([toPerc("0.5"), toPerc("1.5")]);
-        const s = await feePolicy.drHardBounds();
-        expect(s[0]).to.eq(toPerc("0.5"));
-        expect(s[1]).to.eq(toPerc("1.5"));
+        await feePolicy.connect(deployer).updateDRBounds([toPerc("0.5"), toPerc("2")], [toPerc("0.75"), toPerc("1.5")]);
+        const s1 = await feePolicy.drHardBound();
+        expect(s1[0]).to.eq(toPerc("0.5"));
+        expect(s1[1]).to.eq(toPerc("2"));
+        const s2 = await feePolicy.drSoftBound();
+        expect(s2[0]).to.eq(toPerc("0.75"));
+        expect(s2[1]).to.eq(toPerc("1.5"));
       });
     });
   });
@@ -310,7 +320,7 @@ describe("FeePolicy", function () {
       await feePolicy.updateFlashFees([toPerc("0.1"), toPerc("0.2")], [toPerc("0.15"), toPerc("0.5")]);
       await feePolicy.updateVaultMintFees(toPerc("0.05"));
       await feePolicy.updateVaultBurnFees(toPerc("0.075"));
-      await feePolicy.updateDRHardBounds([toPerc("0.85"), toPerc("1.15")]);
+      await feePolicy.updateDRBounds([toPerc("0.85"), toPerc("1.15")], [toPerc("0.999"), toPerc("1.001")]);
     });
 
     describe("when dr is decreasing", function () {
@@ -337,25 +347,25 @@ describe("FeePolicy", function () {
 
       describe("when dr2 < ONE < dr1", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("1.05", "0.95", ["0.025", "0.075", "0.10833333"]);
+          await cmpFees("1.05", "0.95", ["0.025", "0.075", "0.10805704"]);
         });
       });
 
       describe("when dr2 < ONE < dr1", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("1.01", "0.96", ["0.025", "0.075", "0.11066666"]);
+          await cmpFees("1.01", "0.96", ["0.025", "0.075", "0.11020804"]);
         });
       });
 
       describe("when dr2 < ONE < dr1", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("1.1", "0.99", ["0.025", "0.075", "0.10030303"]);
+          await cmpFees("1.1", "0.99", ["0.025", "0.075", "0.10024710"]);
         });
       });
 
       describe("when dr2,dr1 < ONE", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("0.99", "0.95", ["0.025", "0.075", "0.12"]);
+          await cmpFees("0.99", "0.95", ["0.025", "0.075", "0.11946308"]);
         });
       });
 
@@ -402,25 +412,25 @@ describe("FeePolicy", function () {
 
       describe("when dr1 < ONE < dr2", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("0.95", "1.05", ["0.035", "0.05", "0.17916666"]);
+          await cmpFees("0.95", "1.05", ["0.035", "0.05", "0.17819966"]);
         });
       });
 
       describe("when dr1 < ONE < dr2", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("0.99", "1.04", ["0.035", "0.05", "0.18733333"]);
+          await cmpFees("0.99", "1.04", ["0.035", "0.05", "0.18572818"]);
         });
       });
 
       describe("when dr1 < ONE < dr2", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("0.99", "1.1", ["0.035", "0.05", "0.25606060"]);
+          await cmpFees("0.99", "1.1", ["0.035", "0.05", "0.25464764"]);
         });
       });
 
       describe("when ONE < dr1, dr2 < upper", function () {
         it("should compute fees as expected", async function () {
-          await cmpFees("1.01", "1.05", ["0.035", "0.05", "0.22"]);
+          await cmpFees("1.01", "1.05", ["0.035", "0.05", "0.2181208"]);
         });
       });
 
