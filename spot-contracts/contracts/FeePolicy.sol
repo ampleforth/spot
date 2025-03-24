@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
 import { SubscriptionParams, Range, Line, RebalanceData } from "./_interfaces/CommonTypes.sol";
-import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds, ValueTooHigh } from "./_interfaces/ProtocolErrors.sol";
+import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds } from "./_interfaces/ProtocolErrors.sol";
 
 import { LineHelpers } from "./_utils/LineHelpers.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
@@ -69,8 +69,9 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Target subscription ratio higher bound, 2.0 or 200%.
     uint256 public constant TARGET_SR_UPPER_BOUND = 2 * ONE;
 
-    /// @notice The enforced maximum change in perp's value per rebalance operation.
-    uint256 public constant MAX_PERP_VALUE_CHANGE_PERC = ONE / 100; // 0.01 or 1%
+    /// @notice TVL percentage range within which we skip rebalance, 0.01%.
+    /// @dev Intended to limit rebalancing small amounts.
+    uint256 public constant EQUILIBRIUM_REBALANCE_PERC = ONE / 10000;
 
     //-----------------------------------------------------------------------------
     /// @notice The target subscription ratio i.e) the normalization factor.
@@ -249,12 +250,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         uint256 debasementValueChangePerc_,
         uint256 enrichmentValueChangePerc_
     ) external onlyOwner {
-        if (
-            debasementValueChangePerc_ > MAX_PERP_VALUE_CHANGE_PERC ||
-            enrichmentValueChangePerc_ > MAX_PERP_VALUE_CHANGE_PERC
-        ) {
-            revert ValueTooHigh();
-        }
         debasementValueChangePerc = debasementValueChangePerc_;
         enrichmentValueChangePerc = enrichmentValueChangePerc_;
     }
@@ -378,40 +373,36 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @inheritdoc IFeePolicy
     function computeRebalanceData(SubscriptionParams memory s) external view override returns (RebalanceData memory r) {
-        uint256 perpValueChangePerc = 0;
-        (r.perpDebasement, perpValueChangePerc) = computePerpEquilibriumPerc(s);
-        perpValueChangePerc = MathUpgradeable.min(
-            perpValueChangePerc,
-            (r.perpDebasement ? debasementValueChangePerc : enrichmentValueChangePerc)
+        uint256 juniorTR = (TRANCHE_RATIO_GRANULARITY - s.seniorTR);
+        uint256 drNormalizedSeniorTR = ONE.mulDiv(
+            (s.seniorTR * ONE),
+            (s.seniorTR * ONE) + (juniorTR * targetSubscriptionRatio)
         );
-        r.underlyingAmtToTransfer = s.perpTVL.mulDiv(perpValueChangePerc, ONE);
-        r.protocolFeeUnderlyingAmt = r.underlyingAmtToTransfer.mulDiv(
-            (r.perpDebasement ? debasementProtocolSharePerc : enrichmentProtocolSharePerc),
+
+        uint256 reqPerpTVL = (s.perpTVL + s.vaultTVL).mulDiv(drNormalizedSeniorTR, ONE);
+        bool perpDebasement = reqPerpTVL <= s.perpTVL;
+        uint256 perpValueDelta = 0;
+        if (perpDebasement) {
+            perpValueDelta = MathUpgradeable.min(
+                s.perpTVL - reqPerpTVL,
+                s.perpTVL.mulDiv(debasementValueChangePerc, ONE)
+            );
+        } else {
+            perpValueDelta = MathUpgradeable.min(
+                reqPerpTVL - s.perpTVL,
+                s.perpTVL.mulDiv(enrichmentValueChangePerc, ONE)
+            );
+        }
+
+        if (perpValueDelta <= s.perpTVL.mulDiv(EQUILIBRIUM_REBALANCE_PERC, ONE)) {
+            perpValueDelta = 0;
+        }
+
+        r.protocolFeeUnderlyingAmt = perpValueDelta.mulDiv(
+            (perpDebasement ? debasementProtocolSharePerc : enrichmentProtocolSharePerc),
             ONE
         );
-        r.underlyingAmtToTransfer -= r.protocolFeeUnderlyingAmt;
-    }
-
-    /// @notice Computes the percentage change in perpTVL (to or from the vault) to bring the system to equilibrium.
-    /// @param s The subscription parameters of both the perp and vault systems.
-    /// @return debasement True, when value has to flow from perp into the vault and False when value has to flow from the vault into perp.
-    /// @return valueChangePerc The percentage of the perpTVL that has to flow out of perp (into the vault) or into perp (from the vault)
-    ///                         to make the system perfectly balanced (to make dr = 1.0).
-    function computePerpEquilibriumPerc(
-        SubscriptionParams memory s
-    ) public view returns (bool debasement, uint256 valueChangePerc) {
-        uint256 juniorTR = TRANCHE_RATIO_GRANULARITY - s.seniorTR;
-        uint256 dr = computeDeviationRatio(s);
-        uint256 perpAdjFactor = ONE.mulDiv(
-            (juniorTR * targetSubscriptionRatio),
-            (juniorTR * targetSubscriptionRatio) + (s.seniorTR * ONE)
-        );
-        if (dr <= ONE) {
-            debasement = true;
-            valueChangePerc = perpAdjFactor.mulDiv(ONE - dr, ONE);
-        } else {
-            debasement = false;
-            valueChangePerc = perpAdjFactor.mulDiv(dr - ONE, ONE);
-        }
+        perpValueDelta -= r.protocolFeeUnderlyingAmt;
+        r.underlyingAmtIntoPerp = (perpDebasement ? int256(-1) : int256(1)) * perpValueDelta.toInt256();
     }
 }

@@ -59,7 +59,7 @@ import { BondHelpers } from "./_utils/BondHelpers.sol";
  *      When computing the value of assets in the system, the code always over-values by
  *      rounding up. When computing the value of incoming assets, the code rounds down.
  *
- * @dev With release v5.0, we remove rollover fees entirely. Demand imbalance between perp and the vault
+ * @dev Rollover fees have been removed entirely. Demand imbalance between perp and the vault
  *      is restored through a "rebalancing" mechanism. When value needs to flow from perp to the vault,
  *      the system debases the value of perp tokens by minting perp tokens to the vault.
  *      When value needs to flow from the vault to perp, the underlying collateral tokens are

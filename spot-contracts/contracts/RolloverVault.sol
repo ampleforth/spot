@@ -11,6 +11,8 @@ import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/O
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
+import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
+import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 import { ERC20BurnableUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import { EnumerableSetUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
@@ -70,6 +72,8 @@ contract RolloverVault is
 
     // math
     using MathUpgradeable for uint256;
+    using SignedMathUpgradeable for int256;
+    using SafeCastUpgradeable for int256;
 
     //-------------------------------------------------------------------------
     // Events
@@ -270,13 +274,13 @@ contract RolloverVault is
         _unpause();
     }
 
-    /// @notice Stops the rebalance operation from being executed.
-    function stopRebalance() external onlyKeeper {
+    /// @notice Pauses the rebalance operation.
+    function pauseRebalance() external onlyKeeper {
         lastRebalanceTimestampSec = type(uint256).max - DAY_SEC;
     }
 
-    /// @notice Restarts the rebalance operation.
-    function restartRebalance() external onlyKeeper {
+    /// @notice Unpauses the rebalance operation.
+    function unpauseRebalance() external onlyKeeper {
         lastRebalanceTimestampSec = block.timestamp;
     }
 
@@ -304,6 +308,7 @@ contract RolloverVault is
     /// @inheritdoc IRolloverVault
     /// @dev This method can execute at-most once every 24 hours. The rebalance frequency is hard-coded and can't be changed.
     function rebalance() external override nonReentrant whenNotPaused {
+        // TODO: make rebalance frequency configurable.
         if (block.timestamp <= lastRebalanceTimestampSec + DAY_SEC) {
             revert LastRebalanceTooRecent();
         }
@@ -353,11 +358,9 @@ contract RolloverVault is
     function recover() public override nonReentrant whenNotPaused {
         // In case the vault holds perp tokens, from rebalancing or fees,
         // we deconstruct them into tranches.
-        {
-            IPerpetualTranche perp_ = perp;
-            _meldPerps(perp_);
-            _syncAsset(perp_);
-        }
+        IPerpetualTranche perp_ = perp;
+        _meldPerps(perp_);
+        _syncAsset(perp_);
 
         // Redeem deployed tranches
         uint8 deployedCount_ = uint8(_deployed.length());
@@ -760,27 +763,27 @@ contract RolloverVault is
 
         SubscriptionParams memory s = _querySubscriptionState(perp_);
         RebalanceData memory r = feePolicy.computeRebalanceData(s);
-        if (r.perpDebasement) {
+        if (r.underlyingAmtIntoPerp <= 0) {
             // We transfer value from perp to the vault, by minting the vault perp tokens.
+            // NOTE: We first mint the vault perp tokens, and then pay the protocol fee.
             uint256 perpSupply = perp_.totalSupply();
-            uint256 perpAmtToVault = r.underlyingAmtToTransfer.mulDiv(perpSupply, s.perpTVL);
-            perp_.debase(perpAmtToVault);
-            if (r.protocolFeeUnderlyingAmt > 0) {
-                // NOTE: We first mint the vault perp tokens, and then pay the protocol fee.
-                uint256 protocolFeePerpAmt = r.protocolFeeUnderlyingAmt.mulDiv(perpSupply, s.perpTVL);
-                perp_.debase(protocolFeePerpAmt);
-                IERC20Upgradeable(address(perp_)).safeTransfer(owner(), protocolFeePerpAmt);
-            }
+            uint256 perpAmtToVault = r.underlyingAmtIntoPerp.abs().mulDiv(perpSupply, s.perpTVL);
+            uint256 protocolFeePerpAmt = r.protocolFeeUnderlyingAmt.mulDiv(perpSupply, s.perpTVL);
+            perp_.debase(perpAmtToVault + protocolFeePerpAmt);
 
             // We immediately deconstruct perp tokens minted to the vault.
             _meldPerps(perp_);
         } else {
+            // TODO: Look into sending As instead of AMPL on rebalance from vault to perp.
             // We transfer value from the vault to perp, by transferring underlying collateral tokens to perp.
-            underlying_.safeTransfer(address(perp), r.underlyingAmtToTransfer);
-            if (r.protocolFeeUnderlyingAmt > 0) {
-                underlying_.safeTransfer(owner(), r.protocolFeeUnderlyingAmt);
-            }
+            underlying_.safeTransfer(address(perp), r.underlyingAmtIntoPerp.toUint256());
+
             perp_.updateState(); // Trigger perp book-keeping
+        }
+
+        // Pay protocol fees
+        if (r.protocolFeeUnderlyingAmt > 0) {
+            underlying_.safeTransfer(owner(), r.protocolFeeUnderlyingAmt);
         }
 
         // Sync token balances.
