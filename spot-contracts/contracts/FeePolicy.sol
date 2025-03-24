@@ -33,10 +33,10 @@ import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/O
  *
  *          Incentives:
  *          - When the system is "under-subscribed", value is transferred from perp to the vault at a predefined rate.
- *            This debases perp tokens gradually and their redeemable value goes down.
+ *            This debases perp tokens gradually and enriches the rollover vault.
  *          - When the system is "over-subscribed", value is transferred from the vault to perp at a predefined rate.
- *            This enriches perp tokens gradually and their redeemable value goes up.
- *          - This transfer is implemented through a daily "rebalance" operation (executed by the vault),
+ *            This enriches perp tokens gradually and debases the rollover vault.
+ *          - This transfer is implemented through a daily "rebalance" operation, executed by the vault, and
  *            gradually nudges the system back into balance. On rebalance, the vault queries this policy
  *            to compute the magnitude and direction of value transfer.
  *
@@ -259,7 +259,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         enrichmentValueChangePerc = enrichmentValueChangePerc_;
     }
 
-    /// @notice Updates the protocol cut of the daily debasement and enrichment.
+    /// @notice Updates the protocol share of the daily debasement and enrichment.
     /// @param debasementProtocolSharePerc_ The share of the debasement which goes to the protocol.
     /// @param enrichmentProtocolSharePerc_ The share of the enrichment which goes to the protocol.
     function updateProtocolSharePerc(

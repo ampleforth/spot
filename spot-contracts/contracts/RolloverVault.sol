@@ -22,12 +22,12 @@ import { PerpHelpers } from "./_utils/PerpHelpers.sol";
 /*
  *  @title RolloverVault
  *
- *  @notice A vault which performs rollovers on PerpetualTranche (or perp). After rolling over
- *          it holds the junior tranches to maturity, effectively become a perpetual junior tranche
+ *  @notice A vault which performs rollovers on PerpetualTranche (or perp). After rolling over,
+ *          it holds the junior tranches to maturity, effectively becoming a perpetual junior tranche
  *          as long as it's sufficiently capitalized.
  *
  *          The vault takes in AMPL or any other rebasing collateral as the "underlying" asset.
- *          It also generates a yield (from entry/exit fees and rebalancing incentives).
+ *          It also generates a yield (from entry/exit fees, flash liquidity, and rebalancing incentives).
  *
  *          Vault strategy:
  *              1) deploy: The vault deposits the underlying asset into perp's current deposit bond
@@ -40,7 +40,7 @@ import { PerpHelpers } from "./_utils/PerpHelpers.sol";
  *          The swap fees are an additional source of yield for vault note holders.
  *
  *          With v3.0, the vault has a "rebalance" operation (which can be executed at most once a day).
- *          This is intended to balance demand for for holding perp tokens with
+ *          This is intended to balance demand for holding perp tokens with
  *          the demand for holding vault notes, such that the vault is always sufficiently capitalized.
  *
  *
@@ -763,11 +763,11 @@ contract RolloverVault is
         if (r.perpDebasement) {
             // We transfer value from perp to the vault, by minting the vault perp tokens.
             uint256 perpSupply = perp_.totalSupply();
-            uint256 perpAmtToVault = perpSupply.mulDiv(r.underlyingAmtToTransfer, s.perpTVL);
+            uint256 perpAmtToVault = r.underlyingAmtToTransfer.mulDiv(perpSupply, s.perpTVL);
             perp_.debase(perpAmtToVault);
             if (r.protocolFeeUnderlyingAmt > 0) {
                 // NOTE: We first mint the vault perp tokens, and then pay the protocol fee.
-                uint256 protocolFeePerpAmt = perpSupply.mulDiv(r.protocolFeeUnderlyingAmt, s.perpTVL);
+                uint256 protocolFeePerpAmt = r.protocolFeeUnderlyingAmt.mulDiv(perpSupply, s.perpTVL);
                 perp_.debase(protocolFeePerpAmt);
                 IERC20Upgradeable(address(perp_)).safeTransfer(owner(), protocolFeePerpAmt);
             }
