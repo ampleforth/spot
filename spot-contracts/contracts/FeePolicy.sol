@@ -85,7 +85,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     Range public drHardBound;
 
     /// @notice The deviation ratio bounds outside which flash swaps are still functional but,
-    ///         the swap fees transition from a constant fee to a linear function. disabled.
+    ///         the swap fees transition from a constant fee to a linear function.
     Range public drSoftBound;
 
     //-----------------------------------------------------------------------------
