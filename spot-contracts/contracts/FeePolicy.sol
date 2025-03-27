@@ -71,6 +71,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Target subscription ratio higher bound, 2.0 or 200%.
     uint256 public constant TARGET_SR_UPPER_BOUND = 2 * ONE;
 
+    // TODO: Make this configurable
     /// @notice TVL percentage range within which we skip rebalance, 0.01%.
     /// @dev Intended to limit rebalancing small amounts.
     uint256 public constant EQUILIBRIUM_REBALANCE_PERC = ONE / 10000;
@@ -113,11 +114,11 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     //-----------------------------------------------------------------------------
     // Incentive parameters
 
-    /// @notice The maximum allowed daily perp debasement percentage (when dr <= 1).
-    uint256 public maxPerpDebasePerc;
+    /// @notice The maximum percentage of system TVL transferred out of perp on every rebalance (when dr <= 1).
+    uint256 public debasementMaxSystemTVLPerc;
 
-    /// @notice The maximum allowed daily perp enrichment percentage (when dr > 1).
-    uint256 public maxPerpEnrichPerc;
+    /// @notice The maximum percentage of system TVL transferred into perp on every rebalance (when dr > 1).
+    uint256 public enrichmentMaxSystemTVLPerc;
 
     /// @notice The percentage of the debasement value charged by the protocol as fees.
     uint256 public debasementProtocolSharePerc;
@@ -157,8 +158,8 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         flashRedeemFeePercs = Range({ lower: ONE, upper: ONE });
 
         // initializing incentives
-        maxPerpDebasePerc = ONE / 1000; // 0.1% or 10 bps
-        maxPerpEnrichPerc = ONE / 666; // ~0.15% or 15 bps
+        debasementMaxSystemTVLPerc = ONE / 1000; // 0.1% or 10 bps
+        enrichmentMaxSystemTVLPerc = ONE / 666; // ~0.15% or 15 bps
         debasementProtocolSharePerc = 0;
         enrichmentProtocolSharePerc = 0;
     }
@@ -245,12 +246,15 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         flashRedeemFeePercs = flashRedeemFeePercs_;
     }
 
-    /// @notice Updates the rebalance reaction lag.
-    /// @param maxPerpDebasePerc_ The magnitude of the daily debasement.
-    /// @param maxPerpEnrichPerc_ The magnitude of the daily enrichment.
-    function updateRebalanceRate(uint256 maxPerpDebasePerc_, uint256 maxPerpEnrichPerc_) external onlyOwner {
-        maxPerpDebasePerc = maxPerpDebasePerc_;
-        maxPerpEnrichPerc = maxPerpEnrichPerc_;
+    /// @notice Updates the rebalance rate.
+    /// @param debasementMaxSystemTVLPerc_ The maximum percentage of system tvl out of perp on debasement.
+    /// @param enrichmentMaxSystemTVLPerc_ The maximum percentage of system tvl into perp on enrichment.
+    function updateMaxRebalancePerc(
+        uint256 debasementMaxSystemTVLPerc_,
+        uint256 enrichmentMaxSystemTVLPerc_
+    ) external onlyOwner {
+        debasementMaxSystemTVLPerc = debasementMaxSystemTVLPerc_;
+        enrichmentMaxSystemTVLPerc = enrichmentMaxSystemTVLPerc_;
     }
 
     /// @notice Updates the protocol share of the daily debasement and enrichment.
@@ -378,20 +382,21 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
             (s.seniorTR * ONE) + (juniorTR * targetSubscriptionRatio)
         );
 
-        uint256 reqPerpTVL = (s.perpTVL + s.vaultTVL).mulDiv(drNormalizedSeniorTR, ONE);
+        uint256 totalTVL = s.perpTVL + s.vaultTVL;
+        uint256 reqPerpTVL = totalTVL.mulDiv(drNormalizedSeniorTR, ONE);
         r.underlyingAmtIntoPerp = reqPerpTVL.toInt256() - s.perpTVL.toInt256();
 
         // We limit `r.underlyingAmtIntoPerp` to allowed limits
         bool perpDebasement = r.underlyingAmtIntoPerp <= 0;
         if (perpDebasement) {
             r.underlyingAmtIntoPerp = SignedMathUpgradeable.max(
-                r.underlyingAmtIntoPerp,
-                -s.perpTVL.mulDiv(maxPerpDebasePerc, ONE).toInt256()
+                -totalTVL.mulDiv(debasementMaxSystemTVLPerc, ONE).toInt256(),
+                r.underlyingAmtIntoPerp
             );
         } else {
             r.underlyingAmtIntoPerp = SignedMathUpgradeable.min(
-                r.underlyingAmtIntoPerp,
-                s.perpTVL.mulDiv(maxPerpEnrichPerc, ONE).toInt256()
+                totalTVL.mulDiv(enrichmentMaxSystemTVLPerc, ONE).toInt256(),
+                r.underlyingAmtIntoPerp
             );
         }
 
