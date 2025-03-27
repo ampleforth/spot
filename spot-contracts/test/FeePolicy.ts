@@ -44,8 +44,8 @@ describe("FeePolicy", function () {
       expect(fr[0]).to.eq(toPerc("1"));
       expect(fr[1]).to.eq(toPerc("1"));
 
-      expect(await feePolicy.debasementValueChangePerc()).to.eq(toPerc("0.001"));
-      expect(await feePolicy.enrichmentValueChangePerc()).to.eq(toPerc("0.0015015"));
+      expect(await feePolicy.maxPerpDebasePerc()).to.eq(toPerc("0.001"));
+      expect(await feePolicy.maxPerpEnrichPerc()).to.eq(toPerc("0.0015015"));
       expect(await feePolicy.debasementProtocolSharePerc()).to.eq(0n);
       expect(await feePolicy.enrichmentProtocolSharePerc()).to.eq(0n);
     });
@@ -292,8 +292,8 @@ describe("FeePolicy", function () {
     describe("when triggered by owner", function () {
       it("should update parameters", async function () {
         await feePolicy.connect(deployer).updateRebalanceRate(toPerc("0.005"), toPerc("0.01"));
-        expect(await feePolicy.debasementValueChangePerc()).to.eq(toPerc("0.005"));
-        expect(await feePolicy.enrichmentValueChangePerc()).to.eq(toPerc("0.01"));
+        expect(await feePolicy.maxPerpDebasePerc()).to.eq(toPerc("0.005"));
+        expect(await feePolicy.maxPerpEnrichPerc()).to.eq(toPerc("0.01"));
       });
     });
   });
@@ -518,6 +518,30 @@ describe("FeePolicy", function () {
       it("should compute rebalance data", async function () {
         const r = await feePolicy.computeRebalanceData({
           perpTVL: toAmt("100"),
+          vaultTVL: toAmt("500"),
+          seniorTR: 200,
+        });
+        expect(r[0]).to.eq(0n);
+        expect(r[1]).to.eq(0n);
+      });
+    });
+
+    describe("when deviation ~= 1.0", function () {
+      it("should compute rebalance data", async function () {
+        const r = await feePolicy.computeRebalanceData({
+          perpTVL: toAmt("100"),
+          vaultTVL: toAmt("500.001"),
+          seniorTR: 200,
+        });
+        expect(r[0]).to.eq(0n);
+        expect(r[1]).to.eq(0n);
+      });
+    });
+
+    describe("when deviation ~= 1.0", function () {
+      it("should compute rebalance data", async function () {
+        const r = await feePolicy.computeRebalanceData({
+          perpTVL: toAmt("99.999"),
           vaultTVL: toAmt("500"),
           seniorTR: 200,
         });

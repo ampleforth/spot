@@ -38,10 +38,10 @@ import { PerpHelpers } from "./_utils/PerpHelpers.sol";
  *              2) recover: The vault redeems the tranches it holds for the underlying asset.
  *                 NOTE: It performs both mature and immature redemption. Read more: https://bit.ly/3tuN6OC
  *
- *          With v2.0, vault provides perp<>underlying swap liquidity and charges a fee.
+ *          The vault provides perp<>underlying swap liquidity and charges a fee.
  *          The swap fees are an additional source of yield for vault note holders.
  *
- *          With v3.0, the vault has a "rebalance" operation (which can be executed at most once a day).
+ *          The vault has a "rebalance" operation (which can be executed at most once a day).
  *          This is intended to balance demand for holding perp tokens with
  *          the demand for holding vault notes, such that the vault is always sufficiently capitalized.
  *
@@ -766,10 +766,7 @@ contract RolloverVault is
         if (r.underlyingAmtIntoPerp <= 0) {
             // We transfer value from perp to the vault, by minting the vault perp tokens.
             // NOTE: We first mint the vault perp tokens, and then pay the protocol fee.
-            uint256 perpSupply = perp_.totalSupply();
-            uint256 perpAmtToVault = r.underlyingAmtIntoPerp.abs().mulDiv(perpSupply, s.perpTVL);
-            uint256 protocolFeePerpAmt = r.protocolFeeUnderlyingAmt.mulDiv(perpSupply, s.perpTVL);
-            perp_.debase(perpAmtToVault + protocolFeePerpAmt);
+            perp_.rebalanceToVault(r.underlyingAmtIntoPerp.abs() + r.protocolFeeUnderlyingAmt);
 
             // We immediately deconstruct perp tokens minted to the vault.
             _meldPerps(perp_);

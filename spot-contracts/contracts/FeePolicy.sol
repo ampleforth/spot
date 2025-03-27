@@ -7,6 +7,7 @@ import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds } from "./_interfac
 
 import { LineHelpers } from "./_utils/LineHelpers.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
+import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
@@ -48,6 +49,7 @@ import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/O
 contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     // Libraries
     using MathUpgradeable for uint256;
+    using SignedMathUpgradeable for int256;
     using SafeCastUpgradeable for uint256;
     using SafeCastUpgradeable for int256;
 
@@ -111,11 +113,11 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     //-----------------------------------------------------------------------------
     // Incentive parameters
 
-    /// @notice The magnitude of perp's daily debasement (when dr <= 1).
-    uint256 public debasementValueChangePerc;
+    /// @notice The maximum allowed daily perp debasement percentage (when dr <= 1).
+    uint256 public maxPerpDebasePerc;
 
-    /// @notice The magnitude of perp's daily enrichment (when dr > 1).
-    uint256 public enrichmentValueChangePerc;
+    /// @notice The maximum allowed daily perp enrichment percentage (when dr > 1).
+    uint256 public maxPerpEnrichPerc;
 
     /// @notice The percentage of the debasement value charged by the protocol as fees.
     uint256 public debasementProtocolSharePerc;
@@ -155,8 +157,8 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         flashRedeemFeePercs = Range({ lower: ONE, upper: ONE });
 
         // initializing incentives
-        debasementValueChangePerc = ONE / 1000; // 0.1% or 10 bps
-        enrichmentValueChangePerc = ONE / 666; // ~0.15% or 15 bps
+        maxPerpDebasePerc = ONE / 1000; // 0.1% or 10 bps
+        maxPerpEnrichPerc = ONE / 666; // ~0.15% or 15 bps
         debasementProtocolSharePerc = 0;
         enrichmentProtocolSharePerc = 0;
     }
@@ -244,14 +246,11 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @notice Updates the rebalance reaction lag.
-    /// @param debasementValueChangePerc_ The magnitude of the daily debasement.
-    /// @param enrichmentValueChangePerc_ The magnitude of the daily enrichment.
-    function updateRebalanceRate(
-        uint256 debasementValueChangePerc_,
-        uint256 enrichmentValueChangePerc_
-    ) external onlyOwner {
-        debasementValueChangePerc = debasementValueChangePerc_;
-        enrichmentValueChangePerc = enrichmentValueChangePerc_;
+    /// @param maxPerpDebasePerc_ The magnitude of the daily debasement.
+    /// @param maxPerpEnrichPerc_ The magnitude of the daily enrichment.
+    function updateRebalanceRate(uint256 maxPerpDebasePerc_, uint256 maxPerpEnrichPerc_) external onlyOwner {
+        maxPerpDebasePerc = maxPerpDebasePerc_;
+        maxPerpEnrichPerc = maxPerpEnrichPerc_;
     }
 
     /// @notice Updates the protocol share of the daily debasement and enrichment.
@@ -380,29 +379,36 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         );
 
         uint256 reqPerpTVL = (s.perpTVL + s.vaultTVL).mulDiv(drNormalizedSeniorTR, ONE);
-        bool perpDebasement = reqPerpTVL <= s.perpTVL;
-        uint256 perpValueDelta = 0;
+        r.underlyingAmtIntoPerp = reqPerpTVL.toInt256() - s.perpTVL.toInt256();
+
+        // We limit `r.underlyingAmtIntoPerp` to allowed limits
+        bool perpDebasement = r.underlyingAmtIntoPerp <= 0;
         if (perpDebasement) {
-            perpValueDelta = MathUpgradeable.min(
-                s.perpTVL - reqPerpTVL,
-                s.perpTVL.mulDiv(debasementValueChangePerc, ONE)
+            r.underlyingAmtIntoPerp = SignedMathUpgradeable.max(
+                r.underlyingAmtIntoPerp,
+                -s.perpTVL.mulDiv(maxPerpDebasePerc, ONE).toInt256()
             );
         } else {
-            perpValueDelta = MathUpgradeable.min(
-                reqPerpTVL - s.perpTVL,
-                s.perpTVL.mulDiv(enrichmentValueChangePerc, ONE)
+            r.underlyingAmtIntoPerp = SignedMathUpgradeable.min(
+                r.underlyingAmtIntoPerp,
+                s.perpTVL.mulDiv(maxPerpEnrichPerc, ONE).toInt256()
             );
         }
 
-        if (perpValueDelta <= s.perpTVL.mulDiv(EQUILIBRIUM_REBALANCE_PERC, ONE)) {
-            perpValueDelta = 0;
+        // We skip "dust" value transfer
+        uint256 minPerpAbsValueDelta = s.perpTVL.mulDiv(EQUILIBRIUM_REBALANCE_PERC, ONE);
+        if (r.underlyingAmtIntoPerp.abs() <= minPerpAbsValueDelta) {
+            r.underlyingAmtIntoPerp = 0;
         }
 
-        r.protocolFeeUnderlyingAmt = perpValueDelta.mulDiv(
+        // Compute protocol fee
+        r.protocolFeeUnderlyingAmt = r.underlyingAmtIntoPerp.abs().mulDiv(
             (perpDebasement ? debasementProtocolSharePerc : enrichmentProtocolSharePerc),
-            ONE
+            ONE,
+            MathUpgradeable.Rounding.Up
         );
-        perpValueDelta -= r.protocolFeeUnderlyingAmt;
-        r.underlyingAmtIntoPerp = (perpDebasement ? int256(-1) : int256(1)) * perpValueDelta.toInt256();
+
+        // Deduct protocol fee from value transfer
+        r.underlyingAmtIntoPerp -= (perpDebasement ? int256(-1) : int256(1)) * r.protocolFeeUnderlyingAmt.toInt256();
     }
 }

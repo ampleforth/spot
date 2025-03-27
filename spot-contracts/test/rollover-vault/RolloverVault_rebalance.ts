@@ -130,7 +130,7 @@ describe("RolloverVault", function () {
 
     describe("when rebalance is paused", function () {
       it("should revert", async function () {
-        await vault.stopRebalance();
+        await vault.pauseRebalance();
         await expect(vault.rebalance()).to.be.revertedWithCustomError(vault, "LastRebalanceTooRecent");
       });
     });
