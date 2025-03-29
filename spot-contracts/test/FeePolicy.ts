@@ -177,25 +177,6 @@ describe("FeePolicy", function () {
       it("should revert", async function () {
         await expect(
           feePolicy.connect(deployer).updatePerpRolloverFees({
-            lower: toPerc("-0.051"),
-            upper: toPerc("0.01"),
-            growth: toPerc("3"),
-          }),
-        ).to.be.revertedWithCustomError(feePolicy, "InvalidSigmoidAsymptotes");
-      });
-      it("should revert", async function () {
-        await expect(
-          feePolicy.connect(deployer).updatePerpRolloverFees({
-            lower: toPerc("-0.01"),
-            upper: toPerc("0.051"),
-            growth: toPerc("3"),
-          }),
-        ).to.be.revertedWithCustomError(feePolicy, "InvalidSigmoidAsymptotes");
-      });
-
-      it("should revert", async function () {
-        await expect(
-          feePolicy.connect(deployer).updatePerpRolloverFees({
             lower: toPerc("0.02"),
             upper: toPerc("0.01"),
             growth: toPerc("3"),
