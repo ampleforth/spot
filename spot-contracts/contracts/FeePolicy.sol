@@ -67,10 +67,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Fixed point representation of 1.0 or 100%.
     uint256 public constant ONE = (1 * 10 ** DECIMALS);
 
-    /// @notice Sigmoid asymptote bound.
-    /// @dev Set to 0.05 or 5%, i.e) the rollover fee can be at most 5% on either direction.
-    uint256 public constant SIGMOID_BOUND = ONE / 20;
-
     /// @notice Target subscription ratio lower bound, 0.75 or 75%.
     uint256 public constant TARGET_SR_LOWER_BOUND = (ONE * 75) / 100;
 
@@ -209,9 +205,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Update the parameters determining the slope and asymptotes of the sigmoid fee curve.
     /// @param p Lower, Upper and Growth sigmoid paramters are fixed point numbers with {DECIMALS} places.
     function updatePerpRolloverFees(RolloverFeeSigmoidParams calldata p) external onlyOwner {
-        // If the bond duration is 28 days and 13 rollovers happen per year,
-        // perp can be inflated or enriched up to ~65% annually.
-        if (p.lower < -int256(SIGMOID_BOUND) || p.upper > int256(SIGMOID_BOUND) || p.lower > p.upper) {
+        if (p.lower > p.upper) {
             revert InvalidSigmoidAsymptotes();
         }
         perpRolloverFee.lower = p.lower;

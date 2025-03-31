@@ -116,3 +116,4 @@ yarn hardhat --network mainnet validate_upgrade RolloverVault 0x82A91a0D599A45d8
 
 yarn hardhat --network mainnet prepare_upgrade PerpetualTranche 0xC1f33e0cf7e40a67375007104B929E49a581bafE
 yarn hardhat --network mainnet prepare_upgrade RolloverVault 0x82A91a0D599A45d8E9Af781D67f695d7C72869Bd
+yarn hardhat --network mainnet prepare_upgrade FeePolicy 0xE22977381506bF094CB3ed50CB8834E358F7ef6c
