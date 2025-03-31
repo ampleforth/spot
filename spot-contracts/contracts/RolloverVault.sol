@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import { IERC20Upgradeable, IPerpetualTranche, IBondController, ITranche, IFeePolicy } from "./_interfaces/IPerpetualTranche.sol";
 import { IVault } from "./_interfaces/IVault.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
+import { IERC20Burnable } from "./_interfaces/IERC20Burnable.sol";
 import { TokenAmount, RolloverData, SubscriptionParams, RebalanceData } from "./_interfaces/CommonTypes.sol";
 import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, OutOfBounds, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit, InsufficientLiquidity, LastRebalanceTooRecent } from "./_interfaces/ProtocolErrors.sol";
 
@@ -69,6 +70,7 @@ contract RolloverVault is
 
     // ERC20 operations
     using SafeERC20Upgradeable for IERC20Upgradeable;
+    using SafeERC20Upgradeable for ITranche;
 
     // math
     using MathUpgradeable for uint256;
@@ -764,18 +766,18 @@ contract RolloverVault is
         SubscriptionParams memory s = _querySubscriptionState(perp_);
         RebalanceData memory r = feePolicy.computeRebalanceData(s);
         if (r.underlyingAmtIntoPerp <= 0) {
-            // We transfer value from perp to the vault, by minting the vault perp tokens.
+            // We transfer value from perp to the vault, by minting the vault perp tokens (without any deposits).
             // NOTE: We first mint the vault perp tokens, and then pay the protocol fee.
             perp_.rebalanceToVault(r.underlyingAmtIntoPerp.abs() + r.protocolFeeUnderlyingAmt);
 
             // We immediately deconstruct perp tokens minted to the vault.
             _meldPerps(perp_);
         } else {
-            // TODO: Look into sending As instead of AMPL on rebalance from vault to perp.
-            // We transfer value from the vault to perp, by transferring underlying collateral tokens to perp.
-            underlying_.safeTransfer(address(perp), r.underlyingAmtIntoPerp.toUint256());
-
-            perp_.updateState(); // Trigger perp book-keeping
+            // We transfer value from the vault to perp, by minting the perp tokens (after making required deposit)
+            // and then simply burning the newly minted perp tokens.
+            uint256 perpAmtToTransfer = r.underlyingAmtIntoPerp.toUint256().mulDiv(perp_.totalSupply(), s.perpTVL);
+            _trancheAndMintPerps(perp_, underlying_, s.perpTVL, s.seniorTR, perpAmtToTransfer);
+            IERC20Burnable(address(perp_)).burn(perpAmtToTransfer);
         }
 
         // Pay protocol fees
@@ -850,7 +852,7 @@ contract RolloverVault is
         }
     }
 
-    /// @dev Tranches the vault's underlying to mint perps..
+    /// @dev Tranches the vault's underlying to mint perps.
     ///      Performs some book-keeping to keep track of the vault's assets.
     function _trancheAndMintPerps(
         IPerpetualTranche perp_,
