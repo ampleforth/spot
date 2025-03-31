@@ -44,8 +44,8 @@ describe("FeePolicy", function () {
       expect(fr[0]).to.eq(toPerc("1"));
       expect(fr[1]).to.eq(toPerc("1"));
 
-      expect(await feePolicy.debasementMaxSystemTVLPerc()).to.eq(toPerc("0.001"));
-      expect(await feePolicy.enrichmentMaxSystemTVLPerc()).to.eq(toPerc("0.0015015"));
+      expect(await feePolicy.debasementSystemTVLPerc()).to.eq(toPerc("0.001"));
+      expect(await feePolicy.enrichmentSystemTVLPerc()).to.eq(toPerc("0.0015015"));
       expect(await feePolicy.debasementProtocolSharePerc()).to.eq(0n);
       expect(await feePolicy.enrichmentProtocolSharePerc()).to.eq(0n);
     });
@@ -292,8 +292,8 @@ describe("FeePolicy", function () {
     describe("when triggered by owner", function () {
       it("should update parameters", async function () {
         await feePolicy.connect(deployer).updateMaxRebalancePerc(toPerc("0.005"), toPerc("0.01"));
-        expect(await feePolicy.debasementMaxSystemTVLPerc()).to.eq(toPerc("0.005"));
-        expect(await feePolicy.enrichmentMaxSystemTVLPerc()).to.eq(toPerc("0.01"));
+        expect(await feePolicy.debasementSystemTVLPerc()).to.eq(toPerc("0.005"));
+        expect(await feePolicy.enrichmentSystemTVLPerc()).to.eq(toPerc("0.01"));
       });
     });
   });

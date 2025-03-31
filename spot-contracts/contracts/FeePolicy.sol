@@ -114,11 +114,11 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     //-----------------------------------------------------------------------------
     // Incentive parameters
 
-    /// @notice The maximum percentage of system TVL transferred out of perp on every rebalance (when dr <= 1).
-    uint256 public debasementMaxSystemTVLPerc;
+    /// @notice The percentage of system TVL transferred out of perp on every rebalance (when dr <= 1).
+    uint256 public debasementSystemTVLPerc;
 
-    /// @notice The maximum percentage of system TVL transferred into perp on every rebalance (when dr > 1).
-    uint256 public enrichmentMaxSystemTVLPerc;
+    /// @notice The percentage of system TVL transferred into perp on every rebalance (when dr > 1).
+    uint256 public enrichmentSystemTVLPerc;
 
     /// @notice The percentage of the debasement value charged by the protocol as fees.
     uint256 public debasementProtocolSharePerc;
@@ -158,8 +158,8 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         flashRedeemFeePercs = Range({ lower: ONE, upper: ONE });
 
         // initializing incentives
-        debasementMaxSystemTVLPerc = ONE / 1000; // 0.1% or 10 bps
-        enrichmentMaxSystemTVLPerc = ONE / 666; // ~0.15% or 15 bps
+        debasementSystemTVLPerc = ONE / 1000; // 0.1% or 10 bps
+        enrichmentSystemTVLPerc = ONE / 666; // ~0.15% or 15 bps
         debasementProtocolSharePerc = 0;
         enrichmentProtocolSharePerc = 0;
     }
@@ -247,14 +247,14 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @notice Updates the rebalance rate.
-    /// @param debasementMaxSystemTVLPerc_ The maximum percentage of system tvl out of perp on debasement.
-    /// @param enrichmentMaxSystemTVLPerc_ The maximum percentage of system tvl into perp on enrichment.
+    /// @param debasementSystemTVLPerc_ The percentage of system tvl out of perp on debasement.
+    /// @param enrichmentSystemTVLPerc_ The percentage of system tvl into perp on enrichment.
     function updateMaxRebalancePerc(
-        uint256 debasementMaxSystemTVLPerc_,
-        uint256 enrichmentMaxSystemTVLPerc_
+        uint256 debasementSystemTVLPerc_,
+        uint256 enrichmentSystemTVLPerc_
     ) external onlyOwner {
-        debasementMaxSystemTVLPerc = debasementMaxSystemTVLPerc_;
-        enrichmentMaxSystemTVLPerc = enrichmentMaxSystemTVLPerc_;
+        debasementSystemTVLPerc = debasementSystemTVLPerc_;
+        enrichmentSystemTVLPerc = enrichmentSystemTVLPerc_;
     }
 
     /// @notice Updates the protocol share of the daily debasement and enrichment.
@@ -390,12 +390,12 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         bool perpDebasement = r.underlyingAmtIntoPerp <= 0;
         if (perpDebasement) {
             r.underlyingAmtIntoPerp = SignedMathUpgradeable.max(
-                -totalTVL.mulDiv(debasementMaxSystemTVLPerc, ONE).toInt256(),
+                -totalTVL.mulDiv(debasementSystemTVLPerc, ONE).toInt256(),
                 r.underlyingAmtIntoPerp
             );
         } else {
             r.underlyingAmtIntoPerp = SignedMathUpgradeable.min(
-                totalTVL.mulDiv(enrichmentMaxSystemTVLPerc, ONE).toInt256(),
+                totalTVL.mulDiv(enrichmentSystemTVLPerc, ONE).toInt256(),
                 r.underlyingAmtIntoPerp
             );
         }
