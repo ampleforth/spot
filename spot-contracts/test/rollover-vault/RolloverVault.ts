@@ -441,4 +441,29 @@ describe("RolloverVault", function () {
       });
     });
   });
+
+  describe("#updateRebalanceFrequency", function () {
+    let tx: Transaction;
+    beforeEach(async function () {
+      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
+    });
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(vault.connect(deployer).updateRebalanceFrequency(3600)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      beforeEach(async function () {
+        tx = await vault.connect(otherUser).updateRebalanceFrequency(3600);
+        await tx;
+      });
+      it("should update the rebalance freq", async function () {
+        expect(await vault.rebalanceFreqSec()).to.eq(3600);
+      });
+    });
+  });
 });

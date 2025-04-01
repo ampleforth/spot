@@ -79,5 +79,5 @@ error InvalidPerc();
 /// @notice Expected target subscription ratio to be within defined bounds.
 error InvalidTargetSRBounds();
 
-/// @notice Expected deviation ratio bounds to be valid.
-error InvalidDRBounds();
+/// @notice Expected deviation ratio range to be valid.
+error InvalidDRRange();

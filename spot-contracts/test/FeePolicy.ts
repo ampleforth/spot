@@ -104,16 +104,16 @@ describe("FeePolicy", function () {
       it("should revert", async function () {
         await expect(
           feePolicy.connect(deployer).updateDRBounds([toPerc("0.9"), toPerc("2")], [toPerc("0.75"), toPerc("1.5")]),
-        ).to.be.revertedWithCustomError(feePolicy, "InvalidDRBounds");
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidDRRange");
         await expect(
           feePolicy.connect(deployer).updateDRBounds([toPerc("0.5"), toPerc("2")], [toPerc("2"), toPerc("1.5")]),
-        ).to.be.revertedWithCustomError(feePolicy, "InvalidDRBounds");
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidDRRange");
         await expect(
           feePolicy.connect(deployer).updateDRBounds([toPerc("0.5"), toPerc("2")], [toPerc("0.75"), toPerc("0.6")]),
-        ).to.be.revertedWithCustomError(feePolicy, "InvalidDRBounds");
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidDRRange");
         await expect(
           feePolicy.connect(deployer).updateDRBounds([toPerc("0.5"), toPerc("2")], [toPerc("0.75"), toPerc("2.5")]),
-        ).to.be.revertedWithCustomError(feePolicy, "InvalidDRBounds");
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidDRRange");
       });
     });
 
@@ -126,6 +126,39 @@ describe("FeePolicy", function () {
         const s2 = await feePolicy.drSoftBound();
         expect(s2[0]).to.eq(toPerc("0.75"));
         expect(s2[1]).to.eq(toPerc("1.5"));
+      });
+    });
+  });
+
+  describe("#updateRebalanceEquilibriumDR", function () {
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(
+          feePolicy.connect(otherUser).updateRebalanceEquilibriumDR([toPerc("1"), toPerc("1")]),
+        ).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+    });
+
+    describe("when parameters are invalid", function () {
+      it("should revert", async function () {
+        await expect(
+          feePolicy.connect(deployer).updateRebalanceEquilibriumDR([toPerc("2"), toPerc("0.9")]),
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidDRRange");
+        await expect(
+          feePolicy.connect(deployer).updateRebalanceEquilibriumDR([toPerc("1.1"), toPerc("2")]),
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidDRRange");
+        await expect(
+          feePolicy.connect(deployer).updateRebalanceEquilibriumDR([toPerc("0.95"), toPerc("0.99")]),
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidDRRange");
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      it("should update dr hard bounds", async function () {
+        await feePolicy.connect(deployer).updateRebalanceEquilibriumDR([toPerc("0.5"), toPerc("2")]);
+        const s = await feePolicy.rebalEqDr();
+        expect(s[0]).to.eq(toPerc("0.5"));
+        expect(s[1]).to.eq(toPerc("2"));
       });
     });
   });
@@ -512,6 +545,27 @@ describe("FeePolicy", function () {
       await feePolicy.updateTargetSubscriptionRatio(toPerc("1.25"));
       await feePolicy.updateProtocolSharePerc(toPerc("0.05"), toPerc("0.1"));
       await feePolicy.updateMaxRebalancePerc(toPerc("0.02"), toPerc("0.01"));
+      await feePolicy.updateRebalanceEquilibriumDR([toPerc("0.9999"), toPerc("1.0001")])
+    });
+
+    describe("when deviation is within eq range", function () {
+      it("should compute rebalance data", async function () {
+        await feePolicy.updateRebalanceEquilibriumDR([toPerc("0.5"), toPerc("2")])
+        const r1 = await feePolicy.computeRebalanceData({
+          perpTVL: toAmt("120"),
+          vaultTVL: toAmt("500"),
+          seniorTR: 200,
+        });
+        expect(r1[0]).to.eq(0n);
+        expect(r1[1]).to.eq(0n);
+        const r2 = await feePolicy.computeRebalanceData({
+          perpTVL: toAmt("80"),
+          vaultTVL: toAmt("500"),
+          seniorTR: 200,
+        });
+        expect(r2[0]).to.eq(0n);
+        expect(r2[1]).to.eq(0n);
+      });
     });
 
     describe("when deviation = 1.0", function () {

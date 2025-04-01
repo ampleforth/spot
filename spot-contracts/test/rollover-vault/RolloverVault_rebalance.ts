@@ -27,7 +27,7 @@ let collateralToken: Contract;
 let issuer: Contract;
 let feePolicy: Contract;
 let deployer: Signer;
-let reserveSrTranches: Contract[][] = [];
+const reserveSrTranches: Contract[][] = [];
 const reserveJrTranches: Contract[][] = [];
 
 describe("RolloverVault", function () {
@@ -78,7 +78,6 @@ describe("RolloverVault", function () {
     await vault.init("RolloverVault", "VSHARE", perp.target, feePolicy.target);
     await perp.updateVault(vault.target);
 
-    reserveSrTranches = [];
     for (let i = 0; i < 4; i++) {
       const bond = await getDepositBond(perp);
       const tranches = await getTranches(bond);
@@ -208,14 +207,25 @@ describe("RolloverVault", function () {
     });
 
     describe("perp enrichment", function () {
+      let depositBond: Contract, depositTranches: Contract[];
       beforeEach(async function () {
         await feePolicy.mockMethod("computeRebalanceData((uint256,uint256,uint256))", [[toFixedPtAmt("25"), 0n]]);
+        await perp.updateState();
+        depositBond = await getDepositBond(perp);
+        depositTranches = await getTranches(depositBond);
       });
-      it("should transfer collateral tokens from vault to perp", async function () {
+      it("should tranche using deposit bond", async function () {
         await expect(() => vault.rebalance()).to.changeTokenBalances(
           collateralToken,
+          [vault, depositBond.target],
+          [toFixedPtAmt("-125"), toFixedPtAmt("125")],
+        );
+      });
+      it("should transfer seniors from vault to perp", async function () {
+        await expect(() => vault.rebalance()).to.changeTokenBalances(
+          depositTranches[0],
           [vault, perp],
-          [toFixedPtAmt("-25"), toFixedPtAmt("25")],
+          [toFixedPtAmt("0"), toFixedPtAmt("25")],
         );
       });
       it("should not change perp supply", async function () {
@@ -225,23 +235,35 @@ describe("RolloverVault", function () {
       });
       it("should sync token balances", async function () {
         const tx = vault.rebalance();
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.target, toFixedPtAmt("175"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(perp.target, toFixedPtAmt("0"));
-        await expect(tx).to.emit(perp, "ReserveSynced").withArgs(collateralToken.target, toFixedPtAmt("25"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.target, toFixedPtAmt("75"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(depositTranches[1].target, toFixedPtAmt("100"));
+        await expect(tx).to.emit(perp, "ReserveSynced").withArgs(depositTranches[0].target, toFixedPtAmt("25"));
       });
     });
 
     describe("perp enrichment with protocol fee", function () {
+      let depositBond: Contract, depositTranches: Contract[];
       beforeEach(async function () {
         await feePolicy.mockMethod("computeRebalanceData((uint256,uint256,uint256))", [
           [toFixedPtAmt("20"), toFixedPtAmt("5")],
         ]);
+        await perp.updateState();
+        depositBond = await getDepositBond(perp);
+        depositTranches = await getTranches(depositBond);
       });
-      it("should transfer collateral tokens from vault to perp", async function () {
+
+      it("should tranche using deposit bond", async function () {
         await expect(() => vault.rebalance()).to.changeTokenBalances(
           collateralToken,
-          [vault, perp, deployer],
-          [toFixedPtAmt("-25"), toFixedPtAmt("20"), toFixedPtAmt("5")],
+          [vault, depositBond.target],
+          [toFixedPtAmt("-105"), toFixedPtAmt("100")],
+        );
+      });
+      it("should transfer seniors from vault to perp", async function () {
+        await expect(() => vault.rebalance()).to.changeTokenBalances(
+          depositTranches[0],
+          [vault, perp],
+          [toFixedPtAmt("0"), toFixedPtAmt("20")],
         );
       });
       it("should pay the protocol fee", async function () {
@@ -254,9 +276,9 @@ describe("RolloverVault", function () {
       });
       it("should sync token balances", async function () {
         const tx = vault.rebalance();
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.target, toFixedPtAmt("175"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(perp.target, toFixedPtAmt("0"));
-        await expect(tx).to.emit(perp, "ReserveSynced").withArgs(collateralToken.target, toFixedPtAmt("20"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.target, toFixedPtAmt("95"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(depositTranches[1].target, toFixedPtAmt("80"));
+        await expect(tx).to.emit(perp, "ReserveSynced").withArgs(depositTranches[0].target, toFixedPtAmt("20"));
       });
     });
   });
