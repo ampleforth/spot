@@ -6,7 +6,7 @@ import { IVault } from "./_interfaces/IVault.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
 import { IERC20Burnable } from "./_interfaces/IERC20Burnable.sol";
 import { TokenAmount, RolloverData, SubscriptionParams, RebalanceData } from "./_interfaces/CommonTypes.sol";
-import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, OutOfBounds, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit, InsufficientLiquidity, LastRebalanceTooRecent } from "./_interfaces/ProtocolErrors.sol";
+import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, OutOfBounds, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit, InsufficientLiquidity, LastRebalanceTooRecent, UnacceptableParams } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -109,9 +109,6 @@ contract RolloverVault is
     ///      during recovery (through recurrent immature redemption).
     uint256 public constant TRANCHE_DUST_AMT = 10000000;
 
-    /// @notice Number of seconds in one day.
-    uint256 public constant DAY_SEC = (3600 * 24);
-
     //--------------------------------------------------------------------------
     // ASSETS
     //
@@ -173,6 +170,9 @@ contract RolloverVault is
     /// @notice Recorded timestamp of the last successful rebalance.
     uint256 public lastRebalanceTimestampSec;
 
+    /// @notice Number of seconds after which the subsequent rebalance can be triggered.
+    uint256 public rebalanceFreqSec;
+
     //--------------------------------------------------------------------------
     // Modifiers
 
@@ -227,6 +227,7 @@ contract RolloverVault is
         reservedUnderlyingBal = 0;
         reservedSubscriptionPerc = 0;
         lastRebalanceTimestampSec = block.timestamp;
+        rebalanceFreqSec = 86400; // 1 day
 
         // sync underlying
         _syncAsset(underlying);
@@ -261,6 +262,12 @@ contract RolloverVault is
         keeper = keeper_;
     }
 
+    /// @notice Updates the rebalance frequency.
+    /// @param rebalanceFreqSec_ The new rebalance frequency in seconds.
+    function updateRebalanceFrequency(uint256 rebalanceFreqSec_) public onlyOwner {
+        rebalanceFreqSec = rebalanceFreqSec_;
+    }
+
     //--------------------------------------------------------------------------
     // Keeper only methods
 
@@ -278,7 +285,7 @@ contract RolloverVault is
 
     /// @notice Pauses the rebalance operation.
     function pauseRebalance() external onlyKeeper {
-        lastRebalanceTimestampSec = type(uint256).max - DAY_SEC;
+        lastRebalanceTimestampSec = type(uint256).max - rebalanceFreqSec;
     }
 
     /// @notice Unpauses the rebalance operation.
@@ -308,10 +315,8 @@ contract RolloverVault is
     // External & Public write methods
 
     /// @inheritdoc IRolloverVault
-    /// @dev This method can execute at-most once every 24 hours. The rebalance frequency is hard-coded and can't be changed.
     function rebalance() external override nonReentrant whenNotPaused {
-        // TODO: make rebalance frequency configurable.
-        if (block.timestamp <= lastRebalanceTimestampSec + DAY_SEC) {
+        if (block.timestamp <= lastRebalanceTimestampSec + rebalanceFreqSec) {
             revert LastRebalanceTooRecent();
         }
         _rebalance(perp, underlying);
