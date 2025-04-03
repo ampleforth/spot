@@ -246,10 +246,10 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         flashRedeemFeePercs = flashRedeemFeePercs_;
     }
 
-    /// @notice Updates the rebalance rate.
+    /// @notice Updates the rebalance rates.
     /// @param debasementSystemTVLPerc_ The percentage of system tvl out of perp on debasement.
     /// @param enrichmentSystemTVLPerc_ The percentage of system tvl into perp on enrichment.
-    function updateMaxRebalancePerc(
+    function updateRebalanceRates(
         uint256 debasementSystemTVLPerc_,
         uint256 enrichmentSystemTVLPerc_
     ) external onlyOwner {
