@@ -67,8 +67,11 @@ error DeployedCountOverLimit();
 /// @notice Expected parent bond to have only 2 children tranches.
 error UnacceptableTrancheLength();
 
+/// @notice Not enough time has elapsed since last successful rebalance.
+error LastRebalanceTooRecent();
+
 //-------------------------------------------------------------------------
-// Fee Policy
+// FeePolicy
 
 /// @notice Expected perc value to be at most (1 * 10**DECIMALS), i.e) 1.0 or 100%.
 error InvalidPerc();

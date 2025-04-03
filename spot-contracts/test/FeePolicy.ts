@@ -37,17 +37,17 @@ describe("FeePolicy", function () {
       expect(await feePolicy.vaultMintFeePerc()).to.eq(0n);
       expect(await feePolicy.vaultBurnFeePerc()).to.eq(0n);
 
-      const r = await feePolicy.perpRolloverFee();
-      expect(await r.minRolloverFeePerc).to.eq(toPerc("-0.07692307"));
-      expect(await r.perpDebasementSlope).to.eq(toPerc("0.07692307"));
-      expect(await r.perpEnrichmentSlope).to.eq(toPerc("0.07692307"));
-
       const fm = await feePolicy.flashMintFeePercs();
       expect(fm[0]).to.eq(toPerc("1"));
       expect(fm[1]).to.eq(toPerc("1"));
       const fr = await feePolicy.flashRedeemFeePercs();
       expect(fr[0]).to.eq(toPerc("1"));
       expect(fr[1]).to.eq(toPerc("1"));
+
+      expect(await feePolicy.debasementSystemTVLPerc()).to.eq(toPerc("0.001"));
+      expect(await feePolicy.enrichmentSystemTVLPerc()).to.eq(toPerc("0.0015015"));
+      expect(await feePolicy.debasementProtocolSharePerc()).to.eq(0n);
+      expect(await feePolicy.enrichmentProtocolSharePerc()).to.eq(0n);
     });
     it("should return owner", async function () {
       expect(await feePolicy.owner()).to.eq(await deployer.getAddress());
@@ -184,34 +184,6 @@ describe("FeePolicy", function () {
     });
   });
 
-  describe("#updatePerpRolloverFees", function () {
-    describe("when triggered by non-owner", function () {
-      it("should revert", async function () {
-        await expect(
-          feePolicy.connect(otherUser).updatePerpRolloverFees({
-            minRolloverFeePerc: toPerc("-0.01"),
-            perpDebasementSlope: toPerc("0.01"),
-            perpEnrichmentSlope: toPerc("0.01"),
-          }),
-        ).to.be.revertedWith("Ownable: caller is not the owner");
-      });
-    });
-
-    describe("when triggered by owner", function () {
-      it("should update parameters", async function () {
-        await feePolicy.connect(deployer).updatePerpRolloverFees({
-          minRolloverFeePerc: toPerc("-0.01"),
-          perpDebasementSlope: toPerc("0.02"),
-          perpEnrichmentSlope: toPerc("0.03"),
-        });
-        const p = await feePolicy.perpRolloverFee();
-        expect(p.minRolloverFeePerc).to.eq(toPerc("-0.01"));
-        expect(p.perpDebasementSlope).to.eq(toPerc("0.02"));
-        expect(p.perpEnrichmentSlope).to.eq(toPerc("0.03"));
-      });
-    });
-  });
-
   describe("#updateVaultMintFees", function () {
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
@@ -308,15 +280,57 @@ describe("FeePolicy", function () {
     });
   });
 
+  describe("#updateRebalanceRates", function () {
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(
+          feePolicy.connect(otherUser).updateRebalanceRates(toPerc("0.005"), toPerc("0.01")),
+        ).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      it("should update parameters", async function () {
+        await feePolicy.connect(deployer).updateRebalanceRates(toPerc("0.005"), toPerc("0.01"));
+        expect(await feePolicy.debasementSystemTVLPerc()).to.eq(toPerc("0.005"));
+        expect(await feePolicy.enrichmentSystemTVLPerc()).to.eq(toPerc("0.01"));
+      });
+    });
+  });
+
+  describe("#updateProtocolSharePerc", function () {
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(
+          feePolicy.connect(otherUser).updateProtocolSharePerc(toPerc("0.05"), toPerc("0.15")),
+        ).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+    });
+
+    describe("when value is invalid", function () {
+      it("should update parameters", async function () {
+        await expect(
+          feePolicy.connect(deployer).updateProtocolSharePerc(0, toPerc("1.05")),
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidPerc");
+        await expect(
+          feePolicy.connect(deployer).updateProtocolSharePerc(toPerc("1.05"), 0),
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidPerc");
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      it("should update parameters", async function () {
+        await feePolicy.connect(deployer).updateProtocolSharePerc(toPerc("0.05"), toPerc("0.15"));
+        expect(await feePolicy.debasementProtocolSharePerc()).to.eq(toPerc("0.05"));
+        expect(await feePolicy.enrichmentProtocolSharePerc()).to.eq(toPerc("0.15"));
+      });
+    });
+  });
+
   describe("fee logic", function () {
     beforeEach(async function () {
       await feePolicy.updatePerpMintFees(toPerc("0.025"));
       await feePolicy.updatePerpBurnFees(toPerc("0.035"));
-      await feePolicy.updatePerpRolloverFees({
-        minRolloverFeePerc: toPerc("-0.8"),
-        perpDebasementSlope: toPerc("1"),
-        perpEnrichmentSlope: toPerc("2"),
-      });
       await feePolicy.updateFlashFees([toPerc("0.1"), toPerc("0.2")], [toPerc("0.15"), toPerc("0.5")]);
       await feePolicy.updateVaultMintFees(toPerc("0.05"));
       await feePolicy.updateVaultBurnFees(toPerc("0.075"));
@@ -452,30 +466,6 @@ describe("FeePolicy", function () {
         });
       });
     });
-
-    describe("rollover fee", function () {
-      it("should compute fees as expected", async function () {
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0"))).to.eq(toPerc("-0.8"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.01"))).to.eq(toPerc("-0.8"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.25"))).to.eq(toPerc("-0.75"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.5"))).to.eq(toPerc("-0.5"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.66"))).to.eq(toPerc("-0.34"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.7"))).to.eq(toPerc("-0.3"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.8"))).to.eq(toPerc("-0.2"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.9"))).to.eq(toPerc("-0.1"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("0.99"))).to.eq(toPerc("-0.01"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1"))).to.eq("0");
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.01"))).to.eq(toPerc("0.02"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.05"))).to.eq(toPerc("0.1"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.1"))).to.eq(toPerc("0.2"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.25"))).to.eq(toPerc("0.5"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.5"))).to.eq(toPerc("1"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("1.75"))).to.eq(toPerc("1.5"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("2"))).to.eq(toPerc("2"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("5"))).to.eq(toPerc("8"));
-        expect(await feePolicy.computePerpRolloverFeePerc(toPerc("10"))).to.eq(toPerc("18"));
-      });
-    });
   });
 
   describe("#computeDeviationRatio", async function () {
@@ -513,6 +503,98 @@ describe("FeePolicy", function () {
           seniorTR: 200,
         });
         expect(r).to.eq(toPerc("0.5"));
+      });
+    });
+  });
+
+  describe("#computeRebalanceData", async function () {
+    beforeEach(async function () {
+      await feePolicy.updateTargetSubscriptionRatio(toPerc("1.25"));
+      await feePolicy.updateProtocolSharePerc(toPerc("0.05"), toPerc("0.1"));
+      await feePolicy.updateRebalanceRates(toPerc("0.02"), toPerc("0.01"));
+    });
+
+    describe("when deviation = 1.0", function () {
+      it("should compute rebalance data", async function () {
+        const r = await feePolicy.computeRebalanceData({
+          perpTVL: toAmt("100"),
+          vaultTVL: toAmt("500"),
+          seniorTR: 200,
+        });
+        expect(r[0]).to.eq(0n);
+        expect(r[1]).to.eq(0n);
+      });
+    });
+
+    describe("when deviation ~= 1.0", function () {
+      it("should compute rebalance data", async function () {
+        const r = await feePolicy.computeRebalanceData({
+          perpTVL: toAmt("100"),
+          vaultTVL: toAmt("500.001"),
+          seniorTR: 200,
+        });
+        expect(r[0]).to.eq(0n);
+        expect(r[1]).to.eq(0n);
+      });
+    });
+
+    describe("when deviation ~= 1.0", function () {
+      it("should compute rebalance data", async function () {
+        const r = await feePolicy.computeRebalanceData({
+          perpTVL: toAmt("99.999"),
+          vaultTVL: toAmt("500"),
+          seniorTR: 200,
+        });
+        expect(r[0]).to.eq(0n);
+        expect(r[1]).to.eq(0n);
+      });
+    });
+
+    describe("when deviation > 1.0", function () {
+      it("should compute rebalance data", async function () {
+        const r = await feePolicy.computeRebalanceData({
+          perpTVL: toAmt("100"),
+          vaultTVL: toAmt("1000"),
+          seniorTR: 200,
+        });
+        expect(r[0]).to.eq(toAmt("9.9"));
+        expect(r[1]).to.eq(toAmt("1.1"));
+      });
+    });
+
+    describe("when enrichment rate is very low", function () {
+      it("should compute rebalance data", async function () {
+        const r = await feePolicy.computeRebalanceData({
+          perpTVL: toAmt("100"),
+          vaultTVL: toAmt("500.09"),
+          seniorTR: 200,
+        });
+        expect(r[0]).to.eq(toAmt("0.01349639946"));
+        expect(r[1]).to.eq(toAmt("0.00149959994"));
+      });
+    });
+
+    describe("when deviation < 1.0", function () {
+      it("should compute rebalance data", async function () {
+        const r = await feePolicy.computeRebalanceData({
+          perpTVL: toAmt("1000"),
+          vaultTVL: toAmt("2500"),
+          seniorTR: 200,
+        });
+        expect(r[0]).to.eq(toAmt("-66.5"));
+        expect(r[1]).to.eq(toAmt("3.5"));
+      });
+    });
+
+    describe("when debasement rate is very low", function () {
+      it("should compute rebalance data", async function () {
+        const r = await feePolicy.computeRebalanceData({
+          perpTVL: toAmt("105"),
+          vaultTVL: toAmt("500"),
+          seniorTR: 200,
+        });
+        expect(r[0]).to.eq(toAmt("-3.958337165"));
+        expect(r[1]).to.eq(toAmt("0.208333535"));
       });
     });
   });

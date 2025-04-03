@@ -27,6 +27,14 @@ struct RolloverData {
     uint256 trancheInAmt;
 }
 
+struct RebalanceData {
+    /// @notice The value in underlying tokens, that need to flow from the vault into perp.
+    /// @dev When negative, underlying tokens flow from perp into the vault.
+    int256 underlyingAmtIntoPerp;
+    /// @notice The value in underlying tokens, paid to the protocol as fees.
+    uint256 protocolFeeUnderlyingAmt;
+}
+
 /// @notice A data structure to define a numeric Range.
 struct Range {
     // @dev Lower bound of the range.
