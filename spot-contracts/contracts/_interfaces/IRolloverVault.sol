@@ -2,12 +2,29 @@
 pragma solidity ^0.8.0;
 
 import { IVault } from "./IVault.sol";
-import { SubscriptionParams } from "./CommonTypes.sol";
+import { SubscriptionParams, TokenAmount } from "./CommonTypes.sol";
 
 interface IRolloverVault is IVault {
     /// @notice Gradually transfers value between the perp and vault, to bring the system back into balance.
     /// @dev The rebalance function can be executed at-most once a day.
     function rebalance() external;
+
+    /// @notice Batch operation to mint both perp and rollover vault tokens.
+    /// @param underlyingAmtIn The amount of underlying tokens to be tranched.
+    /// @return perpAmt The amount of perp tokens minted.
+    /// @return noteAmt The amount of vault notes minted.
+    function mint2(uint256 underlyingAmtIn) external returns (uint256 perpAmt, uint256 noteAmt);
+
+    /// @notice Batch operation to burn both perp and rollover vault tokens for the underlying collateral and tranches.
+    /// @param perpAmtAvailable The amount of perp tokens available to burn.
+    /// @param noteAmtAvailable The amount of vault notes available to burn.
+    /// @return perpAmtBurnt The amount of perp tokens burnt.
+    /// @return noteAmtBurnt The amount of vault notes burnt.
+    /// @return redeemedTokens The list of asset tokens and amounts redeemed.
+    function redeem2(
+        uint256 perpAmtAvailable,
+        uint256 noteAmtAvailable
+    ) external returns (uint256 perpAmtBurnt, uint256 noteAmtBurnt, TokenAmount[] memory redeemedTokens);
 
     /// @notice Allows users to swap their underlying tokens for perps held by the vault.
     /// @param underlyingAmtIn The amount of underlying tokens swapped in.

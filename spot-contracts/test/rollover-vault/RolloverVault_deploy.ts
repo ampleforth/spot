@@ -76,8 +76,17 @@ describe("RolloverVault", function () {
     await perp.updateTolerableTrancheMaturity(1200, 4800);
     await advancePerpQueueToBondMaturity(perp, await getDepositBond(perp));
 
-    const RolloverVault = await ethers.getContractFactory("RolloverVault");
-    vault = await upgrades.deployProxy(RolloverVault.connect(deployer));
+    const TrancheManager = await ethers.getContractFactory("TrancheManager");
+    const trancheManager = await TrancheManager.deploy();
+    const RolloverVault = await ethers.getContractFactory("RolloverVault", {
+      libraries: {
+        TrancheManager: trancheManager.target,
+      },
+    });
+    await upgrades.silenceWarnings();
+    vault = await upgrades.deployProxy(RolloverVault.connect(deployer), {
+      unsafeAllow: ["external-library-linking"],
+    });
     await vault.init("RolloverVault", "VSHARE", perp.target, feePolicy.target);
     await perp.updateVault(vault.target);
 

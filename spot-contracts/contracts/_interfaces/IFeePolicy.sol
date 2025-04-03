@@ -45,4 +45,28 @@ interface IFeePolicy {
     /// @return r Rebalance data, magnitude and direction of value flow between perp and the rollover vault
     ///           expressed in the underlying token amount and the protocol's cut.
     function computeRebalanceData(SubscriptionParams memory s) external view returns (RebalanceData memory r);
+
+    /// @notice Computes the dr-neutral split of underlying tokens into perp and the vault.
+    /// @param underlyingAmt The amount of underlying tokens to split.
+    /// @param seniorTR The tranche ratio of seniors accepted by perp.
+    /// @return underlyingAmtIntoPerp The amount of underlying tokens to go into perp.
+    /// @return underlyingAmtIntoVault The amount of underlying tokens to go into the vault.
+    function computeNeutralSplit(
+        uint256 underlyingAmt,
+        uint256 seniorTR
+    ) external view returns (uint256 underlyingAmtIntoPerp, uint256 underlyingAmtIntoVault);
+
+    /// @notice Computes a supply proportional split of perp tokens and vault notes.
+    /// @param perpAmtAvailable The available amount of perp tokens.
+    /// @param noteAmtAvailable The available amount of vault notes.
+    /// @param perpSupply The total supply of perp tokens.
+    /// @param noteSupply The total supply of vault notes.
+    /// @return perpAmt The amount of perp tokens, with the same share of total supply as the vault notes.
+    /// @return noteAmt The amount of vault notes, with the same share of total supply as the perp tokens.
+    function computeProportionalSplit(
+        uint256 perpAmtAvailable,
+        uint256 noteAmtAvailable,
+        uint256 perpSupply,
+        uint256 noteSupply
+    ) external view returns (uint256, uint256);
 }
