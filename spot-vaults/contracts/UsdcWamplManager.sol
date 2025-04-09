@@ -299,12 +299,10 @@ contract UsdcWamplManager {
     /// @notice Computes the WAMPL price in USD based on the WAMPL-USDC Pool.
     /// @return The computed WAMPL price in USD.
     function getWamplUSDPrice() public view returns (uint256) {
-        // We get the WAMPL-USDC price from the pool
-        // We assume USDC price is 1 if valid
         uint160 sqrtPriceX96 = TickMath.getSqrtRatioAtTick(VAULT.getTwap());
         uint256 ratioX192 = uint256(sqrtPriceX96) * sqrtPriceX96;
-        uint256 wamplPerUsdc = FullMath.mulDiv(ONE, ratioX192, (1 << 192));
-        return FullMath.mulDiv(ONE_USDC, ONE_WAMPL, wamplPerUsdc);
+        uint256 usdcPerWampl = FullMath.mulDiv(ONE, (1 << 192), ratioX192);
+        return FullMath.mulDiv(usdcPerWampl, ONE_WAMPL, ONE_USDC);
     }
 
     /// @notice Fetches the current USDC price in USD from the Chainlink oracle and checks for deviation indicitive of systemic issue.
