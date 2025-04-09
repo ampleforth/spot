@@ -264,7 +264,7 @@ contract RolloverVault is
 
     /// @notice Updates the rebalance frequency.
     /// @param rebalanceFreqSec_ The new rebalance frequency in seconds.
-    function updateRebalanceFrequency(uint256 rebalanceFreqSec_) public onlyOwner {
+    function updateRebalanceFrequency(uint256 rebalanceFreqSec_) external onlyOwner {
         rebalanceFreqSec = rebalanceFreqSec_;
     }
 

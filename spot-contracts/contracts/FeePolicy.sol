@@ -389,7 +389,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     function computeRebalanceData(SubscriptionParams memory s) external view override returns (RebalanceData memory r) {
         // We skip rebalancing if dr is close to 1.0
         uint256 dr = computeDeviationRatio(s);
-        if (dr > rebalEqDr.lower && dr < rebalEqDr.upper) {
+        if (dr >= rebalEqDr.lower && dr <= rebalEqDr.upper) {
             return r;
         }
 
