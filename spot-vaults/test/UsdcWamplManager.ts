@@ -24,8 +24,8 @@ describe("UsdcWamplManager", function () {
     await mockVault.deploy();
     await mockVault.mockMethod("fullLower()", [-800000]);
     await mockVault.mockMethod("fullUpper()", [800000]);
-    await mockVault.mockMethod("baseLower()", [45000]);
-    await mockVault.mockMethod("baseUpper()", [55000]);
+    await mockVault.mockMethod("baseLower()", [220000]);
+    await mockVault.mockMethod("baseUpper()", [260000]);
     await mockVault.mockMethod("getTwap()", [244800]);
     await mockVault.mockMethod("limitThreshold()", [800000]);
 
@@ -38,7 +38,7 @@ describe("UsdcWamplManager", function () {
     );
     await mockPool.mockCall(
       "positions(bytes32)",
-      [univ3PositionKey(mockVault.target, 45000, 55000)],
+      [univ3PositionKey(mockVault.target, 220000, 260000)],
       [20000, 0, 0, 0, 0],
     );
     await mockVault.mockMethod("pool()", [mockPool.target]);
@@ -381,12 +381,6 @@ describe("UsdcWamplManager", function () {
         [wamplFP("1")],
         [amplFP("18")],
       );
-      // // test
-      //   const amplPrice = await manager.getAmplUSDPrice.staticCall();
-      //   const wamplPrice = await manager.getWamplUSDPrice.staticCall();
-      //   const usdcPrice = await manager.getUSDCPrice.staticCall();
-      //   console.log({amplPrice, wamplPrice, usdcPrice})
-      //   //
       const r = await manager.computeDeviationFactor.staticCall();
       expect(r[0]).to.eq(percFP("1.091900700280112044"));
       expect(r[1]).to.eq(true);
@@ -459,6 +453,70 @@ describe("UsdcWamplManager", function () {
       expect(r[1]).to.eq(true);
     });
   });
+
+  describe("isOverweightWampl", function () {
+    describe("when wampl sell", function () {
+      it("should return true", async function () {
+        const { manager, mockVault } = await loadFixture(setupContracts);
+        await mockVault.mockMethod("getTwap()", [30001]);
+        await mockVault.mockMethod("limitLower()", [20000]);
+        await mockVault.mockMethod("limitUpper()", [40000]);
+        expect(await manager.isOverweightWampl()).to.eq(true);
+      });
+    });
+
+    describe("when wampl buy", function () {
+      it("should return false", async function () {
+        const { manager, mockVault } = await loadFixture(setupContracts);
+        await mockVault.mockMethod("getTwap()", [29999]);
+        await mockVault.mockMethod("limitLower()", [20000]);
+        await mockVault.mockMethod("limitUpper()", [40000]);
+        expect(await manager.isOverweightWampl()).to.eq(false);
+      });
+    });
+  });
+
+  describe("#rebalance", function () {
+    describe("when activePercDelta is within threshold", function () {
+      describe("when deviation is < 1 and goes > 1", function () {
+        describe("when overweight wampl", function () {
+          it("should trim liquidity & keep limit range", async function () {
+            const { manager, mockVault } = await loadFixture(setupContracts);
+            await manager.setActivePercParams(
+              percFP("1"),
+              [percFP("0.5"), percFP("0.2"), percFP("1"), percFP("1")],
+              [percFP("1"), percFP("1"), percFP("2"), percFP("0.2")],
+            );
+
+            await mockVault.mockMethod("getTwap()", [244800]);
+            await mockVault.mockMethod("limitLower()", [200000]);
+            await mockVault.mockMethod("limitUpper()", [220000]);
+            await mockVault.mockMethod("period()", [86400]);
+            await mockVault.mockCall("setPeriod(uint32)", [0], []);
+            await mockVault.mockCall("setPeriod(uint32)", [86400], []);
+            await mockVault.mockMethod("rebalance()", []);
+
+            await mockVault.mockCall(
+              "emergencyBurn(int24,int24,uint128)",
+              [-800000, 800000, 7352],
+              [],
+            );
+            await mockVault.mockCall(
+              "emergencyBurn(int24,int24,uint128)",
+              [220000, 260000, 1470],
+              [],
+            );
+
+            expect(await manager.prevDeviation()).to.eq("0");
+            expect(await manager.isOverweightWampl()).to.eq(true);
+            await expect(manager.rebalance()).not.to.be.reverted;
+            expect(await manager.prevDeviation()).to.eq(percFP("1.091900700280112044"));
+          });
+        });
+      });
+    });
+  });
+
 
 });
 
