@@ -416,31 +416,30 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computeNeutralSplit(
+    function computeDREquilibriumSplit(
         uint256 underlyingAmt,
         uint256 seniorTR
-    ) external view override returns (uint256, uint256) {
+    ) external view override returns (uint256 perpUnderlyingAmt, uint256 vaultUnderlyingAmt) {
         uint256 juniorTR = (TRANCHE_RATIO_GRANULARITY - seniorTR);
-        uint256 perpUnderlyingAmt = underlyingAmt.mulDiv(
+        perpUnderlyingAmt = underlyingAmt.mulDiv(
             seniorTR,
             seniorTR + juniorTR.mulDiv(targetSubscriptionRatio, ONE)
         );
-        uint256 vaultUnderlyingAmt = underlyingAmt - perpUnderlyingAmt;
-        return (perpUnderlyingAmt, vaultUnderlyingAmt);
+        vaultUnderlyingAmt = underlyingAmt - perpUnderlyingAmt;
     }
 
     /// @inheritdoc IFeePolicy
-    function computeProportionalSplit(
+    function computeDRNeutralSplit(
         uint256 perpAmtAvailable,
-        uint256 noteAmtAvailable,
+        uint256 vaultNoteAmtAvailable,
         uint256 perpSupply,
-        uint256 noteSupply
-    ) external pure override returns (uint256 perpAmt, uint256 noteAmt) {
+        uint256 vaultNoteSupply
+    ) external pure override returns (uint256 perpAmt, uint256 vaultNoteAmt) {
         perpAmt = perpAmtAvailable;
-        noteAmt = noteSupply.mulDiv(perpAmt, perpSupply);
-        if (noteAmt >= noteAmtAvailable) {
-            noteAmt = noteAmtAvailable;
-            perpAmt = perpAmtAvailable.mulDiv(noteAmt, noteSupply);
+        vaultNoteAmt = vaultNoteSupply.mulDiv(perpAmt, perpSupply);
+        if (vaultNoteAmt > vaultNoteAmtAvailable) {
+            vaultNoteAmt = vaultNoteAmtAvailable;
+            perpAmt = perpAmtAvailable.mulDiv(vaultNoteAmt, vaultNoteSupply);
         }
     }
 }

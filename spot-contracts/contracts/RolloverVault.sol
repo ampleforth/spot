@@ -18,6 +18,7 @@ import { BondTranches, BondTranchesHelpers } from "./_utils/BondTranchesHelpers.
 import { TrancheHelpers } from "./_utils/TrancheHelpers.sol";
 import { BondHelpers } from "./_utils/BondHelpers.sol";
 import { PerpHelpers } from "./_utils/PerpHelpers.sol";
+import { ERC20Helpers } from "./_utils/ERC20Helpers.sol";
 import { TrancheManager } from "./_utils/TrancheManager.sol";
 
 /*
@@ -68,6 +69,7 @@ contract RolloverVault is
 
     // ERC20 operations
     using SafeERC20Upgradeable for IERC20Upgradeable;
+    using ERC20Helpers for IERC20Upgradeable;
 
     // math
     using MathUpgradeable for uint256;
@@ -429,19 +431,19 @@ contract RolloverVault is
     /// @dev This operation pushes the system back into balance, we thus charge no fees.
     function mint2(
         uint256 underlyingAmtIn
-    ) external override nonReentrant whenNotPaused returns (uint256 perpAmt, uint256 noteAmt) {
+    ) external override nonReentrant whenNotPaused returns (uint256 perpAmt, uint256 vaultNoteAmt) {
         // Compute perp vault split
         IPerpetualTranche perp_ = perp;
         IERC20Upgradeable underlying_ = underlying;
         SubscriptionParams memory s = _querySubscriptionState(perp_);
-        (uint256 underlyingAmtIntoPerp, uint256 underlyingAmtIntoVault) = feePolicy.computeNeutralSplit(
+        (uint256 underlyingAmtIntoPerp, uint256 underlyingAmtIntoVault) = feePolicy.computeDREquilibriumSplit(
             underlyingAmtIn,
             s.seniorTR
         );
 
-        // Compute perp amount and note amount to mint
+        // Compute perp amount and vault note amount to mint
         perpAmt = perp_.totalSupply().mulDiv(underlyingAmtIntoPerp, s.perpTVL);
-        noteAmt = computeMintAmt(underlyingAmtIntoVault, 0);
+        vaultNoteAmt = computeMintAmt(underlyingAmtIntoVault, 0);
 
         // Transfer underlying tokens from user
         underlying_.safeTransferFrom(msg.sender, address(this), underlyingAmtIn);
@@ -451,7 +453,7 @@ contract RolloverVault is
         IERC20Upgradeable(address(perp_)).safeTransfer(msg.sender, perpAmt);
 
         // Mint vault notes to user
-        _mint(msg.sender, noteAmt);
+        _mint(msg.sender, vaultNoteAmt);
 
         // Sync underlying
         _syncAsset(underlying_);
@@ -461,48 +463,48 @@ contract RolloverVault is
     /// @dev This operation maintains the system's balance by just reduces liquidity, we thus charge no fees.
     function redeem2(
         uint256 perpAmtAvailable,
-        uint256 noteAmtAvailable
+        uint256 vaultNoteAmtAvailable
     )
         external
         override
         nonReentrant
         whenNotPaused
-        returns (uint256 perpAmt, uint256 noteAmt, TokenAmount[] memory redeemedTokens)
+        returns (uint256 perpAmt, uint256 vaultNoteAmt, TokenAmount[] memory returnedTokens)
     {
         // Compute perp vault split
         IPerpetualTranche perp_ = perp;
-        (perpAmt, noteAmt) = feePolicy.computeProportionalSplit(
+        (perpAmt, vaultNoteAmt) = feePolicy.computeDRNeutralSplit(
             perpAmtAvailable,
-            noteAmtAvailable,
+            vaultNoteAmtAvailable,
             perp_.totalSupply(),
             totalSupply()
         );
 
         // Redeem vault notes
-        TokenAmount[] memory vaultTokens = computeRedemptionAmts(noteAmt, 0);
-        _burn(msg.sender, noteAmt);
+        TokenAmount[] memory vaultTokens = computeRedemptionAmts(vaultNoteAmt, 0);
+        _burn(msg.sender, vaultNoteAmt);
 
         // Transfer perps from user and redeem
         IERC20Upgradeable(address(perp_)).safeTransferFrom(msg.sender, address(this), perpAmt);
         TokenAmount[] memory perpTokens = perp.redeem(perpAmt);
 
-        // Compute final list of redeemed tokens and transfer back to the user
-        redeemedTokens = new TokenAmount[](perpTokens.length + vaultTokens.length - 1);
-        redeemedTokens[0] = TokenAmount({
+        // Compute final list of tokens to return to the user
+        returnedTokens = new TokenAmount[](perpTokens.length + vaultTokens.length - 1);
+        returnedTokens[0] = TokenAmount({
             token: perpTokens[0].token, // perpTokens[0].token = vaultTokens[0].token = underlying
             amount: (perpTokens[0].amount + vaultTokens[0].amount)
         });
-        redeemedTokens[0].token.safeTransfer(msg.sender, redeemedTokens[0].amount);
+        returnedTokens[0].token.safeTransfer(msg.sender, returnedTokens[0].amount);
 
         // perp tokens
         for (uint8 i = 1; i < uint8(perpTokens.length); i++) {
-            redeemedTokens[i] = perpTokens[i];
-            redeemedTokens[i].token.safeTransfer(msg.sender, redeemedTokens[i].amount);
+            returnedTokens[i] = perpTokens[i];
+            returnedTokens[i].token.safeTransfer(msg.sender, returnedTokens[i].amount);
         }
 
         // vault tokens
         for (uint8 i = 1; i < uint8(vaultTokens.length); i++) {
-            redeemedTokens[i - 1 + perpTokens.length] = vaultTokens[i];
+            returnedTokens[i - 1 + perpTokens.length] = vaultTokens[i];
             vaultTokens[i].token.safeTransfer(msg.sender, vaultTokens[i].amount);
 
             // sync balances
@@ -515,36 +517,36 @@ contract RolloverVault is
 
     /// @inheritdoc IVault
     function deposit(uint256 underlyingAmtIn) external override nonReentrant whenNotPaused returns (uint256) {
-        // Calculates the fee adjusted amount of notes minted when depositing `underlyingAmtIn` of underlying tokens.
+        // Calculates the fee adjusted amount of vault notes minted when depositing `underlyingAmtIn` of underlying tokens.
         // NOTE: This operation should precede any token transfers.
-        uint256 notes = computeMintAmt(underlyingAmtIn, feePolicy.computeVaultMintFeePerc());
-        if (underlyingAmtIn <= 0 || notes <= 0) {
+        uint256 vaultNoteAmt = computeMintAmt(underlyingAmtIn, feePolicy.computeVaultMintFeePerc());
+        if (underlyingAmtIn <= 0 || vaultNoteAmt <= 0) {
             return 0;
         }
 
         // transfer user assets in
         underlying.safeTransferFrom(msg.sender, address(this), underlyingAmtIn);
 
-        // mint notes
-        _mint(msg.sender, notes);
+        // mint vault notes
+        _mint(msg.sender, vaultNoteAmt);
 
         // sync underlying
         _syncAsset(underlying);
-        return notes;
+        return vaultNoteAmt;
     }
 
     /// @inheritdoc IVault
-    function redeem(uint256 notes) public override nonReentrant whenNotPaused returns (TokenAmount[] memory) {
-        if (notes <= 0) {
+    function redeem(uint256 vaultNoteAmt) public override nonReentrant whenNotPaused returns (TokenAmount[] memory) {
+        if (vaultNoteAmt <= 0) {
             return new TokenAmount[](0);
         }
 
         // Calculates the fee adjusted share of vault tokens to be redeemed
         // NOTE: This operation should precede any token transfers.
-        TokenAmount[] memory redemptions = computeRedemptionAmts(notes, feePolicy.computeVaultBurnFeePerc());
+        TokenAmount[] memory redemptions = computeRedemptionAmts(vaultNoteAmt, feePolicy.computeVaultBurnFeePerc());
 
-        // burn notes
-        _burn(msg.sender, notes);
+        // burn vault notes
+        _burn(msg.sender, vaultNoteAmt);
 
         // transfer assets out
         uint8 redemptionsCount = uint8(redemptions.length);
@@ -567,9 +569,9 @@ contract RolloverVault is
     }
 
     /// @inheritdoc IVault
-    function recoverAndRedeem(uint256 notes) external override returns (TokenAmount[] memory) {
+    function recoverAndRedeem(uint256 vaultNoteAmt) external override returns (TokenAmount[] memory) {
         recover();
-        return redeem(notes);
+        return redeem(vaultNoteAmt);
     }
 
     /// @inheritdoc IRolloverVault
@@ -716,62 +718,62 @@ contract RolloverVault is
     //--------------------------------------------------------------------------
     // External & Public read methods
 
-    /// @notice Computes the amount of notes minted when given amount of underlying asset tokens
+    /// @notice Computes the amount of vault notes minted when given amount of underlying asset tokens
     ///         are deposited into the system.
     /// @param underlyingAmtIn The amount underlying tokens to be deposited into the vault.
-    /// @param feePerc The percentage of minted notes paid as fees.
-    /// @return noteAmtMint The amount of notes to be minted.
-    function computeMintAmt(uint256 underlyingAmtIn, uint256 feePerc) public view returns (uint256 noteAmtMint) {
+    /// @param feePerc The percentage of minted vault notes paid as fees.
+    /// @return vaultNoteAmtMint The amount of vault notes to be minted.
+    function computeMintAmt(uint256 underlyingAmtIn, uint256 feePerc) public view returns (uint256 vaultNoteAmtMint) {
         uint256 noteSupply = totalSupply();
 
         //-----------------------------------------------------------------------------
         // Compute mint amt
-        noteAmtMint = (noteSupply > 0)
+        vaultNoteAmtMint = (noteSupply > 0)
             ? noteSupply.mulDiv(underlyingAmtIn, getTVL())
             : (underlyingAmtIn * INITIAL_RATE);
 
         // The mint fees are settled by simply minting fewer vault notes.
-        noteAmtMint = noteAmtMint.mulDiv(ONE - feePerc, ONE);
+        vaultNoteAmtMint = vaultNoteAmtMint.mulDiv(ONE - feePerc, ONE);
     }
 
-    /// @notice Computes the amount of asset tokens redeemed when burning given number of vault notes.
-    /// @param noteAmtBurnt The amount of notes to be burnt.
-    /// @param feePerc The percentage of minted notes paid as fees.
-    /// @return redeemedTokens The list of asset tokens and amounts redeemed.
+    /// @notice Computes the amount of asset tokens returned for redeeming vault notes.
+    /// @param vaultNoteAmtRedeemed The amount of vault notes to be redeemed.
+    /// @param feePerc The percentage of redeemed vault notes paid as fees.
+    /// @return returnedTokens The list of asset tokens and amounts returned.
     function computeRedemptionAmts(
-        uint256 noteAmtBurnt,
+        uint256 vaultNoteAmtRedeemed,
         uint256 feePerc
-    ) public view returns (TokenAmount[] memory redeemedTokens) {
+    ) public view returns (TokenAmount[] memory returnedTokens) {
         uint256 noteSupply = totalSupply();
 
         //-----------------------------------------------------------------------------
         uint8 assetCount_ = 1 + uint8(_deployed.length());
 
         // aggregating vault assets to be redeemed
-        redeemedTokens = new TokenAmount[](assetCount_);
+        returnedTokens = new TokenAmount[](assetCount_);
 
         // underlying share to be redeemed
         IERC20Upgradeable underlying_ = underlying;
-        redeemedTokens[0] = TokenAmount({
+        returnedTokens[0] = TokenAmount({
             token: underlying_,
-            amount: underlying_.balanceOf(address(this)).mulDiv(noteAmtBurnt, noteSupply)
+            amount: underlying_.balanceOf(address(this)).mulDiv(vaultNoteAmtRedeemed, noteSupply)
         });
-        redeemedTokens[0].amount = redeemedTokens[0].amount.mulDiv(ONE - feePerc, ONE);
+        returnedTokens[0].amount = returnedTokens[0].amount.mulDiv(ONE - feePerc, ONE);
 
         for (uint8 i = 1; i < assetCount_; ++i) {
             // tranche token share to be redeemed
             IERC20Upgradeable token = IERC20Upgradeable(_deployed.at(i - 1));
-            redeemedTokens[i] = TokenAmount({
+            returnedTokens[i] = TokenAmount({
                 token: token,
-                amount: token.balanceOf(address(this)).mulDiv(noteAmtBurnt, noteSupply)
+                amount: token.balanceOf(address(this)).mulDiv(vaultNoteAmtRedeemed, noteSupply)
             });
 
             // deduct redemption fee
-            redeemedTokens[i].amount = redeemedTokens[i].amount.mulDiv(ONE - feePerc, ONE);
+            returnedTokens[i].amount = returnedTokens[i].amount.mulDiv(ONE - feePerc, ONE);
 
             // in case the redemption amount is just dust, we skip
-            if (redeemedTokens[i].amount < TRANCHE_DUST_AMT) {
-                redeemedTokens[i].amount = 0;
+            if (returnedTokens[i].amount < TRANCHE_DUST_AMT) {
+                returnedTokens[i].amount = 0;
             }
         }
     }
@@ -965,7 +967,7 @@ contract RolloverVault is
         _tranche(depositBond, underlying_, underylingAmtToTranche);
 
         // Mint perps
-        TrancheManager.checkAndApproveMax(trancheIntoPerp, address(perp_), seniorAmtToDeposit);
+        IERC20Upgradeable(trancheIntoPerp).checkAndApproveMax(address(perp_), seniorAmtToDeposit);
         perp_.deposit(trancheIntoPerp, seniorAmtToDeposit);
 
         // sync holdings
@@ -991,7 +993,7 @@ contract RolloverVault is
         uint256 trancheInAmtAvailable = trancheIntoPerp.balanceOf(address(this));
 
         // Approve once for all rollovers
-        TrancheManager.checkAndApproveMax(trancheIntoPerp, address(perp_), trancheInAmtAvailable);
+        IERC20Upgradeable(trancheIntoPerp).checkAndApproveMax(address(perp_), trancheInAmtAvailable);
 
         // We pair the senior tranche token held by the vault (from the deposit bond)
         // with each of the perp's tokens available for rollovers and execute a rollover.
@@ -1035,12 +1037,11 @@ contract RolloverVault is
     ///      Performs some book-keeping to keep track of the vault's assets.
     function _tranche(IBondController bond, IERC20Upgradeable underlying_, uint256 underlyingAmt) private {
         // Tranche
-        TrancheManager.execTranche(bond, underlying_, underlyingAmt);
+        ITranche[2] memory t = bond.approveAndDeposit(underlying_, underlyingAmt);
 
         // sync holdings
-        BondTranches memory bt = bond.getTranches();
-        _syncDeployedAsset(bt.tranches[0]);
-        _syncDeployedAsset(bt.tranches[1]);
+        _syncDeployedAsset(t[0]);
+        _syncDeployedAsset(t[1]);
     }
 
     /// @dev Syncs balance and updates the deployed list based on the vault's token balance.

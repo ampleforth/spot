@@ -12,19 +12,19 @@ interface IRolloverVault is IVault {
     /// @notice Batch operation to mint both perp and rollover vault tokens.
     /// @param underlyingAmtIn The amount of underlying tokens to be tranched.
     /// @return perpAmt The amount of perp tokens minted.
-    /// @return noteAmt The amount of vault notes minted.
-    function mint2(uint256 underlyingAmtIn) external returns (uint256 perpAmt, uint256 noteAmt);
+    /// @return vaultNoteAmt The amount of vault notes minted.
+    function mint2(uint256 underlyingAmtIn) external returns (uint256 perpAmt, uint256 vaultNoteAmt);
 
-    /// @notice Batch operation to burn both perp and rollover vault tokens for the underlying collateral and tranches.
-    /// @param perpAmtAvailable The amount of perp tokens available to burn.
-    /// @param noteAmtAvailable The amount of vault notes available to burn.
-    /// @return perpAmtBurnt The amount of perp tokens burnt.
-    /// @return noteAmtBurnt The amount of vault notes burnt.
-    /// @return redeemedTokens The list of asset tokens and amounts redeemed.
+    /// @notice Batch operation to redeem both perp and rollover vault tokens for the underlying collateral and tranches.
+    /// @param perpAmtAvailable The amount of perp tokens available to redeem.
+    /// @param vaultNoteAmtAvailable The amount of vault notes available to redeem.
+    /// @return perpAmtBurnt The amount of perp tokens redeemed.
+    /// @return vaultNoteAmtBurnt The amount of vault notes redeemed.
+    /// @return returnedTokens The list of asset tokens and amounts returned.
     function redeem2(
         uint256 perpAmtAvailable,
-        uint256 noteAmtAvailable
-    ) external returns (uint256 perpAmtBurnt, uint256 noteAmtBurnt, TokenAmount[] memory redeemedTokens);
+        uint256 vaultNoteAmtAvailable
+    ) external returns (uint256 perpAmtBurnt, uint256 vaultNoteAmtBurnt, TokenAmount[] memory returnedTokens);
 
     /// @notice Allows users to swap their underlying tokens for perps held by the vault.
     /// @param underlyingAmtIn The amount of underlying tokens swapped in.

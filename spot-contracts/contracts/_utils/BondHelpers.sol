@@ -10,6 +10,7 @@ import { UnacceptableDeposit, UnacceptableTrancheLength } from "../_interfaces/P
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import { BondTranches } from "./BondTranchesHelpers.sol";
+import { ERC20Helpers } from "./ERC20Helpers.sol";
 
 /**
  *  @title BondHelpers
@@ -20,6 +21,7 @@ import { BondTranches } from "./BondTranchesHelpers.sol";
 library BondHelpers {
     using SafeCastUpgradeable for uint256;
     using MathUpgradeable for uint256;
+    using ERC20Helpers for IERC20Upgradeable;
 
     // Replicating value used here:
     // https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
@@ -96,5 +98,18 @@ library BondHelpers {
         tranchesOut[1] = TokenAmount({ token: bt.tranches[1], amount: juniorAmt });
 
         return tranchesOut;
+    }
+
+    /// @notice Helper function which approves and mints tranche tokens underlying tokens by depositing into the provided bond contract.
+    /// @return The array of tranche tokens minted.
+    function approveAndDeposit(
+        IBondController b,
+        IERC20Upgradeable underlying_,
+        uint256 underlyingAmt
+    ) internal returns (ITranche[2] memory) {
+        BondTranches memory bt = getTranches(b);
+        underlying_.checkAndApproveMax(address(b), underlyingAmt);
+        b.deposit(underlyingAmt);
+        return bt.tranches;
     }
 }

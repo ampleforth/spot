@@ -53,7 +53,7 @@ export default {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 1,
+            runs: 200,
           },
         },
       },

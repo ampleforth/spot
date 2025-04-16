@@ -137,7 +137,7 @@ describe("RolloverVault", function () {
   describe("#mint2", function () {
     describe("when dr = 1", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeNeutralSplit(uint256,uint256)", [toFixedPtAmt("25"), toFixedPtAmt("75")]);
+        await feePolicy.mockMethod("computeDREquilibriumSplit(uint256,uint256)", [toFixedPtAmt("25"), toFixedPtAmt("75")]);
       });
 
       it("should compute amounts", async function () {
@@ -199,7 +199,7 @@ describe("RolloverVault", function () {
 
     describe("when dr > 1", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeNeutralSplit(uint256,uint256)", [toFixedPtAmt("25"), toFixedPtAmt("75")]);
+        await feePolicy.mockMethod("computeDREquilibriumSplit(uint256,uint256)", [toFixedPtAmt("25"), toFixedPtAmt("75")]);
         await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1.25")]);
         await vault.deposit(toFixedPtAmt("1000"));
       });
@@ -263,7 +263,7 @@ describe("RolloverVault", function () {
 
     describe("when dr < 1", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeNeutralSplit(uint256,uint256)", [toFixedPtAmt("25"), toFixedPtAmt("75")]);
+        await feePolicy.mockMethod("computeDREquilibriumSplit(uint256,uint256)", [toFixedPtAmt("25"), toFixedPtAmt("75")]);
         await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("0.75")]);
         await vault.redeem(toFixedPtAmt("500") * 1000000n);
         expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("1500"));
@@ -330,7 +330,7 @@ describe("RolloverVault", function () {
   describe("#redeem2", function () {
     describe("when redeeming proportionally", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeProportionalSplit(uint256,uint256,uint256,uint256)", [
+        await feePolicy.mockMethod("computeDRNeutralSplit(uint256,uint256,uint256,uint256)", [
           toFixedPtAmt("25"),
           toFixedPtAmt("75") * 1000000n,
         ]);
@@ -412,7 +412,7 @@ describe("RolloverVault", function () {
 
     describe("when redeeming more perps", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeProportionalSplit(uint256,uint256,uint256,uint256)", [
+        await feePolicy.mockMethod("computeDRNeutralSplit(uint256,uint256,uint256,uint256)", [
           toFixedPtAmt("50"),
           toFixedPtAmt("75") * 1000000n,
         ]);
@@ -495,7 +495,7 @@ describe("RolloverVault", function () {
 
     describe("when redeeming more vault notes", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeProportionalSplit(uint256,uint256,uint256,uint256)", [
+        await feePolicy.mockMethod("computeDRNeutralSplit(uint256,uint256,uint256,uint256)", [
           toFixedPtAmt("25"),
           toFixedPtAmt("150") * 1000000n,
         ]);
