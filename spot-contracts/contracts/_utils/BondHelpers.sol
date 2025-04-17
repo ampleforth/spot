@@ -100,7 +100,7 @@ library BondHelpers {
         return tranchesOut;
     }
 
-    /// @notice Helper function which approves and mints tranche tokens underlying tokens by depositing into the provided bond contract.
+    /// @notice Helper function which approves underlying tokens and mints tranche tokens by depositing into the provided bond contract.
     /// @return The array of tranche tokens minted.
     function approveAndDeposit(
         IBondController b,

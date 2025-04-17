@@ -442,7 +442,7 @@ contract RolloverVault is
         );
 
         // Compute perp amount and vault note amount to mint
-        perpAmt = perp_.totalSupply().mulDiv(underlyingAmtIntoPerp, s.perpTVL);
+        perpAmt = underlyingAmtIntoPerp.mulDiv(perp_.totalSupply(), s.perpTVL);
         vaultNoteAmt = computeMintAmt(underlyingAmtIntoVault, 0);
 
         // Transfer underlying tokens from user
@@ -460,7 +460,7 @@ contract RolloverVault is
     }
 
     /// @inheritdoc IRolloverVault
-    /// @dev This operation maintains the system's balance by just reduces liquidity, we thus charge no fees.
+    /// @dev This operation maintains the system's balance, we thus charge no fees.
     function redeem2(
         uint256 perpAmtAvailable,
         uint256 vaultNoteAmtAvailable
@@ -489,9 +489,10 @@ contract RolloverVault is
         TokenAmount[] memory perpTokens = perp.redeem(perpAmt);
 
         // Compute final list of tokens to return to the user
+        // assert(underlying == perpTokens[0].token && underlying == vaultTokens[0].token);
         returnedTokens = new TokenAmount[](perpTokens.length + vaultTokens.length - 1);
         returnedTokens[0] = TokenAmount({
-            token: perpTokens[0].token, // perpTokens[0].token = vaultTokens[0].token = underlying
+            token: perpTokens[0].token,
             amount: (perpTokens[0].amount + vaultTokens[0].amount)
         });
         returnedTokens[0].token.safeTransfer(msg.sender, returnedTokens[0].amount);

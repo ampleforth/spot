@@ -421,10 +421,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         uint256 seniorTR
     ) external view override returns (uint256 perpUnderlyingAmt, uint256 vaultUnderlyingAmt) {
         uint256 juniorTR = (TRANCHE_RATIO_GRANULARITY - seniorTR);
-        perpUnderlyingAmt = underlyingAmt.mulDiv(
-            seniorTR,
-            seniorTR + juniorTR.mulDiv(targetSubscriptionRatio, ONE)
-        );
+        perpUnderlyingAmt = underlyingAmt.mulDiv(seniorTR, seniorTR + juniorTR.mulDiv(targetSubscriptionRatio, ONE));
         vaultUnderlyingAmt = underlyingAmt - perpUnderlyingAmt;
     }
 
