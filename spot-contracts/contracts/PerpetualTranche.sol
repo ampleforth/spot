@@ -59,8 +59,8 @@ import { BondHelpers } from "./_utils/BondHelpers.sol";
  *      When computing the value of assets in the system, the code always over-values by
  *      rounding up. When computing the value of incoming assets, the code rounds down.
  *
- * @dev With release v5.0, we remove rollover fees entirely. Demand imbalance between perp and the vault
- *      is restored through a "rebalancing" mechanism. When value needs to flow from perp to the vault,
+ * @dev Demand imbalance between perp and the vault
+ *      is restored through a "rebalancing" mechanism similar to a funding rate. When value needs to flow from perp to the vault,
  *      the system debases the value of perp tokens by minting perp tokens to the vault.
  *      When value needs to flow from the vault to perp, the underlying collateral tokens are
  *      transferred from the vault into perp's reserve thereby enriching the value of perp tokens.
@@ -470,10 +470,12 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    /// @dev CAUTION: Only the whitelisted vault can call this function. The logic controlling the frequency
-    ///      and magnitude of debasement should be thoroughly vetted.
-    function debase(uint256 perpAmtMint) external override onlyVault afterStateUpdate nonReentrant whenNotPaused {
-        _mint(address(vault), perpAmtMint);
+    /// @dev CAUTION: Only the whitelisted vault can call this function.
+    ///      The logic controlling the frequency and magnitude of debasement should be vetted.
+    function rebalanceToVault(
+        uint256 underlyingAmtToTransfer
+    ) external override onlyVault afterStateUpdate nonReentrant whenNotPaused {
+        _mint(address(vault), underlyingAmtToTransfer.mulDiv(totalSupply(), _reserveValue()));
     }
 
     /// @inheritdoc IPerpetualTranche

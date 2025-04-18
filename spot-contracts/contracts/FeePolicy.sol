@@ -3,10 +3,11 @@ pragma solidity ^0.8.20;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
 import { SubscriptionParams, Range, Line, RebalanceData } from "./_interfaces/CommonTypes.sol";
-import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds, ValueTooHigh } from "./_interfaces/ProtocolErrors.sol";
+import { InvalidPerc, InvalidTargetSRBounds, InvalidDRRange } from "./_interfaces/ProtocolErrors.sol";
 
 import { LineHelpers } from "./_utils/LineHelpers.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
+import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
@@ -33,10 +34,10 @@ import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/O
  *
  *          Incentives:
  *          - When the system is "under-subscribed", value is transferred from perp to the vault at a predefined rate.
- *            This debases perp tokens gradually and their redeemable value goes down.
+ *            This debases perp tokens gradually and enriches the rollover vault.
  *          - When the system is "over-subscribed", value is transferred from the vault to perp at a predefined rate.
- *            This enriches perp tokens gradually and their redeemable value goes up.
- *          - This transfer is implemented through a daily "rebalance" operation (executed by the vault),
+ *            This enriches perp tokens gradually and debases the rollover vault.
+ *          - This transfer is implemented through a daily "rebalance" operation, executed by the vault, and
  *            gradually nudges the system back into balance. On rebalance, the vault queries this policy
  *            to compute the magnitude and direction of value transfer.
  *
@@ -48,6 +49,7 @@ import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/O
 contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     // Libraries
     using MathUpgradeable for uint256;
+    using SignedMathUpgradeable for int256;
     using SafeCastUpgradeable for uint256;
     using SafeCastUpgradeable for int256;
 
@@ -69,9 +71,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Target subscription ratio higher bound, 2.0 or 200%.
     uint256 public constant TARGET_SR_UPPER_BOUND = 2 * ONE;
 
-    /// @notice The enforced maximum change in perp's value per rebalance operation.
-    uint256 public constant MAX_PERP_VALUE_CHANGE_PERC = ONE / 100; // 0.01 or 1%
-
     //-----------------------------------------------------------------------------
     /// @notice The target subscription ratio i.e) the normalization factor.
     /// @dev The ratio under which the system is considered "under-subscribed".
@@ -83,8 +82,11 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     Range public drHardBound;
 
     /// @notice The deviation ratio bounds outside which flash swaps are still functional but,
-    ///         the swap fees transition from a constant fee to a linear function. disabled.
+    ///         the swap fees transition from a constant fee to a linear function.
     Range public drSoftBound;
+
+    /// @notice The deviation ratio bounds inside which rebalancing is disabled.
+    Range public rebalEqDr;
 
     //-----------------------------------------------------------------------------
     // Fee parameters
@@ -110,11 +112,11 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     //-----------------------------------------------------------------------------
     // Incentive parameters
 
-    /// @notice The magnitude of perp's daily debasement (when dr <= 1).
-    uint256 public debasementValueChangePerc;
+    /// @notice The percentage of system TVL transferred out of perp on every rebalance (when dr <= 1).
+    uint256 public debasementSystemTVLPerc;
 
-    /// @notice The magnitude of perp's daily enrichment (when dr > 1).
-    uint256 public enrichmentValueChangePerc;
+    /// @notice The percentage of system TVL transferred into perp on every rebalance (when dr > 1).
+    uint256 public enrichmentSystemTVLPerc;
 
     /// @notice The percentage of the debasement value charged by the protocol as fees.
     uint256 public debasementProtocolSharePerc;
@@ -142,6 +144,10 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
             lower: (ONE * 90) / 100, // 0.9
             upper: (5 * ONE) / 4 // 1.25
         });
+        rebalEqDr = Range({
+            lower: ONE, // 1.0
+            upper: ONE // 1.0
+        });
 
         // initializing fees
         perpMintFeePerc = 0;
@@ -154,8 +160,8 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         flashRedeemFeePercs = Range({ lower: ONE, upper: ONE });
 
         // initializing incentives
-        debasementValueChangePerc = ONE / 1000; // 0.1% or 10 bps
-        enrichmentValueChangePerc = ONE / 666; // ~0.15% or 15 bps
+        debasementSystemTVLPerc = ONE / 1000; // 0.1% or 10 bps
+        enrichmentSystemTVLPerc = ONE / 666; // ~0.15% or 15 bps
         debasementProtocolSharePerc = 0;
         enrichmentProtocolSharePerc = 0;
     }
@@ -180,10 +186,19 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
             drSoftBound_.lower <= drSoftBound_.upper &&
             drSoftBound_.upper <= drHardBound_.upper);
         if (!validBounds) {
-            revert InvalidDRBounds();
+            revert InvalidDRRange();
         }
         drHardBound = drHardBound_;
         drSoftBound = drSoftBound_;
+    }
+
+    /// @notice Updates rebalance equilibrium DR range within which rebalancing is disabled.
+    /// @param rebalEqDr_ The lower and upper equilibrium deviation ratio range as fixed point number with {DECIMALS} places.
+    function updateRebalanceEquilibriumDR(Range memory rebalEqDr_) external onlyOwner {
+        if (rebalEqDr_.upper < rebalEqDr_.lower || rebalEqDr_.lower > ONE || rebalEqDr_.upper < ONE) {
+            revert InvalidDRRange();
+        }
+        rebalEqDr = rebalEqDr_;
     }
 
     /// @notice Updates the perp mint fee parameters.
@@ -242,24 +257,18 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         flashRedeemFeePercs = flashRedeemFeePercs_;
     }
 
-    /// @notice Updates the rebalance reaction lag.
-    /// @param debasementValueChangePerc_ The magnitude of the daily debasement.
-    /// @param enrichmentValueChangePerc_ The magnitude of the daily enrichment.
-    function updateRebalanceRate(
-        uint256 debasementValueChangePerc_,
-        uint256 enrichmentValueChangePerc_
+    /// @notice Updates the rebalance rates.
+    /// @param debasementSystemTVLPerc_ The percentage of system tvl out of perp on debasement.
+    /// @param enrichmentSystemTVLPerc_ The percentage of system tvl into perp on enrichment.
+    function updateRebalanceRates(
+        uint256 debasementSystemTVLPerc_,
+        uint256 enrichmentSystemTVLPerc_
     ) external onlyOwner {
-        if (
-            debasementValueChangePerc_ > MAX_PERP_VALUE_CHANGE_PERC ||
-            enrichmentValueChangePerc_ > MAX_PERP_VALUE_CHANGE_PERC
-        ) {
-            revert ValueTooHigh();
-        }
-        debasementValueChangePerc = debasementValueChangePerc_;
-        enrichmentValueChangePerc = enrichmentValueChangePerc_;
+        debasementSystemTVLPerc = debasementSystemTVLPerc_;
+        enrichmentSystemTVLPerc = enrichmentSystemTVLPerc_;
     }
 
-    /// @notice Updates the protocol cut of the daily debasement and enrichment.
+    /// @notice Updates the protocol share of the daily debasement and enrichment.
     /// @param debasementProtocolSharePerc_ The share of the debasement which goes to the protocol.
     /// @param enrichmentProtocolSharePerc_ The share of the enrichment which goes to the protocol.
     function updateProtocolSharePerc(
@@ -378,41 +387,45 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @inheritdoc IFeePolicy
     function computeRebalanceData(SubscriptionParams memory s) external view override returns (RebalanceData memory r) {
-        uint256 perpValueChangePerc = 0;
-        (r.perpDebasement, perpValueChangePerc) = computePerpEquilibriumPerc(s);
-        perpValueChangePerc = MathUpgradeable.min(
-            perpValueChangePerc,
-            (r.perpDebasement ? debasementValueChangePerc : enrichmentValueChangePerc)
-        );
-        r.underlyingAmtToTransfer = s.perpTVL.mulDiv(perpValueChangePerc, ONE);
-        r.protocolFeeUnderlyingAmt = r.underlyingAmtToTransfer.mulDiv(
-            (r.perpDebasement ? debasementProtocolSharePerc : enrichmentProtocolSharePerc),
-            ONE
-        );
-        r.underlyingAmtToTransfer -= r.protocolFeeUnderlyingAmt;
-    }
-
-    /// @notice Computes the percentage change in perpTVL (to or from the vault) to bring the system to equilibrium.
-    /// @param s The subscription parameters of both the perp and vault systems.
-    /// @return debasement True, when value has to flow from perp into the vault and False when value has to flow from the vault into perp.
-    /// @return valueChangePerc The percentage of the perpTVL that has to flow out of perp (into the vault) or into perp (from the vault)
-    ///                         to make the system perfectly balanced (to make dr = 1.0).
-    function computePerpEquilibriumPerc(
-        SubscriptionParams memory s
-    ) public view returns (bool debasement, uint256 valueChangePerc) {
-        uint256 juniorTR = TRANCHE_RATIO_GRANULARITY - s.seniorTR;
+        // We skip rebalancing if dr is close to 1.0
         uint256 dr = computeDeviationRatio(s);
-        uint256 perpAdjFactor = ONE.mulDiv(
-            (juniorTR * targetSubscriptionRatio),
-            (juniorTR * targetSubscriptionRatio) + (s.seniorTR * ONE)
-        );
-        if (dr <= ONE) {
-            debasement = true;
-            valueChangePerc = perpAdjFactor.mulDiv(ONE - dr, ONE);
-        } else {
-            debasement = false;
-            valueChangePerc = perpAdjFactor.mulDiv(dr - ONE, ONE);
+        if (dr >= rebalEqDr.lower && dr <= rebalEqDr.upper) {
+            return r;
         }
+
+        uint256 juniorTR = (TRANCHE_RATIO_GRANULARITY - s.seniorTR);
+        uint256 drNormalizedSeniorTR = ONE.mulDiv(
+            (s.seniorTR * ONE),
+            (s.seniorTR * ONE) + (juniorTR * targetSubscriptionRatio)
+        );
+
+        uint256 totalTVL = s.perpTVL + s.vaultTVL;
+        uint256 reqPerpTVL = totalTVL.mulDiv(drNormalizedSeniorTR, ONE);
+        r.underlyingAmtIntoPerp = reqPerpTVL.toInt256() - s.perpTVL.toInt256();
+
+        // We limit `r.underlyingAmtIntoPerp` to allowed limits
+        bool perpDebasement = r.underlyingAmtIntoPerp <= 0;
+        if (perpDebasement) {
+            r.underlyingAmtIntoPerp = SignedMathUpgradeable.max(
+                -totalTVL.mulDiv(debasementSystemTVLPerc, ONE).toInt256(),
+                r.underlyingAmtIntoPerp
+            );
+        } else {
+            r.underlyingAmtIntoPerp = SignedMathUpgradeable.min(
+                totalTVL.mulDiv(enrichmentSystemTVLPerc, ONE).toInt256(),
+                r.underlyingAmtIntoPerp
+            );
+        }
+
+        // Compute protocol fee
+        r.protocolFeeUnderlyingAmt = r.underlyingAmtIntoPerp.abs().mulDiv(
+            (perpDebasement ? debasementProtocolSharePerc : enrichmentProtocolSharePerc),
+            ONE,
+            MathUpgradeable.Rounding.Up
+        );
+
+        // Deduct protocol fee from value transfer
+        r.underlyingAmtIntoPerp -= (perpDebasement ? int256(-1) : int256(1)) * r.protocolFeeUnderlyingAmt.toInt256();
     }
 
     /// @inheritdoc IFeePolicy

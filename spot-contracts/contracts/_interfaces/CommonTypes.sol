@@ -28,10 +28,9 @@ struct RolloverData {
 }
 
 struct RebalanceData {
-    /// @notice True, when value flows from perp into the vault and False when value flows from the vault into perp.
-    bool perpDebasement;
-    /// @notice The value in underlying tokens, that need to flow between perp and the vault.
-    uint256 underlyingAmtToTransfer;
+    /// @notice The value in underlying tokens, that need to flow from the vault into perp.
+    /// @dev When negative, underlying tokens flow from perp into the vault.
+    int256 underlyingAmtIntoPerp;
     /// @notice The value in underlying tokens, paid to the protocol as fees.
     uint256 protocolFeeUnderlyingAmt;
 }

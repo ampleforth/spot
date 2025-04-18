@@ -67,7 +67,7 @@ error DeployedCountOverLimit();
 /// @notice Expected parent bond to have only 2 children tranches.
 error UnacceptableTrancheLength();
 
-/// @notice Enough time has not elapsed since last successful rebalance.
+/// @notice Not enough time has elapsed since last successful rebalance.
 error LastRebalanceTooRecent();
 
 //-------------------------------------------------------------------------
@@ -79,8 +79,5 @@ error InvalidPerc();
 /// @notice Expected target subscription ratio to be within defined bounds.
 error InvalidTargetSRBounds();
 
-/// @notice Expected deviation ratio bounds to be valid.
-error InvalidDRBounds();
-
-/// @notice Expected lower value.
-error ValueTooHigh();
+/// @notice Expected deviation ratio range to be valid.
+error InvalidDRRange();

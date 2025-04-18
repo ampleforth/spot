@@ -184,33 +184,33 @@ describe("RolloverVault", function () {
     });
   });
 
-  describe("#stopRebalance", function () {
+  describe("#pauseRebalance", function () {
     beforeEach(async function () {
       await vault.updateKeeper(await otherUser.getAddress());
     });
 
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
-        await expect(vault.connect(deployer).stopRebalance()).to.be.revertedWithCustomError(vault, "UnauthorizedCall");
+        await expect(vault.connect(deployer).pauseRebalance()).to.be.revertedWithCustomError(vault, "UnauthorizedCall");
       });
     });
 
     describe("when valid", function () {
       it("should stop rebalance", async function () {
-        await vault.connect(otherUser).stopRebalance();
+        await vault.connect(otherUser).pauseRebalance();
         expect(await vault.lastRebalanceTimestampSec()).to.eq(ethers.MaxUint256 - 86400n);
       });
     });
   });
 
-  describe("#restartRebalance", function () {
+  describe("#unpauseRebalance", function () {
     beforeEach(async function () {
       await vault.updateKeeper(await otherUser.getAddress());
     });
 
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
-        await expect(vault.connect(deployer).restartRebalance()).to.be.revertedWithCustomError(
+        await expect(vault.connect(deployer).unpauseRebalance()).to.be.revertedWithCustomError(
           vault,
           "UnauthorizedCall",
         );
@@ -219,7 +219,7 @@ describe("RolloverVault", function () {
 
     describe("when valid", function () {
       it("should restart rebalance", async function () {
-        await vault.connect(otherUser).restartRebalance();
+        await vault.connect(otherUser).unpauseRebalance();
         expect(await vault.lastRebalanceTimestampSec()).to.lt(ethers.MaxUint256);
       });
     });
@@ -454,6 +454,31 @@ describe("RolloverVault", function () {
       });
       it("should update the keeper", async function () {
         expect(await vault.keeper()).to.eq(await otherUser.getAddress());
+      });
+    });
+  });
+
+  describe("#updateRebalanceFrequency", function () {
+    let tx: Transaction;
+    beforeEach(async function () {
+      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
+    });
+
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(vault.connect(deployer).updateRebalanceFrequency(3600)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      beforeEach(async function () {
+        tx = await vault.connect(otherUser).updateRebalanceFrequency(3600);
+        await tx;
+      });
+      it("should update the rebalance freq", async function () {
+        expect(await vault.rebalanceFreqSec()).to.eq(3600);
       });
     });
   });
