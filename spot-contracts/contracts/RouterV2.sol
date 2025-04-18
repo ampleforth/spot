@@ -11,6 +11,7 @@ import { SafeERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { BondTranches, BondTranchesHelpers } from "./_utils/BondTranchesHelpers.sol";
 import { BondHelpers } from "./_utils/BondHelpers.sol";
+import { ERC20Helpers } from "./_utils/ERC20Helpers.sol";
 
 /**
  *  @title RouterV2
@@ -30,6 +31,7 @@ contract RouterV2 {
     using SafeERC20Upgradeable for IERC20Upgradeable;
     using SafeERC20Upgradeable for ITranche;
     using SafeERC20Upgradeable for IPerpetualTranche;
+    using ERC20Helpers for IERC20Upgradeable;
 
     /// @notice Calculates the amount of tranche tokens minted after depositing into the deposit bond.
     /// @dev Used by off-chain services to preview a tranche operation.
@@ -64,14 +66,14 @@ contract RouterV2 {
         collateralToken.safeTransferFrom(msg.sender, address(this), collateralAmount);
 
         // approves collateral to be tranched
-        _checkAndApproveMax(collateralToken, address(bond), collateralAmount);
+        collateralToken.checkAndApproveMax(address(bond), collateralAmount);
 
         // tranches collateral
         bond.deposit(collateralAmount);
 
         // uses senior tranches to mint perps
         uint256 trancheAmt = bt.tranches[0].balanceOf(address(this));
-        _checkAndApproveMax(bt.tranches[0], address(perp), trancheAmt);
+        IERC20Upgradeable(bt.tranches[0]).checkAndApproveMax(address(perp), trancheAmt);
         perp.deposit(bt.tranches[0], trancheAmt);
 
         // transfers remaining junior tranches back
@@ -85,13 +87,5 @@ contract RouterV2 {
 
         // transfers perp tokens back
         perp.safeTransfer(msg.sender, perp.balanceOf(address(this)));
-    }
-
-    /// @dev Checks if the spender has sufficient allowance. If not, approves the maximum possible amount.
-    function _checkAndApproveMax(IERC20Upgradeable token, address spender, uint256 amount) private {
-        uint256 allowance = token.allowance(address(this), spender);
-        if (allowance < amount) {
-            token.safeApprove(spender, type(uint256).max);
-        }
     }
 }

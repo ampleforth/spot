@@ -652,4 +652,72 @@ describe("FeePolicy", function () {
       });
     });
   });
+
+  describe("#computeDREquilibriumSplit", async function () {
+    it("should compute correct perp and vault underlying amounts", async function () {
+      const r = await feePolicy.computeDREquilibriumSplit(toFixedPtAmt("100"), 333);
+      expect(r[0]).to.eq(toFixedPtAmt("24.981245311327831957"));
+      expect(r[1]).to.eq(toFixedPtAmt("75.018754688672168043"));
+    });
+
+    it("should compute correct perp and vault underlying amounts", async function () {
+      await feePolicy.updateTargetSubscriptionRatio(toPercFixedPtAmt("1.0"));
+      const r = await feePolicy.computeDREquilibriumSplit(toFixedPtAmt("100"), 500);
+      expect(r[0]).to.eq(toFixedPtAmt("50"));
+      expect(r[1]).to.eq(toFixedPtAmt("50"));
+    });
+
+    it("should compute correct perp and vault underlying amounts", async function () {
+      await feePolicy.updateTargetSubscriptionRatio(toPercFixedPtAmt("2.0"));
+      const r = await feePolicy.computeDREquilibriumSplit(toFixedPtAmt("100"), 500);
+      expect(r[0]).to.eq(toFixedPtAmt("33.333333333333333333"));
+      expect(r[1]).to.eq(toFixedPtAmt("66.666666666666666667"));
+    });
+  });
+
+  describe("#computeDRNeutralSplit", async function () {
+    it("should compute proportional split", async function () {
+      const r = await feePolicy.computeDRNeutralSplit(
+        toFixedPtAmt("1000"),
+        toFixedPtAmt("100"),
+        toFixedPtAmt("1000"),
+        toFixedPtAmt("1000"),
+      );
+      expect(r[0]).to.equal(toFixedPtAmt("100"));
+      expect(r[1]).to.equal(toFixedPtAmt("100"));
+    });
+
+    it("should compute proportional split", async function () {
+      const r = await feePolicy.computeDRNeutralSplit(
+        toFixedPtAmt("1000"),
+        toFixedPtAmt("100"),
+        toFixedPtAmt("1000"),
+        toFixedPtAmt("100"),
+      );
+      expect(r[0]).to.equal(toFixedPtAmt("1000"));
+      expect(r[1]).to.equal(toFixedPtAmt("100"));
+    });
+
+    it("should compute proportional split", async function () {
+      const r = await feePolicy.computeDRNeutralSplit(
+        toFixedPtAmt("1000"),
+        toFixedPtAmt("100"),
+        toFixedPtAmt("100000"),
+        toFixedPtAmt("100"),
+      );
+      expect(r[0]).to.equal(toFixedPtAmt("1000"));
+      expect(r[1]).to.equal(toFixedPtAmt("1"));
+    });
+
+    it("should compute proportional split", async function () {
+      const r = await feePolicy.computeDRNeutralSplit(
+        toFixedPtAmt("1000"),
+        toFixedPtAmt("100"),
+        toFixedPtAmt("1000"),
+        toFixedPtAmt("10000"),
+      );
+      expect(r[0]).to.equal(toFixedPtAmt("10"));
+      expect(r[1]).to.equal(toFixedPtAmt("100"));
+    });
+  });
 });

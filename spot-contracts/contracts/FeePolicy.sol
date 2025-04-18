@@ -427,4 +427,29 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         // Deduct protocol fee from value transfer
         r.underlyingAmtIntoPerp -= (perpDebasement ? int256(-1) : int256(1)) * r.protocolFeeUnderlyingAmt.toInt256();
     }
+
+    /// @inheritdoc IFeePolicy
+    function computeDREquilibriumSplit(
+        uint256 underlyingAmt,
+        uint256 seniorTR
+    ) external view override returns (uint256 perpUnderlyingAmt, uint256 vaultUnderlyingAmt) {
+        uint256 juniorTR = (TRANCHE_RATIO_GRANULARITY - seniorTR);
+        perpUnderlyingAmt = underlyingAmt.mulDiv(seniorTR, seniorTR + juniorTR.mulDiv(targetSubscriptionRatio, ONE));
+        vaultUnderlyingAmt = underlyingAmt - perpUnderlyingAmt;
+    }
+
+    /// @inheritdoc IFeePolicy
+    function computeDRNeutralSplit(
+        uint256 perpAmtAvailable,
+        uint256 vaultNoteAmtAvailable,
+        uint256 perpSupply,
+        uint256 vaultNoteSupply
+    ) external pure override returns (uint256 perpAmt, uint256 vaultNoteAmt) {
+        perpAmt = perpAmtAvailable;
+        vaultNoteAmt = vaultNoteSupply.mulDiv(perpAmt, perpSupply);
+        if (vaultNoteAmt > vaultNoteAmtAvailable) {
+            vaultNoteAmt = vaultNoteAmtAvailable;
+            perpAmt = perpAmtAvailable.mulDiv(vaultNoteAmt, vaultNoteSupply);
+        }
+    }
 }

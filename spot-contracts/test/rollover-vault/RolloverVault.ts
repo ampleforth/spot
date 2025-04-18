@@ -15,6 +15,7 @@ import {
 } from "../helpers";
 
 let vault: Contract,
+  trancheManager: Contract,
   perp: Contract,
   feePolicy: Contract,
   collateralToken: Contract,
@@ -47,8 +48,17 @@ describe("RolloverVault", function () {
     await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [0]);
     await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [0]);
 
-    const RolloverVault = await ethers.getContractFactory("RolloverVault");
-    vault = await upgrades.deployProxy(RolloverVault.connect(deployer));
+    const TrancheManager = await ethers.getContractFactory("TrancheManager");
+    trancheManager = await TrancheManager.deploy();
+    const RolloverVault = await ethers.getContractFactory("RolloverVault", {
+      libraries: {
+        TrancheManager: trancheManager.target,
+      },
+    });
+    await upgrades.silenceWarnings();
+    vault = await upgrades.deployProxy(RolloverVault.connect(deployer), {
+      unsafeAllow: ["external-library-linking"],
+    });
     await collateralToken.approve(vault.target, toFixedPtAmt("1"));
     await vault.init("RolloverVault", "VSHARE", perp.target, feePolicy.target);
     await perp.mockMethod("vault()", [vault.target]);
@@ -285,8 +295,14 @@ describe("RolloverVault", function () {
         await perp.updateTolerableTrancheMaturity(1200, 4800);
         await advancePerpQueueToBondMaturity(perp, await getDepositBond(perp));
 
-        const RolloverVault = await ethers.getContractFactory("RolloverVault");
-        vault = await upgrades.deployProxy(RolloverVault.connect(deployer));
+        const RolloverVault = await ethers.getContractFactory("RolloverVault", {
+          libraries: {
+            TrancheManager: trancheManager.target,
+          },
+        });
+        vault = await upgrades.deployProxy(RolloverVault.connect(deployer), {
+          unsafeAllow: ["external-library-linking"],
+        });
         await vault.init("RolloverVault", "VSHARE", perp.target, feePolicy.target);
         await perp.updateVault(vault.target);
 
