@@ -313,18 +313,18 @@ describe("FeePolicy", function () {
     });
   });
 
-  describe("#updateMaxRebalancePerc", function () {
+  describe("#updateRebalanceRates", function () {
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
         await expect(
-          feePolicy.connect(otherUser).updateMaxRebalancePerc(toPerc("0.005"), toPerc("0.01")),
+          feePolicy.connect(otherUser).updateRebalanceRates(toPerc("0.005"), toPerc("0.01")),
         ).to.be.revertedWith("Ownable: caller is not the owner");
       });
     });
 
     describe("when triggered by owner", function () {
       it("should update parameters", async function () {
-        await feePolicy.connect(deployer).updateMaxRebalancePerc(toPerc("0.005"), toPerc("0.01"));
+        await feePolicy.connect(deployer).updateRebalanceRates(toPerc("0.005"), toPerc("0.01"));
         expect(await feePolicy.debasementSystemTVLPerc()).to.eq(toPerc("0.005"));
         expect(await feePolicy.enrichmentSystemTVLPerc()).to.eq(toPerc("0.01"));
       });
