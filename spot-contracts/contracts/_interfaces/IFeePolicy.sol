@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import { SubscriptionParams } from "./CommonTypes.sol";
+import { SubscriptionParams, RebalanceData } from "./CommonTypes.sol";
 
 interface IFeePolicy {
     /// @return The percentage of the mint perp tokens to be charged as fees,
@@ -13,18 +13,6 @@ interface IFeePolicy {
     ///         as a fixed-point number with {DECIMALS} decimal places.
     /// @dev Perp burn fees are paid to the vault.
     function computePerpBurnFeePerc() external view returns (uint256);
-
-    /// @param dr The current system deviation ratio.
-    /// @return The applied exchange rate adjustment between tranches into perp and
-    ///         tokens out of perp during a rollover,
-    ///         as a fixed-point number with {DECIMALS} decimal places.
-    /// @dev - A fee of 0%, implies the rollover exchange rate is unaltered.
-    ///         example) 100 tranchesIn for 100 tranchesOut
-    ///      - A fee of 1%, implies the exchange rate is adjusted in favor of tranchesIn.
-    ///         example) 100 tranchesIn for 99 tranchesOut; i.e) perp enrichment
-    ///      - A fee of -1%, implies the exchange rate is adjusted in favor of tranchesOut.
-    ///         example) 99 tranchesIn for 100 tranchesOut
-    function computePerpRolloverFeePerc(uint256 dr) external view returns (int256);
 
     /// @return The percentage of the mint vault note amount to be charged as fees,
     ///         as a fixed-point number with {DECIMALS} decimal places.
@@ -52,4 +40,35 @@ interface IFeePolicy {
     /// @param s The subscription parameters of both the perp and vault systems.
     /// @return The deviation ratio given the system subscription parameters.
     function computeDeviationRatio(SubscriptionParams memory s) external view returns (uint256);
+
+    /// @param s The subscription parameters of both the perp and vault systems.
+    /// @return r Rebalance data, magnitude and direction of value flow between perp and the rollover vault
+    ///           expressed in the underlying token amount and the protocol's cut.
+    function computeRebalanceData(SubscriptionParams memory s) external view returns (RebalanceData memory r);
+
+    /// @notice Computes the dr-equilibrium split of underlying tokens into perp and the vault.
+    /// @dev The this basically the `targetSr` adjusted bond ratio.
+    /// @param underlyingAmt The amount of underlying tokens to split.
+    /// @param seniorTR The tranche ratio of seniors accepted by perp.
+    /// @return underlyingAmtIntoPerp The amount of underlying tokens to go into perp.
+    /// @return underlyingAmtIntoVault The amount of underlying tokens to go into the vault.
+    function computeDREquilibriumSplit(
+        uint256 underlyingAmt,
+        uint256 seniorTR
+    ) external view returns (uint256 underlyingAmtIntoPerp, uint256 underlyingAmtIntoVault);
+
+    /// @notice Computes the dr-neutral split of perp tokens and vault notes.
+    /// @dev The "system ratio" or the ratio of assets in the system as it stands.
+    /// @param perpAmtAvailable The available amount of perp tokens.
+    /// @param vaultNoteAmtAvailable The available amount of vault notes.
+    /// @param perpSupply The total supply of perp tokens.
+    /// @param vaultNoteSupply The total supply of vault notes.
+    /// @return perpAmt The amount of perp tokens, with the same share of total supply as the vault notes.
+    /// @return vaultNoteAmt The amount of vault notes, with the same share of total supply as the perp tokens.
+    function computeDRNeutralSplit(
+        uint256 perpAmtAvailable,
+        uint256 vaultNoteAmtAvailable,
+        uint256 perpSupply,
+        uint256 vaultNoteSupply
+    ) external view returns (uint256, uint256);
 }
