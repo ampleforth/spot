@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import { SubscriptionParams, RebalanceData } from "./CommonTypes.sol";
+import { SubscriptionParams } from "./CommonTypes.sol";
 
 interface IFeePolicy {
     /// @return The percentage of the mint perp tokens to be charged as fees,
@@ -41,10 +41,11 @@ interface IFeePolicy {
     /// @return The deviation ratio given the system subscription parameters.
     function computeDeviationRatio(SubscriptionParams memory s) external view returns (uint256);
 
+    /// @notice Computes magnitude and direction of value flow between perp and the rollover vault
+    ///         expressed in underlying tokens.
     /// @param s The subscription parameters of both the perp and vault systems.
-    /// @return r Rebalance data, magnitude and direction of value flow between perp and the rollover vault
-    ///           expressed in the underlying token amount and the protocol's cut.
-    function computeRebalanceData(SubscriptionParams memory s) external view returns (RebalanceData memory r);
+    /// @return underlyingAmtIntoPerp The value in underlying tokens, that need to flow from the vault into perp.
+    function computeRebalanceAmount(SubscriptionParams memory s) external view returns (int256 underlyingAmtIntoPerp);
 
     /// @notice Computes the dr-equilibrium split of underlying tokens into perp and the vault.
     /// @dev The this basically the `targetSr` adjusted bond ratio.
@@ -71,4 +72,7 @@ interface IFeePolicy {
         uint256 perpSupply,
         uint256 vaultNoteSupply
     ) external view returns (uint256, uint256);
+
+    /// @return The share of the system tvl paid to the protocol owner as fees.
+    function computeProtocolSharePerc() external view returns (uint256);
 }

@@ -470,12 +470,12 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    /// @dev CAUTION: Only the whitelisted vault can call this function.
+    /// @dev Only the whitelisted vault can call this function.
     ///      The logic controlling the frequency and magnitude of debasement should be vetted.
     function rebalanceToVault(
-        uint256 underlyingAmtToTransfer
+        uint256 perpAmtToMint
     ) external override onlyVault afterStateUpdate nonReentrant whenNotPaused {
-        _mint(address(vault), underlyingAmtToTransfer.mulDiv(totalSupply(), _reserveValue()));
+        _mint(address(vault), perpAmtToMint);
     }
 
     /// @inheritdoc IPerpetualTranche

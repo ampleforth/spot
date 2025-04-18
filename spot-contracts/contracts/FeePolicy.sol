@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
-import { SubscriptionParams, Range, Line, RebalanceData } from "./_interfaces/CommonTypes.sol";
+import { SubscriptionParams, Range, Line } from "./_interfaces/CommonTypes.sol";
 import { InvalidPerc, InvalidTargetSRBounds, InvalidDRRange } from "./_interfaces/ProtocolErrors.sol";
 
 import { LineHelpers } from "./_utils/LineHelpers.sol";
@@ -37,7 +37,7 @@ import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/O
  *            This debases perp tokens gradually and enriches the rollover vault.
  *          - When the system is "over-subscribed", value is transferred from the vault to perp at a predefined rate.
  *            This enriches perp tokens gradually and debases the rollover vault.
- *          - This transfer is implemented through a daily "rebalance" operation, executed by the vault, and
+ *          - This transfer is implemented through a "rebalance" operation, executed by the vault, and
  *            gradually nudges the system back into balance. On rebalance, the vault queries this policy
  *            to compute the magnitude and direction of value transfer.
  *
@@ -118,11 +118,8 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice The percentage of system TVL transferred into perp on every rebalance (when dr > 1).
     uint256 public enrichmentSystemTVLPerc;
 
-    /// @notice The percentage of the debasement value charged by the protocol as fees.
-    uint256 public debasementProtocolSharePerc;
-
-    /// @notice The percentage of the enrichment value charged by the protocol as fees.
-    uint256 public enrichmentProtocolSharePerc;
+    /// @notice The percentage of system tvl charged as protocol fees on every rebalance.
+    uint256 public protocolSharePerc;
 
     //-----------------------------------------------------------------------------
 
@@ -162,8 +159,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         // initializing incentives
         debasementSystemTVLPerc = ONE / 1000; // 0.1% or 10 bps
         enrichmentSystemTVLPerc = ONE / 666; // ~0.15% or 15 bps
-        debasementProtocolSharePerc = 0;
-        enrichmentProtocolSharePerc = 0;
+        protocolSharePerc = 0;
     }
 
     //-----------------------------------------------------------------------------
@@ -264,23 +260,20 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         uint256 debasementSystemTVLPerc_,
         uint256 enrichmentSystemTVLPerc_
     ) external onlyOwner {
+        if (debasementSystemTVLPerc_ > ONE || enrichmentSystemTVLPerc_ > ONE) {
+            revert InvalidPerc();
+        }
         debasementSystemTVLPerc = debasementSystemTVLPerc_;
         enrichmentSystemTVLPerc = enrichmentSystemTVLPerc_;
     }
 
-    /// @notice Updates the protocol share of the daily debasement and enrichment.
-    /// @param debasementProtocolSharePerc_ The share of the debasement which goes to the protocol.
-    /// @param enrichmentProtocolSharePerc_ The share of the enrichment which goes to the protocol.
-    function updateProtocolSharePerc(
-        uint256 debasementProtocolSharePerc_,
-        uint256 enrichmentProtocolSharePerc_
-    ) external onlyOwner {
-        if (debasementProtocolSharePerc_ > ONE || enrichmentProtocolSharePerc_ > ONE) {
+    /// @notice Updates the protocol share of tvl extracted on every rebalance.
+    /// @param protocolSharePerc_ The share of the tvl which goes to the protocol as a percentage.
+    function updateProtocolSharePerc(uint256 protocolSharePerc_) external onlyOwner {
+        if (protocolSharePerc_ > ONE) {
             revert InvalidPerc();
         }
-
-        debasementProtocolSharePerc = debasementProtocolSharePerc_;
-        enrichmentProtocolSharePerc = enrichmentProtocolSharePerc_;
+        protocolSharePerc = protocolSharePerc_;
     }
 
     //-----------------------------------------------------------------------------
@@ -386,11 +379,13 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computeRebalanceData(SubscriptionParams memory s) external view override returns (RebalanceData memory r) {
+    function computeRebalanceAmount(
+        SubscriptionParams memory s
+    ) external view override returns (int256 underlyingAmtIntoPerp) {
         // We skip rebalancing if dr is close to 1.0
         uint256 dr = computeDeviationRatio(s);
         if (dr >= rebalEqDr.lower && dr <= rebalEqDr.upper) {
-            return r;
+            return 0;
         }
 
         uint256 juniorTR = (TRANCHE_RATIO_GRANULARITY - s.seniorTR);
@@ -401,31 +396,21 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
         uint256 totalTVL = s.perpTVL + s.vaultTVL;
         uint256 reqPerpTVL = totalTVL.mulDiv(drNormalizedSeniorTR, ONE);
-        r.underlyingAmtIntoPerp = reqPerpTVL.toInt256() - s.perpTVL.toInt256();
+        underlyingAmtIntoPerp = reqPerpTVL.toInt256() - s.perpTVL.toInt256();
 
-        // We limit `r.underlyingAmtIntoPerp` to allowed limits
-        bool perpDebasement = r.underlyingAmtIntoPerp <= 0;
+        // We limit `underlyingAmtIntoPerp` to allowed limits
+        bool perpDebasement = underlyingAmtIntoPerp <= 0;
         if (perpDebasement) {
-            r.underlyingAmtIntoPerp = SignedMathUpgradeable.max(
+            underlyingAmtIntoPerp = SignedMathUpgradeable.max(
                 -totalTVL.mulDiv(debasementSystemTVLPerc, ONE).toInt256(),
-                r.underlyingAmtIntoPerp
+                underlyingAmtIntoPerp
             );
         } else {
-            r.underlyingAmtIntoPerp = SignedMathUpgradeable.min(
+            underlyingAmtIntoPerp = SignedMathUpgradeable.min(
                 totalTVL.mulDiv(enrichmentSystemTVLPerc, ONE).toInt256(),
-                r.underlyingAmtIntoPerp
+                underlyingAmtIntoPerp
             );
         }
-
-        // Compute protocol fee
-        r.protocolFeeUnderlyingAmt = r.underlyingAmtIntoPerp.abs().mulDiv(
-            (perpDebasement ? debasementProtocolSharePerc : enrichmentProtocolSharePerc),
-            ONE,
-            MathUpgradeable.Rounding.Up
-        );
-
-        // Deduct protocol fee from value transfer
-        r.underlyingAmtIntoPerp -= (perpDebasement ? int256(-1) : int256(1)) * r.protocolFeeUnderlyingAmt.toInt256();
     }
 
     /// @inheritdoc IFeePolicy
@@ -451,5 +436,10 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
             vaultNoteAmt = vaultNoteAmtAvailable;
             perpAmt = perpAmtAvailable.mulDiv(vaultNoteAmt, vaultNoteSupply);
         }
+    }
+
+    /// @inheritdoc IFeePolicy
+    function computeProtocolSharePerc() external view returns (uint256) {
+        return protocolSharePerc;
     }
 }

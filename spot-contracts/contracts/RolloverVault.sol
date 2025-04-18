@@ -5,8 +5,8 @@ import { IERC20Upgradeable, IPerpetualTranche, IBondController, ITranche, IFeePo
 import { IVault } from "./_interfaces/IVault.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
 import { IERC20Burnable } from "./_interfaces/IERC20Burnable.sol";
-import { TokenAmount, RolloverData, SubscriptionParams, RebalanceData } from "./_interfaces/CommonTypes.sol";
-import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, OutOfBounds, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit, InsufficientLiquidity, LastRebalanceTooRecent, UnacceptableParams } from "./_interfaces/ProtocolErrors.sol";
+import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/CommonTypes.sol";
+import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, OutOfBounds, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit, InsufficientLiquidity, LastRebalanceTooRecent } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
@@ -870,25 +870,30 @@ contract RolloverVault is
         _meldPerps(perp_);
 
         SubscriptionParams memory s = _querySubscriptionState(perp_);
-        RebalanceData memory r = feePolicy.computeRebalanceData(s);
-        if (r.underlyingAmtIntoPerp <= 0) {
+        int256 underlyingAmtIntoPerp = feePolicy.computeRebalanceAmount(s);
+        uint256 perpAmtToTransfer = perp_.totalSupply().mulDiv(underlyingAmtIntoPerp.abs(), s.perpTVL);
+        if (underlyingAmtIntoPerp <= 0) {
             // We transfer value from perp to the vault, by minting the vault perp tokens (without any deposits).
-            // NOTE: We first mint the vault perp tokens, and then pay the protocol fee.
-            perp_.rebalanceToVault(r.underlyingAmtIntoPerp.abs() + r.protocolFeeUnderlyingAmt);
+            perp_.rebalanceToVault(perpAmtToTransfer);
 
             // We immediately deconstruct perp tokens minted to the vault.
             _meldPerps(perp_);
         } else {
             // We transfer value from the vault to perp, by minting the perp tokens (after making required deposit)
             // and then simply burning the newly minted perp tokens.
-            uint256 perpAmtToTransfer = r.underlyingAmtIntoPerp.toUint256().mulDiv(perp_.totalSupply(), s.perpTVL);
             _trancheAndMintPerps(perp_, underlying_, s.perpTVL, s.seniorTR, perpAmtToTransfer);
             IERC20Burnable(address(perp_)).burn(perpAmtToTransfer);
         }
 
-        // Pay protocol fees
-        if (r.protocolFeeUnderlyingAmt > 0) {
-            underlying_.safeTransfer(owner(), r.protocolFeeUnderlyingAmt);
+        // Pay protocol fee share, by simply minting perps and vault notes to the owner (without any deposits).
+        uint256 protocolSharePerc = feePolicy.computeProtocolSharePerc();
+        if (protocolSharePerc > 0) {
+            uint256 perpAmt = perp_.totalSupply().mulDiv(protocolSharePerc, ONE);
+            perp_.rebalanceToVault(perpAmt);
+            perp_.transfer(owner(), perpAmt);
+
+            uint256 vaultNoteAmt = protocolSharePerc.mulDiv(totalSupply(), ONE);
+            _mint(owner(), vaultNoteAmt);
         }
 
         // Sync token balances.
