@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
 import { SubscriptionParams, Range, Line, RebalanceData } from "./_interfaces/CommonTypes.sol";
-import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds } from "./_interfaces/ProtocolErrors.sol";
+import { InvalidPerc, InvalidTargetSRBounds, InvalidDRRange } from "./_interfaces/ProtocolErrors.sol";
 
 import { LineHelpers } from "./_utils/LineHelpers.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
@@ -71,11 +71,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Target subscription ratio higher bound, 2.0 or 200%.
     uint256 public constant TARGET_SR_UPPER_BOUND = 2 * ONE;
 
-    // TODO: Make this configurable
-    /// @notice TVL percentage range within which we skip rebalance, 0.01%.
-    /// @dev Intended to limit rebalancing small amounts.
-    uint256 public constant EQUILIBRIUM_REBALANCE_PERC = ONE / 10000;
-
     //-----------------------------------------------------------------------------
     /// @notice The target subscription ratio i.e) the normalization factor.
     /// @dev The ratio under which the system is considered "under-subscribed".
@@ -87,8 +82,11 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     Range public drHardBound;
 
     /// @notice The deviation ratio bounds outside which flash swaps are still functional but,
-    ///         the swap fees transition from a constant fee to a linear function. disabled.
+    ///         the swap fees transition from a constant fee to a linear function.
     Range public drSoftBound;
+
+    /// @notice The deviation ratio bounds inside which rebalancing is disabled.
+    Range public rebalEqDr;
 
     //-----------------------------------------------------------------------------
     // Fee parameters
@@ -146,6 +144,10 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
             lower: (ONE * 90) / 100, // 0.9
             upper: (5 * ONE) / 4 // 1.25
         });
+        rebalEqDr = Range({
+            lower: ONE, // 1.0
+            upper: ONE // 1.0
+        });
 
         // initializing fees
         perpMintFeePerc = 0;
@@ -184,10 +186,19 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
             drSoftBound_.lower <= drSoftBound_.upper &&
             drSoftBound_.upper <= drHardBound_.upper);
         if (!validBounds) {
-            revert InvalidDRBounds();
+            revert InvalidDRRange();
         }
         drHardBound = drHardBound_;
         drSoftBound = drSoftBound_;
+    }
+
+    /// @notice Updates rebalance equilibrium DR range within which rebalancing is disabled.
+    /// @param rebalEqDr_ The lower and upper equilibrium deviation ratio range as fixed point number with {DECIMALS} places.
+    function updateRebalanceEquilibriumDR(Range memory rebalEqDr_) external onlyOwner {
+        if (rebalEqDr_.upper < rebalEqDr_.lower || rebalEqDr_.lower > ONE || rebalEqDr_.upper < ONE) {
+            revert InvalidDRRange();
+        }
+        rebalEqDr = rebalEqDr_;
     }
 
     /// @notice Updates the perp mint fee parameters.
@@ -376,6 +387,12 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     /// @inheritdoc IFeePolicy
     function computeRebalanceData(SubscriptionParams memory s) external view override returns (RebalanceData memory r) {
+        // We skip rebalancing if dr is close to 1.0
+        uint256 dr = computeDeviationRatio(s);
+        if (dr >= rebalEqDr.lower && dr <= rebalEqDr.upper) {
+            return r;
+        }
+
         uint256 juniorTR = (TRANCHE_RATIO_GRANULARITY - s.seniorTR);
         uint256 drNormalizedSeniorTR = ONE.mulDiv(
             (s.seniorTR * ONE),
@@ -398,12 +415,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
                 totalTVL.mulDiv(enrichmentSystemTVLPerc, ONE).toInt256(),
                 r.underlyingAmtIntoPerp
             );
-        }
-
-        // We skip "dust" value transfer
-        uint256 minPerpAbsValueDelta = s.perpTVL.mulDiv(EQUILIBRIUM_REBALANCE_PERC, ONE);
-        if (r.underlyingAmtIntoPerp.abs() <= minPerpAbsValueDelta) {
-            r.underlyingAmtIntoPerp = 0;
         }
 
         // Compute protocol fee
