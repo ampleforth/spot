@@ -26,6 +26,10 @@ interface IPerpetualTranche is IERC20Upgradeable {
     //--------------------------------------------------------------------------
     // Methods
 
+    /// @notice Debases the value of perp tokens, by minting new perp tokens directly to the vault.
+    /// @param underlyingAmtToTransfer The value of underlying tokens to transfer to the vault.
+    function rebalanceToVault(uint256 underlyingAmtToTransfer) external;
+
     /// @notice Deposits tranche tokens into the system and mint perp tokens.
     /// @param trancheIn The address of the tranche token to be deposited.
     /// @param trancheInAmt The amount of tranche tokens deposited.
