@@ -82,15 +82,4 @@ interface IVault is IERC20Upgradeable {
     /// @param token The address of a token to check.
     /// @return If the given token is held by the vault.
     function isVaultAsset(IERC20Upgradeable token) external view returns (bool);
-
-    /// @notice Computes the amount of notes minted when given amount of underlying asset tokens
-    ///         are deposited into the system.
-    /// @param amount The amount tokens to be deposited into the vault.
-    /// @return The amount of notes to be minted.
-    function computeMintAmt(uint256 amount) external returns (uint256);
-
-    /// @notice Computes the amount of asset tokens redeemed when burning given number of vault notes.
-    /// @param notes The amount of notes to be burnt.
-    /// @return The list of asset tokens and amounts redeemed.
-    function computeRedemptionAmts(uint256 notes) external returns (TokenAmount[] memory);
 }

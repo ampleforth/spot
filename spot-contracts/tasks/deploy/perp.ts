@@ -42,14 +42,14 @@ task("deploy:BondIssuer")
     if (verify) {
       await sleep(30);
       await hre.run("verify:contract", {
-        address: bondIssuer.address,
+        address: bondIssuer.target,
         constructorArguments: [bondFactoryAddress, collateralTokenAddress],
       });
     } else {
       console.log("Skipping verification");
     }
 
-    console.log("Bond issuer", bondIssuer.address);
+    console.log("Bond issuer", bondIssuer.target);
   });
 
 task("deploy:PerpSystem")
@@ -67,19 +67,16 @@ task("deploy:PerpSystem")
 
     const FeePolicy = await hre.ethers.getContractFactory("FeePolicy");
     const feePolicy = await hre.upgrades.deployProxy(FeePolicy.connect(deployer));
-    await feePolicy.deployed();
 
     const PerpetualTranche = await hre.ethers.getContractFactory("PerpetualTranche");
     const perp = await hre.upgrades.deployProxy(PerpetualTranche.connect(deployer));
-    await perp.deployed();
 
     const RolloverVault = await hre.ethers.getContractFactory("RolloverVault");
     const vault = await hre.upgrades.deployProxy(RolloverVault.connect(deployer));
-    await vault.deployed();
 
-    console.log("perp", perp.address);
-    console.log("vault", vault.address);
-    console.log("feePolicy", feePolicy.address);
+    console.log("perp", perp.target);
+    console.log("vault", vault.target);
+    console.log("feePolicy", feePolicy.target);
 
     console.log("fee policy init");
     await (await feePolicy.init()).wait();
@@ -90,32 +87,32 @@ task("deploy:PerpSystem")
       perpSymbol,
       collateralTokenAddress,
       bondIssuerAddress,
-      feePolicy.address,
+      feePolicy.target,
     );
     await perpInitTx.wait();
 
     console.log("vault init");
-    const vaultInitTx = await vault.init(vaultName, vaultSymbol, perp.address, feePolicy.address);
+    const vaultInitTx = await vault.init(vaultName, vaultSymbol, perp.target, feePolicy.target);
     await vaultInitTx.wait();
 
     console.log("point perp to vault");
-    await (await perp.updateVault(vault.address)).wait();
+    await (await perp.updateVault(vault.target)).wait();
 
     if (verify) {
       await sleep(30);
       // We just need to verify the proxy once
       await hre.run("verify:contract", {
-        address: feePolicy.address,
+        address: feePolicy.target,
       });
       // Verifying implementations
       await hre.run("verify:contract", {
-        address: await getImplementationAddress(hre.ethers.provider, feePolicy.address),
+        address: await getImplementationAddress(hre.ethers.provider, feePolicy.target),
       });
       await hre.run("verify:contract", {
-        address: await getImplementationAddress(hre.ethers.provider, perp.address),
+        address: await getImplementationAddress(hre.ethers.provider, perp.target),
       });
       await hre.run("verify:contract", {
-        address: await getImplementationAddress(hre.ethers.provider, vault.address),
+        address: await getImplementationAddress(hre.ethers.provider, vault.target),
       });
     } else {
       console.log("Skipping verification");
@@ -129,13 +126,12 @@ task("deploy:Router")
 
     const RouterV2 = await hre.ethers.getContractFactory("RouterV2");
     const router = await RouterV2.deploy();
-    await router.deployed();
-    console.log("RouterV2", router.address);
+    console.log("RouterV2", router.target);
 
     if (args.verify) {
       await sleep(30);
       await hre.run("verify:contract", {
-        address: router.address,
+        address: router.target,
       });
     } else {
       console.log("Skipping verification");
@@ -152,16 +148,15 @@ task("deploy:FeePolicy")
     const feePolicy = await hre.upgrades.deployProxy(FeePolicy.connect(deployer), [], {
       initializer: "init()",
     });
-    await feePolicy.deployed();
-    console.log("feePolicy", feePolicy.address);
+    console.log("feePolicy", feePolicy.target);
 
     if (args.verify) {
       await sleep(30);
       await hre.run("verify:contract", {
-        address: feePolicy.address,
+        address: feePolicy.target,
       });
       await hre.run("verify:contract", {
-        address: await getImplementationAddress(hre.ethers.provider, feePolicy.address),
+        address: await getImplementationAddress(hre.ethers.provider, feePolicy.target),
       });
     } else {
       console.log("Skipping verification");
