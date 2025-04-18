@@ -57,7 +57,7 @@ describe("RolloverVault", function () {
     await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
     await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
     await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
-    await feePolicy.mockMethod("computePerpRolloverFeePerc(uint256)", [0]);
+
     await feePolicy.mockMethod("computeVaultMintFeePerc()", [0]);
     await feePolicy.mockMethod("computeVaultBurnFeePerc()", [0]);
     await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [0]);
@@ -75,8 +75,17 @@ describe("RolloverVault", function () {
     await perp.updateTolerableTrancheMaturity(1200, 4800);
     await advancePerpQueueToBondMaturity(perp, await getDepositBond(perp));
 
-    const RolloverVault = await ethers.getContractFactory("RolloverVault");
-    vault = await upgrades.deployProxy(RolloverVault.connect(deployer));
+    const TrancheManager = await ethers.getContractFactory("TrancheManager");
+    const trancheManager = await TrancheManager.deploy();
+    const RolloverVault = await ethers.getContractFactory("RolloverVault", {
+      libraries: {
+        TrancheManager: trancheManager.target,
+      },
+    });
+    await upgrades.silenceWarnings();
+    vault = await upgrades.deployProxy(RolloverVault.connect(deployer), {
+      unsafeAllow: ["external-library-linking"],
+    });
     await vault.init("RolloverVault", "VSHARE", perp.target, feePolicy.target);
     await perp.updateVault(vault.target);
 

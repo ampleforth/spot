@@ -52,7 +52,6 @@ describe("RouterV2", function () {
     await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
     await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
     await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
-    await feePolicy.mockMethod("computePerpRolloverFeePerc(uint256)", [0]);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -65,7 +64,14 @@ describe("RouterV2", function () {
     await perp.updateTolerableTrancheMaturity(600, 3600);
     await advancePerpQueue(perp, 3600);
 
-    vault = new DMock(await ethers.getContractFactory("RolloverVault"));
+    const TrancheManager = await ethers.getContractFactory("TrancheManager");
+    const trancheManager = await TrancheManager.deploy();
+    const RolloverVault = await ethers.getContractFactory("RolloverVault", {
+      libraries: {
+        TrancheManager: trancheManager.target,
+      },
+    });
+    vault = new DMock(RolloverVault);
     await vault.deploy();
     await vault.mockMethod("getTVL()", [0]);
     await perp.updateVault(vault.target);

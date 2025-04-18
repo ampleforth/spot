@@ -55,7 +55,6 @@ describe("PerpetualTranche", function () {
     await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
     await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
     await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
-    await feePolicy.mockMethod("computePerpRolloverFeePerc(uint256)", [0]);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -67,7 +66,14 @@ describe("PerpetualTranche", function () {
     );
     await advancePerpQueue(perp, 3600);
 
-    const vault = new DMock(await ethers.getContractFactory("RolloverVault"));
+    const TrancheManager = await ethers.getContractFactory("TrancheManager");
+    const trancheManager = await TrancheManager.deploy();
+    const RolloverVault = await ethers.getContractFactory("RolloverVault", {
+      libraries: {
+        TrancheManager: trancheManager.target,
+      },
+    });
+    const vault = new DMock(RolloverVault);
     await vault.deploy();
     await vault.mockMethod("getTVL()", [0]);
     await perp.updateVault(vault.target);
@@ -616,11 +622,15 @@ describe("PerpetualTranche", function () {
 
       it("should update the total supply", async function () {
         await txFn();
-        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("500"));
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("550"));
       });
 
       it("should burn perp tokens", async function () {
         await expect(txFn).to.changeTokenBalances(perp, [deployer], [toFixedPtAmt("-500")]);
+      });
+
+      it("should transfer fees to the vault", async function () {
+        await expect(txFn).to.changeTokenBalances(perp, [await perp.vault()], [toFixedPtAmt("50")]);
       });
     });
 
