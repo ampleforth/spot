@@ -71,4 +71,7 @@ interface IFeePolicy {
         uint256 perpSupply,
         uint256 vaultNoteSupply
     ) external view returns (uint256, uint256);
+
+    /// @return The fee collector address.
+    function protocolFeeCollector() external view returns (address);
 }

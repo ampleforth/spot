@@ -122,6 +122,7 @@ describe("RolloverVault", function () {
     await TimeHelpers.increaseTime(86401);
 
     await feePolicy.mockMethod("computeRebalanceData((uint256,uint256,uint256))", [[0n, 0n]]);
+    await feePolicy.mockMethod("protocolFeeCollector()", [await deployer.getAddress()]);
   });
 
   afterEach(async function () {

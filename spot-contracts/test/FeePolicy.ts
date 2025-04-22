@@ -52,6 +52,9 @@ describe("FeePolicy", function () {
     it("should return owner", async function () {
       expect(await feePolicy.owner()).to.eq(await deployer.getAddress());
     });
+    it("should return the fee collector", async function () {
+      expect(await feePolicy.protocolFeeCollector()).to.eq(await deployer.getAddress());
+    });
     it("should return decimals", async function () {
       expect(await feePolicy.decimals()).to.eq(8);
     });
@@ -360,6 +363,23 @@ describe("FeePolicy", function () {
     });
   });
 
+  describe("#updateProtocolFeeCollector", function () {
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(feePolicy.connect(otherUser).updateProtocolFeeCollector(ethers.ZeroAddress)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      it("should update parameters", async function () {
+        await feePolicy.connect(deployer).updateProtocolFeeCollector(ethers.ZeroAddress);
+        expect(await feePolicy.protocolFeeCollector()).to.eq(ethers.ZeroAddress);
+      });
+    });
+  });
+
   describe("fee logic", function () {
     beforeEach(async function () {
       await feePolicy.updatePerpMintFees(toPerc("0.025"));
@@ -545,12 +565,12 @@ describe("FeePolicy", function () {
       await feePolicy.updateTargetSubscriptionRatio(toPerc("1.25"));
       await feePolicy.updateProtocolSharePerc(toPerc("0.05"), toPerc("0.1"));
       await feePolicy.updateMaxRebalancePerc(toPerc("0.02"), toPerc("0.01"));
-      await feePolicy.updateRebalanceEquilibriumDR([toPerc("0.9999"), toPerc("1.0001")])
+      await feePolicy.updateRebalanceEquilibriumDR([toPerc("0.9999"), toPerc("1.0001")]);
     });
 
     describe("when deviation is within eq range", function () {
       it("should compute rebalance data", async function () {
-        await feePolicy.updateRebalanceEquilibriumDR([toPerc("0.5"), toPerc("2")])
+        await feePolicy.updateRebalanceEquilibriumDR([toPerc("0.5"), toPerc("2")]);
         const r1 = await feePolicy.computeRebalanceData({
           perpTVL: toAmt("120"),
           vaultTVL: toAmt("500"),

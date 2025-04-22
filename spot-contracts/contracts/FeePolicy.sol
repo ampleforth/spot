@@ -124,6 +124,9 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice The percentage of the enrichment value charged by the protocol as fees.
     uint256 public enrichmentProtocolSharePerc;
 
+    /// @notice The address to which the protocol fees are streamed to.
+    address public protocolFeeCollector;
+
     //-----------------------------------------------------------------------------
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -134,6 +137,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @notice Contract initializer.
     function init() external initializer {
         __Ownable_init();
+        protocolFeeCollector = owner();
 
         targetSubscriptionRatio = (ONE * 150) / 100; // 1.5
         drHardBound = Range({
@@ -281,6 +285,12 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
         debasementProtocolSharePerc = debasementProtocolSharePerc_;
         enrichmentProtocolSharePerc = enrichmentProtocolSharePerc_;
+    }
+
+    /// @notice Updates the protocol fee collector.
+    /// @param protocolFeeCollector_ The new fee collector address.
+    function updateProtocolFeeCollector(address protocolFeeCollector_) external onlyOwner {
+        protocolFeeCollector = protocolFeeCollector_;
     }
 
     //-----------------------------------------------------------------------------

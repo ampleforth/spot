@@ -886,9 +886,9 @@ contract RolloverVault is
             IERC20Burnable(address(perp_)).burn(perpAmtToTransfer);
         }
 
-        // Pay protocol fees
+        // Pay protocol fees to the fee collector
         if (r.protocolFeeUnderlyingAmt > 0) {
-            underlying_.safeTransfer(owner(), r.protocolFeeUnderlyingAmt);
+            underlying_.safeTransfer(feePolicy.protocolFeeCollector(), r.protocolFeeUnderlyingAmt);
         }
 
         // Sync token balances.
