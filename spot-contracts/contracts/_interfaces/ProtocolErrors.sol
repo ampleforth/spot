@@ -37,6 +37,9 @@ error ReserveCountOverLimit();
 /// @notice Expected range to be non-decreasing.
 error InvalidRange();
 
+/// @notice Inconsistent amount.
+error InconsistentAmount();
+
 //-------------------------------------------------------------------------
 // Perp
 

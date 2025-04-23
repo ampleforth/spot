@@ -53,11 +53,6 @@ interface IVault is IERC20Upgradeable {
     /// @return The list of asset tokens and amounts redeemed.
     function redeem(uint256 notes) external returns (TokenAmount[] memory);
 
-    /// @notice Batches the recover and redeem functions.
-    /// @param notes The amount of notes to be burnt.
-    /// @return The list of asset tokens and amounts redeemed.
-    function recoverAndRedeem(uint256 notes) external returns (TokenAmount[] memory);
-
     /// @return The total value of assets currently held by the vault, denominated in a standard unit of account.
     function getTVL() external view returns (uint256);
 
