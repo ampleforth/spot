@@ -17,7 +17,6 @@ import {
   checkVaultComposition,
   rebase,
   toPercFixedPtAmt,
-  advancePerpQueueUpToBondMaturity,
   DMock,
 } from "../helpers";
 
@@ -63,13 +62,7 @@ describe("RolloverVault", function () {
     await feePolicy.deploy();
     await feePolicy.mockMethod("decimals()", [8]);
     await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
-    await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
-    await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
-
-    await feePolicy.mockMethod("computeVaultMintFeePerc()", [0]);
-    await feePolicy.mockMethod("computeVaultBurnFeePerc()", [0]);
-    await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [0]);
-    await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [0]);
+    await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -473,7 +466,19 @@ describe("RolloverVault", function () {
       beforeEach(async function () {
         await collateralToken.approve(vault.target, toFixedPtAmt("100"));
         await vault.deposit(toFixedPtAmt("100"));
-        await feePolicy.mockMethod("computeVaultMintFeePerc()", [toPercFixedPtAmt("0.05")]);
+
+        await feePolicy.clearMockMethod("computeDeviationRatio((uint256,uint256,uint256))");
+        await feePolicy.mockCall(
+          "computeDeviationRatio((uint256,uint256,uint256))",
+          [[toFixedPtAmt("600"), toFixedPtAmt("100"), "200"]],
+          [toPercFixedPtAmt("1")],
+        );
+        await feePolicy.mockCall(
+          "computeDeviationRatio((uint256,uint256,uint256))",
+          [[toFixedPtAmt("600"), toFixedPtAmt("200"), "200"]],
+          [toPercFixedPtAmt("1")],
+        );
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.05")]);
         await collateralToken.transfer(otherUserAddress, toFixedPtAmt("100"));
         await collateralToken.connect(otherUser).approve(vault.target, toFixedPtAmt("100"));
         noteAmt = await vault.connect(otherUser).deposit.staticCall(toFixedPtAmt("100"));
@@ -794,7 +799,18 @@ describe("RolloverVault", function () {
         await collateralToken.transfer(vault.target, toFixedPtAmt("20"));
 
         bal = toFixedPtAmt("50") * 1000000n;
-        await feePolicy.mockMethod("computeVaultBurnFeePerc()", [toPercFixedPtAmt("0.1")]);
+        await feePolicy.clearMockMethod("computeDeviationRatio((uint256,uint256,uint256))");
+        await feePolicy.mockCall(
+          "computeDeviationRatio((uint256,uint256,uint256))",
+          [[toFixedPtAmt("600"), toFixedPtAmt("220"), "200"]],
+          [toPercFixedPtAmt("1")],
+        );
+        await feePolicy.mockCall(
+          "computeDeviationRatio((uint256,uint256,uint256))",
+          [[toFixedPtAmt("600"), toFixedPtAmt("165"), "200"]],
+          [toPercFixedPtAmt("1")],
+        );
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.1")]);
       });
 
       it("should transfer assets", async function () {
@@ -850,71 +866,6 @@ describe("RolloverVault", function () {
         expect(redemptionAmts[2].token).to.eq(rolloverInTranches[1].target);
         expect(redemptionAmts[2].amount).to.eq(toFixedPtAmt("36"));
       });
-    });
-  });
-
-  describe("#recoverAndRedeem", function () {
-    let bal: BigNumber;
-    beforeEach(async function () {
-      await collateralToken.approve(vault.target, toFixedPtAmt("100"));
-      await vault.deposit(toFixedPtAmt("100"));
-
-      await collateralToken.transfer(otherUserAddress, toFixedPtAmt("100"));
-      await collateralToken.connect(otherUser).approve(vault.target, toFixedPtAmt("100"));
-      await vault.connect(otherUser).deposit(toFixedPtAmt("100"));
-
-      await vault.deploy();
-      await collateralToken.transfer(vault.target, toFixedPtAmt("20"));
-
-      await advancePerpQueueUpToBondMaturity(perp, await bondAt(await perp.getDepositBond.staticCall()));
-      bal = toFixedPtAmt("50") * 1000000n;
-    });
-
-    it("should transfer assets", async function () {
-      await expect(() => vault.recoverAndRedeem(bal)).to.changeTokenBalances(
-        collateralToken,
-        [deployer, vault],
-        [toFixedPtAmt("55"), toFixedPtAmt("145")],
-      );
-    });
-
-    it("should transfer assets", async function () {
-      await expect(() => vault.recoverAndRedeem(bal)).to.changeTokenBalances(
-        reserveTranches[0],
-        [deployer, vault],
-        [toFixedPtAmt("0"), toFixedPtAmt("-40")],
-      );
-    });
-
-    it("should transfer assets", async function () {
-      await expect(() => vault.recoverAndRedeem(bal)).to.changeTokenBalances(
-        rolloverInTranches[1],
-        [deployer, vault],
-        [toFixedPtAmt("0"), toFixedPtAmt("-160")],
-      );
-    });
-
-    it("should update vault", async function () {
-      await checkVaultComposition(
-        vault,
-        [collateralToken, reserveTranches[0], rolloverInTranches[1]],
-        [toFixedPtAmt("20"), toFixedPtAmt("40"), toFixedPtAmt("160")],
-      );
-      await vault.recoverAndRedeem(bal);
-      await checkVaultComposition(vault, [collateralToken], [toFixedPtAmt("165")]);
-    });
-
-    it("should burn users notes", async function () {
-      await expect(() => vault.recoverAndRedeem(bal)).to.changeTokenBalances(vault, [deployer], [bal * -1n]);
-      expect(await vault.balanceOf(otherUserAddress)).to.eq(toFixedPtAmt("100") * 1000000n);
-    });
-
-    it("should return redemption amounts", async function () {
-      await perp.updateState();
-      const redemptionAmts = await vault.recoverAndRedeem.staticCall(bal);
-      expect(redemptionAmts.length).to.eq(1);
-      expect(redemptionAmts[0].token).to.eq(collateralToken.target);
-      expect(redemptionAmts[0].amount).to.eq(toFixedPtAmt("55"));
     });
   });
 });

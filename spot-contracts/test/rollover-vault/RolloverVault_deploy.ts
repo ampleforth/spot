@@ -56,13 +56,7 @@ describe("RolloverVault", function () {
     await feePolicy.deploy();
     await feePolicy.mockMethod("decimals()", [8]);
     await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
-    await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
-    await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
-
-    await feePolicy.mockMethod("computeVaultMintFeePerc()", [0]);
-    await feePolicy.mockMethod("computeVaultBurnFeePerc()", [0]);
-    await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [0]);
-    await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [0]);
+    await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -131,13 +125,13 @@ describe("RolloverVault", function () {
 
     describe("when reservedUnderlyingBal is not set", function () {
       beforeEach(async function () {
-        await vault.updateReservedUnderlyingBal(toFixedPtAmt("0"));
+        await vault.updateLiquidityLimits(toFixedPtAmt("0"), toFixedPtAmt("0"), toPercFixedPtAmt("0"));
       });
 
       describe("when usable balance is lower than the min deployment", function () {
         beforeEach(async function () {
           await collateralToken.transfer(vault.target, toFixedPtAmt("999"));
-          await vault.updateMinDeploymentAmt(toFixedPtAmt("1000"));
+          await vault.updateLiquidityLimits(toFixedPtAmt("1000"), toFixedPtAmt("0"), toPercFixedPtAmt("0"));
         });
         it("should revert", async function () {
           await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "InsufficientDeployment");
@@ -147,7 +141,7 @@ describe("RolloverVault", function () {
       describe("when usable balance is higher than the min deployment", function () {
         beforeEach(async function () {
           await collateralToken.transfer(vault.target, toFixedPtAmt("1000"));
-          await vault.updateMinDeploymentAmt(toFixedPtAmt("100"));
+          await vault.updateLiquidityLimits(toFixedPtAmt("100"), toFixedPtAmt("0"), toPercFixedPtAmt("0"));
         });
         it("should not revert", async function () {
           await expect(vault.deploy()).not.to.be.reverted;
@@ -157,13 +151,12 @@ describe("RolloverVault", function () {
 
     describe("when reservedUnderlyingBal is set", function () {
       beforeEach(async function () {
-        await vault.updateReservedUnderlyingBal(toFixedPtAmt("25"));
+        await vault.updateLiquidityLimits(toFixedPtAmt("0"), toFixedPtAmt("25"), toPercFixedPtAmt("0"));
       });
 
       describe("when usable balance is lower than the reservedUnderlyingBal", function () {
         beforeEach(async function () {
           await collateralToken.transfer(vault.target, toFixedPtAmt("20"));
-          await vault.updateMinDeploymentAmt(toFixedPtAmt("1"));
         });
         it("should revert", async function () {
           await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "InsufficientDeployment");
@@ -173,7 +166,7 @@ describe("RolloverVault", function () {
       describe("when usable balance is lower than the min deployment", function () {
         beforeEach(async function () {
           await collateralToken.transfer(vault.target, toFixedPtAmt("125"));
-          await vault.updateMinDeploymentAmt(toFixedPtAmt("100"));
+          await vault.updateLiquidityLimits(toFixedPtAmt("100"), toFixedPtAmt("25"), toPercFixedPtAmt("0"));
         });
         it("should revert", async function () {
           await expect(vault.deploy()).to.be.revertedWithCustomError(vault, "InsufficientDeployment");
@@ -183,7 +176,7 @@ describe("RolloverVault", function () {
       describe("when usable balance is higher than the min deployment", function () {
         beforeEach(async function () {
           await collateralToken.transfer(vault.target, toFixedPtAmt("126"));
-          await vault.updateMinDeploymentAmt(toFixedPtAmt("100"));
+          await vault.updateLiquidityLimits(toFixedPtAmt("100"), toFixedPtAmt("25"), toPercFixedPtAmt("0"));
         });
         it("should not revert", async function () {
           await expect(vault.deploy()).not.to.be.reverted;

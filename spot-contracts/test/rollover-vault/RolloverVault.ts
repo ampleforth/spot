@@ -40,13 +40,7 @@ describe("RolloverVault", function () {
     await feePolicy.deploy();
     await feePolicy.mockMethod("decimals()", [8]);
     await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
-    await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
-    await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
-
-    await feePolicy.mockMethod("computeVaultMintFeePerc()", [0]);
-    await feePolicy.mockMethod("computeVaultBurnFeePerc()", [0]);
-    await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [0]);
-    await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [0]);
+    await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
 
     const TrancheManager = await ethers.getContractFactory("TrancheManager");
     trancheManager = await TrancheManager.deploy();
@@ -198,7 +192,7 @@ describe("RolloverVault", function () {
     describe("when valid", function () {
       it("should stop rebalance", async function () {
         await vault.connect(otherUser).pauseRebalance();
-        expect(await vault.lastRebalanceTimestampSec()).to.eq(ethers.MaxUint256 - 86400n);
+        expect(await vault.lastRebalanceTimestampSec()).to.eq(18446744073709551615n);
       });
     });
   });
@@ -355,7 +349,7 @@ describe("RolloverVault", function () {
     });
   });
 
-  describe("#updateReservedUnderlyingBal", function () {
+  describe("#updateLiquidityLimits", function () {
     let tx: Transaction;
     beforeEach(async function () {
       await vault.connect(deployer).updateKeeper(await otherUser.getAddress());
@@ -363,72 +357,25 @@ describe("RolloverVault", function () {
 
     describe("when triggered by non-keeper", function () {
       it("should revert", async function () {
-        await expect(vault.connect(deployer).updateReservedUnderlyingBal(0)).to.be.revertedWithCustomError(
-          vault,
-          "UnauthorizedCall",
-        );
+        await expect(
+          vault
+            .connect(deployer)
+            .updateLiquidityLimits(toFixedPtAmt("1000"), toFixedPtAmt("100000"), toPercFixedPtAmt("0.25")),
+        ).to.be.revertedWithCustomError(vault, "UnauthorizedCall");
       });
     });
 
     describe("when triggered by keeper", function () {
       beforeEach(async function () {
-        tx = await vault.connect(otherUser).updateReservedUnderlyingBal(toFixedPtAmt("1000"));
+        tx = await vault
+          .connect(otherUser)
+          .updateLiquidityLimits(toFixedPtAmt("1000"), toFixedPtAmt("100000"), toPercFixedPtAmt("0.25"));
         await tx;
       });
-      it("should update the min deployment amount", async function () {
-        expect(await vault.reservedUnderlyingBal()).to.eq(toFixedPtAmt("1000"));
-      });
-    });
-  });
-
-  describe("#updateReservedUnderlyingBal", function () {
-    let tx: Transaction;
-    beforeEach(async function () {
-      await vault.connect(deployer).updateKeeper(await otherUser.getAddress());
-    });
-
-    describe("when triggered by non-keeper", function () {
-      it("should revert", async function () {
-        await expect(vault.connect(deployer).updateReservedUnderlyingBal(0)).to.be.revertedWithCustomError(
-          vault,
-          "UnauthorizedCall",
-        );
-      });
-    });
-
-    describe("when triggered by keeper", function () {
-      beforeEach(async function () {
-        tx = await vault.connect(otherUser).updateReservedUnderlyingBal(toFixedPtAmt("1000"));
-        await tx;
-      });
-      it("should update the min underlying balance", async function () {
-        expect(await vault.reservedUnderlyingBal()).to.eq(toFixedPtAmt("1000"));
-      });
-    });
-  });
-
-  describe("#updateReservedSubscriptionPerc", function () {
-    let tx: Transaction;
-    beforeEach(async function () {
-      await vault.connect(deployer).updateKeeper(await otherUser.getAddress());
-    });
-
-    describe("when triggered by non-keeper", function () {
-      it("should revert", async function () {
-        await expect(vault.connect(deployer).updateReservedSubscriptionPerc(0)).to.be.revertedWithCustomError(
-          vault,
-          "UnauthorizedCall",
-        );
-      });
-    });
-
-    describe("when triggered by keeper", function () {
-      beforeEach(async function () {
-        tx = await vault.connect(otherUser).updateReservedSubscriptionPerc(toPercFixedPtAmt("0.1"));
-        await tx;
-      });
-      it("should update the min underlying balance", async function () {
-        expect(await vault.reservedSubscriptionPerc()).to.eq(toPercFixedPtAmt("0.1"));
+      it("should update the liquidity parameters", async function () {
+        expect(await vault.minDeploymentAmt()).to.eq(toFixedPtAmt("1000"));
+        expect(await vault.reservedUnderlyingBal()).to.eq(toFixedPtAmt("100000"));
+        expect(await vault.reservedSubscriptionPerc()).to.eq(toPercFixedPtAmt("0.25"));
       });
     });
   });
@@ -454,31 +401,6 @@ describe("RolloverVault", function () {
       });
       it("should update the keeper", async function () {
         expect(await vault.keeper()).to.eq(await otherUser.getAddress());
-      });
-    });
-  });
-
-  describe("#updateRebalanceFrequency", function () {
-    let tx: Transaction;
-    beforeEach(async function () {
-      await vault.connect(deployer).transferOwnership(await otherUser.getAddress());
-    });
-
-    describe("when triggered by non-owner", function () {
-      it("should revert", async function () {
-        await expect(vault.connect(deployer).updateRebalanceFrequency(3600)).to.be.revertedWith(
-          "Ownable: caller is not the owner",
-        );
-      });
-    });
-
-    describe("when triggered by owner", function () {
-      beforeEach(async function () {
-        tx = await vault.connect(otherUser).updateRebalanceFrequency(3600);
-        await tx;
-      });
-      it("should update the rebalance freq", async function () {
-        expect(await vault.rebalanceFreqSec()).to.eq(3600);
       });
     });
   });

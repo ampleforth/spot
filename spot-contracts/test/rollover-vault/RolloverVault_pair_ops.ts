@@ -54,13 +54,7 @@ describe("RolloverVault", function () {
     await feePolicy.deploy();
     await feePolicy.mockMethod("decimals()", [8]);
     await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
-    await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
-    await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
-
-    await feePolicy.mockMethod("computeVaultMintFeePerc()", [0]);
-    await feePolicy.mockMethod("computeVaultBurnFeePerc()", [0]);
-    await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [0]);
-    await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [0]);
+    await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -137,10 +131,7 @@ describe("RolloverVault", function () {
   describe("#mint2", function () {
     describe("when dr = 1", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeDREquilibriumSplit(uint256,uint256)", [
-          toFixedPtAmt("25"),
-          toFixedPtAmt("75"),
-        ]);
+        await feePolicy.mockMethod("computeDRNormSeniorTR(uint256)", [toPercFixedPtAmt("0.25")]);
       });
 
       it("should compute amounts", async function () {
@@ -202,10 +193,7 @@ describe("RolloverVault", function () {
 
     describe("when dr > 1", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeDREquilibriumSplit(uint256,uint256)", [
-          toFixedPtAmt("25"),
-          toFixedPtAmt("75"),
-        ]);
+        await feePolicy.mockMethod("computeDRNormSeniorTR(uint256)", [toPercFixedPtAmt("0.25")]);
         await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1.25")]);
         await vault.deposit(toFixedPtAmt("1000"));
       });
@@ -269,10 +257,7 @@ describe("RolloverVault", function () {
 
     describe("when dr < 1", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeDREquilibriumSplit(uint256,uint256)", [
-          toFixedPtAmt("25"),
-          toFixedPtAmt("75"),
-        ]);
+        await feePolicy.mockMethod("computeDRNormSeniorTR(uint256)", [toPercFixedPtAmt("0.25")]);
         await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("0.75")]);
         await vault.redeem(toFixedPtAmt("500") * 1000000n);
         expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("1500"));
@@ -338,249 +323,209 @@ describe("RolloverVault", function () {
 
   describe("#redeem2", function () {
     describe("when redeeming proportionally", function () {
-      beforeEach(async function () {
-        await feePolicy.mockMethod("computeDRNeutralSplit(uint256,uint256,uint256,uint256)", [
-          toFixedPtAmt("25"),
-          toFixedPtAmt("75") * 1000000n,
-        ]);
-      });
-
       it("should compute amounts", async function () {
-        const r = await vault.redeem2.staticCall(toFixedPtAmt("25"), toFixedPtAmt("75") * 1000000n);
+        const r = await vault.redeem2.staticCall(toFixedPtAmt("20"), toFixedPtAmt("50") * 1000000n);
 
-        expect(r[0]).to.eq(toFixedPtAmt("25"));
-        expect(r[1]).to.eq(toFixedPtAmt("75") * 1000000n);
+        expect(r[0]).to.eq(toFixedPtAmt("20"));
+        expect(r[1]).to.eq(toFixedPtAmt("50") * 1000000n);
 
         expect(r[2][0][0]).to.eq(collateralToken.target);
-        expect(r[2][0][1]).to.eq(toFixedPtAmt("45"));
+        expect(r[2][0][1]).to.eq(toFixedPtAmt("30"));
 
         expect(r[2][1][0]).to.eq(reserveTranches[3].target);
-        expect(r[2][1][1]).to.eq(toFixedPtAmt("6.25"));
+        expect(r[2][1][1]).to.eq(toFixedPtAmt("5"));
 
         expect(r[2][2][0]).to.eq(reserveTranches[1].target);
-        expect(r[2][2][1]).to.eq(toFixedPtAmt("6.25"));
+        expect(r[2][2][1]).to.eq(toFixedPtAmt("5"));
 
         expect(r[2][3][0]).to.eq(reserveTranches[2].target);
-        expect(r[2][3][1]).to.eq(toFixedPtAmt("6.25"));
+        expect(r[2][3][1]).to.eq(toFixedPtAmt("5"));
 
         expect(r[2][4][0]).to.eq(currentTranchesIn[0].target);
-        expect(r[2][4][1]).to.eq(toFixedPtAmt("6.25"));
+        expect(r[2][4][1]).to.eq(toFixedPtAmt("5"));
 
         expect(r[2][5][0]).to.eq(currentTranchesIn[1].target);
-        expect(r[2][5][1]).to.eq(toFixedPtAmt("30"));
+        expect(r[2][5][1]).to.eq(toFixedPtAmt("20"));
       });
 
       it("should burn perps", async function () {
-        await expect(() => vault.redeem2(toFixedPtAmt("25"), toFixedPtAmt("75") * 1000000n)).to.changeTokenBalances(
+        await expect(() => vault.redeem2(toFixedPtAmt("20"), toFixedPtAmt("50") * 1000000n)).to.changeTokenBalances(
           perp,
           [deployer],
-          [toFixedPtAmt("-25")],
+          [toFixedPtAmt("-20")],
         );
       });
 
       it("should burn vault notes", async function () {
-        await expect(() => vault.redeem2(toFixedPtAmt("25"), toFixedPtAmt("75") * 1000000n)).to.changeTokenBalances(
+        await expect(() => vault.redeem2(toFixedPtAmt("20"), toFixedPtAmt("50") * 1000000n)).to.changeTokenBalances(
           vault,
           [deployer],
-          [toFixedPtAmt("-75") * 1000000n],
+          [toFixedPtAmt("-50") * 1000000n],
         );
       });
 
       it("should decrease tvl", async function () {
-        await vault.redeem2(toFixedPtAmt("25"), toFixedPtAmt("75") * 1000000n);
-        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("1925"));
-        expect(await perp.getTVL.staticCall()).to.eq(toFixedPtAmt("775"));
+        await vault.redeem2(toFixedPtAmt("20"), toFixedPtAmt("50") * 1000000n);
+        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("1950"));
+        expect(await perp.getTVL.staticCall()).to.eq(toFixedPtAmt("780"));
       });
 
       it("should have the updated composition", async function () {
-        await vault.redeem2(toFixedPtAmt("25"), toFixedPtAmt("75") * 1000000n);
+        await vault.redeem2(toFixedPtAmt("20"), toFixedPtAmt("50") * 1000000n);
         await checkPerpComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          [
-            toFixedPtAmt("0"),
-            toFixedPtAmt("193.75"),
-            toFixedPtAmt("193.75"),
-            toFixedPtAmt("193.75"),
-            toFixedPtAmt("193.75"),
-          ],
+          [toFixedPtAmt("0"), toFixedPtAmt("195"), toFixedPtAmt("195"), toFixedPtAmt("195"), toFixedPtAmt("195")],
         );
         await checkVaultComposition(
           vault,
           [collateralToken, currentTranchesIn[1]],
-          [toFixedPtAmt("1155"), toFixedPtAmt("770")],
+          [toFixedPtAmt("1170"), toFixedPtAmt("780")],
         );
       });
 
       it("should sync vault assets", async function () {
-        const tx = vault.redeem2(toFixedPtAmt("25"), toFixedPtAmt("75") * 1000000n);
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.target, toFixedPtAmt("1155"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[1].target, toFixedPtAmt("770"));
+        const tx = vault.redeem2(toFixedPtAmt("20"), toFixedPtAmt("50") * 1000000n);
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.target, toFixedPtAmt("1170"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[1].target, toFixedPtAmt("780"));
       });
     });
 
     describe("when redeeming more perps", function () {
-      beforeEach(async function () {
-        await feePolicy.mockMethod("computeDRNeutralSplit(uint256,uint256,uint256,uint256)", [
-          toFixedPtAmt("50"),
-          toFixedPtAmt("75") * 1000000n,
-        ]);
-        await collateralToken.transfer(perp.target, toFixedPtAmt("100"));
-      });
-
       it("should compute amounts", async function () {
-        const r = await vault.redeem2.staticCall(toFixedPtAmt("100"), toFixedPtAmt("75") * 1000000n);
+        const r = await vault.redeem2.staticCall(toFixedPtAmt("100"), toFixedPtAmt("50") * 1000000n);
 
-        expect(r[0]).to.eq(toFixedPtAmt("50"));
-        expect(r[1]).to.eq(toFixedPtAmt("75") * 1000000n);
+        expect(r[0]).to.eq(toFixedPtAmt("20"));
+        expect(r[1]).to.eq(toFixedPtAmt("50") * 1000000n);
 
         expect(r[2][0][0]).to.eq(collateralToken.target);
-        expect(r[2][0][1]).to.eq(toFixedPtAmt("51.25"));
+        expect(r[2][0][1]).to.eq(toFixedPtAmt("30"));
 
         expect(r[2][1][0]).to.eq(reserveTranches[3].target);
-        expect(r[2][1][1]).to.eq(toFixedPtAmt("12.5"));
+        expect(r[2][1][1]).to.eq(toFixedPtAmt("5"));
 
         expect(r[2][2][0]).to.eq(reserveTranches[1].target);
-        expect(r[2][2][1]).to.eq(toFixedPtAmt("12.5"));
+        expect(r[2][2][1]).to.eq(toFixedPtAmt("5"));
 
         expect(r[2][3][0]).to.eq(reserveTranches[2].target);
-        expect(r[2][3][1]).to.eq(toFixedPtAmt("12.5"));
+        expect(r[2][3][1]).to.eq(toFixedPtAmt("5"));
 
         expect(r[2][4][0]).to.eq(currentTranchesIn[0].target);
-        expect(r[2][4][1]).to.eq(toFixedPtAmt("12.5"));
+        expect(r[2][4][1]).to.eq(toFixedPtAmt("5"));
 
         expect(r[2][5][0]).to.eq(currentTranchesIn[1].target);
-        expect(r[2][5][1]).to.eq(toFixedPtAmt("30"));
+        expect(r[2][5][1]).to.eq(toFixedPtAmt("20"));
       });
 
       it("should burn perps", async function () {
-        await expect(() => vault.redeem2(toFixedPtAmt("100"), toFixedPtAmt("75") * 1000000n)).to.changeTokenBalances(
+        await expect(() => vault.redeem2(toFixedPtAmt("100"), toFixedPtAmt("50") * 1000000n)).to.changeTokenBalances(
           perp,
           [deployer],
-          [toFixedPtAmt("-50")],
+          [toFixedPtAmt("-20")],
         );
       });
 
       it("should burn vault notes", async function () {
-        await expect(() => vault.redeem2(toFixedPtAmt("100"), toFixedPtAmt("75") * 1000000n)).to.changeTokenBalances(
+        await expect(() => vault.redeem2(toFixedPtAmt("100"), toFixedPtAmt("50") * 1000000n)).to.changeTokenBalances(
           vault,
           [deployer],
-          [toFixedPtAmt("-75") * 1000000n],
+          [toFixedPtAmt("-50") * 1000000n],
         );
       });
 
       it("should decrease tvl", async function () {
-        await vault.redeem2(toFixedPtAmt("100"), toFixedPtAmt("75") * 1000000n);
-        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("1925"));
-        expect(await perp.getTVL.staticCall()).to.eq(toFixedPtAmt("843.75"));
+        await vault.redeem2(toFixedPtAmt("100"), toFixedPtAmt("50") * 1000000n);
+        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("1950"));
+        expect(await perp.getTVL.staticCall()).to.eq(toFixedPtAmt("780"));
       });
 
       it("should have the updated composition", async function () {
-        await vault.redeem2(toFixedPtAmt("100"), toFixedPtAmt("75") * 1000000n);
+        await vault.redeem2(toFixedPtAmt("100"), toFixedPtAmt("50") * 1000000n);
         await checkPerpComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          [
-            toFixedPtAmt("93.75"),
-            toFixedPtAmt("187.5"),
-            toFixedPtAmt("187.5"),
-            toFixedPtAmt("187.5"),
-            toFixedPtAmt("187.5"),
-          ],
+          [toFixedPtAmt("0"), toFixedPtAmt("195"), toFixedPtAmt("195"), toFixedPtAmt("195"), toFixedPtAmt("195")],
         );
         await checkVaultComposition(
           vault,
           [collateralToken, currentTranchesIn[1]],
-          [toFixedPtAmt("1155"), toFixedPtAmt("770")],
+          [toFixedPtAmt("1170"), toFixedPtAmt("780")],
         );
       });
 
       it("should sync vault assets", async function () {
-        const tx = vault.redeem2(toFixedPtAmt("100"), toFixedPtAmt("75") * 1000000n);
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.target, toFixedPtAmt("1155"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[1].target, toFixedPtAmt("770"));
+        const tx = vault.redeem2(toFixedPtAmt("100"), toFixedPtAmt("50") * 1000000n);
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.target, toFixedPtAmt("1170"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[1].target, toFixedPtAmt("780"));
       });
     });
 
     describe("when redeeming more vault notes", function () {
-      beforeEach(async function () {
-        await feePolicy.mockMethod("computeDRNeutralSplit(uint256,uint256,uint256,uint256)", [
-          toFixedPtAmt("25"),
-          toFixedPtAmt("150") * 1000000n,
-        ]);
-      });
-
       it("should compute amounts", async function () {
-        const r = await vault.redeem2.staticCall(toFixedPtAmt("25"), toFixedPtAmt("250") * 1000000n);
+        const r = await vault.redeem2.staticCall(toFixedPtAmt("20"), toFixedPtAmt("100") * 1000000n);
 
-        expect(r[0]).to.eq(toFixedPtAmt("25"));
-        expect(r[1]).to.eq(toFixedPtAmt("150") * 1000000n);
+        expect(r[0]).to.eq(toFixedPtAmt("20"));
+        expect(r[1]).to.eq(toFixedPtAmt("50") * 1000000n);
 
         expect(r[2][0][0]).to.eq(collateralToken.target);
-        expect(r[2][0][1]).to.eq(toFixedPtAmt("90"));
+        expect(r[2][0][1]).to.eq(toFixedPtAmt("30"));
 
         expect(r[2][1][0]).to.eq(reserveTranches[3].target);
-        expect(r[2][1][1]).to.eq(toFixedPtAmt("6.25"));
+        expect(r[2][1][1]).to.eq(toFixedPtAmt("5"));
 
         expect(r[2][2][0]).to.eq(reserveTranches[1].target);
-        expect(r[2][2][1]).to.eq(toFixedPtAmt("6.25"));
+        expect(r[2][2][1]).to.eq(toFixedPtAmt("5"));
 
         expect(r[2][3][0]).to.eq(reserveTranches[2].target);
-        expect(r[2][3][1]).to.eq(toFixedPtAmt("6.25"));
+        expect(r[2][3][1]).to.eq(toFixedPtAmt("5"));
 
         expect(r[2][4][0]).to.eq(currentTranchesIn[0].target);
-        expect(r[2][4][1]).to.eq(toFixedPtAmt("6.25"));
+        expect(r[2][4][1]).to.eq(toFixedPtAmt("5"));
 
         expect(r[2][5][0]).to.eq(currentTranchesIn[1].target);
-        expect(r[2][5][1]).to.eq(toFixedPtAmt("60"));
+        expect(r[2][5][1]).to.eq(toFixedPtAmt("20"));
       });
 
       it("should burn perps", async function () {
-        await expect(() => vault.redeem2(toFixedPtAmt("25"), toFixedPtAmt("250") * 1000000n)).to.changeTokenBalances(
+        await expect(() => vault.redeem2(toFixedPtAmt("20"), toFixedPtAmt("100") * 1000000n)).to.changeTokenBalances(
           perp,
           [deployer],
-          [toFixedPtAmt("-25")],
+          [toFixedPtAmt("-20")],
         );
       });
 
       it("should burn vault notes", async function () {
-        await expect(() => vault.redeem2(toFixedPtAmt("25"), toFixedPtAmt("250") * 1000000n)).to.changeTokenBalances(
+        await expect(() => vault.redeem2(toFixedPtAmt("20"), toFixedPtAmt("100") * 1000000n)).to.changeTokenBalances(
           vault,
           [deployer],
-          [toFixedPtAmt("-150") * 1000000n],
+          [toFixedPtAmt("-50") * 1000000n],
         );
       });
 
       it("should decrease tvl", async function () {
-        await vault.redeem2(toFixedPtAmt("25"), toFixedPtAmt("250") * 1000000n);
-        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("1850"));
-        expect(await perp.getTVL.staticCall()).to.eq(toFixedPtAmt("775"));
+        await vault.redeem2(toFixedPtAmt("20"), toFixedPtAmt("100") * 1000000n);
+        expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("1950"));
+        expect(await perp.getTVL.staticCall()).to.eq(toFixedPtAmt("780"));
       });
 
       it("should have the updated composition", async function () {
-        await vault.redeem2(toFixedPtAmt("25"), toFixedPtAmt("250") * 1000000n);
+        await vault.redeem2(toFixedPtAmt("20"), toFixedPtAmt("100") * 1000000n);
         await checkPerpComposition(
           perp,
           [collateralToken, ...reserveTranches.slice(-3), currentTranchesIn[0]],
-          [
-            toFixedPtAmt("0"),
-            toFixedPtAmt("193.75"),
-            toFixedPtAmt("193.75"),
-            toFixedPtAmt("193.75"),
-            toFixedPtAmt("193.75"),
-          ],
+          [toFixedPtAmt("0"), toFixedPtAmt("195"), toFixedPtAmt("195"), toFixedPtAmt("195"), toFixedPtAmt("195")],
         );
         await checkVaultComposition(
           vault,
           [collateralToken, currentTranchesIn[1]],
-          [toFixedPtAmt("1110"), toFixedPtAmt("740")],
+          [toFixedPtAmt("1170"), toFixedPtAmt("780")],
         );
       });
 
       it("should sync vault assets", async function () {
-        const tx = vault.redeem2(toFixedPtAmt("25"), toFixedPtAmt("250") * 1000000n);
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.target, toFixedPtAmt("1110"));
-        await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[1].target, toFixedPtAmt("740"));
+        const tx = vault.redeem2(toFixedPtAmt("20"), toFixedPtAmt("100") * 1000000n);
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(collateralToken.target, toFixedPtAmt("1170"));
+        await expect(tx).to.emit(vault, "AssetSynced").withArgs(currentTranchesIn[1].target, toFixedPtAmt("780"));
       });
     });
   });

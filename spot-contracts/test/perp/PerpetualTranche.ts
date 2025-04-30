@@ -44,8 +44,7 @@ describe("PerpetualTranche", function () {
     await feePolicy.deploy();
     await feePolicy.mockMethod("decimals()", [8]);
     await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
-    await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
-    await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
+    await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -98,8 +97,8 @@ describe("PerpetualTranche", function () {
     });
 
     it("should set hyper parameters", async function () {
-      expect(await perp.minTrancheMaturitySec()).to.eq(1);
-      expect(await perp.maxTrancheMaturitySec()).to.eq(ethers.MaxUint256);
+      expect(await perp.minTrancheMaturitySec()).to.eq(86400 * 7);
+      expect(await perp.maxTrancheMaturitySec()).to.eq(86400 * 31);
       expect(await perp.maxSupply()).to.eq(ethers.MaxUint256);
       expect(await perp.maxDepositTrancheValuePerc()).to.eq(toPercFixedPtAmt("1"));
     });

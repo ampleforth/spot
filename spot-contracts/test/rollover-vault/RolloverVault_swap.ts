@@ -56,13 +56,7 @@ describe("RolloverVault", function () {
     await feePolicy.deploy();
     await feePolicy.mockMethod("decimals()", [8]);
     await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
-    await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
-    await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
-
-    await feePolicy.mockMethod("computeVaultMintFeePerc()", [0]);
-    await feePolicy.mockMethod("computeVaultBurnFeePerc()", [0]);
-    await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [0]);
-    await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [0]);
+    await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -289,9 +283,7 @@ describe("RolloverVault", function () {
 
     describe("when fee is not zero", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [
-          toPercFixedPtAmt("0.1"),
-        ]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.1")]);
       });
 
       it("should compute swap amount", async function () {
@@ -312,8 +304,7 @@ describe("RolloverVault", function () {
 
     describe("when absolute liquidity is too low", function () {
       beforeEach(async function () {
-        await vault.updateReservedUnderlyingBal(toFixedPtAmt("1000"));
-        await vault.updateReservedSubscriptionPerc(0);
+        await vault.updateLiquidityLimits(toFixedPtAmt("2500"), toFixedPtAmt("1000"), toPercFixedPtAmt("0"));
       });
       it("should be reverted", async function () {
         await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("50"))).to.be.revertedWithCustomError(
@@ -326,8 +317,7 @@ describe("RolloverVault", function () {
 
     describe("when percentage of liquidity is too low", function () {
       beforeEach(async function () {
-        await vault.updateReservedUnderlyingBal(0);
-        await vault.updateReservedSubscriptionPerc(toPercFixedPtAmt("0.25"));
+        await vault.updateLiquidityLimits(toFixedPtAmt("2500"), toFixedPtAmt("0"), toPercFixedPtAmt("0.25"));
       });
       it("should be reverted", async function () {
         await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("100"))).to.be.revertedWithCustomError(
@@ -340,7 +330,7 @@ describe("RolloverVault", function () {
 
     describe("when fee is 100%", function () {
       it("should be reverted", async function () {
-        await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [toPercFixedPtAmt("1")]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("1")]);
         await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("100"))).to.be.revertedWithCustomError(
           vault,
           "UnacceptableSwap",
@@ -350,9 +340,7 @@ describe("RolloverVault", function () {
 
     describe("when fee is greater than 100%", function () {
       it("should be reverted", async function () {
-        await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [
-          toPercFixedPtAmt("1.01"),
-        ]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("1.01")]);
         await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("100"))).to.be.reverted;
       });
     });
@@ -420,9 +408,7 @@ describe("RolloverVault", function () {
     describe("on successful swap with flash fees", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [
-          toPercFixedPtAmt("0.1"),
-        ]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.1")]);
         txFn = () => vault.swapUnderlyingForPerps(toFixedPtAmt("100"));
       });
 
@@ -483,9 +469,7 @@ describe("RolloverVault", function () {
     describe("on successful swap with imperfect rounding", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [
-          toPercFixedPtAmt("0.1"),
-        ]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.1")]);
         txFn = () => vault.swapUnderlyingForPerps(toFixedPtAmt("100.999999999999999999"));
       });
 
@@ -555,9 +539,7 @@ describe("RolloverVault", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
         await advancePerpQueueToBondMaturity(perp, await getDepositBond(perp));
-        await feePolicy.mockMethod("computeUnderlyingToPerpVaultSwapFeePerc(uint256,uint256)", [
-          toPercFixedPtAmt("0.1"),
-        ]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.1")]);
         txFn = () => vault.swapUnderlyingForPerps(toFixedPtAmt("100"));
       });
 
@@ -617,7 +599,7 @@ describe("RolloverVault", function () {
   describe("#swapPerpsForUnderlying", function () {
     describe("when fee is zero", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [0]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
       });
 
       describe("when perp price is 1", function () {
@@ -662,9 +644,7 @@ describe("RolloverVault", function () {
 
     describe("when fee is not zero", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [
-          toPercFixedPtAmt("0.15"),
-        ]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.15")]);
       });
 
       it("should compute swap amount", async function () {
@@ -685,7 +665,7 @@ describe("RolloverVault", function () {
 
     describe("when fee is 100%", function () {
       it("should be reverted", async function () {
-        await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [toPercFixedPtAmt("1")]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("1")]);
         await expect(vault.swapPerpsForUnderlying(toFixedPtAmt("100"))).to.be.revertedWithCustomError(
           vault,
           "UnacceptableSwap",
@@ -695,7 +675,7 @@ describe("RolloverVault", function () {
 
     describe("when fee is greater than 100%", function () {
       it("should be reverted", async function () {
-        await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [toPercFixedPtAmt("1")]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("1")]);
         await expect(vault.swapPerpsForUnderlying(toFixedPtAmt("100"))).to.be.reverted;
       });
     });
@@ -763,9 +743,7 @@ describe("RolloverVault", function () {
     describe("on successful swap with flash fees", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [
-          toPercFixedPtAmt("0.15"),
-        ]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.15")]);
         txFn = () => vault.swapPerpsForUnderlying(toFixedPtAmt("100"));
       });
 
@@ -826,9 +804,7 @@ describe("RolloverVault", function () {
     describe("on successful swap with imperfect rounding", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [
-          toPercFixedPtAmt("0.1"),
-        ]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.1")]);
         txFn = () => vault.swapPerpsForUnderlying(toFixedPtAmt("100.999999999999999999"));
       });
 
@@ -906,9 +882,7 @@ describe("RolloverVault", function () {
     describe("on successful swap with some the juniors in the vault", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [
-          toPercFixedPtAmt("0.15"),
-        ]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.15")]);
         remainingJuniorTranches[1].transfer(vault.target, toFixedPtAmt("100"));
         remainingJuniorTranches[2].transfer(vault.target, toFixedPtAmt("100"));
         remainingJuniorTranches[3].transfer(vault.target, toFixedPtAmt("100"));
@@ -972,9 +946,7 @@ describe("RolloverVault", function () {
     describe("on successful swap with all the juniors in the vault", function () {
       let txFn: Promise<Transaction>;
       beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [
-          toPercFixedPtAmt("0.15"),
-        ]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.15")]);
 
         remainingJuniorTranches[1].transfer(vault.target, toFixedPtAmt("800"));
         remainingJuniorTranches[2].transfer(vault.target, toFixedPtAmt("800"));
@@ -1045,9 +1017,7 @@ describe("RolloverVault", function () {
 
     describe("when vault reduces underlying liquidity", function () {
       it("should be reverted", async function () {
-        await feePolicy.mockMethod("computePerpToUnderlyingVaultSwapFeePerc(uint256,uint256)", [
-          toPercFixedPtAmt("0.15"),
-        ]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.15")]);
 
         const bond = await getDepositBond(perp);
         const tranches = await getTranches(bond);

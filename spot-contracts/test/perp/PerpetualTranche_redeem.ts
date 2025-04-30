@@ -53,8 +53,7 @@ describe("PerpetualTranche", function () {
     await feePolicy.deploy();
     await feePolicy.mockMethod("decimals()", [8]);
     await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
-    await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
-    await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
+    await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -583,7 +582,18 @@ describe("PerpetualTranche", function () {
         );
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("1000"));
 
-        await feePolicy.mockMethod("computePerpBurnFeePerc()", [toPercFixedPtAmt("0.1")]);
+        await feePolicy.clearMockMethod("computeDeviationRatio((uint256,uint256,uint256))");
+        await feePolicy.mockCall(
+          "computeDeviationRatio((uint256,uint256,uint256))",
+          [[toFixedPtAmt("1100"), toFixedPtAmt("0"), "500"]],
+          [toPercFixedPtAmt("1")],
+        );
+        await feePolicy.mockCall(
+          "computeDeviationRatio((uint256,uint256,uint256))",
+          [[toFixedPtAmt("550"), toFixedPtAmt("0"), "500"]],
+          [toPercFixedPtAmt("1")],
+        );
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.1")]);
         txFn = () => perp.redeem(toFixedPtAmt("500"));
       });
 
@@ -629,8 +639,8 @@ describe("PerpetualTranche", function () {
         await expect(txFn).to.changeTokenBalances(perp, [deployer], [toFixedPtAmt("-500")]);
       });
 
-      it("should transfer fees to the vault", async function () {
-        await expect(txFn).to.changeTokenBalances(perp, [await perp.vault()], [toFixedPtAmt("50")]);
+      it("should mint fees to perp", async function () {
+        await expect(txFn).to.changeTokenBalances(perp, [perp], [toFixedPtAmt("50")]);
       });
     });
 
@@ -655,7 +665,7 @@ describe("PerpetualTranche", function () {
           [toFixedPtAmt("100"), toFixedPtAmt("500"), toFixedPtAmt("500")],
         );
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("1000"));
-        await feePolicy.mockMethod("computePerpBurnFeePerc()", [toPercFixedPtAmt("1")]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("1")]);
 
         const MockVault = await ethers.getContractFactory("MockVault");
         mockVault = await MockVault.deploy();
