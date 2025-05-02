@@ -472,7 +472,7 @@ contract PerpetualTranche is
 
     /// @inheritdoc IPerpetualTranche
     /// @dev Only the whitelisted vault can call this function.
-    function claimFees(address to) external override onlyVault afterStateUpdate nonReentrant whenNotPaused {
+    function claimFees(address to) external override onlyVault nonReentrant whenNotPaused {
         IERC20Upgradeable perp_ = IERC20Upgradeable(address(this));
         uint256 collectedBal = perp_.balanceOf(address(perp_));
         if (collectedBal > 0) {
@@ -482,31 +482,31 @@ contract PerpetualTranche is
 
     /// @inheritdoc IPerpetualTranche
     /// @dev Only the whitelisted vault can call this function.
-    function payProtocolFee() external override onlyVault afterStateUpdate nonReentrant whenNotPaused {
-        uint256 protocolSharePerc = feePolicy.protocolSharePerc();
+    function payProtocolFee(
+        address collector,
+        uint256 protocolSharePerc
+    ) external override onlyVault nonReentrant whenNotPaused {
         if (protocolSharePerc > 0) {
-            _mint(feePolicy.protocolFeeCollector(), protocolSharePerc.mulDiv(totalSupply(), ONE - protocolSharePerc));
+            _mint(collector, protocolSharePerc.mulDiv(totalSupply(), ONE - protocolSharePerc));
         }
     }
 
     /// @inheritdoc IPerpetualTranche
     /// @dev Only the whitelisted vault can call this function.
     ///      The logic controlling the frequency and magnitude of debasement should be vetted.
-    ///      Pays a protocol fee on every rebalance.
     function rebalanceToVault(
-        int256 underlyingAmtToTransfer
+        uint256 underlyingAmtToTransfer
     ) external override onlyVault afterStateUpdate nonReentrant whenNotPaused {
-        // When value is flowing out of perp to the vault, we mint the vault perp tokens.
-        if (underlyingAmtToTransfer < 0) {
-            uint256 valueOut = underlyingAmtToTransfer.abs();
-            uint256 perpAmtToVault = valueOut.mulDiv(
+        // When value is flowing out of perp to the vault,
+        // we mint the vault perp tokens.
+        if (underlyingAmtToTransfer > 0) {
+            uint256 perpAmtToVault = underlyingAmtToTransfer.mulDiv(
                 totalSupply(),
-                _reserveValue() - valueOut,
+                _reserveValue() - underlyingAmtToTransfer,
                 MathUpgradeable.Rounding.Up
             );
             _mint(address(vault), perpAmtToVault);
         }
-        // otherwise, no value transfer here.
     }
 
     /// @inheritdoc IPerpetualTranche

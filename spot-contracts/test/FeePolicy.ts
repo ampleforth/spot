@@ -139,16 +139,14 @@ describe("FeePolicy", function () {
           "InvalidFees",
         );
       });
-    });
 
-    describe("when parameters are invalid (InvalidPerc)", function () {
       it("fee percentage > 1 (100 %)", async function () {
         await expect(
           feePolicy.connect(deployer).updateFees(toLine("0.0", "1.1", "1.0", "0.1"), VALID_UP),
-        ).to.be.revertedWithCustomError(feePolicy, "InvalidPerc");
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidFees");
         await expect(
           feePolicy.connect(deployer).updateFees(VALID_DOWN, toLine("1.0", "0", "2.0", "1.1")),
-        ).to.be.revertedWithCustomError(feePolicy, "InvalidPerc");
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidFees");
       });
     });
 
@@ -183,6 +181,21 @@ describe("FeePolicy", function () {
             .connect(otherUser)
             .updateRebalanceConfig(DEBASE_LAG, ENRICH_LAG, DEBASE_RNG, ENRICH_RNG, REBAL_FREQ),
         ).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+    });
+
+    describe("when range is invalid", function () {
+      it("should revert", async function () {
+        await expect(
+          feePolicy
+            .connect(deployer)
+            .updateRebalanceConfig(DEBASE_LAG, ENRICH_LAG, toRange("0.06", "0.05"), ENRICH_RNG, REBAL_FREQ),
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidRange");
+        await expect(
+          feePolicy
+            .connect(deployer)
+            .updateRebalanceConfig(DEBASE_LAG, ENRICH_LAG, DEBASE_RNG, toRange("0.06", "0.05"), REBAL_FREQ),
+        ).to.be.revertedWithCustomError(feePolicy, "InvalidRange");
       });
     });
 

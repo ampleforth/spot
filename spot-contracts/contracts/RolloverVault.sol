@@ -870,32 +870,29 @@ contract RolloverVault is
         SubscriptionParams memory s = _querySubscriptionState(perp_);
         int256 underlyingAmtIntoPerp = feePolicy.computeRebalanceAmount(s);
 
+        // When value is flowing into perp from the vault.
         // We rebalance from perp to the vault.
-        perp_.rebalanceToVault(underlyingAmtIntoPerp);
-        _meldPerps(perp_); // Meld residual perps, if any.
-
+        if (underlyingAmtIntoPerp < 0) {
+            perp_.rebalanceToVault(underlyingAmtIntoPerp.abs());
+            _meldPerps(perp_); // Meld residual perps, if any.
+        }
+        // When value is flowing from the vault to perp.
         // We rebalance from the vault to perp.
-        {
-            // When value is flowing into perp from the vault.
-            if (underlyingAmtIntoPerp > 0) {
-                // We transfer value by minting the perp tokens (after making required deposit)
-                // and then simply burning the newly minted perp tokens.
-                uint256 perpAmtToTransfer = (underlyingAmtIntoPerp.toUint256()).mulDiv(perp_.totalSupply(), s.perpTVL);
-                _trancheAndMintPerps(perp_, underlying_, s.perpTVL, s.seniorTR, perpAmtToTransfer);
-                IERC20Burnable(address(perp_)).burn(perpAmtToTransfer);
-            }
-            // otherwise, no value transfer here.
+        else if (underlyingAmtIntoPerp > 0) {
+            // We transfer value by minting the perp tokens (after making required deposit)
+            // and then simply burning the newly minted perp tokens.
+            uint256 perpAmtToTransfer = (underlyingAmtIntoPerp.toUint256()).mulDiv(perp_.totalSupply(), s.perpTVL);
+            _trancheAndMintPerps(perp_, underlying_, s.perpTVL, s.seniorTR, perpAmtToTransfer);
+            IERC20Burnable(address(perp_)).burn(perpAmtToTransfer);
         }
 
         // We pay the protocol fee on every rebalance.
-        perp.payProtocolFee();
         {
             uint256 protocolSharePerc = feePolicy.protocolSharePerc();
             if (protocolSharePerc > 0) {
-                _mint(
-                    feePolicy.protocolFeeCollector(),
-                    protocolSharePerc.mulDiv(totalSupply(), ONE - protocolSharePerc)
-                );
+                address collector = feePolicy.protocolFeeCollector();
+                perp.payProtocolFee(collector, protocolSharePerc);
+                _mint(collector, protocolSharePerc.mulDiv(totalSupply(), ONE - protocolSharePerc));
             }
         }
 

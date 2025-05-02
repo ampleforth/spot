@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
 import { SubscriptionParams, Range, Line } from "./_interfaces/CommonTypes.sol";
-import { InvalidPerc, InvalidFees } from "./_interfaces/ProtocolErrors.sol";
+import { InvalidPerc, InvalidRange, InvalidFees } from "./_interfaces/ProtocolErrors.sol";
 
 import { LineHelpers } from "./_utils/LineHelpers.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
@@ -170,13 +170,15 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         // Expect fees to be non-decreasing when dr moves away from 1.0
         validFees = ((feeFnDRDown_.y1 >= feeFnDRDown_.y2) && (feeFnDRUp_.y1 <= feeFnDRUp_.y2)) && validFees;
 
+        // Expect fee percentages to be valid
+        validFees =
+            (feeFnDRDown_.y1 <= ONE) &&
+            (feeFnDRDown_.y2 <= ONE) &&
+            (feeFnDRUp_.y1 <= ONE) &&
+            ((feeFnDRUp_.y2 <= ONE) && validFees);
+
         if (!validFees) {
             revert InvalidFees();
-        }
-
-        // Expect fee percentages to be valid
-        if ((feeFnDRDown_.y1 > ONE) || (feeFnDRDown_.y2 > ONE) || (feeFnDRUp_.y1 > ONE) || (feeFnDRUp_.y2 > ONE)) {
-            revert InvalidPerc();
         }
 
         feeFnDRDown = feeFnDRDown_;
@@ -196,6 +198,13 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         Range memory perpEnrichmentPercLimits_,
         uint256 rebalanceFreqSec_
     ) external onlyOwner {
+        if (
+            perpDebasementPercLimits_.lower > perpDebasementPercLimits_.upper ||
+            perpEnrichmentPercLimits_.lower > perpEnrichmentPercLimits_.upper
+        ) {
+            revert InvalidRange();
+        }
+
         perpDebasementLag = perpDebasementLag_;
         perpEnrichmentLag = perpEnrichmentLag_;
         perpDebasementPercLimits = perpDebasementPercLimits_;
@@ -226,7 +235,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
                 LineHelpers
                     .computePiecewiseAvgY(
                         fee,
-                        Line({ x1: ONE, y1: fee.y2, x2: fee.x2, y2: fee.y2 }),
+                        Line({ x1: fee.x2, y1: fee.y2, x2: ONE, y2: fee.y2 }),
                         Range({ lower: drPost, upper: drPre }),
                         fee.x2
                     )

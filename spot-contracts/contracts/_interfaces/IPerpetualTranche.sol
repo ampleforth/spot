@@ -53,11 +53,13 @@ interface IPerpetualTranche is IERC20Upgradeable {
     function claimFees(address to) external;
 
     /// @notice Pays the protocol fee collector a share of the TVL.
-    function payProtocolFee() external;
+    /// @param to The recipient address.
+    /// @param protocolSharePerc The share of tvl to be paid to the protocol as fees.
+    function payProtocolFee(address to, uint256 protocolSharePerc) external;
 
     /// @notice Debases the value of perp tokens, by transferring value to the vault.
     /// @param underlyingAmtToTransfer The value in underlying tokens to be transferred to the vault.
-    function rebalanceToVault(int256 underlyingAmtToTransfer) external;
+    function rebalanceToVault(uint256 underlyingAmtToTransfer) external;
 
     /// @notice External contract that stores a predefined bond config and frequency,
     ///         and issues new bonds when poked.
