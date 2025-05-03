@@ -27,7 +27,7 @@ interface IFeePolicy {
     /// @return underlyingAmtIntoPerp The value in underlying tokens, that need to flow from the vault into perp.
     function computeRebalanceAmount(SubscriptionParams memory s) external view returns (int256 underlyingAmtIntoPerp);
 
-    /// @return The share of the system tvl paid to the protocol owner as fees.
+    /// @return The share of the system tvl paid to the protocol owner as fees per rebalance.
     function protocolSharePerc() external view returns (uint256);
 
     /// @return Frequency of the periodic rebalance operation.

@@ -887,13 +887,11 @@ contract RolloverVault is
         }
 
         // We pay the protocol fee on every rebalance.
-        {
-            uint256 protocolSharePerc = feePolicy.protocolSharePerc();
-            if (protocolSharePerc > 0) {
-                address collector = feePolicy.protocolFeeCollector();
-                perp.payProtocolFee(collector, protocolSharePerc);
-                _mint(collector, protocolSharePerc.mulDiv(totalSupply(), ONE - protocolSharePerc));
-            }
+        uint256 protocolSharePerc = feePolicy.protocolSharePerc();
+        if (protocolSharePerc > 0) {
+            address collector = feePolicy.protocolFeeCollector();
+            perp.payProtocolFee(collector, protocolSharePerc);
+            _mint(collector, protocolSharePerc.mulDiv(totalSupply(), ONE - protocolSharePerc));
         }
 
         // Sync token balances.
