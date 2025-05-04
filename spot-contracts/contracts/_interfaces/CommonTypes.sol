@@ -10,14 +10,12 @@ struct TokenAmount {
     uint256 amount;
 }
 
-/// @notice The system subscription parameters.
-struct SubscriptionParams {
+/// @notice The system state parameters.
+struct SystemState {
     /// @notice The current TVL of perp denominated in the underlying.
     uint256 perpTVL;
     /// @notice The current TVL of the vault denominated in the underlying.
     uint256 vaultTVL;
-    /// @notice The tranche ratio of seniors accepted by perp.
-    uint256 seniorTR;
 }
 
 struct RolloverData {

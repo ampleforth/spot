@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import { SubscriptionParams } from "./CommonTypes.sol";
+import { SystemState } from "./CommonTypes.sol";
 
 interface IFeePolicy {
     /// @return The percentage of the mint perp tokens to be charged as fees,
@@ -14,18 +14,16 @@ interface IFeePolicy {
 
     /// @param s The subscription parameters of both the perp and vault systems.
     /// @return The deviation ratio given the system subscription parameters.
-    function computeDeviationRatio(SubscriptionParams memory s) external view returns (uint256);
+    function computeDeviationRatio(SystemState memory s) external view returns (uint256);
 
-    /// @param seniorTR The senior tranche ratio of the deposit bond.
-    /// @return The "targetSR" adjusted senior tranche ratio,
-    ///         as a fixed-point number with {DECIMALS} decimal places.
-    function computeDRNormSeniorTR(uint256 seniorTR) external view returns (uint256);
+    /// @return The target system ratio as a fixed-point number with {DECIMALS} decimal places.
+    function targetSystemRatio() external view returns (uint256);
 
     /// @notice Computes magnitude and direction of value flow between perp and the rollover vault
     ///         expressed in underlying tokens.
     /// @param s The subscription parameters of both the perp and vault systems.
     /// @return underlyingAmtIntoPerp The value in underlying tokens, that need to flow from the vault into perp.
-    function computeRebalanceAmount(SubscriptionParams memory s) external view returns (int256 underlyingAmtIntoPerp);
+    function computeRebalanceAmount(SystemState memory s) external view returns (int256 underlyingAmtIntoPerp);
 
     /// @return The share of the system tvl paid to the protocol owner as fees.
     function protocolSharePerc() external view returns (uint256);

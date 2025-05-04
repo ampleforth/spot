@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import { IVault } from "./IVault.sol";
-import { SubscriptionParams, TokenAmount } from "./CommonTypes.sol";
+import { SystemState, TokenAmount } from "./CommonTypes.sol";
 
 interface IRolloverVault is IVault {
     /// @notice Gradually transfers value between the perp and vault, to bring the system back into balance.
@@ -43,16 +43,14 @@ interface IRolloverVault is IVault {
     /// @return s The pre-swap perp and vault subscription state.
     function computeUnderlyingToPerpSwapAmt(
         uint256 underlyingAmtIn
-    ) external returns (uint256, uint256, SubscriptionParams memory);
+    ) external returns (uint256, uint256, SystemState memory);
 
     /// @notice Computes the amount of underlying tokens that are returned when user swaps a given number of perp tokens.
     /// @param perpAmtIn The number of perp tokens the user swaps in.
     /// @return underlyingAmtOut The number of underlying tokens returned to the user.
     /// @return perpFeeAmtToBurn The amount of perp tokens to be paid to the perp contract as burn fees.
     /// @return s The pre-swap perp and vault subscription state.
-    function computePerpToUnderlyingSwapAmt(
-        uint256 perpAmtIn
-    ) external returns (uint256, uint256, SubscriptionParams memory);
+    function computePerpToUnderlyingSwapAmt(uint256 perpAmtIn) external returns (uint256, uint256, SystemState memory);
 
     /// @return The system's current deviation ratio.
     function deviationRatio() external returns (uint256);
