@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeePolicy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
-import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/CommonTypes.sol";
+import { TokenAmount, RolloverData, SystemState } from "./_interfaces/CommonTypes.sol";
 import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, UnacceptableParams, UnacceptableRollover, ExceededMaxSupply, ExceededMaxMintPerTranche, ReserveCountOverLimit, InvalidPerc } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -642,7 +642,7 @@ contract PerpetualTranche is
 
     /// @inheritdoc IPerpetualTranche
     function deviationRatio() external override afterStateUpdate nonReentrant returns (uint256) {
-        return feePolicy.computeDeviationRatio(_querySubscriptionState());
+        return feePolicy.computeDeviationRatio(_querySystemState());
     }
 
     //--------------------------------------------------------------------------
@@ -785,14 +785,12 @@ contract PerpetualTranche is
 
         //-----------------------------------------------------------------------------
         // We charge no mint fee when interacting with other callers within the system.
-        SubscriptionParams memory s = _querySubscriptionState();
+        SystemState memory s = _querySystemState();
         uint256 feePerc = _isProtocolCaller()
             ? 0
             : feePolicy.computeFeePerc(
                 feePolicy.computeDeviationRatio(s),
-                feePolicy.computeDeviationRatio(
-                    SubscriptionParams({ perpTVL: s.perpTVL + valueIn, vaultTVL: s.vaultTVL, seniorTR: s.seniorTR })
-                )
+                feePolicy.computeDeviationRatio(SystemState({ perpTVL: s.perpTVL + valueIn, vaultTVL: s.vaultTVL }))
             );
         //-----------------------------------------------------------------------------
 
@@ -818,17 +816,13 @@ contract PerpetualTranche is
 
         //-----------------------------------------------------------------------------
         // We charge no burn fee when interacting with other parts of the system.
-        SubscriptionParams memory s = _querySubscriptionState();
+        SystemState memory s = _querySystemState();
         uint256 feePerc = _isProtocolCaller()
             ? 0
             : feePolicy.computeFeePerc(
                 feePolicy.computeDeviationRatio(s),
                 feePolicy.computeDeviationRatio(
-                    SubscriptionParams({
-                        perpTVL: s.perpTVL.mulDiv(perpSupply - perpAmt, perpSupply),
-                        vaultTVL: s.vaultTVL,
-                        seniorTR: s.seniorTR
-                    })
+                    SystemState({ perpTVL: s.perpTVL.mulDiv(perpSupply - perpAmt, perpSupply), vaultTVL: s.vaultTVL })
                 )
             );
         //-----------------------------------------------------------------------------
@@ -1051,14 +1045,9 @@ contract PerpetualTranche is
         return (trancheSupply > 0) ? trancheClaim.mulDiv(trancheAmt, trancheSupply, rounding) : trancheAmt;
     }
 
-    /// @dev Queries the current subscription state of the perp and vault systems.
-    function _querySubscriptionState() private view returns (SubscriptionParams memory) {
-        return
-            SubscriptionParams({
-                perpTVL: _reserveValue(),
-                vaultTVL: vault.getTVL(),
-                seniorTR: _depositBond.getSeniorTrancheRatio()
-            });
+    /// @dev Queries the current system state of the perp and vault systems.
+    function _querySystemState() private view returns (SystemState memory) {
+        return SystemState({ perpTVL: _reserveValue(), vaultTVL: vault.getTVL() });
     }
 
     /// @dev Checks if the given token is the underlying collateral token.
