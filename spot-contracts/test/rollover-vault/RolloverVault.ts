@@ -39,7 +39,7 @@ describe("RolloverVault", function () {
     feePolicy = new DMock(await ethers.getContractFactory("FeePolicy"));
     await feePolicy.deploy();
     await feePolicy.mockMethod("decimals()", [8]);
-    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
+    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256))", [toPercFixedPtAmt("1")]);
     await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
 
     const TrancheManager = await ethers.getContractFactory("TrancheManager");
@@ -84,7 +84,7 @@ describe("RolloverVault", function () {
     it("should set initial param values", async function () {
       expect(await vault.minDeploymentAmt()).to.eq("0");
       expect(await vault.reservedUnderlyingBal()).to.eq("0");
-      expect(await vault.reservedSubscriptionPerc()).to.eq("0");
+      expect(await vault.reservedUnderlyingPerc()).to.eq("0");
       expect(await vault.lastRebalanceTimestampSec()).not.to.eq("0");
     });
 
@@ -375,7 +375,7 @@ describe("RolloverVault", function () {
       it("should update the liquidity parameters", async function () {
         expect(await vault.minDeploymentAmt()).to.eq(toFixedPtAmt("1000"));
         expect(await vault.reservedUnderlyingBal()).to.eq(toFixedPtAmt("100000"));
-        expect(await vault.reservedSubscriptionPerc()).to.eq(toPercFixedPtAmt("0.25"));
+        expect(await vault.reservedUnderlyingPerc()).to.eq(toPercFixedPtAmt("0.25"));
       });
     });
   });

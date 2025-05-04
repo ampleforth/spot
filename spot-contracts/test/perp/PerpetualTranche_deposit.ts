@@ -51,7 +51,7 @@ describe("PerpetualTranche", function () {
     feePolicy = new DMock(await ethers.getContractFactory("FeePolicy"));
     await feePolicy.deploy();
     await feePolicy.mockMethod("decimals()", [8]);
-    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
+    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256))", [toPercFixedPtAmt("1")]);
     await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
@@ -482,15 +482,15 @@ describe("PerpetualTranche", function () {
 
     describe("when fee is set", function () {
       beforeEach(async function () {
-        await feePolicy.clearMockMethod("computeDeviationRatio((uint256,uint256,uint256))");
+        await feePolicy.clearMockMethod("computeDeviationRatio((uint256,uint256))");
         await feePolicy.mockCall(
-          "computeDeviationRatio((uint256,uint256,uint256))",
-          [[toFixedPtAmt("0"), toFixedPtAmt("0"), "500"]],
+          "computeDeviationRatio((uint256,uint256))",
+          [[toFixedPtAmt("0"), toFixedPtAmt("0")]],
           [toPercFixedPtAmt("1")],
         );
         await feePolicy.mockCall(
-          "computeDeviationRatio((uint256,uint256,uint256))",
-          [[toFixedPtAmt("500"), toFixedPtAmt("0"), "500"]],
+          "computeDeviationRatio((uint256,uint256))",
+          [[toFixedPtAmt("500"), toFixedPtAmt("0")]],
           [toPercFixedPtAmt("1")],
         );
         await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.01")]);

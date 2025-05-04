@@ -52,7 +52,7 @@ describe("RolloverVault", function () {
     feePolicy = new DMock(await ethers.getContractFactory("FeePolicy"));
     await feePolicy.deploy();
     await feePolicy.mockMethod("decimals()", [8]);
-    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
+    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256))", [toPercFixedPtAmt("1")]);
     await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
@@ -116,7 +116,7 @@ describe("RolloverVault", function () {
     await TimeHelpers.increaseTime(86401);
 
     await feePolicy.mockMethod("protocolSharePerc()", [0n]);
-    await feePolicy.mockMethod("computeRebalanceAmount((uint256,uint256,uint256))", [0n]);
+    await feePolicy.mockMethod("computeRebalanceAmount((uint256,uint256))", [0n]);
     await feePolicy.mockMethod("protocolFeeCollector()", [await deployer.getAddress()]);
     await feePolicy.mockMethod("rebalanceFreqSec()", [86400]);
   });
@@ -151,7 +151,7 @@ describe("RolloverVault", function () {
 
     describe("no-change", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeRebalanceAmount((uint256,uint256,uint256))", [toFixedPtAmt("0")]);
+        await feePolicy.mockMethod("computeRebalanceAmount((uint256,uint256))", [toFixedPtAmt("0")]);
       });
       it("should transfer value to the vault (by minting and melding perps)", async function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("800"));
@@ -168,7 +168,7 @@ describe("RolloverVault", function () {
     describe("no-change with protocol fee", function () {
       beforeEach(async function () {
         await feePolicy.mockMethod("protocolSharePerc()", [toPercFixedPtAmt("0.01")]);
-        await feePolicy.mockMethod("computeRebalanceAmount((uint256,uint256,uint256))", [toFixedPtAmt("0")]);
+        await feePolicy.mockMethod("computeRebalanceAmount((uint256,uint256))", [toFixedPtAmt("0")]);
       });
       it("should transfer value to the vault (by minting and melding perps)", async function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("800"));
@@ -198,7 +198,7 @@ describe("RolloverVault", function () {
 
     describe("perp debasement", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeRebalanceAmount((uint256,uint256,uint256))", [toFixedPtAmt("-10")]);
+        await feePolicy.mockMethod("computeRebalanceAmount((uint256,uint256))", [toFixedPtAmt("-10")]);
       });
       it("should transfer value to the vault (by minting and melding perps)", async function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("800"));
@@ -223,7 +223,7 @@ describe("RolloverVault", function () {
     describe("perp debasement with protocol fee", function () {
       beforeEach(async function () {
         await feePolicy.mockMethod("protocolSharePerc()", [toPercFixedPtAmt("0.01")]);
-        await feePolicy.mockMethod("computeRebalanceAmount((uint256,uint256,uint256))", [toFixedPtAmt("-10")]);
+        await feePolicy.mockMethod("computeRebalanceAmount((uint256,uint256))", [toFixedPtAmt("-10")]);
       });
       it("should transfer value to the vault (by minting and melding perps)", async function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("800"));
@@ -262,7 +262,7 @@ describe("RolloverVault", function () {
     describe("perp enrichment", function () {
       let depositBond: Contract, depositTranches: Contract[];
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeRebalanceAmount((uint256,uint256,uint256))", [toFixedPtAmt("25")]);
+        await feePolicy.mockMethod("computeRebalanceAmount((uint256,uint256))", [toFixedPtAmt("25")]);
         await perp.updateState();
         depositBond = await getDepositBond(perp);
         depositTranches = await getTranches(depositBond);
@@ -310,7 +310,7 @@ describe("RolloverVault", function () {
       let depositBond: Contract, depositTranches: Contract[];
       beforeEach(async function () {
         await feePolicy.mockMethod("protocolSharePerc()", [toPercFixedPtAmt("0.01")]);
-        await feePolicy.mockMethod("computeRebalanceAmount((uint256,uint256,uint256))", [toFixedPtAmt("25")]);
+        await feePolicy.mockMethod("computeRebalanceAmount((uint256,uint256))", [toFixedPtAmt("25")]);
         await perp.updateState();
         depositBond = await getDepositBond(perp);
         depositTranches = await getTranches(depositBond);

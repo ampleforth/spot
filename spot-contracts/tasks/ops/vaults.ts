@@ -80,11 +80,7 @@ task("ops:vault:info")
     const subscriptionRatio = (vaultTVL * seniorTR * feeOne) / perpTVL / juniorTR;
     const targetSubscriptionRatio = await feePolicy.targetSubscriptionRatio();
     const expectedVaultTVL = (targetSubscriptionRatio * perpTVL * juniorTR) / seniorTR / feeOne;
-    const deviationRatio = await feePolicy["computeDeviationRatio((uint256,uint256,uint256))"]([
-      perpTVL,
-      vaultTVL,
-      seniorTR,
-    ]);
+    const deviationRatio = await feePolicy["computeDeviationRatio((uint256,uint256))"]([perpTVL, vaultTVL, seniorTR]);
     console.log("perpTVL:", hre.ethers.formatUnits(perpTVL, underlyingDecimals));
     console.log("vaultTVL:", hre.ethers.formatUnits(vaultTVL, underlyingDecimals));
     console.log("expectedVaultTVL:", hre.ethers.formatUnits(expectedVaultTVL, underlyingDecimals));
