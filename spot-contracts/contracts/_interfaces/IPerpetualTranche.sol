@@ -70,8 +70,8 @@ interface IPerpetualTranche is IERC20Upgradeable {
     /// @return The address of the keeper.
     function keeper() external view returns (address);
 
-    /// @notice The address of the underlying rebasing ERC-20 collateral token backing the tranches.
-    /// @return Address of the underlying collateral token.
+    /// @notice The address of the underlying rebasing ERC-20 underlying token backing the tranches.
+    /// @return Address of the underlying token.
     function underlying() external view returns (IERC20Upgradeable);
 
     /// @return Address of perp's rollover vault.

@@ -30,7 +30,7 @@ import { TrancheManager } from "./_utils/TrancheManager.sol";
  *  @notice A vault which performs rollovers on PerpetualTranche (or perp). After rolling over,
  *          it holds the junior tranches to maturity, effectively becoming a perpetual junior tranche.
  *
- *          The vault takes in AMPL or any other rebasing collateral as the "underlying" asset.
+ *          The vault takes in AMPL or any other rebasing token as the "underlying" asset.
  *          It also generates a yield (from entry/exit fees, flash swap liquidity, and rebalancing incentives).
  *
  *          Vault strategy:
@@ -212,7 +212,7 @@ contract RolloverVault is
         __Pausable_init();
         __ReentrancyGuard_init();
 
-        // setup underlying collateral
+        // setup underlying token
         underlying = perp_.underlying();
 
         // set reference to perp

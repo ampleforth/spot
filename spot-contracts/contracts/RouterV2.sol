@@ -36,40 +36,40 @@ contract RouterV2 {
     /// @notice Calculates the amount of tranche tokens minted after depositing into the deposit bond.
     /// @dev Used by off-chain services to preview a tranche operation.
     /// @param perp Address of the perp contract.
-    /// @param collateralAmount The amount of collateral the user wants to tranche.
+    /// @param underlyingAmt The amount of underlying tokens the user wants to tranche.
     /// @return bond The address of the current deposit bond.
     /// @return trancheAmts The tranche tokens and amounts minted.
     function previewTranche(
         IPerpetualTranche perp,
-        uint256 collateralAmount
+        uint256 underlyingAmt
     ) external returns (IBondController, TokenAmount[] memory) {
         IBondController bond = perp.getDepositBond();
-        return (bond, bond.previewDeposit(collateralAmount));
+        return (bond, bond.previewDeposit(underlyingAmt));
     }
 
-    /// @notice Tranches the collateral using the current deposit bond and then deposits individual tranches
+    /// @notice Tranches the underlying tokens using the current deposit bond and then deposits individual tranches
     ///         to mint perp tokens. It transfers the perp tokens back to the
     ///         transaction sender along with any unused tranches and fees.
     /// @param perp Address of the perp contract.
     /// @param bond Address of the deposit bond.
-    /// @param collateralAmount The amount of collateral the user wants to tranche.
-    function trancheAndDeposit(IPerpetualTranche perp, IBondController bond, uint256 collateralAmount) external {
+    /// @param underlyingAmt The amount of underlying tokens the user wants to tranche.
+    function trancheAndDeposit(IPerpetualTranche perp, IBondController bond, uint256 underlyingAmt) external {
         // If deposit bond does not exist, we first issue it.
         if (address(bond).code.length <= 0) {
             perp.updateState();
         }
 
         BondTranches memory bt = bond.getTranches();
-        IERC20Upgradeable collateralToken = IERC20Upgradeable(bond.collateralToken());
+        IERC20Upgradeable underlying = IERC20Upgradeable(bond.collateralToken());
 
-        // transfers collateral & fees to router
-        collateralToken.safeTransferFrom(msg.sender, address(this), collateralAmount);
+        // transfers underlying tokens & fees to router
+        underlying.safeTransferFrom(msg.sender, address(this), underlyingAmt);
 
-        // approves collateral to be tranched
-        collateralToken.checkAndApproveMax(address(bond), collateralAmount);
+        // approves underlying tokens to be tranched
+        underlying.checkAndApproveMax(address(bond), underlyingAmt);
 
-        // tranches collateral
-        bond.deposit(collateralAmount);
+        // tranches underlying tokens
+        bond.deposit(underlyingAmt);
 
         // uses senior tranches to mint perps
         uint256 trancheAmt = bt.tranches[0].balanceOf(address(this));
@@ -79,10 +79,10 @@ contract RouterV2 {
         // transfers remaining junior tranches back
         bt.tranches[1].safeTransfer(msg.sender, bt.tranches[1].balanceOf(address(this)));
 
-        // transfers any remaining collateral tokens back
-        uint256 collateralBalance = collateralToken.balanceOf(address(this));
-        if (collateralBalance > 0) {
-            collateralToken.safeTransfer(msg.sender, collateralBalance);
+        // transfers any remaining underlying tokens back
+        uint256 underlyingBal = underlying.balanceOf(address(this));
+        if (underlyingBal > 0) {
+            underlying.safeTransfer(msg.sender, underlyingBal);
         }
 
         // transfers perp tokens back

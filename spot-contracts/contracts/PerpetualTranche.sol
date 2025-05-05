@@ -31,11 +31,11 @@ import { BondHelpers } from "./_utils/BondHelpers.sol";
  *          Users can ONLY mint perps for seniors belonging to the active "deposit" bond.
  *          Users can burn perps, and redeem a proportional share of tokens held in the reserve.
  *
- *          Once seniors held in the reserve mature, the underlying collateral is extracted
+ *          Once seniors held in the reserve mature, the underlying token is extracted
  *          into the reserve. At any time, the reserve holds at most 2 classes of tokens
- *          i.e) the seniors and the underlying collateral.
+ *          i.e) the seniors and the underlying token.
  *
- *          The rollover vault can "rollover" tranches approaching maturity or the underlying collateral,
+ *          The rollover vault can "rollover" tranches approaching maturity or the underlying token,
  *          for newer seniors (which expire further out in the future) that belong to the updated "depositBond".
  *
  *
@@ -101,7 +101,7 @@ contract PerpetualTranche is
     // When `ai` tokens of type `ti` are deposited into the system:
     // Mint: mintAmt (perps) => (ai * price(ti) / RV) * supply(perps)
     //
-    // This ensures that if 10% of the collateral value is deposited,
+    // This ensures that if 10% of the reserve value is deposited,
     // the minter receives 10% of the perp token supply.
     // This removes any race conditions for minters based on reserve state.
     //
@@ -169,7 +169,7 @@ contract PerpetualTranche is
     uint256 public maxTrancheMaturitySec;
 
     /// @notice DEPRECATED.
-    /// @dev This used to control the percentage of the reserve value to be held as the underlying collateral.
+    /// @dev This used to control the percentage of the reserve value to be held as the underlying token.
     ///      With V2 perp cannot control this anymore, the rollover mechanics are dictated
     ///      by the amount of capital in the vault system.
     /// @custom:oz-upgrades-renamed-from matureValueTargetPerc
@@ -203,7 +203,7 @@ contract PerpetualTranche is
     EnumerableSetUpgradeable.AddressSet private _reserves;
 
     /// @notice DEPRECATED.
-    /// @dev The used to store the amount of all the mature tranches extracted and held as the collateral token,
+    /// @dev The used to store the amount of all the mature tranches extracted and held as the underlying token,
     ///      i.e) the reserve's "virtual" mature tranche balance. The system no longer tracks this.
     // solhint-disable-next-line var-name-mixedcase
     uint256 private _matureTrancheBalance_DEPRECATED;
@@ -252,14 +252,14 @@ contract PerpetualTranche is
     /// @notice Contract state initialization.
     /// @param name ERC-20 Name of the Perp token.
     /// @param symbol ERC-20 Symbol of the Perp token.
-    /// @param collateral_ Address of the underlying collateral token.
+    /// @param underlying_ Address of the underlying token.
     /// @param bondIssuer_ Address of the bond issuer contract.
     /// @param feePolicy_ Address of the fee policy contract.
     /// @dev Call `updateVault` with reference to the rollover vault after initialization.
     function init(
         string memory name,
         string memory symbol,
-        IERC20Upgradeable collateral_,
+        IERC20Upgradeable underlying_,
         IBondIssuer bondIssuer_,
         IFeePolicy feePolicy_
     ) external initializer {
@@ -268,12 +268,12 @@ contract PerpetualTranche is
         __Ownable_init();
         __Pausable_init();
         __ReentrancyGuard_init();
-        _decimals = IERC20MetadataUpgradeable(address(collateral_)).decimals();
+        _decimals = IERC20MetadataUpgradeable(address(underlying_)).decimals();
 
-        // NOTE: `_reserveAt(0)` always points to the underling collateral token
+        // NOTE: `_reserveAt(0)` always points to the underling underlying token
         // and is to be never updated.
-        _reserves.add(address(collateral_));
-        _syncReserve(collateral_);
+        _reserves.add(address(underlying_));
+        _syncReserve(underlying_);
 
         updateKeeper(owner());
         updateFeePolicy(feePolicy_);
@@ -576,7 +576,7 @@ contract PerpetualTranche is
         // We count the number of tokens up for rollover.
         uint8 numTokensUpForRollover = 0;
 
-        // If any underlying collateral exists it can be rolled over.
+        // If any underlying token exists it can be rolled over.
         IERC20Upgradeable underlying_ = _reserveAt(0);
         if (underlying_.balanceOf(address(this)) > 0) {
             activeRolloverTokens[0] = underlying_;
@@ -605,7 +605,7 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    /// @dev Returns a fixed point with the same decimals as the underlying collateral.
+    /// @dev Returns a fixed point with the same decimals as the underlying token.
     function getTVL() external override afterStateUpdate returns (uint256) {
         return _reserveValue();
     }
@@ -670,12 +670,12 @@ contract PerpetualTranche is
         }
 
         // Lazily checks if every reserve tranche has reached maturity.
-        // If so redeems the tranche balance for the underlying collateral and
+        // If so redeems the tranche balance for the underlying token and
         // removes the tranche from the reserve set.
         // NOTE: We traverse the reserve set in the reverse order
         //       as deletions involve swapping the deleted element to the
         //       end of the set and removing the last element.
-        //       We also skip the `reserveAt(0)`, i.e) the underlying collateral,
+        //       We also skip the `reserveAt(0)`, i.e) the underlying token,
         //       which is never removed.
         uint8 reserveCount = uint8(_reserves.length());
         for (uint8 i = reserveCount - 1; i > 0; i--) {
@@ -692,12 +692,12 @@ contract PerpetualTranche is
                 bond.mature();
             }
 
-            // Redeeming the underlying collateral token
+            // Redeeming the underlying token
             bond.redeemMature(address(tranche), tranche.balanceOf(address(this)));
             _syncReserve(tranche);
         }
 
-        // Keeps track of the underlying collateral balance
+        // Keeps track of the underlying token balance
         _syncReserve(_reserveAt(0));
     }
 
@@ -742,7 +742,7 @@ contract PerpetualTranche is
         uint256 balance = token.balanceOf(address(this));
         emit ReserveSynced(token, balance);
 
-        // The underlying collateral NEVER gets removed from the `_reserves` set.
+        // The underlying token NEVER gets removed from the `_reserves` set.
         if (_isUnderlying(token)) {
             return balance;
         }
@@ -914,7 +914,7 @@ contract PerpetualTranche is
     }
 
     /// @dev Checks if the given token pair is a valid rollover.
-    ///      * When rolling out underlying collateral,
+    ///      * When rolling out underlying token,
     ///          - expects incoming tranche to be part of the deposit bond
     ///      * When rolling out immature tranches,
     ///          - expects incoming tranche to be part of the deposit bond
@@ -922,7 +922,7 @@ contract PerpetualTranche is
     ///          - expects outgoing tranche to be in the reserve
     ///          - expects outgoing tranche to be ready for rollout.
     function _isAcceptableRollover(ITranche trancheIn, IERC20Upgradeable tokenOut) private view returns (bool) {
-        // when rolling out the underlying collateral
+        // when rolling out the underlying token
         if (_isUnderlying(tokenOut)) {
             return _isDepositTranche(trancheIn);
         }
@@ -936,7 +936,7 @@ contract PerpetualTranche is
     }
 
     /// @dev Checks if the given bond is valid and can be accepted into the reserve.
-    ///      * Expects the bond to to have the same collateral token as perp.
+    ///      * Expects the bond to to have the same underlying token as perp.
     ///      * Expects the bond to have only two tranches.
     ///      * Expects the bond controller to not withhold any fees.
     ///      * Expects the bond's time to maturity to be within the max safety bound.
@@ -975,7 +975,7 @@ contract PerpetualTranche is
         // Checks if the value of deposit tranche relative to the other tranches in the reserve
         // is no higher than the defined limit.
         //
-        // NOTE: We consider the tranches which are up for rollover and mature collateral (if any),
+        // NOTE: We consider the tranches which are up for rollover and mature tranches (if any),
         // to be part of the deposit tranche, as given enough time
         // they will be eventually rolled over into the deposit tranche.
         IERC20Upgradeable underlying_ = _reserveAt(0);
@@ -1013,7 +1013,7 @@ contract PerpetualTranche is
     }
 
     /// @dev Calculates the total value of all the tranches in the reserve.
-    ///      Value of each reserve tranche is denominated in the underlying collateral.
+    ///      Value of each reserve tranche is denominated in the underlying token.
     function _reserveValue() private view returns (uint256) {
         IERC20Upgradeable underlying_ = _reserveAt(0);
         uint256 totalVal = underlying_.balanceOf(address(this));
@@ -1038,12 +1038,12 @@ contract PerpetualTranche is
     function _computeReserveTrancheValue(
         ITranche tranche,
         IBondController parentBond,
-        IERC20Upgradeable collateralToken,
+        IERC20Upgradeable underlying_,
         uint256 trancheAmt,
         MathUpgradeable.Rounding rounding
     ) private view returns (uint256) {
         // NOTE: As an optimization here, we assume that the reserve tranche is immature and has the most senior claim.
-        uint256 parentBondCollateralBalance = collateralToken.balanceOf(address(parentBond));
+        uint256 parentBondCollateralBalance = underlying_.balanceOf(address(parentBond));
         uint256 trancheSupply = tranche.totalSupply();
         uint256 trancheClaim = MathUpgradeable.min(trancheSupply, parentBondCollateralBalance);
         // Tranche supply is zero (its parent bond has no deposits yet);
@@ -1061,7 +1061,7 @@ contract PerpetualTranche is
             });
     }
 
-    /// @dev Checks if the given token is the underlying collateral token.
+    /// @dev Checks if the given token is the underlying token.
     function _isUnderlying(IERC20Upgradeable token) private view returns (bool) {
         return (token == _reserveAt(0));
     }

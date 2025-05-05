@@ -15,7 +15,7 @@ interface IRolloverVault is IVault {
     /// @return vaultNoteAmt The amount of vault notes minted.
     function mint2(uint256 underlyingAmtIn) external returns (uint256 perpAmt, uint256 vaultNoteAmt);
 
-    /// @notice Batch operation to redeem both perp and rollover vault tokens for the underlying collateral and tranches.
+    /// @notice Batch operation to redeem both perp and rollover vault tokens for the underlying token and tranches.
     /// @param perpAmtAvailable The amount of perp tokens available to redeem.
     /// @param vaultNoteAmtAvailable The amount of vault notes available to redeem.
     /// @return perpAmtBurnt The amount of perp tokens redeemed.

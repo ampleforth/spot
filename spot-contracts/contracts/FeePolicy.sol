@@ -18,8 +18,8 @@ import { MathHelpers } from "./_utils/MathHelpers.sol";
  *  @notice This contract determines fees and incentives for interacting with the perp and vault systems.
  *
  *          The fee policy attempts to balance the demand for holding perp tokens with
- *          the demand for holding vault tokens; such that the total collateral in the vault
- *          supports rolling over all mature collateral backing perps.
+ *          the demand for holding vault tokens; such that the total asset value in the vault
+ *          supports rolling over all mature tranches backing perps.
  *
  *          The system's balance is defined by it's `deviationRatio` which is defined as follows.
  *              - `subscriptionRatio`   = (vaultTVL * seniorTR) / (perpTVL * 1-seniorTR)
