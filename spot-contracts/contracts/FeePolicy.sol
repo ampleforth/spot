@@ -72,6 +72,11 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     ///      Adds a safety buffer to ensure that rollovers are better sustained.
     uint256 public targetSubscriptionRatio;
 
+    /// @notice The range of deviation ratios which define the equilibrium zone.
+    /// @dev When the system's dr is within the equilibrium zone, no value is transferred
+    ///      during a rebalance operation.
+    Range public equilibriumDR;
+
     //-----------------------------------------------------------------------------
     // Fee parameters
 
@@ -117,6 +122,10 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         __Ownable_init();
 
         targetSubscriptionRatio = (ONE * 150) / 100; // 1.5
+        equilibriumDR = Range({
+            lower: (ONE * 95) / 100, // 0.95
+            upper: (ONE * 105) / 100 // 1.05
+        });
 
         // initializing fees
         feeFnDRDown = Line({
@@ -155,6 +164,15 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @param targetSubscriptionRatio_ The new target subscription ratio as a fixed point number with {DECIMALS} places.
     function updateTargetSubscriptionRatio(uint256 targetSubscriptionRatio_) external onlyOwner {
         targetSubscriptionRatio = targetSubscriptionRatio_;
+    }
+
+    /// @notice Updates the equilibrium DR range.
+    /// @param equilibriumDR_ The new equilibrium DR range as tuple of a fixed point numbers with {DECIMALS} places.
+    function updateEquilibriumDR(Range memory equilibriumDR_) external onlyOwner {
+        if (equilibriumDR_.lower > equilibriumDR_.upper || equilibriumDR_.lower > ONE || equilibriumDR_.upper < ONE) {
+            revert InvalidRange();
+        }
+        equilibriumDR = equilibriumDR_;
     }
 
     /// @notice Updates the system fee functions.
@@ -267,8 +285,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     ) external view override returns (int256 underlyingAmtIntoPerp) {
         // We skip rebalancing if dr is close to 1.0
         uint256 dr = computeDeviationRatio(s);
-        Range memory drEq = drEqZone();
-        if (dr >= drEq.lower && dr <= drEq.upper) {
+        if (dr >= equilibriumDR.lower && dr <= equilibriumDR.upper) {
             return 0;
         }
 
@@ -318,12 +335,5 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     function computeDRNormSeniorTR(uint256 seniorTR) public view override returns (uint256) {
         uint256 juniorTR = (TRANCHE_RATIO_GRANULARITY - seniorTR);
         return ONE.mulDiv((seniorTR * ONE), (seniorTR * ONE) + (juniorTR * targetSubscriptionRatio));
-    }
-
-    /// @return The range of deviation ratios which define the equilibrium zone.
-    /// @dev We infer the equilibrium from the fee function definitions, i.e) the upperDR in `feeFnDRDown`
-    ///      and lowerDR in `feeFnDRUp`.
-    function drEqZone() public view returns (Range memory) {
-        return Range({ lower: feeFnDRDown.x2, upper: feeFnDRUp.x1 });
     }
 }

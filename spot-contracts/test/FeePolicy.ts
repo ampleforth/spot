@@ -46,7 +46,7 @@ describe("FeePolicy", function () {
       expect(f2[2]).to.eq(toPerc("1.5"));
       expect(f2[3]).to.eq(toPerc("0.25"));
 
-      const drEq = await feePolicy.drEqZone();
+      const drEq = await feePolicy.equilibriumDR();
       expect(drEq[0]).to.eq(toPerc("0.95"));
       expect(drEq[1]).to.eq(toPerc("1.05"));
 
@@ -87,6 +87,42 @@ describe("FeePolicy", function () {
         expect(await feePolicy.targetSubscriptionRatio()).to.eq(toPerc("1.5"));
         await feePolicy.connect(deployer).updateTargetSubscriptionRatio(toPerc("1.25"));
         expect(await feePolicy.targetSubscriptionRatio()).to.eq(toPerc("1.25"));
+      });
+    });
+  });
+
+  describe("#updateEquilibriumDR", function () {
+    describe("when triggered by non-owner", function () {
+      it("should revert", async function () {
+        await expect(
+          feePolicy.connect(otherUser).updateEquilibriumDR([toPerc("0.9"), toPerc("1.1")]),
+        ).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+    });
+
+    describe("when range is invalid", function () {
+      it("should revert", async function () {
+        await expect(feePolicy.updateEquilibriumDR([toPerc("1.2"), toPerc("1.1")])).to.be.revertedWithCustomError(
+          feePolicy,
+          "InvalidRange",
+        );
+        await expect(feePolicy.updateEquilibriumDR([toPerc("1.01"), toPerc("1.1")])).to.be.revertedWithCustomError(
+          feePolicy,
+          "InvalidRange",
+        );
+        await expect(feePolicy.updateEquilibriumDR([toPerc("0.9"), toPerc("0.99")])).to.be.revertedWithCustomError(
+          feePolicy,
+          "InvalidRange",
+        );
+      });
+    });
+
+    describe("when triggered by owner", function () {
+      it("should update the target sr", async function () {
+        await feePolicy.connect(deployer).updateEquilibriumDR([toPerc("0.9"), toPerc("1.1")]);
+        const eq = await feePolicy.equilibriumDR();
+        expect(eq[0]).to.eq(toPerc("0.9"));
+        expect(eq[1]).to.eq(toPerc("1.1"));
       });
     });
   });
@@ -347,7 +383,7 @@ describe("FeePolicy", function () {
 
     describe("when deviation is within eq range", function () {
       it("should compute rebalance data", async function () {
-        await feePolicy.updateFees(toLine("0", "0.5", "0.5", "0"), toLine("2", "0", "10", "0.5"));
+        await feePolicy.updateEquilibriumDR([toPerc("0.5"), toPerc("2")]);
         const r1 = await feePolicy.computeRebalanceAmount({
           perpTVL: toAmt("120"),
           vaultTVL: toAmt("500"),
