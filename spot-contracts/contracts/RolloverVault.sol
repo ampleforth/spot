@@ -55,6 +55,12 @@ import { TrancheManager } from "./_utils/TrancheManager.sol";
  *      When ever a tranche token enters or leaves the system, we immediately invoke `_syncDeployedAsset` to update book-keeping.
  *      We call `_syncAsset` at the very end of every external function which changes the vault's underlying or perp balance.
  *
+ *      The perp tokens aren't considered be part of the vault's asset set. However
+ *      during the normal operations, the vault can hold transient perp tokens but they
+ *      are immediately broken down into tranches. The vault receives perps only during rebalancing and swapping.
+ *      At the end of those operations, the vault redeems perp tokens for the senior tranches backing them.
+ *
+ *
  */
 contract RolloverVault is
     ERC20BurnableUpgradeable,
