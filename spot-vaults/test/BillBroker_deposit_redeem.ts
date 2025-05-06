@@ -276,7 +276,7 @@ describe("BillBroker", function () {
           protocolSwapSharePerc: 0n,
         });
         expect(await billBroker.computeMintAmtWithUSD.staticCall(usdFP("11.5"))).to.eq(
-          lpAmtFP("11.980204248447204967542855"),
+          lpAmtFP("11.980704141614906830371426"),
         );
       });
     });
@@ -368,7 +368,7 @@ describe("BillBroker", function () {
           protocolSwapSharePerc: 0n,
         });
         expect(await billBroker.computeMintAmtWithPerp.staticCall(perpFP("10.5"))).to.eq(
-          lpAmtFP("14.243163296689361701442552"),
+          lpAmtFP("14.243981158876595744680849"),
         );
       });
     });
@@ -867,14 +867,14 @@ describe("BillBroker", function () {
         ).to.changeTokenBalance(
           billBroker,
           deployer,
-          lpAmtFP("8.984877117391304347826085"),
+          lpAmtFP("8.982547441304347826086955"),
         );
 
         const r = await billBroker.computeRedemptionAmts.staticCall(
-          lpAmtFP("8.984877117391304347826085"),
+          lpAmtFP("8.982547441304347826086955"),
         );
-        expect(r[0]).to.eq(usdFP("3.466549"));
-        expect(r[1]).to.eq(perpFP("5.546479327"));
+        expect(r[0]).to.eq(usdFP("3.465675"));
+        expect(r[1]).to.eq(perpFP("5.545081062"));
       });
 
       it("should be roughly equivalent to swap+deposit", async function () {
@@ -1118,13 +1118,13 @@ describe("BillBroker", function () {
         await perp.approve(billBroker.target, perpFP("10"));
         await expect(() =>
           billBroker.depositPerp(perpFP("10"), percFP("1")),
-        ).to.changeTokenBalance(billBroker, deployer, lpAmtFP("10.825833333315"));
+        ).to.changeTokenBalance(billBroker, deployer, lpAmtFP("10.82258064514"));
 
         const r = await billBroker.computeRedemptionAmts.staticCall(
-          lpAmtFP("10.825833333315"),
+          lpAmtFP("10.82258064514"),
         );
-        expect(r[0]).to.eq(usdFP("7.305613"));
-        expect(r[1]).to.eq(perpFP("3.493988865"));
+        expect(r[0]).to.eq(usdFP("7.303487"));
+        expect(r[1]).to.eq(perpFP("3.49297241"));
       });
 
       it("should be roughly equivalent to swap+deposit", async function () {

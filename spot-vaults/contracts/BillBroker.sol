@@ -656,7 +656,6 @@ contract BillBroker is
             return 0;
         }
 
-        // We compute equal value of perp tokens going out.
         uint256 totalSupply_ = totalSupply();
         uint256 valueIn = s.usdPrice.mulDiv(usdAmtIn, usdUnitAmt);
         uint256 totalReserveVal = (s.usdPrice.mulDiv(s.usdBalance, usdUnitAmt) +
@@ -673,13 +672,12 @@ contract BillBroker is
         // apply the swap fee only for that portion.
         // The mint fees are waived, because single sided deposits
         // push the pool back into balance.
-        uint256 percOfAmtInSwapped = ONE.mulDiv(
-            usdAmtIn - (s.usdBalance + usdAmtIn).mulDiv(mintAmt, totalSupply_),
-            usdAmtIn
-        );
+        uint256 postOpUsdBal = s.usdBalance + usdAmtIn;
+        uint256 postOpUsdClaim = postOpUsdBal.mulDiv(mintAmt, totalSupply_ + mintAmt);
+        uint256 percOfAmtInSwapped = ONE.mulDiv(usdAmtIn - postOpUsdClaim, usdAmtIn);
         uint256 feeFactor = computeUSDToPerpSwapFeeFactor(
             assetRatio(s),
-            assetRatio(_updatedReserveState(s, s.usdBalance + usdAmtIn, s.perpBalance))
+            assetRatio(_updatedReserveState(s, postOpUsdBal, s.perpBalance))
         );
         mintAmt =
             mintAmt.mulDiv(percOfAmtInSwapped, ONE).mulDiv(TWO - feeFactor, ONE) +
@@ -699,7 +697,6 @@ contract BillBroker is
             return 0;
         }
 
-        // We compute equal value of perp tokens coming in.
         uint256 totalSupply_ = totalSupply();
         uint256 valueIn = s.perpPrice.mulDiv(perpAmtIn, perpUnitAmt);
         uint256 totalReserveVal = (s.usdPrice.mulDiv(s.usdBalance, usdUnitAmt) +
@@ -709,22 +706,19 @@ contract BillBroker is
         }
 
         // Compute mint amount.
-        mintAmt = (totalReserveVal > 0)
-            ? valueIn.mulDiv(totalSupply_, totalReserveVal)
-            : 0;
+        mintAmt = valueIn.mulDiv(totalSupply_, totalReserveVal);
 
         // A single sided deposit is a combination of swap and mint.
         // We first calculate the amount of perps swapped into usd and
         // apply the swap fee only for that portion.
         // The mint fees are waived, because single sided deposits
         // push the pool back into balance.
-        uint256 percOfAmtInSwapped = ONE.mulDiv(
-            perpAmtIn - (s.perpBalance + perpAmtIn).mulDiv(mintAmt, totalSupply_),
-            perpAmtIn
-        );
+        uint256 postOpPerpBal = s.perpBalance + perpAmtIn;
+        uint256 postOpPerpClaim = postOpPerpBal.mulDiv(mintAmt, totalSupply_ + mintAmt);
+        uint256 percOfAmtInSwapped = ONE.mulDiv(perpAmtIn - postOpPerpClaim, perpAmtIn);
         uint256 feeFactor = computePerpToUSDSwapFeeFactor(
             assetRatio(s),
-            assetRatio(_updatedReserveState(s, s.usdBalance, s.perpBalance + perpAmtIn))
+            assetRatio(_updatedReserveState(s, s.usdBalance, postOpPerpBal))
         );
         mintAmt =
             mintAmt.mulDiv(percOfAmtInSwapped, ONE).mulDiv(TWO - feeFactor, ONE) +
@@ -771,7 +765,7 @@ contract BillBroker is
             perpUnitAmt
         );
 
-        // We compute the fee factor
+        // We compute the fee factor.
         uint256 feeFactor = computePerpToUSDSwapFeeFactor(
             assetRatio(s),
             assetRatio(
@@ -782,11 +776,16 @@ contract BillBroker is
                 )
             )
         );
+
+        // We compute protocol fee.
+        // System only changes a protocol fee when fees are non-negative.
         if (feeFactor >= ONE) {
             protocolFeeUsdAmt = usdAmtOut
                 .mulDiv(feeFactor - ONE, ONE, MathUpgradeable.Rounding.Up)
                 .mulDiv(fees.protocolSwapSharePerc, ONE, MathUpgradeable.Rounding.Up);
         }
+
+        // We computed fee adjusted amount out.
         usdAmtOut = usdAmtOut.mulDiv(TWO - feeFactor, ONE);
     }
 
@@ -807,7 +806,7 @@ contract BillBroker is
             usdUnitAmt
         );
 
-        // We compute the fee factor
+        // We compute the fee factor.
         uint256 feeFactor = computeUSDToPerpSwapFeeFactor(
             assetRatio(s),
             assetRatio(
@@ -818,11 +817,16 @@ contract BillBroker is
                 )
             )
         );
+
+        // We compute protocol fee.
+        // System only changes a protocol fee when fees are non-negative.
         if (feeFactor >= ONE) {
             protocolFeePerpAmt = perpAmtOut
                 .mulDiv(feeFactor - ONE, ONE, MathUpgradeable.Rounding.Up)
                 .mulDiv(fees.protocolSwapSharePerc, ONE, MathUpgradeable.Rounding.Up);
         }
+
+        // We computed fee adjusted amount out.
         perpAmtOut = perpAmtOut.mulDiv(TWO - feeFactor, ONE);
     }
 
