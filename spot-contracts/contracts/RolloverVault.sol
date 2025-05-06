@@ -5,7 +5,7 @@ import { IERC20Upgradeable, IPerpetualTranche, IBondController, ITranche, IFeePo
 import { IVault } from "./_interfaces/IVault.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
 import { IERC20Burnable } from "./_interfaces/IERC20Burnable.sol";
-import { TokenAmount, RolloverData, SystemState } from "./_interfaces/CommonTypes.sol";
+import { TokenAmount, RolloverData, SystemTVL } from "./_interfaces/CommonTypes.sol";
 import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, OutOfBounds, UnacceptableSwap, InsufficientDeployment, DeployedCountOverLimit, InsufficientLiquidity, LastRebalanceTooRecent } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -419,7 +419,7 @@ contract RolloverVault is
         IERC20Upgradeable underlying_ = underlying;
 
         // Compute perp vault asset split.
-        SystemState memory s = _querySystemState(perp_);
+        SystemTVL memory s = _querySystemTVL(perp_);
         uint256 underlyingAmtIntoPerp = underlyingAmtIn.mulDiv(ONE, ONE + feePolicy.targetSystemRatio());
         uint256 underlyingAmtIntoVault = underlyingAmtIn - underlyingAmtIntoPerp;
 
@@ -506,10 +506,10 @@ contract RolloverVault is
     /// @inheritdoc IVault
     function deposit(uint256 underlyingAmtIn) external override nonReentrant whenNotPaused returns (uint256) {
         // Compute the mint fees
-        SystemState memory s = _querySystemState(perp);
+        SystemTVL memory s = _querySystemTVL(perp);
         uint256 feePerc = feePolicy.computeFeePerc(
             feePolicy.computeDeviationRatio(s),
-            feePolicy.computeDeviationRatio(SystemState({ perpTVL: s.perpTVL, vaultTVL: s.vaultTVL + underlyingAmtIn }))
+            feePolicy.computeDeviationRatio(SystemTVL({ perpTVL: s.perpTVL, vaultTVL: s.vaultTVL + underlyingAmtIn }))
         );
 
         // Calculates the fee adjusted amount of vault notes minted when depositing `underlyingAmtIn` of underlying tokens.
@@ -537,12 +537,12 @@ contract RolloverVault is
         }
 
         // Compute the redemption fees
-        SystemState memory s = _querySystemState(perp);
+        SystemTVL memory s = _querySystemTVL(perp);
         uint256 vaultNoteSupply = totalSupply();
         uint256 feePerc = feePolicy.computeFeePerc(
             feePolicy.computeDeviationRatio(s),
             feePolicy.computeDeviationRatio(
-                SystemState({
+                SystemTVL({
                     perpTVL: s.perpTVL,
                     vaultTVL: s.vaultTVL.mulDiv(vaultNoteSupply - vaultNoteAmt, vaultNoteSupply)
                 })
@@ -584,7 +584,7 @@ contract RolloverVault is
         IPerpetualTranche perp_ = perp;
         IERC20Upgradeable underlying_ = underlying;
         uint256 underlyingBalPre = underlying_.balanceOf(address(this));
-        (uint256 perpAmtOut, , SystemState memory s) = computeUnderlyingToPerpSwapAmt(underlyingAmtIn);
+        (uint256 perpAmtOut, , SystemTVL memory s) = computeUnderlyingToPerpSwapAmt(underlyingAmtIn);
 
         // Revert if insufficient tokens are swapped in or out
         if (perpAmtOut <= 0 || underlyingAmtIn <= 0) {
@@ -655,24 +655,24 @@ contract RolloverVault is
 
     /// @inheritdoc IRolloverVault
     function deviationRatio() external override nonReentrant returns (uint256) {
-        return feePolicy.computeDeviationRatio(_querySystemState(perp));
+        return feePolicy.computeDeviationRatio(_querySystemTVL(perp));
     }
 
     /// @inheritdoc IRolloverVault
     function computeUnderlyingToPerpSwapAmt(
         uint256 underlyingAmtIn
-    ) public returns (uint256, uint256, SystemState memory) {
+    ) public returns (uint256, uint256, SystemTVL memory) {
         IPerpetualTranche perp_ = perp;
         // Compute equal value perps to swap out to the user
-        SystemState memory s = _querySystemState(perp_);
+        SystemTVL memory s = _querySystemTVL(perp_);
         uint256 perpAmtOut = underlyingAmtIn.mulDiv(perp_.totalSupply(), s.perpTVL);
 
         //-----------------------------------------------------------------------------
         // When user swaps underlying for vault's perps -> perps are minted by the vault
-        // We thus compute fees based on the post-mint subscription state.
+        // We thus compute fees based on the post-mint system tvl.
         uint256 feePerc = feePolicy.computeFeePerc(
             feePolicy.computeDeviationRatio(s),
-            feePolicy.computeDeviationRatio(SystemState({ perpTVL: s.perpTVL + underlyingAmtIn, vaultTVL: s.vaultTVL }))
+            feePolicy.computeDeviationRatio(SystemTVL({ perpTVL: s.perpTVL + underlyingAmtIn, vaultTVL: s.vaultTVL }))
         );
         //-----------------------------------------------------------------------------
 
@@ -683,20 +683,18 @@ contract RolloverVault is
     }
 
     /// @inheritdoc IRolloverVault
-    function computePerpToUnderlyingSwapAmt(uint256 perpAmtIn) public returns (uint256, uint256, SystemState memory) {
+    function computePerpToUnderlyingSwapAmt(uint256 perpAmtIn) public returns (uint256, uint256, SystemTVL memory) {
         IPerpetualTranche perp_ = perp;
         // Compute equal value underlying tokens to swap out
-        SystemState memory s = _querySystemState(perp_);
+        SystemTVL memory s = _querySystemTVL(perp_);
         uint256 underlyingAmtOut = perpAmtIn.mulDiv(s.perpTVL, perp_.totalSupply());
 
         //-----------------------------------------------------------------------------
         // When user swaps perps for vault's underlying -> perps are redeemed by the vault
-        // We thus compute fees based on the post-burn subscription state.
+        // We thus compute fees based on the post-burn system tvl.
         uint256 feePerc = feePolicy.computeFeePerc(
             feePolicy.computeDeviationRatio(s),
-            feePolicy.computeDeviationRatio(
-                SystemState({ perpTVL: s.perpTVL - underlyingAmtOut, vaultTVL: s.vaultTVL })
-            )
+            feePolicy.computeDeviationRatio(SystemTVL({ perpTVL: s.perpTVL - underlyingAmtOut, vaultTVL: s.vaultTVL }))
         );
         //-----------------------------------------------------------------------------
 
@@ -846,7 +844,7 @@ contract RolloverVault is
         perp_.claimFees(address(this));
         _meldPerps(perp_);
 
-        SystemState memory s = _querySystemState(perp_);
+        SystemTVL memory s = _querySystemTVL(perp_);
         int256 underlyingAmtIntoPerp = feePolicy.computeRebalanceAmount(s);
 
         // When value is flowing into perp from the vault.
@@ -1068,9 +1066,9 @@ contract RolloverVault is
         emit AssetSynced(token, balance);
     }
 
-    /// @dev Queries the current system state of the perp and vault systems.
-    function _querySystemState(IPerpetualTranche perp_) private returns (SystemState memory) {
-        return SystemState({ perpTVL: perp_.getTVL(), vaultTVL: getTVL() });
+    /// @dev Queries the current TVL of the perp and vault systems.
+    function _querySystemTVL(IPerpetualTranche perp_) private returns (SystemTVL memory) {
+        return SystemTVL({ perpTVL: perp_.getTVL(), vaultTVL: getTVL() });
     }
 
     //--------------------------------------------------------------------------

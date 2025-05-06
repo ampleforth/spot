@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
-import { SystemState, Range, Line } from "./_interfaces/CommonTypes.sol";
+import { SystemTVL, Range, Line } from "./_interfaces/CommonTypes.sol";
 import { InvalidPerc, InvalidRange, InvalidFees } from "./_interfaces/ProtocolErrors.sol";
 
 import { LineHelpers } from "./_utils/LineHelpers.sol";
@@ -34,9 +34,9 @@ import { MathHelpers } from "./_utils/MathHelpers.sol";
  *          - If an operation moves the system back to the balance point, it charges a lower fee (or no fee).
  *
  *          Incentives:
- *          - When the vault is "under-subscribed", value is transferred from perp to the vault at a predefined rate.
+ *          - When the vault is "under-subscribed", value is transferred from perp to the vault at the computed rate.
  *            This debases perp tokens gradually and enriches the rollover vault.
- *          - When the vault is "over-subscribed", value is transferred from the vault to perp at a predefined rate.
+ *          - When the vault is "over-subscribed", value is transferred from the vault to perp at the computed rate.
  *            This enriches perp tokens gradually and debases the rollover vault.
  *          - This transfer is implemented through a periodic "rebalance" operation, executed by the vault, and
  *            gradually nudges the system back into balance. On rebalance, the vault queries this policy
@@ -64,7 +64,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
 
     //-----------------------------------------------------------------------------
     /// @notice The target system ratio i.e) the normalization factor.
-    /// @dev The target system ratio, the target vault tvl to perp tvl ration and
+    /// @dev The target system ratio, the target vault tvl to perp tvl ratio and
     ///      is *different* from button-wood's tranche ratios.
     uint256 public override targetSystemRatio;
 
@@ -258,9 +258,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computeRebalanceAmount(
-        SystemState memory s
-    ) external view override returns (int256 underlyingAmtIntoPerp) {
+    function computeRebalanceAmount(SystemTVL memory s) external view override returns (int256 underlyingAmtIntoPerp) {
         // We skip rebalancing if dr is close to 1.0
         uint256 dr = computeDeviationRatio(s);
         Range memory drEq = drEqZone();
@@ -303,7 +301,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computeDeviationRatio(SystemState memory s) public view override returns (uint256) {
+    function computeDeviationRatio(SystemTVL memory s) public view override returns (uint256) {
         // NOTE: We assume that perp's TVL and vault's TVL values have the same base denomination.
         return s.vaultTVL.mulDiv(ONE, s.perpTVL).mulDiv(ONE, targetSystemRatio);
     }

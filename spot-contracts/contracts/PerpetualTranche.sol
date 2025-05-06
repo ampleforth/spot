@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeePolicy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
-import { TokenAmount, RolloverData, SystemState } from "./_interfaces/CommonTypes.sol";
+import { TokenAmount, RolloverData, SystemTVL } from "./_interfaces/CommonTypes.sol";
 import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, UnacceptableParams, UnacceptableRollover, ExceededMaxSupply, ExceededMaxMintPerTranche, ReserveCountOverLimit, InvalidPerc } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -642,7 +642,7 @@ contract PerpetualTranche is
 
     /// @inheritdoc IPerpetualTranche
     function deviationRatio() external override afterStateUpdate nonReentrant returns (uint256) {
-        return feePolicy.computeDeviationRatio(_querySystemState());
+        return feePolicy.computeDeviationRatio(_querySystemTVL());
     }
 
     //--------------------------------------------------------------------------
@@ -785,12 +785,12 @@ contract PerpetualTranche is
 
         //-----------------------------------------------------------------------------
         // We charge no mint fee when interacting with other callers within the system.
-        SystemState memory s = _querySystemState();
+        SystemTVL memory s = _querySystemTVL();
         uint256 feePerc = _isProtocolCaller()
             ? 0
             : feePolicy.computeFeePerc(
                 feePolicy.computeDeviationRatio(s),
-                feePolicy.computeDeviationRatio(SystemState({ perpTVL: s.perpTVL + valueIn, vaultTVL: s.vaultTVL }))
+                feePolicy.computeDeviationRatio(SystemTVL({ perpTVL: s.perpTVL + valueIn, vaultTVL: s.vaultTVL }))
             );
         //-----------------------------------------------------------------------------
 
@@ -816,13 +816,13 @@ contract PerpetualTranche is
 
         //-----------------------------------------------------------------------------
         // We charge no burn fee when interacting with other parts of the system.
-        SystemState memory s = _querySystemState();
+        SystemTVL memory s = _querySystemTVL();
         uint256 feePerc = _isProtocolCaller()
             ? 0
             : feePolicy.computeFeePerc(
                 feePolicy.computeDeviationRatio(s),
                 feePolicy.computeDeviationRatio(
-                    SystemState({ perpTVL: s.perpTVL.mulDiv(perpSupply - perpAmt, perpSupply), vaultTVL: s.vaultTVL })
+                    SystemTVL({ perpTVL: s.perpTVL.mulDiv(perpSupply - perpAmt, perpSupply), vaultTVL: s.vaultTVL })
                 )
             );
         //-----------------------------------------------------------------------------
@@ -1045,9 +1045,9 @@ contract PerpetualTranche is
         return (trancheSupply > 0) ? trancheClaim.mulDiv(trancheAmt, trancheSupply, rounding) : trancheAmt;
     }
 
-    /// @dev Queries the current system state of the perp and vault systems.
-    function _querySystemState() private view returns (SystemState memory) {
-        return SystemState({ perpTVL: _reserveValue(), vaultTVL: vault.getTVL() });
+    /// @dev Queries the current TVL of the perp and vault systems.
+    function _querySystemTVL() private view returns (SystemTVL memory) {
+        return SystemTVL({ perpTVL: _reserveValue(), vaultTVL: vault.getTVL() });
     }
 
     /// @dev Checks if the given token is the underlying collateral token.

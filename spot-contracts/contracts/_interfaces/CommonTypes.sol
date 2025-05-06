@@ -10,8 +10,8 @@ struct TokenAmount {
     uint256 amount;
 }
 
-/// @notice The system state parameters.
-struct SystemState {
+/// @notice The system TVL parameters.
+struct SystemTVL {
     /// @notice The current TVL of perp denominated in the underlying.
     uint256 perpTVL;
     /// @notice The current TVL of the vault denominated in the underlying.
