@@ -870,7 +870,7 @@ contract RolloverVault is
         SubscriptionParams memory s = _querySubscriptionState(perp_);
         int256 underlyingAmtIntoPerp = feePolicy.computeRebalanceAmount(s);
 
-        // When value is flowing into perp from the vault.
+        // When value is flowing from perp to the vault.
         // We rebalance from perp to the vault.
         if (underlyingAmtIntoPerp < 0) {
             perp_.rebalanceToVault(underlyingAmtIntoPerp.abs());
