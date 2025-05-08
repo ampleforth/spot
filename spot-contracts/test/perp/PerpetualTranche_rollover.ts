@@ -58,9 +58,8 @@ describe("PerpetualTranche", function () {
     feePolicy = new DMock(await ethers.getContractFactory("FeePolicy"));
     await feePolicy.deploy();
     await feePolicy.mockMethod("decimals()", [8]);
-    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
-    await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
-    await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
+    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256))", [toPercFixedPtAmt("1")]);
+    await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
 
     const MockVault = await ethers.getContractFactory("MockVault");
     mockVault = await MockVault.deploy();

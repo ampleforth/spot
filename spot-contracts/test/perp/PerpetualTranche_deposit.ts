@@ -51,9 +51,8 @@ describe("PerpetualTranche", function () {
     feePolicy = new DMock(await ethers.getContractFactory("FeePolicy"));
     await feePolicy.deploy();
     await feePolicy.mockMethod("decimals()", [8]);
-    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
-    await feePolicy.mockMethod("computePerpMintFeePerc()", [0]);
-    await feePolicy.mockMethod("computePerpBurnFeePerc()", [0]);
+    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256))", [toPercFixedPtAmt("1")]);
+    await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
@@ -214,6 +213,7 @@ describe("PerpetualTranche", function () {
       beforeEach(async function () {
         await perp.deposit(depositTrancheA.target, toFixedPtAmt("250"));
         await advancePerpQueue(perp, 1200);
+        await perp.updateTolerableTrancheMaturity(1, ethers.MaxUint256);
         await perp.updateMaxDepositTrancheValuePerc(toPercFixedPtAmt("0.5"));
       });
 
@@ -234,6 +234,7 @@ describe("PerpetualTranche", function () {
       beforeEach(async function () {
         await perp.deposit(depositTrancheA.target, toFixedPtAmt("250"));
         await advancePerpQueue(perp, 1200);
+        await perp.updateTolerableTrancheMaturity(1, ethers.MaxUint256);
         await perp.updateMaxDepositTrancheValuePerc(toPercFixedPtAmt("0.5"));
       });
 
@@ -254,6 +255,7 @@ describe("PerpetualTranche", function () {
       beforeEach(async function () {
         await perp.deposit(depositTrancheA.target, toFixedPtAmt("250"));
         await advancePerpQueue(perp, 1200);
+        await perp.updateTolerableTrancheMaturity(1, ethers.MaxUint256);
         await perp.updateMaxDepositTrancheValuePerc(toPercFixedPtAmt("0.5"));
       });
 
@@ -480,7 +482,18 @@ describe("PerpetualTranche", function () {
 
     describe("when fee is set", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computePerpMintFeePerc()", [toPercFixedPtAmt("0.01")]);
+        await feePolicy.clearMockMethod("computeDeviationRatio((uint256,uint256))");
+        await feePolicy.mockCall(
+          "computeDeviationRatio((uint256,uint256))",
+          [[toFixedPtAmt("0"), toFixedPtAmt("0")]],
+          [toPercFixedPtAmt("1")],
+        );
+        await feePolicy.mockCall(
+          "computeDeviationRatio((uint256,uint256))",
+          [[toFixedPtAmt("500"), toFixedPtAmt("0")]],
+          [toPercFixedPtAmt("1")],
+        );
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.01")]);
       });
       it("should mint perp tokens", async function () {
         await expect(() => perp.deposit(depositTrancheA.target, toFixedPtAmt("500"))).to.changeTokenBalance(
@@ -506,10 +519,10 @@ describe("PerpetualTranche", function () {
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("500"));
       });
 
-      it("should mint fees to the vault", async function () {
+      it("should mint fees to perp", async function () {
         await expect(() => perp.deposit(depositTrancheA.target, toFixedPtAmt("500"))).to.changeTokenBalances(
           perp,
-          [await perp.vault()],
+          [perp],
           [toFixedPtAmt("5")],
         );
       });
@@ -522,7 +535,7 @@ describe("PerpetualTranche", function () {
         mockVault = await MockVault.deploy();
         await perp.updateVault(mockVault.target);
         await depositTrancheA.approve(mockVault.target, toFixedPtAmt("500"));
-        await feePolicy.mockMethod("computePerpMintFeePerc()", [toPercFixedPtAmt("11")]);
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("11")]);
       });
       it("should mint perp tokens", async function () {
         await expect(() =>

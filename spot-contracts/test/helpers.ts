@@ -84,6 +84,19 @@ export class DMock {
     await this.contract.mockMethod(methodFragmentObj.selector, encodedReturnValue);
   }
 
+  public async clearMockMethod(methodFragment: string): Promise<void> {
+    if (!this.contract) {
+      await this.deploy();
+    }
+    const methodFragmentObj = this.refFactory.interface.fragments.filter(
+      f => f.type === "function" && f.format("sighash") === methodFragment,
+    )[0];
+    if (!methodFragmentObj) {
+      throw Error(`Unkown function fragment ${methodFragment}, not part of the contract abi`);
+    }
+    await this.contract.clearMockMethodSig(methodFragmentObj.selector);
+  }
+
   public async mockCall(methodFragment: string, parameters: any, returnValue: any = []): Promise<void> {
     if (!this.contract) {
       await this.deploy();

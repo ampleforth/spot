@@ -10,14 +10,12 @@ struct TokenAmount {
     uint256 amount;
 }
 
-/// @notice The system subscription parameters.
-struct SubscriptionParams {
+/// @notice The system TVL parameters.
+struct SystemTVL {
     /// @notice The current TVL of perp denominated in the underlying.
     uint256 perpTVL;
     /// @notice The current TVL of the vault denominated in the underlying.
     uint256 vaultTVL;
-    /// @notice The tranche ratio of seniors accepted by perp.
-    uint256 seniorTR;
 }
 
 struct RolloverData {
@@ -25,14 +23,6 @@ struct RolloverData {
     uint256 tokenOutAmt;
     /// @notice The amount of trancheIn tokens rolled in.
     uint256 trancheInAmt;
-}
-
-struct RebalanceData {
-    /// @notice The value in underlying tokens, that need to flow from the vault into perp.
-    /// @dev When negative, underlying tokens flow from perp into the vault.
-    int256 underlyingAmtIntoPerp;
-    /// @notice The value in underlying tokens, paid to the protocol as fees.
-    uint256 protocolFeeUnderlyingAmt;
 }
 
 /// @notice A data structure to define a numeric Range.

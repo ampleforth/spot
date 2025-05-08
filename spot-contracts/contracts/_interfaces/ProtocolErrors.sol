@@ -76,8 +76,5 @@ error LastRebalanceTooRecent();
 /// @notice Expected perc value to be at most (1 * 10**DECIMALS), i.e) 1.0 or 100%.
 error InvalidPerc();
 
-/// @notice Expected target subscription ratio to be within defined bounds.
-error InvalidTargetSRBounds();
-
-/// @notice Expected deviation ratio range to be valid.
-error InvalidDRRange();
+/// @notice Expected valid fee function definitions.
+error InvalidFees();

@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/IERC20MetadataUpgradeable.sol";
 import { IERC20Upgradeable, IPerpetualTranche, IBondIssuer, IFeePolicy, IBondController, ITranche } from "./_interfaces/IPerpetualTranche.sol";
 import { IRolloverVault } from "./_interfaces/IRolloverVault.sol";
-import { TokenAmount, RolloverData, SubscriptionParams } from "./_interfaces/CommonTypes.sol";
+import { TokenAmount, RolloverData, SystemTVL } from "./_interfaces/CommonTypes.sol";
 import { UnauthorizedCall, UnauthorizedTransferOut, UnexpectedDecimals, UnexpectedAsset, UnacceptableParams, UnacceptableRollover, ExceededMaxSupply, ExceededMaxMintPerTranche, ReserveCountOverLimit, InvalidPerc } from "./_interfaces/ProtocolErrors.sol";
 
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -62,7 +62,7 @@ import { BondHelpers } from "./_utils/BondHelpers.sol";
  * @dev Demand imbalance between perp and the vault
  *      is restored through a "rebalancing" mechanism similar to a funding rate. When value needs to flow from perp to the vault,
  *      the system debases the value of perp tokens by minting perp tokens to the vault.
- *      When value needs to flow from the vault to perp, the underlying collateral tokens are
+ *      When value needs to flow from the vault to perp, the fresh senior tranches are
  *      transferred from the vault into perp's reserve thereby enriching the value of perp tokens.
  *
  */
@@ -121,7 +121,7 @@ contract PerpetualTranche is
     uint256 public constant ONE = (10 ** PERC_DECIMALS); // 1.0 or 100%
 
     /// @dev The maximum number of reserve assets that can be held by perp.
-    uint8 public constant MAX_RESERVE_COUNT = 11;
+    uint8 public constant MAX_RESERVE_COUNT = 21;
 
     //-------------------------------------------------------------------------
     // Storage
@@ -255,6 +255,7 @@ contract PerpetualTranche is
     /// @param collateral_ Address of the underlying collateral token.
     /// @param bondIssuer_ Address of the bond issuer contract.
     /// @param feePolicy_ Address of the fee policy contract.
+    /// @dev Call `updateVault` with reference to the rollover vault after initialization.
     function init(
         string memory name,
         string memory symbol,
@@ -278,7 +279,7 @@ contract PerpetualTranche is
         updateFeePolicy(feePolicy_);
         updateBondIssuer(bondIssuer_);
 
-        updateTolerableTrancheMaturity(1, type(uint256).max);
+        updateTolerableTrancheMaturity(86400 * 7, 86400 * 31);
         updateMaxSupply(type(uint256).max);
         updateMaxDepositTrancheValuePerc(ONE);
     }
@@ -355,7 +356,6 @@ contract PerpetualTranche is
     }
 
     /// @notice Unpauses deposits, withdrawals and rollovers.
-    /// @dev ERC-20 functions, like transfers will always remain operational.
     function unpause() external onlyKeeper {
         _unpause();
     }
@@ -388,7 +388,8 @@ contract PerpetualTranche is
             revert UnexpectedAsset();
         }
 
-        // Calculates the fee adjusted amount of perp tokens minted when depositing `trancheInAmt` of tranche tokens
+        // Calculates the amount of perp tokens minted when depositing `trancheInAmt` of tranche tokens
+        // and the perp tokens paid as fees.
         // NOTE: This calculation should precede any token transfers.
         (uint256 perpAmtMint, uint256 perpFeeAmt) = _computeMintAmt(trancheIn, trancheInAmt);
         if (trancheInAmt <= 0 || perpAmtMint <= 0) {
@@ -401,8 +402,8 @@ contract PerpetualTranche is
         // mints perp tokens to the sender
         _mint(msg.sender, perpAmtMint);
 
-        // mint fees are paid to the vault by minting perp tokens.
-        _mint(address(vault), perpFeeAmt);
+        // Mint fees are collected self-minting perp tokens.
+        _mint(address(this), perpFeeAmt);
 
         // post-deposit checks
         _enforceMintCaps(trancheIn);
@@ -426,8 +427,8 @@ contract PerpetualTranche is
         // burns perp tokens from the sender
         _burn(msg.sender, perpAmt - perpFeeAmt);
 
-        // redemption fees are paid to transferring perp tokens
-        transfer(address(vault), perpFeeAmt);
+        // Redemption fees are collected by transferring some perp tokens from the user.
+        transfer(address(this), perpFeeAmt);
 
         // transfers reserve tokens out
         uint8 tokensOutCount = uint8(tokensOut.length);
@@ -470,12 +471,42 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    /// @dev CAUTION: Only the whitelisted vault can call this function.
+    /// @dev Only the whitelisted vault can call this function.
+    function claimFees(address to) external override onlyVault nonReentrant whenNotPaused {
+        IERC20Upgradeable perp_ = IERC20Upgradeable(address(this));
+        uint256 collectedBal = perp_.balanceOf(address(perp_));
+        if (collectedBal > 0) {
+            perp_.safeTransfer(to, collectedBal);
+        }
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    /// @dev Only the whitelisted vault can call this function.
+    function payProtocolFee(
+        address collector,
+        uint256 protocolSharePerc
+    ) external override onlyVault nonReentrant whenNotPaused {
+        if (protocolSharePerc > 0) {
+            _mint(collector, protocolSharePerc.mulDiv(totalSupply(), ONE - protocolSharePerc));
+        }
+    }
+
+    /// @inheritdoc IPerpetualTranche
+    /// @dev Only the whitelisted vault can call this function.
     ///      The logic controlling the frequency and magnitude of debasement should be vetted.
     function rebalanceToVault(
         uint256 underlyingAmtToTransfer
     ) external override onlyVault afterStateUpdate nonReentrant whenNotPaused {
-        _mint(address(vault), underlyingAmtToTransfer.mulDiv(totalSupply(), _reserveValue()));
+        // When value is flowing out of perp to the vault,
+        // we mint the vault perp tokens.
+        if (underlyingAmtToTransfer > 0) {
+            uint256 perpAmtToVault = underlyingAmtToTransfer.mulDiv(
+                totalSupply(),
+                _reserveValue() - underlyingAmtToTransfer,
+                MathUpgradeable.Rounding.Up
+            );
+            _mint(address(vault), perpAmtToVault);
+        }
     }
 
     /// @inheritdoc IPerpetualTranche
@@ -611,14 +642,7 @@ contract PerpetualTranche is
 
     /// @inheritdoc IPerpetualTranche
     function deviationRatio() external override afterStateUpdate nonReentrant returns (uint256) {
-        return
-            feePolicy.computeDeviationRatio(
-                SubscriptionParams({
-                    perpTVL: _reserveValue(),
-                    vaultTVL: vault.getTVL(),
-                    seniorTR: _depositBond.getSeniorTrancheRatio()
-                })
-            );
+        return feePolicy.computeDeviationRatio(_querySystemTVL());
     }
 
     //--------------------------------------------------------------------------
@@ -761,7 +785,13 @@ contract PerpetualTranche is
 
         //-----------------------------------------------------------------------------
         // We charge no mint fee when interacting with other callers within the system.
-        uint256 feePerc = _isProtocolCaller() ? 0 : feePolicy.computePerpMintFeePerc();
+        SystemTVL memory s = _querySystemTVL();
+        uint256 feePerc = _isProtocolCaller()
+            ? 0
+            : feePolicy.computeFeePerc(
+                feePolicy.computeDeviationRatio(s),
+                feePolicy.computeDeviationRatio(SystemTVL({ perpTVL: s.perpTVL + valueIn, vaultTVL: s.vaultTVL }))
+            );
         //-----------------------------------------------------------------------------
 
         // Compute mint amt
@@ -786,7 +816,15 @@ contract PerpetualTranche is
 
         //-----------------------------------------------------------------------------
         // We charge no burn fee when interacting with other parts of the system.
-        uint256 feePerc = _isProtocolCaller() ? 0 : feePolicy.computePerpBurnFeePerc();
+        SystemTVL memory s = _querySystemTVL();
+        uint256 feePerc = _isProtocolCaller()
+            ? 0
+            : feePolicy.computeFeePerc(
+                feePolicy.computeDeviationRatio(s),
+                feePolicy.computeDeviationRatio(
+                    SystemTVL({ perpTVL: s.perpTVL.mulDiv(perpSupply - perpAmt, perpSupply), vaultTVL: s.vaultTVL })
+                )
+            );
         //-----------------------------------------------------------------------------
 
         // Compute the fee amount
@@ -814,7 +852,7 @@ contract PerpetualTranche is
         ITranche trancheIn,
         IERC20Upgradeable tokenOut,
         uint256 trancheInAmtAvailable
-    ) private view returns (RolloverData memory) {
+    ) private view returns (RolloverData memory r) {
         //-----------------------------------------------------------------------------
 
         // We compute "price" as the value of a unit token.
@@ -843,8 +881,9 @@ contract PerpetualTranche is
 
         uint256 tokenOutBalance = tokenOut.balanceOf(address(this));
         if (trancheInAmtAvailable <= 0 || tokenOutBalance <= 0 || trancheInPrice <= 0 || tokenOutPrice <= 0) {
-            return RolloverData({ trancheInAmt: 0, tokenOutAmt: 0 });
+            return r;
         }
+
         //-----------------------------------------------------------------------------
         // Basic rollover:
         // (trancheInAmt . trancheInPrice) = (tokenOutAmt . tokenOutPrice)
@@ -852,17 +891,13 @@ contract PerpetualTranche is
 
         // Using perp's tokenOutBalance, we calculate the amount of tokens in to rollover
         // the entire balance.
-
-        RolloverData memory r = RolloverData({
-            tokenOutAmt: tokenOutBalance,
-            trancheInAmt: tokenOutBalance.mulDiv(tokenOutPrice, trancheInPrice, MathUpgradeable.Rounding.Up)
-        });
+        r.tokenOutAmt = tokenOutBalance;
+        r.trancheInAmt = tokenOutBalance.mulDiv(tokenOutPrice, trancheInPrice, MathUpgradeable.Rounding.Up);
 
         //-----------------------------------------------------------------------------
 
         // When the trancheInAmt exceeds trancheInAmtAvailable:
         // we fix trancheInAmt = trancheInAmtAvailable and re-calculate tokenOutAmt
-
         if (r.trancheInAmt > trancheInAmtAvailable) {
             // Given the amount of tranches In, we compute the amount of tokens out
             r.trancheInAmt = trancheInAmtAvailable;
@@ -1008,6 +1043,11 @@ contract PerpetualTranche is
         // Tranche supply is zero (its parent bond has no deposits yet);
         // the tranche's CDR is assumed 1.0.
         return (trancheSupply > 0) ? trancheClaim.mulDiv(trancheAmt, trancheSupply, rounding) : trancheAmt;
+    }
+
+    /// @dev Queries the current TVL of the perp and vault systems.
+    function _querySystemTVL() private view returns (SystemTVL memory) {
+        return SystemTVL({ perpTVL: _reserveValue(), vaultTVL: vault.getTVL() });
     }
 
     /// @dev Checks if the given token is the underlying collateral token.
