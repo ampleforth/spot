@@ -53,7 +53,7 @@ describe("RolloverVault", function () {
     feePolicy = new DMock(await ethers.getContractFactory("FeePolicy"));
     await feePolicy.deploy();
     await feePolicy.mockMethod("decimals()", [8]);
-    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
+    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256))", [toPercFixedPtAmt("1")]);
     await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
@@ -131,7 +131,7 @@ describe("RolloverVault", function () {
   describe("#mint2", function () {
     describe("when dr = 1", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeDRNormSeniorTR(uint256)", [toPercFixedPtAmt("0.25")]);
+        await feePolicy.mockMethod("targetSystemRatio()", [toPercFixedPtAmt("3")]);
       });
 
       it("should compute amounts", async function () {
@@ -193,8 +193,8 @@ describe("RolloverVault", function () {
 
     describe("when dr > 1", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeDRNormSeniorTR(uint256)", [toPercFixedPtAmt("0.25")]);
-        await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1.25")]);
+        await feePolicy.mockMethod("targetSystemRatio()", [toPercFixedPtAmt("3")]);
+        await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256))", [toPercFixedPtAmt("1.25")]);
         await vault.deposit(toFixedPtAmt("1000"));
       });
 
@@ -257,8 +257,8 @@ describe("RolloverVault", function () {
 
     describe("when dr < 1", function () {
       beforeEach(async function () {
-        await feePolicy.mockMethod("computeDRNormSeniorTR(uint256)", [toPercFixedPtAmt("0.25")]);
-        await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("0.75")]);
+        await feePolicy.mockMethod("targetSystemRatio()", [toPercFixedPtAmt("3")]);
+        await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256))", [toPercFixedPtAmt("0.75")]);
         await vault.redeem(toFixedPtAmt("500") * 1000000n);
         expect(await vault.getTVL.staticCall()).to.eq(toFixedPtAmt("1500"));
       });

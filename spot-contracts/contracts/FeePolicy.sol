@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
-import { SubscriptionParams, Range, Line } from "./_interfaces/CommonTypes.sol";
+import { SystemTVL, Range, Line } from "./_interfaces/CommonTypes.sol";
 import { InvalidPerc, InvalidRange, InvalidFees } from "./_interfaces/ProtocolErrors.sol";
 
 import { LineHelpers } from "./_utils/LineHelpers.sol";
@@ -22,21 +22,21 @@ import { MathHelpers } from "./_utils/MathHelpers.sol";
  *          supports rolling over all mature collateral backing perps.
  *
  *          The system's balance is defined by it's `deviationRatio` which is defined as follows.
- *              - `subscriptionRatio`   = (vaultTVL * seniorTR) / (perpTVL * 1-seniorTR)
- *              - `deviationRatio` (dr) = subscriptionRatio / targetSubscriptionRatio
+ *              - `systemRatio`   = vaultTVL / perpTVL
+ *              - `deviationRatio` (dr) = systemRatio / targetSystemRatio
  *
  *          When the dr = 1, the system is considered perfectly balanced.
- *          When the dr < 1, it's considered "under-subscribed".
- *          When the dr > 1, it's considered "over-subscribed".
+ *          When the dr < 1, the vault is considered "under-subscribed".
+ *          When the dr > 1, the vault is  considered "over-subscribed".
  *
  *          Fees:
  *          - The system charges a greater fee for operations that move it away from the balance point.
  *          - If an operation moves the system back to the balance point, it charges a lower fee (or no fee).
  *
  *          Incentives:
- *          - When the system is "under-subscribed", value is transferred from perp to the vault at a predefined rate.
+ *          - When the vault is "under-subscribed", value is transferred from perp to the vault at the computed rate.
  *            This debases perp tokens gradually and enriches the rollover vault.
- *          - When the system is "over-subscribed", value is transferred from the vault to perp at a predefined rate.
+ *          - When the vault is "over-subscribed", value is transferred from the vault to perp at the computed rate.
  *            This enriches perp tokens gradually and debases the rollover vault.
  *          - This transfer is implemented through a periodic "rebalance" operation, executed by the vault, and
  *            gradually nudges the system back into balance. On rebalance, the vault queries this policy
@@ -54,10 +54,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     using SafeCastUpgradeable for uint256;
     using SafeCastUpgradeable for int256;
 
-    // Replicating value used here:
-    // https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
-    uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
-
     /// @notice The returned fee percentages are fixed point numbers with {DECIMALS} places.
     /// @dev The decimals should line up with value expected by consumer (perp, vault).
     ///      NOTE: 10**DECIMALS => 100% or 1.0
@@ -67,10 +63,10 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     uint256 public constant ONE = (10 ** DECIMALS);
 
     //-----------------------------------------------------------------------------
-    /// @notice The target subscription ratio i.e) the normalization factor.
-    /// @dev The ratio under which the system is considered "under-subscribed".
-    ///      Adds a safety buffer to ensure that rollovers are better sustained.
-    uint256 public targetSubscriptionRatio;
+    /// @notice The target system ratio i.e) the normalization factor.
+    /// @dev The target system ratio, the target vault tvl to perp tvl ratio and
+    ///      is *different* from button-wood's tranche ratios.
+    uint256 public override targetSystemRatio;
 
     //-----------------------------------------------------------------------------
     // Fee parameters
@@ -116,7 +112,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     function init() external initializer {
         __Ownable_init();
 
-        targetSubscriptionRatio = (ONE * 150) / 100; // 1.5
+        targetSystemRatio = 3 * ONE; // 3.0
 
         // initializing fees
         feeFnDRDown = Line({
@@ -151,10 +147,10 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     //-----------------------------------------------------------------------------
     // Owner only
 
-    /// @notice Updates the target subscription ratio.
-    /// @param targetSubscriptionRatio_ The new target subscription ratio as a fixed point number with {DECIMALS} places.
-    function updateTargetSubscriptionRatio(uint256 targetSubscriptionRatio_) external onlyOwner {
-        targetSubscriptionRatio = targetSubscriptionRatio_;
+    /// @notice Updates the target system ratio.
+    /// @param targetSystemRatio_ The new target system ratio as a fixed point number with {DECIMALS} places.
+    function updateTargetSystemRatio(uint256 targetSystemRatio_) external onlyOwner {
+        targetSystemRatio = targetSystemRatio_;
     }
 
     /// @notice Updates the system fee functions.
@@ -262,9 +258,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computeRebalanceAmount(
-        SubscriptionParams memory s
-    ) external view override returns (int256 underlyingAmtIntoPerp) {
+    function computeRebalanceAmount(SystemTVL memory s) external view override returns (int256 underlyingAmtIntoPerp) {
         // We skip rebalancing if dr is close to 1.0
         uint256 dr = computeDeviationRatio(s);
         Range memory drEq = drEqZone();
@@ -273,8 +267,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         }
 
         // We compute the total value that should flow into perp to push the system into equilibrium.
-        uint256 totalTVL = s.perpTVL + s.vaultTVL;
-        uint256 reqPerpTVL = totalTVL.mulDiv(computeDRNormSeniorTR(s.seniorTR), ONE);
+        uint256 reqPerpTVL = (s.perpTVL + s.vaultTVL).mulDiv(ONE, targetSystemRatio + ONE);
         int256 reqUnderlyingAmtIntoPerp = reqPerpTVL.toInt256() - s.perpTVL.toInt256();
 
         // Perp debasement, value needs to flow from perp into the vault
@@ -308,16 +301,9 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computeDeviationRatio(SubscriptionParams memory s) public view override returns (uint256) {
+    function computeDeviationRatio(SystemTVL memory s) public view override returns (uint256) {
         // NOTE: We assume that perp's TVL and vault's TVL values have the same base denomination.
-        uint256 juniorTR = TRANCHE_RATIO_GRANULARITY - s.seniorTR;
-        return (s.vaultTVL * s.seniorTR).mulDiv(ONE, (s.perpTVL * juniorTR)).mulDiv(ONE, targetSubscriptionRatio);
-    }
-
-    /// @inheritdoc IFeePolicy
-    function computeDRNormSeniorTR(uint256 seniorTR) public view override returns (uint256) {
-        uint256 juniorTR = (TRANCHE_RATIO_GRANULARITY - seniorTR);
-        return ONE.mulDiv((seniorTR * ONE), (seniorTR * ONE) + (juniorTR * targetSubscriptionRatio));
+        return s.vaultTVL.mulDiv(ONE, s.perpTVL).mulDiv(ONE, targetSystemRatio);
     }
 
     /// @return The range of deviation ratios which define the equilibrium zone.

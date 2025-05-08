@@ -61,7 +61,7 @@ describe("RolloverVault", function () {
     feePolicy = new DMock(await ethers.getContractFactory("FeePolicy"));
     await feePolicy.deploy();
     await feePolicy.mockMethod("decimals()", [8]);
-    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
+    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256))", [toPercFixedPtAmt("1")]);
     await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
@@ -467,15 +467,15 @@ describe("RolloverVault", function () {
         await collateralToken.approve(vault.target, toFixedPtAmt("100"));
         await vault.deposit(toFixedPtAmt("100"));
 
-        await feePolicy.clearMockMethod("computeDeviationRatio((uint256,uint256,uint256))");
+        await feePolicy.clearMockMethod("computeDeviationRatio((uint256,uint256))");
         await feePolicy.mockCall(
-          "computeDeviationRatio((uint256,uint256,uint256))",
-          [[toFixedPtAmt("600"), toFixedPtAmt("100"), "200"]],
+          "computeDeviationRatio((uint256,uint256))",
+          [[toFixedPtAmt("600"), toFixedPtAmt("100")]],
           [toPercFixedPtAmt("1")],
         );
         await feePolicy.mockCall(
-          "computeDeviationRatio((uint256,uint256,uint256))",
-          [[toFixedPtAmt("600"), toFixedPtAmt("200"), "200"]],
+          "computeDeviationRatio((uint256,uint256))",
+          [[toFixedPtAmt("600"), toFixedPtAmt("200")]],
           [toPercFixedPtAmt("1")],
         );
         await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.05")]);
@@ -799,15 +799,15 @@ describe("RolloverVault", function () {
         await collateralToken.transfer(vault.target, toFixedPtAmt("20"));
 
         bal = toFixedPtAmt("50") * 1000000n;
-        await feePolicy.clearMockMethod("computeDeviationRatio((uint256,uint256,uint256))");
+        await feePolicy.clearMockMethod("computeDeviationRatio((uint256,uint256))");
         await feePolicy.mockCall(
-          "computeDeviationRatio((uint256,uint256,uint256))",
-          [[toFixedPtAmt("600"), toFixedPtAmt("220"), "200"]],
+          "computeDeviationRatio((uint256,uint256))",
+          [[toFixedPtAmt("600"), toFixedPtAmt("220")]],
           [toPercFixedPtAmt("1")],
         );
         await feePolicy.mockCall(
-          "computeDeviationRatio((uint256,uint256,uint256))",
-          [[toFixedPtAmt("600"), toFixedPtAmt("165"), "200"]],
+          "computeDeviationRatio((uint256,uint256))",
+          [[toFixedPtAmt("600"), toFixedPtAmt("165")]],
           [toPercFixedPtAmt("1")],
         );
         await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.1")]);

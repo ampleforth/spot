@@ -55,7 +55,7 @@ describe("RolloverVault", function () {
     feePolicy = new DMock(await ethers.getContractFactory("FeePolicy"));
     await feePolicy.deploy();
     await feePolicy.mockMethod("decimals()", [8]);
-    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256,uint256))", [toPercFixedPtAmt("1")]);
+    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256))", [toPercFixedPtAmt("1")]);
     await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
@@ -138,7 +138,6 @@ describe("RolloverVault", function () {
           expect(s[1]).to.eq(0);
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("800"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2000"));
-          expect(s[2].seniorTR).to.eq("200");
         });
 
         it("should update vault after swap", async function () {
@@ -169,7 +168,6 @@ describe("RolloverVault", function () {
           expect(s[1]).to.eq(0);
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("1600"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2000"));
-          expect(s[2].seniorTR).to.eq("200");
         });
 
         it("should update vault after swap", async function () {
@@ -199,7 +197,6 @@ describe("RolloverVault", function () {
           expect(s[1]).to.eq(0);
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("400"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("120"));
-          expect(s[2].seniorTR).to.eq("200");
         });
         it("should update vault after swap", async function () {
           await checkVaultComposition(
@@ -229,7 +226,6 @@ describe("RolloverVault", function () {
           expect(s[1]).to.eq(0);
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("800"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("1780"));
-          expect(s[2].seniorTR).to.eq("200");
         });
 
         it("should update vault after swap", async function () {
@@ -260,7 +256,6 @@ describe("RolloverVault", function () {
           expect(s[1]).to.eq(0);
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("800"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2220"));
-          expect(s[2].seniorTR).to.eq("200");
         });
 
         it("should update vault after swap", async function () {
@@ -292,7 +287,6 @@ describe("RolloverVault", function () {
         expect(s[1]).to.eq(toFixedPtAmt("0"));
         expect(s[2].perpTVL).to.eq(toFixedPtAmt("800"));
         expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2000"));
-        expect(s[2].seniorTR).to.eq("200");
       });
     });
 
@@ -317,7 +311,7 @@ describe("RolloverVault", function () {
 
     describe("when percentage of liquidity is too low", function () {
       beforeEach(async function () {
-        await vault.updateLiquidityLimits(toFixedPtAmt("2500"), toFixedPtAmt("0"), toPercFixedPtAmt("0.25"));
+        await vault.updateLiquidityLimits(toFixedPtAmt("2500"), toFixedPtAmt("0"), toPercFixedPtAmt("0.4"));
       });
       it("should be reverted", async function () {
         await expect(vault.swapUnderlyingForPerps(toFixedPtAmt("100"))).to.be.revertedWithCustomError(
@@ -609,7 +603,6 @@ describe("RolloverVault", function () {
           expect(s[1]).to.eq(0);
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("800"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2000"));
-          expect(s[2].seniorTR).to.eq("200");
         });
       });
 
@@ -623,7 +616,6 @@ describe("RolloverVault", function () {
           expect(s[1]).to.eq(0);
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("1600"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2000"));
-          expect(s[2].seniorTR).to.eq("200");
         });
       });
 
@@ -637,7 +629,6 @@ describe("RolloverVault", function () {
           expect(s[1]).to.eq(0);
           expect(s[2].perpTVL).to.eq(toFixedPtAmt("400"));
           expect(s[2].vaultTVL).to.eq(toFixedPtAmt("120"));
-          expect(s[2].seniorTR).to.eq("200");
         });
       });
     });
@@ -653,7 +644,6 @@ describe("RolloverVault", function () {
         expect(s[1]).to.eq(toFixedPtAmt("0"));
         expect(s[2].perpTVL).to.eq(toFixedPtAmt("800"));
         expect(s[2].vaultTVL).to.eq(toFixedPtAmt("2000"));
-        expect(s[2].seniorTR).to.eq("200");
       });
     });
 
