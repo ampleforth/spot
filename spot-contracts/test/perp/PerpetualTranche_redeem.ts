@@ -1,7 +1,6 @@
-import { expect, use } from "chai";
+import { expect } from "chai";
 import { network, ethers, upgrades } from "hardhat";
 import { Contract, Transaction, Signer } from "ethers";
-import { smock } from "@defi-wonderland/smock";
 import {
   setupCollateralToken,
   setupBondFactory,
@@ -11,11 +10,11 @@ import {
   toPercFixedPtAmt,
   toFixedPtAmt,
   advancePerpQueue,
-  checkReserveComposition,
+  checkPerpComposition,
   rebase,
   mintCollteralToken,
+  DMock,
 } from "../helpers";
-use(smock.matchers);
 
 let perp: Contract,
   bondFactory: Contract,
@@ -44,38 +43,46 @@ describe("PerpetualTranche", function () {
     const BondIssuer = await ethers.getContractFactory("BondIssuer");
     issuer = await upgrades.deployProxy(
       BondIssuer.connect(deployer),
-      [bondFactory.address, collateralToken.address, 3600, [500, 500], 1200, 0],
+      [bondFactory.target, collateralToken.target, 3600, [500, 500], 1200, 0],
       {
         initializer: "init(address,address,uint256,uint256[],uint256,uint256)",
       },
     );
 
-    const FeePolicy = await ethers.getContractFactory("FeePolicy");
-    feePolicy = await smock.fake(FeePolicy);
-    await feePolicy.decimals.returns(8);
+    feePolicy = new DMock(await ethers.getContractFactory("FeePolicy"));
+    await feePolicy.deploy();
+    await feePolicy.mockMethod("decimals()", [8]);
+    await feePolicy.mockMethod("computeDeviationRatio((uint256,uint256))", [toPercFixedPtAmt("1")]);
+    await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [0]);
 
     const PerpetualTranche = await ethers.getContractFactory("PerpetualTranche");
     perp = await upgrades.deployProxy(
       PerpetualTranche.connect(deployer),
-      ["PerpetualTranche", "PERP", collateralToken.address, issuer.address, feePolicy.address],
+      ["PerpetualTranche", "PERP", collateralToken.target, issuer.target, feePolicy.target],
       {
         initializer: "init(string,string,address,address,address)",
       },
     );
     await advancePerpQueue(perp, 3600);
 
-    const RolloverVault = await ethers.getContractFactory("RolloverVault");
-    const vault = await smock.fake(RolloverVault);
-    await vault.getTVL.returns("0");
-    await perp.updateVault(vault.address);
+    const TrancheManager = await ethers.getContractFactory("TrancheManager");
+    const trancheManager = await TrancheManager.deploy();
+    const RolloverVault = await ethers.getContractFactory("RolloverVault", {
+      libraries: {
+        TrancheManager: trancheManager.target,
+      },
+    });
+    const vault = new DMock(RolloverVault);
+    await vault.deploy();
+    await vault.mockMethod("getTVL()", [0]);
+    await perp.updateVault(vault.target);
 
-    depositBond = await bondAt(await perp.callStatic.getDepositBond());
+    depositBond = await bondAt(await perp.getDepositBond.staticCall());
     [initialDepositTranche] = await getTranches(depositBond);
 
     await depositIntoBond(depositBond, toFixedPtAmt("1000"), deployer);
-    await initialDepositTranche.approve(perp.address, toFixedPtAmt("500"));
-    await perp.deposit(initialDepositTranche.address, toFixedPtAmt("500"));
-    await feePolicy.computePerpBurnFeePerc.returns("0");
+    await initialDepositTranche.approve(perp.target, toFixedPtAmt("500"));
+    await perp.deposit(initialDepositTranche.target, toFixedPtAmt("500"));
     await mintCollteralToken(collateralToken, toFixedPtAmt("1000"), deployer);
   });
 
@@ -85,23 +92,23 @@ describe("PerpetualTranche", function () {
 
   describe("#burn", function () {
     it("should burn tokens without redemption", async function () {
-      await checkReserveComposition(perp, [collateralToken, initialDepositTranche], ["0", toFixedPtAmt("500")]);
+      await checkPerpComposition(perp, [collateralToken, initialDepositTranche], ["0", toFixedPtAmt("500")]);
       expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("500"));
       await perp.burn(toFixedPtAmt("500"));
       expect(await perp.balanceOf(deployerAddress)).to.eq("0");
-      await checkReserveComposition(perp, [collateralToken, initialDepositTranche], ["0", toFixedPtAmt("500")]);
+      await checkPerpComposition(perp, [collateralToken, initialDepositTranche], ["0", toFixedPtAmt("500")]);
     });
   });
 
   describe("#burnFrom", function () {
     it("should burn tokens without redemption from authorized wallet", async function () {
-      await checkReserveComposition(perp, [collateralToken, initialDepositTranche], ["0", toFixedPtAmt("500")]);
+      await checkPerpComposition(perp, [collateralToken, initialDepositTranche], ["0", toFixedPtAmt("500")]);
       expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("500"));
       await perp.approve(await otherUser.getAddress(), toFixedPtAmt("500"));
       await perp.connect(otherUser).burnFrom(deployerAddress, toFixedPtAmt("200"));
       expect(await perp.balanceOf(deployerAddress)).to.eq(toFixedPtAmt("300"));
       expect(await perp.allowance(deployerAddress, await otherUser.getAddress())).to.eq(toFixedPtAmt("300"));
-      await checkReserveComposition(perp, [collateralToken, initialDepositTranche], ["0", toFixedPtAmt("500")]);
+      await checkPerpComposition(perp, [collateralToken, initialDepositTranche], ["0", toFixedPtAmt("500")]);
     });
   });
 
@@ -130,7 +137,7 @@ describe("PerpetualTranche", function () {
 
     describe("when requested amount is zero", function () {
       it("should return without redeeming", async function () {
-        expect(await perp.callStatic.redeem("0")).to.deep.eq([]);
+        expect(await perp.redeem.staticCall("0")).to.deep.eq([]);
       });
     });
 
@@ -144,7 +151,7 @@ describe("PerpetualTranche", function () {
       });
 
       it("should revert", async function () {
-        await expect(perp.callStatic.computeRedemptionAmts(toFixedPtAmt("100"))).to.be.reverted;
+        await expect(perp.computeRedemptionAmts.staticCall(toFixedPtAmt("100"))).to.be.reverted;
       });
     });
 
@@ -166,21 +173,21 @@ describe("PerpetualTranche", function () {
       it("should emit reserve synced", async function () {
         await expect(perp.redeem(toFixedPtAmt("500")))
           .to.emit(perp, "ReserveSynced")
-          .withArgs(collateralToken.address, "0")
+          .withArgs(collateralToken.target, "0")
           .to.emit(perp, "ReserveSynced")
-          .withArgs(initialDepositTranche.address, "0");
+          .withArgs(initialDepositTranche.target, "0");
       });
       it("should return the redemption amounts", async function () {
-        const r = await perp.callStatic.redeem(toFixedPtAmt("500"));
-        expect(r[0].token).to.eq(collateralToken.address);
-        expect(r[1].token).to.eq(initialDepositTranche.address);
+        const r = await perp.redeem.staticCall(toFixedPtAmt("500"));
+        expect(r[0].token).to.eq(collateralToken.target);
+        expect(r[1].token).to.eq(initialDepositTranche.target);
         expect(r[0].amount).to.eq("0");
         expect(r[1].amount).to.eq(toFixedPtAmt("500"));
       });
       it("should return the redemption amounts", async function () {
-        const r = await perp.callStatic.computeRedemptionAmts(toFixedPtAmt("500"));
-        expect(r[0].token).to.eq(collateralToken.address);
-        expect(r[1].token).to.eq(initialDepositTranche.address);
+        const r = await perp.computeRedemptionAmts.staticCall(toFixedPtAmt("500"));
+        expect(r[0].token).to.eq(collateralToken.target);
+        expect(r[1].token).to.eq(initialDepositTranche.target);
         expect(r[0].amount).to.eq("0");
         expect(r[1].amount).to.eq(toFixedPtAmt("500"));
       });
@@ -193,15 +200,15 @@ describe("PerpetualTranche", function () {
 
         await advancePerpQueue(perp, 1200);
 
-        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        const newBond = await bondAt(await perp.getDepositBond.staticCall());
         await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
         const tranches = await getTranches(newBond);
         newRedemptionTranche = tranches[0];
 
-        await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
-        await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
+        await newRedemptionTranche.approve(perp.target, toFixedPtAmt("500"));
+        await perp.deposit(newRedemptionTranche.target, toFixedPtAmt("500"));
 
-        await checkReserveComposition(
+        await checkPerpComposition(
           perp,
           [collateralToken, initialDepositTranche, newRedemptionTranche],
           ["0", toFixedPtAmt("500"), toFixedPtAmt("500")],
@@ -213,7 +220,7 @@ describe("PerpetualTranche", function () {
 
       it("should update the reserve composition", async function () {
         await txFn();
-        await checkReserveComposition(
+        await checkPerpComposition(
           perp,
           [collateralToken, initialDepositTranche, newRedemptionTranche],
           ["0", toFixedPtAmt("312.5"), toFixedPtAmt("312.5")],
@@ -256,16 +263,16 @@ describe("PerpetualTranche", function () {
         await perp.updateTolerableTrancheMaturity(1200, 3600);
         await advancePerpQueue(perp, 1200);
 
-        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        const newBond = await bondAt(await perp.getDepositBond.staticCall());
         await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
         const tranches = await getTranches(newBond);
         newRedemptionTranche = tranches[0];
 
-        await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
-        await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
+        await newRedemptionTranche.approve(perp.target, toFixedPtAmt("500"));
+        await perp.deposit(newRedemptionTranche.target, toFixedPtAmt("500"));
 
-        await collateralToken.transfer(perp.address, toFixedPtAmt("100"));
-        await checkReserveComposition(
+        await collateralToken.transfer(perp.target, toFixedPtAmt("100"));
+        await checkPerpComposition(
           perp,
           [collateralToken, initialDepositTranche, newRedemptionTranche],
           [toFixedPtAmt("100"), toFixedPtAmt("500"), toFixedPtAmt("500")],
@@ -277,7 +284,7 @@ describe("PerpetualTranche", function () {
 
       it("should update the reserve composition", async function () {
         await txFn();
-        await checkReserveComposition(
+        await checkPerpComposition(
           perp,
           [collateralToken, initialDepositTranche, newRedemptionTranche],
           [toFixedPtAmt("50"), toFixedPtAmt("250"), toFixedPtAmt("250")],
@@ -324,15 +331,15 @@ describe("PerpetualTranche", function () {
 
         await advancePerpQueue(perp, 1200);
 
-        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        const newBond = await bondAt(await perp.getDepositBond.staticCall());
         await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
         const tranches = await getTranches(newBond);
         newRedemptionTranche = tranches[0];
 
-        await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
-        await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
+        await newRedemptionTranche.approve(perp.target, toFixedPtAmt("500"));
+        await perp.deposit(newRedemptionTranche.target, toFixedPtAmt("500"));
 
-        await checkReserveComposition(
+        await checkPerpComposition(
           perp,
           [collateralToken, initialDepositTranche, newRedemptionTranche],
           ["0", toFixedPtAmt("500"), toFixedPtAmt("500")],
@@ -340,7 +347,7 @@ describe("PerpetualTranche", function () {
 
         await advancePerpQueue(perp, 2400);
         await rebase(collateralToken, rebaseOracle, +0.5);
-        await checkReserveComposition(
+        await checkPerpComposition(
           perp,
           [collateralToken, newRedemptionTranche],
           [toFixedPtAmt("750"), toFixedPtAmt("500")],
@@ -352,7 +359,7 @@ describe("PerpetualTranche", function () {
 
       it("should update the reserve composition", async function () {
         await txFn();
-        await checkReserveComposition(
+        await checkPerpComposition(
           perp,
           [collateralToken, newRedemptionTranche],
           [toFixedPtAmt("468.75"), toFixedPtAmt("312.5")],
@@ -388,15 +395,15 @@ describe("PerpetualTranche", function () {
 
         await advancePerpQueue(perp, 1200);
 
-        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        const newBond = await bondAt(await perp.getDepositBond.staticCall());
         await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
         const tranches = await getTranches(newBond);
         newRedemptionTranche = tranches[0];
 
-        await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
-        await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
+        await newRedemptionTranche.approve(perp.target, toFixedPtAmt("500"));
+        await perp.deposit(newRedemptionTranche.target, toFixedPtAmt("500"));
 
-        await checkReserveComposition(
+        await checkPerpComposition(
           perp,
           [collateralToken, initialDepositTranche, newRedemptionTranche],
           ["0", toFixedPtAmt("500"), toFixedPtAmt("500")],
@@ -404,7 +411,7 @@ describe("PerpetualTranche", function () {
 
         await advancePerpQueue(perp, 2400);
         await rebase(collateralToken, rebaseOracle, -0.5);
-        await checkReserveComposition(
+        await checkPerpComposition(
           perp,
           [collateralToken, newRedemptionTranche],
           [toFixedPtAmt("250"), toFixedPtAmt("500")],
@@ -416,7 +423,7 @@ describe("PerpetualTranche", function () {
 
       it("should update the reserve composition", async function () {
         await txFn();
-        await checkReserveComposition(
+        await checkPerpComposition(
           perp,
           [collateralToken, newRedemptionTranche],
           [toFixedPtAmt("156.25"), toFixedPtAmt("312.5")],
@@ -448,22 +455,22 @@ describe("PerpetualTranche", function () {
 
         await advancePerpQueue(perp, 1200);
 
-        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        const newBond = await bondAt(await perp.getDepositBond.staticCall());
         await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
         const tranches = await getTranches(newBond);
         newRedemptionTranche = tranches[0];
 
-        await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
-        await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
+        await newRedemptionTranche.approve(perp.target, toFixedPtAmt("500"));
+        await perp.deposit(newRedemptionTranche.target, toFixedPtAmt("500"));
 
-        await checkReserveComposition(
+        await checkPerpComposition(
           perp,
           [collateralToken, initialDepositTranche, newRedemptionTranche],
           ["0", toFixedPtAmt("500"), toFixedPtAmt("500")],
         );
         await advancePerpQueue(perp, 7200);
 
-        await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("1000")]);
+        await checkPerpComposition(perp, [collateralToken], [toFixedPtAmt("1000")]);
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("1000"));
 
         txFn = () => perp.redeem(toFixedPtAmt("375"));
@@ -471,7 +478,7 @@ describe("PerpetualTranche", function () {
 
       it("should update the reserve composition", async function () {
         await txFn();
-        await checkReserveComposition(perp, [collateralToken], [toFixedPtAmt("625")]);
+        await checkPerpComposition(perp, [collateralToken], [toFixedPtAmt("625")]);
       });
 
       it("should transfer tokens out", async function () {
@@ -499,15 +506,15 @@ describe("PerpetualTranche", function () {
 
         await advancePerpQueue(perp, 1200);
 
-        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        const newBond = await bondAt(await perp.getDepositBond.staticCall());
         await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
         const tranches = await getTranches(newBond);
         newRedemptionTranche = tranches[0];
 
-        await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
-        await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
+        await newRedemptionTranche.approve(perp.target, toFixedPtAmt("500"));
+        await perp.deposit(newRedemptionTranche.target, toFixedPtAmt("500"));
 
-        await checkReserveComposition(
+        await checkPerpComposition(
           perp,
           [collateralToken, initialDepositTranche, newRedemptionTranche],
           ["0", toFixedPtAmt("500"), toFixedPtAmt("500")],
@@ -520,7 +527,7 @@ describe("PerpetualTranche", function () {
 
       it("should update the reserve composition", async function () {
         await txFn();
-        await checkReserveComposition(perp, [collateralToken], ["0"]);
+        await checkPerpComposition(perp, [collateralToken], ["0"]);
       });
 
       it("should transfer tokens out", async function () {
@@ -559,29 +566,40 @@ describe("PerpetualTranche", function () {
         await perp.updateTolerableTrancheMaturity(1200, 3600);
         await advancePerpQueue(perp, 1200);
 
-        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        const newBond = await bondAt(await perp.getDepositBond.staticCall());
         await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
         const tranches = await getTranches(newBond);
         newRedemptionTranche = tranches[0];
 
-        await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
-        await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
+        await newRedemptionTranche.approve(perp.target, toFixedPtAmt("500"));
+        await perp.deposit(newRedemptionTranche.target, toFixedPtAmt("500"));
 
-        await collateralToken.transfer(perp.address, toFixedPtAmt("100"));
-        await checkReserveComposition(
+        await collateralToken.transfer(perp.target, toFixedPtAmt("100"));
+        await checkPerpComposition(
           perp,
           [collateralToken, initialDepositTranche, newRedemptionTranche],
           [toFixedPtAmt("100"), toFixedPtAmt("500"), toFixedPtAmt("500")],
         );
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("1000"));
 
-        await feePolicy.computePerpBurnFeePerc.returns(toPercFixedPtAmt("0.1"));
+        await feePolicy.clearMockMethod("computeDeviationRatio((uint256,uint256))");
+        await feePolicy.mockCall(
+          "computeDeviationRatio((uint256,uint256))",
+          [[toFixedPtAmt("1100"), toFixedPtAmt("0")]],
+          [toPercFixedPtAmt("1")],
+        );
+        await feePolicy.mockCall(
+          "computeDeviationRatio((uint256,uint256))",
+          [[toFixedPtAmt("550"), toFixedPtAmt("0")]],
+          [toPercFixedPtAmt("1")],
+        );
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("0.1")]);
         txFn = () => perp.redeem(toFixedPtAmt("500"));
       });
 
       it("should update the reserve composition", async function () {
         await txFn();
-        await checkReserveComposition(
+        await checkPerpComposition(
           perp,
           [collateralToken, initialDepositTranche, newRedemptionTranche],
           [toFixedPtAmt("55"), toFixedPtAmt("275"), toFixedPtAmt("275")],
@@ -614,11 +632,15 @@ describe("PerpetualTranche", function () {
 
       it("should update the total supply", async function () {
         await txFn();
-        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("500"));
+        expect(await perp.totalSupply()).to.eq(toFixedPtAmt("550"));
       });
 
       it("should burn perp tokens", async function () {
         await expect(txFn).to.changeTokenBalances(perp, [deployer], [toFixedPtAmt("-500")]);
+      });
+
+      it("should mint fees to perp", async function () {
+        await expect(txFn).to.changeTokenBalances(perp, [perp], [toFixedPtAmt("50")]);
       });
     });
 
@@ -628,33 +650,33 @@ describe("PerpetualTranche", function () {
         await perp.updateTolerableTrancheMaturity(1200, 3600);
         await advancePerpQueue(perp, 1200);
 
-        const newBond = await bondAt(await perp.callStatic.getDepositBond());
+        const newBond = await bondAt(await perp.getDepositBond.staticCall());
         await depositIntoBond(newBond, toFixedPtAmt("1000"), deployer);
         const tranches = await getTranches(newBond);
         newRedemptionTranche = tranches[0];
 
-        await newRedemptionTranche.approve(perp.address, toFixedPtAmt("500"));
-        await perp.deposit(newRedemptionTranche.address, toFixedPtAmt("500"));
+        await newRedemptionTranche.approve(perp.target, toFixedPtAmt("500"));
+        await perp.deposit(newRedemptionTranche.target, toFixedPtAmt("500"));
 
-        await collateralToken.transfer(perp.address, toFixedPtAmt("100"));
-        await checkReserveComposition(
+        await collateralToken.transfer(perp.target, toFixedPtAmt("100"));
+        await checkPerpComposition(
           perp,
           [collateralToken, initialDepositTranche, newRedemptionTranche],
           [toFixedPtAmt("100"), toFixedPtAmt("500"), toFixedPtAmt("500")],
         );
         expect(await perp.totalSupply()).to.eq(toFixedPtAmt("1000"));
-        await feePolicy.computePerpBurnFeePerc.returns(toPercFixedPtAmt("1"));
+        await feePolicy.mockMethod("computeFeePerc(uint256,uint256)", [toPercFixedPtAmt("1")]);
 
         const MockVault = await ethers.getContractFactory("MockVault");
         mockVault = await MockVault.deploy();
-        await perp.updateVault(mockVault.address);
-        await perp.approve(mockVault.address, toFixedPtAmt("500"));
-        txFn = () => mockVault.redeemPerps(perp.address, toFixedPtAmt("500"));
+        await perp.updateVault(mockVault.target);
+        await perp.approve(mockVault.target, toFixedPtAmt("500"));
+        txFn = () => mockVault.redeemPerps(perp.target, toFixedPtAmt("500"));
       });
 
       it("should update the reserve composition", async function () {
         await txFn();
-        await checkReserveComposition(
+        await checkPerpComposition(
           perp,
           [collateralToken, initialDepositTranche, newRedemptionTranche],
           [toFixedPtAmt("50"), toFixedPtAmt("250"), toFixedPtAmt("250")],
@@ -695,10 +717,10 @@ describe("PerpetualTranche", function () {
       });
 
       it("should return the redemption amounts", async function () {
-        const r = await mockVault.callStatic.computePerpRedemptionAmts(perp.address, toFixedPtAmt("500"));
-        expect(r[0].token).to.eq(collateralToken.address);
-        expect(r[1].token).to.eq(initialDepositTranche.address);
-        expect(r[2].token).to.eq(newRedemptionTranche.address);
+        const r = await mockVault.computePerpRedemptionAmts.staticCall(perp.target, toFixedPtAmt("500"));
+        expect(r[0].token).to.eq(collateralToken.target);
+        expect(r[1].token).to.eq(initialDepositTranche.target);
+        expect(r[2].token).to.eq(newRedemptionTranche.target);
         expect(r[0].amount).to.eq(toFixedPtAmt("50"));
         expect(r[1].amount).to.eq(toFixedPtAmt("250"));
         expect(r[2].amount).to.eq(toFixedPtAmt("250"));

@@ -17,52 +17,44 @@ task("deploy:mocks").setAction(async function (args: TaskArguments, hre) {
   await cpiOracle.mockData("1200000000000000000", true);
 });
 
-task("deploy:SpotAppraiser")
-  .addParam("perp", "the address of the perp token", undefined, types.string, false)
+task("deploy:SpotPricer")
+  .addParam(
+    "wethWamplPool",
+    "the address of the weth-wampl univ3 pool",
+    undefined,
+    types.string,
+    false,
+  )
+  .addParam(
+    "usdcSpotPool",
+    "the address of the usdc-spot univ3 pool",
+    undefined,
+    types.string,
+    false,
+  )
+  .addParam("ethOracle", "the address of the eth oracle", undefined, types.string, false)
   .addParam("usdOracle", "the address of the usd oracle", undefined, types.string, false)
-  .addParam("cpiOracle", "the address of the usd oracle", undefined, types.string, false)
   .addParam("verify", "flag to set false for local deployments", true, types.boolean)
   .setAction(async function (args: TaskArguments, hre) {
     const deployer = (await hre.ethers.getSigners())[0];
     console.log("Signer", await deployer.getAddress());
 
-    const { perp, usdOracle, cpiOracle } = args;
+    const { wethWamplPool, usdcSpotPool, ethOracle, usdOracle } = args;
 
-    const SpotAppraiser = await hre.ethers.getContractFactory("SpotAppraiser");
-    const spotAppraiser = await SpotAppraiser.deploy(perp, usdOracle, cpiOracle);
-    console.log("spotAppraiser", spotAppraiser.target);
-
-    if (args.verify) {
-      await sleep(30);
-      await hre.run("verify:contract", {
-        address: spotAppraiser.target,
-        constructorArguments: [perp, usdOracle, cpiOracle],
-      });
-    } else {
-      console.log("Skipping verification");
-    }
-  });
-
-task("deploy:SpotCDRPricer")
-  .addParam("perp", "the address of the perp token", undefined, types.string, false)
-  .addParam("usdOracle", "the address of the usd oracle", undefined, types.string, false)
-  .addParam("cpiOracle", "the address of the usd oracle", undefined, types.string, false)
-  .addParam("verify", "flag to set false for local deployments", true, types.boolean)
-  .setAction(async function (args: TaskArguments, hre) {
-    const deployer = (await hre.ethers.getSigners())[0];
-    console.log("Signer", await deployer.getAddress());
-
-    const { perp, usdOracle, cpiOracle } = args;
-
-    const SpotCDRPricer = await hre.ethers.getContractFactory("SpotCDRPricer");
-    const spotCDRPricer = await SpotCDRPricer.deploy(perp, usdOracle, cpiOracle);
-    console.log("spotCDRPricer", spotCDRPricer.target);
+    const SpotPricer = await hre.ethers.getContractFactory("SpotPricer");
+    const spotPricer = await SpotPricer.deploy(
+      wethWamplPool,
+      usdcSpotPool,
+      ethOracle,
+      usdOracle,
+    );
+    console.log("spotPricer", spotPricer.target);
 
     if (args.verify) {
       await sleep(30);
       await hre.run("verify:contract", {
-        address: spotCDRPricer.target,
-        constructorArguments: [perp, usdOracle, cpiOracle],
+        address: spotPricer.target,
+        constructorArguments: [wethWamplPool, usdcSpotPool, ethOracle, usdOracle],
       });
     } else {
       console.log("Skipping verification");
@@ -86,23 +78,17 @@ task("deploy:BillBroker")
   )
   .addParam("usd", "the address of the usd token", undefined, types.string, false)
   .addParam("perp", "the address of the perp token", undefined, types.string, false)
-  .addParam(
-    "pricingStrategy",
-    "the address of the pricing strategy",
-    undefined,
-    types.string,
-    false,
-  )
+  .addParam("oracle", "the address of the oracle", undefined, types.string, false)
   .addParam("verify", "flag to set false for local deployments", true, types.boolean)
   .setAction(async function (args: TaskArguments, hre) {
     const deployer = (await hre.ethers.getSigners())[0];
     console.log("Signer", await deployer.getAddress());
 
-    const { name, symbol, usd, perp, pricingStrategy } = args;
+    const { name, symbol, usd, perp, oracle } = args;
     const BillBroker = await hre.ethers.getContractFactory("BillBroker");
     const billBroker = await hre.upgrades.deployProxy(
       BillBroker.connect(deployer),
-      [name, symbol, usd, perp, pricingStrategy],
+      [name, symbol, usd, perp, oracle],
       {
         initializer: "init(string,string,address,address,address)",
       },
@@ -119,69 +105,32 @@ task("deploy:BillBroker")
     }
   });
 
-task("deploy:WethWamplManager")
+task("deploy:CharmManager")
   .addParam(
-    "vault",
-    "the address of the weth-wampl charm vault",
+    "manager",
+    "the contract reference of the manager to be deployed",
     undefined,
     types.string,
     false,
   )
-  .addParam("cpiOracle", "the address of the usd oracle", undefined, types.string, false)
-  .addParam("ethOracle", "the address of the eth oracle", undefined, types.string, false)
+  .addParam("vault", "the address of the charm vault", undefined, types.string, false)
+  .addParam("oracle", "the address of the meta oracle", undefined, types.string, false)
   .addParam("verify", "flag to set false for local deployments", true, types.boolean)
   .setAction(async function (args: TaskArguments, hre) {
     const deployer = (await hre.ethers.getSigners())[0];
     console.log("Signer", await deployer.getAddress());
 
-    const { vault, cpiOracle, ethOracle } = args;
+    const { manager, vault, oracle } = args;
 
-    const WethWamplManager = await hre.ethers.getContractFactory("WethWamplManager");
-    const manager = await WethWamplManager.deploy(vault, cpiOracle, ethOracle);
-    console.log("wethWamplManager", manager.target);
-
-    if (args.verify) {
-      await sleep(30);
-      await hre.run("verify:contract", {
-        address: manager.target,
-        constructorArguments: [vault, cpiOracle, ethOracle],
-      });
-    } else {
-      console.log("Skipping verification");
-    }
-  });
-
-task("deploy:UsdcSpotManager")
-  .addParam(
-    "vault",
-    "the address of the usdc-spot charm vault",
-    undefined,
-    types.string,
-    false,
-  )
-  .addParam(
-    "spotAppraiser",
-    "the address of the spot appraiser",
-    undefined,
-    types.string,
-    false,
-  )
-  .addParam("verify", "flag to set false for local deployments", true, types.boolean)
-  .setAction(async function (args: TaskArguments, hre) {
-    const deployer = (await hre.ethers.getSigners())[0];
-    console.log("Signer", await deployer.getAddress());
-
-    const { vault, spotAppraiser } = args;
-
-    const UsdcSpotManager = await hre.ethers.getContractFactory("UsdcSpotManager");
-    const manager = await UsdcSpotManager.deploy(vault, spotAppraiser);
-    console.log("usdcSpotManager", manager.target);
+    const Factory = await hre.ethers.getContractFactory(manager);
+    const mgr = await Factory.deploy(vault, oracle);
+    console.log(manager, mgr.target);
 
     if (args.verify) {
       await sleep(30);
       await hre.run("verify:contract", {
-        address: manager.target,
-        constructorArguments: [vault, spotAppraiser],
+        address: mgr.target,
+        constructorArguments: [vault, oracle],
       });
     } else {
       console.log("Skipping verification");

@@ -5,15 +5,14 @@ This repository is a collection of vault strategies leveraging the SPOT system.
 The official mainnet addresses are:
 
 - Bill Broker (SPOT-USDC): [0xA088Aef966CAD7fE0B38e28c2E07590127Ab4ccB](https://etherscan.io/address/0xA088Aef966CAD7fE0B38e28c2E07590127Ab4ccB)
-- WethWamplManager: [0x6785fa26191eb531c54fd093931f395c4b01b583](https://etherscan.io/address/0x6785fa26191eb531c54fd093931f395c4b01b583)
-- UsdcSpotManager: [0x780eB92040bf24cd9BF993505390e88E8ED59935](https://etherscan.io/address/0x780eB92040bf24cd9BF993505390e88E8ED59935)
-- SpotAppraiser: [0x965FBFebDA76d9AA11642C1d0074CdF02e546F3c](https://etherscan.io/address/0x965FBFebDA76d9AA11642C1d0074CdF02e546F3c) Used by the Bill Broker
-- SpotCDRPricer: [0xa76df05BAb61444fa2C1c5c1e14A3aD912A00EbA](https://etherscan.io/address/0xa76df05BAb61444fa2C1c5c1e14A3aD912A00EbA) Used by the Charm USDC/SPOT auto manager
+- WethWamplManager: [0x574fca658b4B59E965C0e5f74761AE0Ac41DA6a7](https://etherscan.io/address/0x574fca658b4B59E965C0e5f74761AE0Ac41DA6a7)
+- UsdcSpotManager: [0x2f67158859Fe0f69f5773570eC60444Fe0c1693c](https://etherscan.io/address/0x2f67158859Fe0f69f5773570eC60444Fe0c1693c)
+- SpotPricer: [0x0f8f519878c10ce36C6aAF89c1AeefaaDE5D7881](https://etherscan.io/address/0x0f8f519878c10ce36C6aAF89c1AeefaaDE5D7881)
 
 The official testnet addresses are:
 
 - Bill Broker (SPOT-USDC): [0xc3f6D1F1d253EdC8B34D78Bc6cDD2b3eEFAd76BD](https://sepolia.etherscan.io/address/0xc3f6D1F1d253EdC8B34D78Bc6cDD2b3eEFAd76BD)
-- SpotAppraiser: [0x08c5b39F000705ebeC8427C1d64D6262392944EE](https://sepolia.etherscan.io/address/0x08c5b39F000705ebeC8427C1d64D6262392944EE)
+- SpotAppraiser **(deprecated)**: [0x08c5b39F000705ebeC8427C1d64D6262392944EE](https://sepolia.etherscan.io/address/0x08c5b39F000705ebeC8427C1d64D6262392944EE)
 
 ## Install
 

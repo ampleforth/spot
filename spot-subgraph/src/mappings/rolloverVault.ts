@@ -135,6 +135,9 @@ export function handleUnderlyingToPerpSwap(call: SwapUnderlyingForPerpsCall): vo
 
   let dailyStat = fetchRolloverVaultDailyStat(vault, dayTimestamp(call.block.timestamp))
   dailyStat.totalSwapValue = dailyStat.totalSwapValue.plus(underlyingAmtIn)
+  dailyStat.totalUnderlyingToPerpSwapValue = dailyStat.totalUnderlyingToPerpSwapValue.plus(
+    underlyingAmtIn,
+  )
   dailyStat.save()
 }
 
@@ -153,5 +156,8 @@ export function handlePerpToUnderlyingSwap(call: SwapPerpsForUnderlyingCall): vo
 
   let dailyStat = fetchRolloverVaultDailyStat(vault, dayTimestamp(call.block.timestamp))
   dailyStat.totalSwapValue = dailyStat.totalSwapValue.plus(perpAmtIn.times(perp.price))
+  dailyStat.totalPerpToUnderlyingSwapValue = dailyStat.totalPerpToUnderlyingSwapValue.plus(
+    perpAmtIn.times(perp.price),
+  )
   dailyStat.save()
 }

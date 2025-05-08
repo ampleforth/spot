@@ -4,7 +4,7 @@ import {
   RolloverVaultAsset,
   ScaledUnderlyingVaultDepositorBalance,
   RolloverVaultDailyStat,
-  Tranche
+  Tranche,
 } from '../../generated/schema'
 import { RolloverVault as RolloverVaultABI } from '../../generated/RolloverVault/RolloverVault'
 import { ERC20 as ERC20ABI } from '../../generated/BondFactory/ERC20'
@@ -144,10 +144,10 @@ export function refreshRolloverVaultRebaseMultiplier(vault: RolloverVault): void
     .plus(vaultPerpBalance)
     .plus(vaultZBalance)
     .plus(vaultUnderlyingBalance)
-  if(denominator.gt(BIGDECIMAL_ZERO)){
+  if (denominator.gt(BIGDECIMAL_ZERO)) {
     vault.rebaseMultiplier = numerator.div(denominator)
   }
-  vault.save()  
+  vault.save()
 }
 
 export function refreshRolloverVaultDailyStat(dailyStat: RolloverVaultDailyStat): void {
@@ -246,6 +246,8 @@ export function fetchRolloverVaultDailyStat(
     dailyStat.price = BIGDECIMAL_ZERO
     dailyStat.totalSupply = BIGDECIMAL_ZERO
     dailyStat.totalSwapValue = BIGDECIMAL_ZERO
+    dailyStat.totalUnderlyingToPerpSwapValue = BIGDECIMAL_ZERO
+    dailyStat.totalPerpToUnderlyingSwapValue = BIGDECIMAL_ZERO
   }
   return dailyStat as RolloverVaultDailyStat
 }

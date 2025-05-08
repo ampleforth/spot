@@ -355,4 +355,10 @@ type RolloverVaultDailyStat @entity {
 
   " the total value of swaps on the given day "
   totalSwapValue: BigDecimal!
+
+  " the total value of underlying to perp swaps on the given day "
+  totalUnderlyingToPerpSwapValue: BigDecimal!
+
+  " the total value of perp to underlying swaps on the given day "
+  totalPerpToUnderlyingSwapValue: BigDecimal!
 }

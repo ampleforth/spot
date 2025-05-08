@@ -48,6 +48,19 @@ interface IPerpetualTranche is IERC20Upgradeable {
         uint256 trancheInAmt
     ) external returns (RolloverData memory r);
 
+    /// @notice Sends the collected mint/burn fees to the provided recipient address.
+    /// @param to The recipient address.
+    function claimFees(address to) external;
+
+    /// @notice Pays the protocol fee collector a share of the TVL.
+    /// @param to The recipient address.
+    /// @param protocolSharePerc The share of tvl to be paid to the protocol as fees.
+    function payProtocolFee(address to, uint256 protocolSharePerc) external;
+
+    /// @notice Debases the value of perp tokens, by transferring value to the vault.
+    /// @param underlyingAmtToTransfer The value in underlying tokens to be transferred to the vault.
+    function rebalanceToVault(uint256 underlyingAmtToTransfer) external;
+
     /// @notice External contract that stores a predefined bond config and frequency,
     ///         and issues new bonds when poked.
     /// @return The address of the bond issuer.

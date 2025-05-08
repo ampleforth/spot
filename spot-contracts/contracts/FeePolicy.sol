@@ -2,62 +2,57 @@
 pragma solidity ^0.8.20;
 
 import { IFeePolicy } from "./_interfaces/IFeePolicy.sol";
-import { SubscriptionParams } from "./_interfaces/CommonTypes.sol";
-import { InvalidPerc, InvalidTargetSRBounds, InvalidDRBounds, InvalidSigmoidAsymptotes } from "./_interfaces/ProtocolErrors.sol";
+import { SystemTVL, Range, Line } from "./_interfaces/CommonTypes.sol";
+import { InvalidPerc, InvalidRange, InvalidFees } from "./_interfaces/ProtocolErrors.sol";
 
+import { LineHelpers } from "./_utils/LineHelpers.sol";
 import { MathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
+import { SignedMathUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SignedMathUpgradeable.sol";
 import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import { Sigmoid } from "./_utils/Sigmoid.sol";
+import { MathHelpers } from "./_utils/MathHelpers.sol";
 
 /**
  *  @title FeePolicy
  *
- *  @notice This contract determines fees for interacting with the perp and vault systems.
+ *  @notice This contract determines fees and incentives for interacting with the perp and vault systems.
  *
  *          The fee policy attempts to balance the demand for holding perp tokens with
  *          the demand for holding vault tokens; such that the total collateral in the vault
  *          supports rolling over all mature collateral backing perps.
  *
- *          Fees are computed based on the deviation between the system's current subscription ratio
- *          and the target subscription ratio.
- *              - `subscriptionRatio`   = (vaultTVL * seniorTR) / (perpTVL * 1-seniorTR)
- *              - `deviationRatio` (dr) = subscriptionRatio / targetSubscriptionRatio
+ *          The system's balance is defined by it's `deviationRatio` which is defined as follows.
+ *              - `systemRatio`   = vaultTVL / perpTVL
+ *              - `deviationRatio` (dr) = systemRatio / targetSystemRatio
  *
- *          When the system is "under-subscribed" (dr <= 1):
- *              - Rollover fees flow from perp holders to vault note holders.
- *              - Fees are charged for minting new perps.
- *              - No fees are charged for redeeming perps.
+ *          When the dr = 1, the system is considered perfectly balanced.
+ *          When the dr < 1, the vault is considered "under-subscribed".
+ *          When the dr > 1, the vault is  considered "over-subscribed".
  *
- *          When the system is "over-subscribed" (dr > 1):
- *              - Rollover fees flow from vault note holders to perp holders.
- *              - No fees are charged for minting new perps.
- *              - Fees are charged for redeeming perps.
+ *          Fees:
+ *          - The system charges a greater fee for operations that move it away from the balance point.
+ *          - If an operation moves the system back to the balance point, it charges a lower fee (or no fee).
  *
- *          Regardless of the `deviationRatio`, the system charges a fixed percentage fee
- *          for minting and redeeming vault notes.
+ *          Incentives:
+ *          - When the vault is "under-subscribed", value is transferred from perp to the vault at the computed rate.
+ *            This debases perp tokens gradually and enriches the rollover vault.
+ *          - When the vault is "over-subscribed", value is transferred from the vault to perp at the computed rate.
+ *            This enriches perp tokens gradually and debases the rollover vault.
+ *          - This transfer is implemented through a periodic "rebalance" operation, executed by the vault, and
+ *            gradually nudges the system back into balance. On rebalance, the vault queries this policy
+ *            to compute the magnitude and direction of value transfer.
  *
- *
- *          The rollover fees are signed and can flow in either direction based on the `deviationRatio`.
- *          The fee is a percentage is computed through a sigmoid function.
- *          The slope and asymptotes are set by the owner.
- *
- *          CRITICAL: The rollover fee percentage is NOT annualized, the fee percentage is applied per rollover.
- *          The number of rollovers per year changes based on the duration of perp's minting bond.
- *
- *          We consider a `deviationRatio` of greater than 1.0 healthy (or "over-subscribed").
- *          In general, the system favors an elastic perp supply and an inelastic vault note supply.
+ *          NOTE: All parameters are stored as fixed point numbers with {DECIMALS} decimal places.
  *
  *
  */
 contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     // Libraries
     using MathUpgradeable for uint256;
+    using MathHelpers for uint256;
+    using SignedMathUpgradeable for int256;
     using SafeCastUpgradeable for uint256;
-
-    // Replicating value used here:
-    // https://github.com/buttonwood-protocol/tranche/blob/main/contracts/BondController.sol
-    uint256 private constant TRANCHE_RATIO_GRANULARITY = 1000;
+    using SafeCastUpgradeable for int256;
 
     /// @notice The returned fee percentages are fixed point numbers with {DECIMALS} places.
     /// @dev The decimals should line up with value expected by consumer (perp, vault).
@@ -65,65 +60,46 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     uint8 public constant DECIMALS = 8;
 
     /// @notice Fixed point representation of 1.0 or 100%.
-    uint256 public constant ONE = (1 * 10 ** DECIMALS);
-
-    /// @notice Target subscription ratio lower bound, 0.75 or 75%.
-    uint256 public constant TARGET_SR_LOWER_BOUND = (ONE * 75) / 100;
-
-    /// @notice Target subscription ratio higher bound, 2.0 or 200%.
-    uint256 public constant TARGET_SR_UPPER_BOUND = 2 * ONE;
+    uint256 public constant ONE = (10 ** DECIMALS);
 
     //-----------------------------------------------------------------------------
-    /// @notice The target subscription ratio i.e) the normalization factor.
-    /// @dev The ratio under which the system is considered "under-subscribed".
-    ///      Adds a safety buffer to ensure that rollovers are better sustained.
-    uint256 public targetSubscriptionRatio;
-
-    /// @notice The lower bound of deviation ratio, below which some operations (which decrease the dr) are disabled.
-    uint256 public deviationRatioBoundLower;
-
-    /// @notice The upper bound of deviation ratio, above which some operations (which increase the dr) are disabled.
-    uint256 public deviationRatioBoundUpper;
+    /// @notice The target system ratio i.e) the normalization factor.
+    /// @dev The target system ratio, the target vault tvl to perp tvl ratio and
+    ///      is *different* from button-wood's tranche ratios.
+    uint256 public override targetSystemRatio;
 
     //-----------------------------------------------------------------------------
+    // Fee parameters
+
+    /// @notice Linear fee function used for operations that decrease DR (x-axis dr, y-axis fees).
+    Line public feeFnDRDown;
+
+    /// @notice Linear fee function used for operations that increase DR (x-axis dr, y-axis fees).
+    Line public feeFnDRUp;
 
     //-----------------------------------------------------------------------------
-    // Perp fee parameters
+    // Rebalance parameters
 
-    /// @notice The percentage fee charged on minting perp tokens.
-    uint256 public perpMintFeePerc;
+    /// @notice Reaction lag factor applied to rebalancing on perp debasement.
+    uint256 public perpDebasementLag;
 
-    /// @notice The percentage fee charged on burning perp tokens.
-    uint256 public perpBurnFeePerc;
+    /// @notice Reaction lag factor applied to rebalancing on perp enrichment.
+    uint256 public perpEnrichmentLag;
 
-    struct RolloverFeeSigmoidParams {
-        /// @notice Lower asymptote
-        int256 lower;
-        /// @notice Upper asymptote
-        int256 upper;
-        /// @notice sigmoid slope
-        int256 growth;
-    }
+    /// @notice Lower and upper percentage limits on perp debasement.
+    Range public perpDebasementPercLimits;
 
-    /// @notice Parameters which control the asymptotes and the slope of the perp token's rollover fee.
-    RolloverFeeSigmoidParams public perpRolloverFee;
+    /// @notice Lower and upper percentage limits on perp enrichment.
+    Range public perpEnrichmentPercLimits;
 
-    //-----------------------------------------------------------------------------
+    /// @notice Minimum number of seconds between subsequent rebalances.
+    uint256 public override rebalanceFreqSec;
 
-    //-----------------------------------------------------------------------------
-    // Vault fee parameters
+    /// @notice The percentage of system tvl charged as protocol fees on every rebalance.
+    uint256 public override protocolSharePerc;
 
-    /// @notice The percentage fee charged on minting vault notes.
-    uint256 public vaultMintFeePerc;
-
-    /// @notice The percentage fee charged on burning vault notes.
-    uint256 public vaultBurnFeePerc;
-
-    /// @notice The percentage fee charged by the vault to swap underlying tokens for perp tokens.
-    uint256 public vaultUnderlyingToPerpSwapFeePerc;
-
-    /// @notice The percentage fee charged by the vault to swap perp tokens for underlying tokens.
-    uint256 public vaultPerpToUnderlyingSwapFeePerc;
+    /// @notice The address to which the protocol fees are streamed to.
+    address public override protocolFeeCollector;
 
     //-----------------------------------------------------------------------------
 
@@ -136,179 +112,144 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     function init() external initializer {
         __Ownable_init();
 
-        // initializing mint/burn fees to zero
-        perpMintFeePerc = 0;
-        perpBurnFeePerc = 0;
-        vaultMintFeePerc = 0;
-        vaultBurnFeePerc = 0;
+        targetSystemRatio = 3 * ONE; // 3.0
 
-        // initializing swap fees to 100%, to disable swapping initially
-        vaultUnderlyingToPerpSwapFeePerc = ONE;
-        vaultPerpToUnderlyingSwapFeePerc = ONE;
+        // initializing fees
+        feeFnDRDown = Line({
+            x1: (ONE * 66) / 100, // 0.66
+            y1: ONE / 4, // 25%
+            x2: (ONE * 95) / 100, // 0.95
+            y2: 0 // 0%
+        });
+        feeFnDRUp = Line({
+            x1: (ONE * 105) / 100, // 1.05
+            y1: 0, // 0%
+            x2: (ONE * 150) / 100, // 1.5
+            y2: ONE / 4 // 25%
+        });
 
-        // NOTE: With the current bond length of 28 days, rollover rate is annualized by dividing by: 365/28 ~= 13
-        perpRolloverFee.lower = -int256(ONE) / (30 * 13); // -0.033/13 = -0.00253 (3.3% annualized)
-        perpRolloverFee.upper = int256(ONE) / (10 * 13); // 0.1/13 = 0.00769 (10% annualized)
-        perpRolloverFee.growth = 5 * int256(ONE); // 5.0
-
-        targetSubscriptionRatio = (ONE * 133) / 100; // 1.33
-        deviationRatioBoundLower = (ONE * 75) / 100; // 0.75
-        deviationRatioBoundUpper = 2 * ONE; // 2.0
+        // initializing rebalancing parameters
+        perpDebasementLag = 30;
+        perpEnrichmentLag = 30;
+        perpDebasementPercLimits = Range({
+            lower: (ONE) / 200, // 0.5% or 50 bps
+            upper: ONE / 40 // 2.5% or 250 bps
+        });
+        perpEnrichmentPercLimits = Range({
+            lower: (ONE) / 200, // 0.5% or 50 bps
+            upper: ONE / 40 // 2.5% or 250 bps
+        });
+        rebalanceFreqSec = 86400; // 1 day
+        protocolSharePerc = ONE / 100; // or 1%
+        protocolFeeCollector = owner();
     }
 
     //-----------------------------------------------------------------------------
     // Owner only
 
-    /// @notice Updates the target subscription ratio.
-    /// @param targetSubscriptionRatio_ The new target subscription ratio as a fixed point number with {DECIMALS} places.
-    function updateTargetSubscriptionRatio(uint256 targetSubscriptionRatio_) external onlyOwner {
-        if (targetSubscriptionRatio_ < TARGET_SR_LOWER_BOUND || targetSubscriptionRatio_ > TARGET_SR_UPPER_BOUND) {
-            revert InvalidTargetSRBounds();
-        }
-        targetSubscriptionRatio = targetSubscriptionRatio_;
+    /// @notice Updates the target system ratio.
+    /// @param targetSystemRatio_ The new target system ratio as a fixed point number with {DECIMALS} places.
+    function updateTargetSystemRatio(uint256 targetSystemRatio_) external onlyOwner {
+        targetSystemRatio = targetSystemRatio_;
     }
 
-    /// @notice Updates the deviation ratio bounds.
-    /// @param deviationRatioBoundLower_ The new lower deviation ratio bound as fixed point number with {DECIMALS} places.
-    /// @param deviationRatioBoundUpper_ The new upper deviation ratio bound as fixed point number with {DECIMALS} places.
-    function updateDeviationRatioBounds(
-        uint256 deviationRatioBoundLower_,
-        uint256 deviationRatioBoundUpper_
+    /// @notice Updates the system fee functions.
+    /// @param feeFnDRDown_ The new fee function for operations that decrease DR.
+    /// @param feeFnDRUp_ The new fee function for operations that increase DR.
+    function updateFees(Line memory feeFnDRDown_, Line memory feeFnDRUp_) external onlyOwner {
+        // Expect DR to be non-decreasing, x1 <= x2
+        bool validFees = ((feeFnDRDown_.x1 <= feeFnDRDown_.x2) && (feeFnDRUp_.x1 <= feeFnDRUp_.x2));
+
+        // Expect equilibrium zone to be valid
+        validFees = ((feeFnDRDown_.x2 <= ONE) && (feeFnDRUp_.x1 >= ONE)) && validFees;
+
+        // Expect fees to be non-decreasing when dr moves away from 1.0
+        validFees = ((feeFnDRDown_.y1 >= feeFnDRDown_.y2) && (feeFnDRUp_.y1 <= feeFnDRUp_.y2)) && validFees;
+
+        // Expect fee percentages to be valid
+        validFees =
+            (feeFnDRDown_.y1 <= ONE) &&
+            (feeFnDRDown_.y2 <= ONE) &&
+            (feeFnDRUp_.y1 <= ONE) &&
+            ((feeFnDRUp_.y2 <= ONE) && validFees);
+
+        if (!validFees) {
+            revert InvalidFees();
+        }
+
+        feeFnDRDown = feeFnDRDown_;
+        feeFnDRUp = feeFnDRUp_;
+    }
+
+    /// @notice Updates the all the parameters which control magnitude and frequency of the rebalance.
+    /// @param perpDebasementLag_ The new perp debasement lag factor.
+    /// @param perpEnrichmentLag_ The new perp enrichment lag factor.
+    /// @param perpDebasementPercLimits_ The new lower and upper percentage limits on perp debasement.
+    /// @param perpEnrichmentPercLimits_ The new lower and upper percentage limits on perp enrichment.
+    /// @param rebalanceFreqSec_ The new rebalance frequency in seconds.
+    function updateRebalanceConfig(
+        uint256 perpDebasementLag_,
+        uint256 perpEnrichmentLag_,
+        Range memory perpDebasementPercLimits_,
+        Range memory perpEnrichmentPercLimits_,
+        uint256 rebalanceFreqSec_
     ) external onlyOwner {
-        if (deviationRatioBoundLower_ > ONE || deviationRatioBoundUpper_ < ONE) {
-            revert InvalidDRBounds();
+        if (
+            perpDebasementPercLimits_.lower > perpDebasementPercLimits_.upper ||
+            perpEnrichmentPercLimits_.lower > perpEnrichmentPercLimits_.upper
+        ) {
+            revert InvalidRange();
         }
-        deviationRatioBoundLower = deviationRatioBoundLower_;
-        deviationRatioBoundUpper = deviationRatioBoundUpper_;
+
+        perpDebasementLag = perpDebasementLag_;
+        perpEnrichmentLag = perpEnrichmentLag_;
+        perpDebasementPercLimits = perpDebasementPercLimits_;
+        perpEnrichmentPercLimits = perpEnrichmentPercLimits_;
+        rebalanceFreqSec = rebalanceFreqSec_;
     }
 
-    /// @notice Updates the perp mint fee parameters.
-    /// @param perpMintFeePerc_ The new perp mint fee ceiling percentage
-    ///        as a fixed point number with {DECIMALS} places.
-    function updatePerpMintFees(uint256 perpMintFeePerc_) external onlyOwner {
-        if (perpMintFeePerc_ > ONE) {
+    /// @notice Updates the protocol share of tvl extracted on every rebalance.
+    /// @param protocolSharePerc_ The share of the tvl which goes to the protocol as a percentage.
+    /// @param protocolFeeCollector_ The new fee collector address.
+    function updateProtocolFeeConfig(uint256 protocolSharePerc_, address protocolFeeCollector_) external onlyOwner {
+        if (protocolSharePerc_ > ONE) {
             revert InvalidPerc();
         }
-        perpMintFeePerc = perpMintFeePerc_;
-    }
-
-    /// @notice Updates the perp burn fee parameters.
-    /// @param perpBurnFeePerc_ The new perp burn fee ceiling percentage
-    ///        as a fixed point number with {DECIMALS} places.
-    function updatePerpBurnFees(uint256 perpBurnFeePerc_) external onlyOwner {
-        if (perpBurnFeePerc_ > ONE) {
-            revert InvalidPerc();
-        }
-        perpBurnFeePerc = perpBurnFeePerc_;
-    }
-
-    /// @notice Update the parameters determining the slope and asymptotes of the sigmoid fee curve.
-    /// @param p Lower, Upper and Growth sigmoid paramters are fixed point numbers with {DECIMALS} places.
-    function updatePerpRolloverFees(RolloverFeeSigmoidParams calldata p) external onlyOwner {
-        if (p.lower > p.upper) {
-            revert InvalidSigmoidAsymptotes();
-        }
-        perpRolloverFee.lower = p.lower;
-        perpRolloverFee.upper = p.upper;
-        perpRolloverFee.growth = p.growth;
-    }
-
-    /// @notice Updates the vault mint fee parameters.
-    /// @param vaultMintFeePerc_ The new vault mint fee ceiling percentage
-    ///        as a fixed point number with {DECIMALS} places.
-    function updateVaultMintFees(uint256 vaultMintFeePerc_) external onlyOwner {
-        if (vaultMintFeePerc_ > ONE) {
-            revert InvalidPerc();
-        }
-        vaultMintFeePerc = vaultMintFeePerc_;
-    }
-
-    /// @notice Updates the vault burn fee parameters.
-    /// @param vaultBurnFeePerc_ The new vault burn fee ceiling percentage
-    ///        as a fixed point number with {DECIMALS} places.
-    function updateVaultBurnFees(uint256 vaultBurnFeePerc_) external onlyOwner {
-        if (vaultBurnFeePerc_ > ONE) {
-            revert InvalidPerc();
-        }
-        vaultBurnFeePerc = vaultBurnFeePerc_;
-    }
-
-    /// @notice Updates the vault's share of the underlying to perp swap fee.
-    /// @param feePerc The new fee percentage.
-    function updateVaultUnderlyingToPerpSwapFeePerc(uint256 feePerc) external onlyOwner {
-        if (feePerc > ONE) {
-            revert InvalidPerc();
-        }
-        vaultUnderlyingToPerpSwapFeePerc = feePerc;
-    }
-
-    /// @notice Updates the vault's share of the perp to underlying swap fee.
-    /// @param feePerc The new fee percentage.
-    function updateVaultPerpToUnderlyingSwapFeePerc(uint256 feePerc) external onlyOwner {
-        if (feePerc > ONE) {
-            revert InvalidPerc();
-        }
-        vaultPerpToUnderlyingSwapFeePerc = feePerc;
+        protocolSharePerc = protocolSharePerc_;
+        protocolFeeCollector = protocolFeeCollector_;
     }
 
     //-----------------------------------------------------------------------------
     // Public methods
 
     /// @inheritdoc IFeePolicy
-    /// @dev Minting perps reduces system dr, i.e) drPost < drPre.
-    function computePerpMintFeePerc() public view override returns (uint256) {
-        return perpMintFeePerc;
-    }
-
-    /// @inheritdoc IFeePolicy
-    /// @dev Burning perps increases system dr, i.e) drPost > drPre.
-    function computePerpBurnFeePerc() public view override returns (uint256) {
-        return perpBurnFeePerc;
-    }
-
-    /// @inheritdoc IFeePolicy
-    function computePerpRolloverFeePerc(uint256 dr) external view override returns (int256) {
-        return
-            Sigmoid.compute(
-                dr.toInt256(),
-                perpRolloverFee.lower,
-                perpRolloverFee.upper,
-                perpRolloverFee.growth,
-                ONE.toInt256()
-            );
-    }
-
-    /// @inheritdoc IFeePolicy
-    /// @dev Minting vault notes increases system dr, i.e) drPost > drPre.
-    function computeVaultMintFeePerc() external view override returns (uint256) {
-        return vaultMintFeePerc;
-    }
-
-    /// @inheritdoc IFeePolicy
-    function computeVaultBurnFeePerc() external view override returns (uint256) {
-        return vaultBurnFeePerc;
-    }
-
-    /// @inheritdoc IFeePolicy
-    /// @dev Swapping by minting perps reduces system dr, i.e) drPost < drPre.
-    function computeUnderlyingToPerpVaultSwapFeePerc(
-        uint256 /*drPre*/,
-        uint256 drPost
-    ) external view override returns (uint256) {
-        // When the after op deviation ratio is below the bound,
-        // swapping is disabled. (fees are set to 100%)
-        return (drPost < deviationRatioBoundLower ? ONE : vaultUnderlyingToPerpSwapFeePerc);
-    }
-
-    /// @inheritdoc IFeePolicy
-    /// @dev Swapping by burning perps increases system dr, i.e) drPost > drPre.
-    function computePerpToUnderlyingVaultSwapFeePerc(
-        uint256 /*drPre*/,
-        uint256 drPost
-    ) external view override returns (uint256) {
-        // When the after op deviation ratio is above the bound,
-        // swapping is disabled. (fees are set to 100%)
-        return (drPost > deviationRatioBoundUpper ? ONE : vaultPerpToUnderlyingSwapFeePerc);
+    function computeFeePerc(uint256 drPre, uint256 drPost) public view override returns (uint256) {
+        // DR is decreasing, we use feeFnDRDown
+        if (drPre > drPost) {
+            Line memory fee = feeFnDRDown;
+            return
+                LineHelpers
+                    .computePiecewiseAvgY(
+                        fee,
+                        Line({ x1: fee.x2, y1: fee.y2, x2: ONE, y2: fee.y2 }),
+                        Range({ lower: drPost, upper: drPre }),
+                        fee.x2
+                    )
+                    .toUint256();
+        }
+        // DR is increasing, we use feeFnDRUp
+        else {
+            Line memory fee = feeFnDRUp;
+            return
+                LineHelpers
+                    .computePiecewiseAvgY(
+                        Line({ x1: ONE, y1: fee.y1, x2: fee.x1, y2: fee.y1 }),
+                        fee,
+                        Range({ lower: drPre, upper: drPost }),
+                        fee.x1
+                    )
+                    .toUint256();
+        }
     }
 
     /// @inheritdoc IFeePolicy
@@ -317,9 +258,58 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     }
 
     /// @inheritdoc IFeePolicy
-    function computeDeviationRatio(SubscriptionParams memory s) public view returns (uint256) {
+    function computeRebalanceAmount(SystemTVL memory s) external view override returns (int256 underlyingAmtIntoPerp) {
+        // We skip rebalancing if dr is close to 1.0
+        uint256 dr = computeDeviationRatio(s);
+        Range memory drEq = drEqZone();
+        if (dr >= drEq.lower && dr <= drEq.upper) {
+            return 0;
+        }
+
+        // We compute the total value that should flow into perp to push the system into equilibrium.
+        uint256 reqPerpTVL = (s.perpTVL + s.vaultTVL).mulDiv(ONE, targetSystemRatio + ONE);
+        int256 reqUnderlyingAmtIntoPerp = reqPerpTVL.toInt256() - s.perpTVL.toInt256();
+
+        // Perp debasement, value needs to flow from perp into the vault
+        if (reqUnderlyingAmtIntoPerp < 0) {
+            // We calculate the 'clipped' lag adjusted rebalance amount
+            uint256 underlyingAmtTransferred = (reqUnderlyingAmtIntoPerp.abs() / perpDebasementLag).clip(
+                s.perpTVL.mulDiv(perpDebasementPercLimits.lower, ONE),
+                s.perpTVL.mulDiv(perpDebasementPercLimits.upper, ONE)
+            );
+
+            // We ensure that the rebalance doesn't overshoot equilibrium
+            underlyingAmtIntoPerp = SignedMathUpgradeable.max(
+                -underlyingAmtTransferred.toInt256(),
+                reqUnderlyingAmtIntoPerp
+            );
+        }
+        // Perp enrichment, from the vault into perp
+        else if (reqUnderlyingAmtIntoPerp > 0) {
+            // We calculate the 'clipped' lag adjusted rebalance amount
+            uint256 underlyingAmtTransferred = (reqUnderlyingAmtIntoPerp.toUint256() / perpEnrichmentLag).clip(
+                s.perpTVL.mulDiv(perpEnrichmentPercLimits.lower, ONE),
+                s.perpTVL.mulDiv(perpEnrichmentPercLimits.upper, ONE)
+            );
+
+            // We ensure that the rebalance doesn't overshoot equilibrium
+            underlyingAmtIntoPerp = SignedMathUpgradeable.min(
+                underlyingAmtTransferred.toInt256(),
+                reqUnderlyingAmtIntoPerp
+            );
+        }
+    }
+
+    /// @inheritdoc IFeePolicy
+    function computeDeviationRatio(SystemTVL memory s) public view override returns (uint256) {
         // NOTE: We assume that perp's TVL and vault's TVL values have the same base denomination.
-        uint256 juniorTR = TRANCHE_RATIO_GRANULARITY - s.seniorTR;
-        return (s.vaultTVL * s.seniorTR).mulDiv(ONE, (s.perpTVL * juniorTR)).mulDiv(ONE, targetSubscriptionRatio);
+        return s.vaultTVL.mulDiv(ONE, s.perpTVL).mulDiv(ONE, targetSystemRatio);
+    }
+
+    /// @return The range of deviation ratios which define the equilibrium zone.
+    /// @dev We infer the equilibrium from the fee function definitions, i.e) the upperDR in `feeFnDRDown`
+    ///      and lowerDR in `feeFnDRUp`.
+    function drEqZone() public view returns (Range memory) {
+        return Range({ lower: feeFnDRDown.x2, upper: feeFnDRUp.x1 });
     }
 }

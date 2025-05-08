@@ -10,6 +10,7 @@ import "hardhat-gas-reporter";
 
 // Loads custom tasks
 import "./tasks/deploy";
+import "./tasks/upgrade";
 import "./tasks/ops";
 import "./tasks/info";
 import "./tasks/tools";

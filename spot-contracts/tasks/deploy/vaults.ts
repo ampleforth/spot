@@ -15,12 +15,11 @@ task("deploy:RolloverVault")
 
     const RolloverVault = await hre.ethers.getContractFactory("RolloverVault");
     const vault = await hre.upgrades.deployProxy(RolloverVault.connect(deployer));
-    await vault.deployed();
 
-    const implAddress = await getImplementationAddress(hre.ethers.provider, vault.address);
+    const implAddress = await getImplementationAddress(hre.ethers.provider, vault.target);
 
     console.log("perp", perpAddress);
-    console.log("vault", vault.address);
+    console.log("vault", vault.target);
     console.log("vaultImpl", implAddress);
 
     const initTx = await vault.init(name, symbol, perpAddress);
