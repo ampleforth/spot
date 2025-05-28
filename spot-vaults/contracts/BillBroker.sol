@@ -53,8 +53,8 @@ import { InvalidARBound } from "./_interfaces/errors/BillBrokerErrors.sol";
  *          hold the perp tokens until the market price recovers and sell it back to the bill broker contract.
  *
  *          Single Sided deposits:
- *          The pool also supports single sided deposits with either perps or usd tokens
- *          insofar as it brings the pool back into balance.
+ *          The pool also supports single sided deposits with either perps or usd tokens. A
+ *          single sided deposit is treated simply as an atomic swap and deposit.
  *
  */
 contract BillBroker is
