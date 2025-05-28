@@ -212,8 +212,7 @@ contract PerpetualTranche is
     // v2.0.0 STORAGE ADDITION
 
     /// @notice Address of the authorized rollover vault.
-    /// @dev If this address is set, only the rollover vault can perform rollovers.
-    ///      If not rollovers are publicly accessible.
+    /// @dev Only the authorized rollover vault can perform rollovers.
     IRolloverVault public override vault;
 
     //--------------------------------------------------------------------------
