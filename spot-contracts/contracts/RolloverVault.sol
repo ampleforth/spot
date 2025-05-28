@@ -610,7 +610,7 @@ contract RolloverVault is
         // The vault continues to hold the perp dust until the subsequent `swapPerpsForUnderlying` or manual `recover(perp)`.
 
         // We ensure that the vault's underlying token liquidity
-        // remains above the reserved level after swap.
+        // remains above the reserved level after a swap that reduces liquidity.
         uint256 underlyingBalPost = underlying_.balanceOf(address(this));
         if ((underlyingBalPost < underlyingBalPre) && (underlyingBalPost <= _totalReservedBalance(s.vaultTVL))) {
             revert InsufficientLiquidity();
@@ -644,7 +644,7 @@ contract RolloverVault is
         // transfer underlying out
         underlying_.safeTransfer(msg.sender, underlyingAmtOut);
 
-        // Revert if swap reduces vault's available liquidity.
+        // We ensure that this swap strictly increases the vault's liquidity.
         uint256 underlyingBalPost = underlying_.balanceOf(address(this));
         if (underlyingBalPost < underlyingBalPre) {
             revert InsufficientLiquidity();
