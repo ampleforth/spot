@@ -569,9 +569,14 @@ contract PerpetualTranche is
     }
 
     /// @inheritdoc IPerpetualTranche
-    function getReserveTokensUpForRollover() external override afterStateUpdate returns (IERC20Upgradeable[] memory) {
+    function getReserveTokensUpForRollover()
+        external
+        override
+        afterStateUpdate
+        returns (IERC20Upgradeable[] memory activeRolloverTokens)
+    {
         uint8 reserveCount = uint8(_reserves.length());
-        IERC20Upgradeable[] memory activeRolloverTokens = new IERC20Upgradeable[](reserveCount);
+        activeRolloverTokens = new IERC20Upgradeable[](reserveCount);
 
         // We count the number of tokens up for rollover.
         uint8 numTokensUpForRollover = 0;
@@ -579,29 +584,22 @@ contract PerpetualTranche is
         // If any underlying collateral exists it can be rolled over.
         IERC20Upgradeable underlying_ = _reserveAt(0);
         if (underlying_.balanceOf(address(this)) > 0) {
-            activeRolloverTokens[0] = underlying_;
-            numTokensUpForRollover++;
+            activeRolloverTokens[numTokensUpForRollover++] = underlying_;
         }
 
         // Iterating through the reserve to find tranches that are ready to be rolled out.
         for (uint8 i = 1; i < reserveCount; ++i) {
             IERC20Upgradeable token = _reserveAt(i);
             if (_isTimeForRollout(ITranche(address(token)))) {
-                activeRolloverTokens[i] = token;
-                numTokensUpForRollover++;
+                activeRolloverTokens[numTokensUpForRollover++] = token;
             }
         }
 
-        // We recreate a smaller array with just the tokens up for rollover.
-        IERC20Upgradeable[] memory rolloverTokens = new IERC20Upgradeable[](numTokensUpForRollover);
-        uint8 j = 0;
-        for (uint8 i = 0; i < reserveCount; ++i) {
-            if (address(activeRolloverTokens[i]) != address(0)) {
-                rolloverTokens[j++] = activeRolloverTokens[i];
-            }
+        // Resize array in-place
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            mstore(activeRolloverTokens, numTokensUpForRollover)
         }
-
-        return rolloverTokens;
     }
 
     /// @inheritdoc IPerpetualTranche
