@@ -95,8 +95,8 @@ task("info:BillBroker")
 
     const oracle = await hre.ethers.getContractAt(
       "SpotPricer",
-      // await billBroker.oracle.staticCall(),
-      "0x0f8f519878c10ce36C6aAF89c1AeefaaDE5D7881",
+      await billBroker.oracle.staticCall(),
+      // "0x0f8f519878c10ce36C6aAF89c1AeefaaDE5D7881",
     );
     const oracleDecimals = await oracle.decimals();
     console.log("---------------------------------------------------------------");
@@ -104,7 +104,7 @@ task("info:BillBroker")
     const usdPriceCall = await oracle.usdPrice.staticCall();
     console.log("usdPrice:", pp(usdPriceCall[0], oracleDecimals));
     console.log("usdPriceValid:", usdPriceCall[1]);
-    const perpPriceCall = await oracle.perpUsdPrice.staticCall();
+    const perpPriceCall = await oracle.perpFmvUsdPrice.staticCall();
     console.log("perpPrice:", pp(perpPriceCall[0], oracleDecimals));
     console.log("perpPriceValid:", perpPriceCall[1]);
     console.log("---------------------------------------------------------------");
@@ -169,12 +169,12 @@ task("info:BillBroker")
               unitPerp * swapAmt,
             ),
             usdDecimals,
-          ) / parseInt(swapAmt),
+          ) / parseFloat(swapAmt),
           `usd per perp`,
         );
         console.log(
           `~Sell price for ${swapAmt} perp: `,
-          parseInt(swapAmt) /
+          parseFloat(swapAmt) /
             pp(
               await billBroker["computeUSDToPerpSwapAmt(uint256)"].staticCall(
                 unitUsd * swapAmt,
@@ -187,7 +187,6 @@ task("info:BillBroker")
       console.log("---------------------------------------------------------------");
     } catch (e) {
       console.log(e);
-      console.log("ReserveState: NA");
       console.log("---------------------------------------------------------------");
     }
   });
