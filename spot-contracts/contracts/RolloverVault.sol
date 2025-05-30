@@ -55,6 +55,12 @@ import { TrancheManager } from "./_utils/TrancheManager.sol";
  *      When ever a tranche token enters or leaves the system, we immediately invoke `_syncDeployedAsset` to update book-keeping.
  *      We call `_syncAsset` at the very end of every external function which changes the vault's underlying or perp balance.
  *
+ *      The perp tokens aren't considered part of the vault's asset set. However
+ *      during the normal operations, the vault can hold transient perp tokens but they
+ *      are immediately broken down into tranches. The vault receives perps only during rebalancing and swapping.
+ *      At the end of those operations, the vault redeems perp tokens for the senior tranches backing them.
+ *
+ *
  */
 contract RolloverVault is
     ERC20BurnableUpgradeable,
@@ -604,7 +610,7 @@ contract RolloverVault is
         // The vault continues to hold the perp dust until the subsequent `swapPerpsForUnderlying` or manual `recover(perp)`.
 
         // We ensure that the vault's underlying token liquidity
-        // remains above the reserved level after swap.
+        // remains above the reserved level after a swap that reduces liquidity.
         uint256 underlyingBalPost = underlying_.balanceOf(address(this));
         if ((underlyingBalPost < underlyingBalPre) && (underlyingBalPost <= _totalReservedBalance(s.vaultTVL))) {
             revert InsufficientLiquidity();
@@ -638,7 +644,7 @@ contract RolloverVault is
         // transfer underlying out
         underlying_.safeTransfer(msg.sender, underlyingAmtOut);
 
-        // Revert if swap reduces vault's available liquidity.
+        // We ensure that this swap strictly increases the vault's liquidity.
         uint256 underlyingBalPost = underlying_.balanceOf(address(this));
         if (underlyingBalPost < underlyingBalPre) {
             revert InsufficientLiquidity();
