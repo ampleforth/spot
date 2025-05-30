@@ -105,10 +105,10 @@ task("upgrade:testnet")
       await getImplementationAddress(hre.ethers.provider, address),
     );
 
-    const impl = await hre.upgrades.upgradeProxy(address, Factory, {
+    await hre.upgrades.upgradeProxy(address, Factory, {
       unsafeAllowRenames: true,
     });
-    await impl.deployed();
+    await sleep(30);
     const newImpl = await getImplementationAddress(hre.ethers.provider, address);
     console.log("Updated implementation", newImpl);
 

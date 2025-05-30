@@ -47,13 +47,6 @@ task("ops:perp:info")
     console.log("---------------------------------------------------------------");
     console.log("feePolicy:", feePolicy.target);
     console.log("owner", await feePolicy.owner());
-    console.log("perpMintFeePerc:", hre.ethers.formatUnits(await feePolicy.perpMintFeePerc(), percDecimals));
-    console.log("perpBurnFeePerc:", hre.ethers.formatUnits(await feePolicy.perpBurnFeePerc(), percDecimals));
-    const r = await feePolicy.perpRolloverFee();
-    console.log("minRolloverFeePerc:", hre.ethers.formatUnits(r.minRolloverFeePerc, percDecimals));
-    console.log("perpDebasementSlope:", hre.ethers.formatUnits(r.perpDebasementSlope, percDecimals));
-    console.log("perpEnrichmentSlope:", hre.ethers.formatUnits(r.perpEnrichmentSlope, percDecimals));
-
     console.log("---------------------------------------------------------------");
     console.log("PerpetualTranche:", perp.target);
     console.log("proxyAdmin:", proxyAdminAddress);
@@ -84,7 +77,7 @@ task("ops:perp:info")
       const tokenAddress = await perp.getReserveAt.staticCall(i);
       const balance = await perp.getReserveTokenBalance.staticCall(tokenAddress);
       const value = await perp.getReserveTokenValue.staticCall(tokenAddress);
-      const price = balance > 0n ? (value * balance * 1000) / 10n ** perpDecimals / 10n ** percDecimals : 0n;
+      const price = (balance > 0n) ? (value * 1000n / balance) : 0n;
       data.push({
         token: tokenAddress,
         balance: hre.ethers.formatUnits(balance, await perp.decimals()),

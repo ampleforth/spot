@@ -9,9 +9,7 @@ export async function getContractFactoryFromExternalArtifacts(ethers: any, name:
   return ethers.getContractFactoryFromArtifact(artifact);
 }
 
-export async function sleep(sleepSec: number) {
-  await new Promise(resolve => setTimeout(resolve, sleepSec));
-}
+export const sleep = seconds => new Promise(resolve => setTimeout(resolve, seconds * 1000));
 
 interface ContractInput {
   internalType: string;

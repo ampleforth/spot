@@ -30,6 +30,7 @@ task("ops:vault:info")
     console.log("RolloverVault:", vault.target);
     console.log("proxyAdmin:", proxyAdminAddress);
     console.log("implementation:", implAddress);
+    console.log("feePolicy:", feePolicy.target);
     console.log("owner:", await vault.owner());
     console.log("paused:", await vault.paused());
     console.log("perp:", perp.target);
@@ -77,43 +78,23 @@ task("ops:vault:info")
     const vaultTVL = await vault.getTVL.staticCall();
     const seniorTR = await perp.getDepositTrancheRatio.staticCall();
     const juniorTR = 1000n - seniorTR;
-    const subscriptionRatio = (vaultTVL * seniorTR * feeOne) / perpTVL / juniorTR;
-    const targetSubscriptionRatio = await feePolicy.targetSubscriptionRatio();
-    const expectedVaultTVL = (targetSubscriptionRatio * perpTVL * juniorTR) / seniorTR / feeOne;
-    const deviationRatio = await feePolicy["computeDeviationRatio((uint256,uint256))"]([perpTVL, vaultTVL, seniorTR]);
+    const systemRatio = vaultTVL * feeOne / perpTVL;
+    const targetSystemRatio = await feePolicy.targetSystemRatio();
+    const expectedVaultTVL = (targetSystemRatio * perpTVL) / feeOne;
+    const deviationRatio = await feePolicy["computeDeviationRatio((uint256,uint256))"]([perpTVL, vaultTVL]);
     console.log("perpTVL:", hre.ethers.formatUnits(perpTVL, underlyingDecimals));
     console.log("vaultTVL:", hre.ethers.formatUnits(vaultTVL, underlyingDecimals));
     console.log("expectedVaultTVL:", hre.ethers.formatUnits(expectedVaultTVL, underlyingDecimals));
     console.log("seniorTR:", hre.ethers.formatUnits(seniorTR, 3));
     console.log("juniorTR:", hre.ethers.formatUnits(juniorTR, 3));
-    console.log("subscriptionRatio:", hre.ethers.formatUnits(subscriptionRatio, feeDecimals));
-    console.log("targetSubscriptionRatio:", hre.ethers.formatUnits(targetSubscriptionRatio, feeDecimals));
+    console.log("systemRatio:", hre.ethers.formatUnits(systemRatio, feeDecimals));
+    console.log("targetSystemRatio:", hre.ethers.formatUnits(targetSystemRatio, feeDecimals));
     console.log("targetDeviationRatio:", hre.ethers.formatUnits(feeOne, feeDecimals));
-
-    const drHardBound = await feePolicy.drHardBound();
-    console.log("deviationRatioBoundLower:", hre.ethers.formatUnits(drHardBound.lower, feeDecimals));
-    console.log("deviationRatioBoundUpper:", hre.ethers.formatUnits(drHardBound.upper, feeDecimals));
     console.log("deviationRatio:", hre.ethers.formatUnits(deviationRatio, feeDecimals));
 
     console.log("---------------------------------------------------------------");
     console.log("feePolicy:", feePolicy.target);
     console.log("owner", await feePolicy.owner());
-    console.log("computeVaultMintFeePerc:", hre.ethers.formatUnits(await feePolicy.computeVaultMintFeePerc(), 8));
-    console.log("computeVaultBurnFeePerc:", hre.ethers.formatUnits(await feePolicy.computeVaultBurnFeePerc(), 8));
-    console.log(
-      "computeUnderlyingToPerpVaultSwapFeePerc:",
-      hre.ethers.formatUnits(
-        await feePolicy.computeUnderlyingToPerpVaultSwapFeePerc(deviationRatio, deviationRatio),
-        8,
-      ),
-    );
-    console.log(
-      "computePerpToUnderlyingVaultSwapFeePerc:",
-      hre.ethers.formatUnits(
-        await feePolicy.computePerpToUnderlyingVaultSwapFeePerc(deviationRatio, deviationRatio),
-        8,
-      ),
-    );
     console.log("---------------------------------------------------------------");
     console.log("Swap slippage");
     try {
