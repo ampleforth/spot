@@ -326,6 +326,325 @@
         },
         "namespaces": {}
       }
+    },
+    "7f703e4a10347cca6e80b8d427a010abcbb83e0b8f3039d52b3a4a4aae5948ff": {
+      "address": "0x047b82a5D79d9DF62dE4f34CbaBa83F71848a6BF",
+      "txHash": "0xda1e4afb92b889dce9982b6ff84671a677d7735194299577ca14e1d7a3091cce",
+      "layout": {
+        "solcVersion": "0.8.24",
+        "storage": [
+          {
+            "label": "_initialized",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint8",
+            "contract": "Initializable",
+            "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:63",
+            "retypedFrom": "bool"
+          },
+          {
+            "label": "_initializing",
+            "offset": 1,
+            "slot": "0",
+            "type": "t_bool",
+            "contract": "Initializable",
+            "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:68"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_array(t_uint256)50_storage",
+            "contract": "ContextUpgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol:40"
+          },
+          {
+            "label": "_balances",
+            "offset": 0,
+            "slot": "51",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "ERC20Upgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol:40"
+          },
+          {
+            "label": "_allowances",
+            "offset": 0,
+            "slot": "52",
+            "type": "t_mapping(t_address,t_mapping(t_address,t_uint256))",
+            "contract": "ERC20Upgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol:42"
+          },
+          {
+            "label": "_totalSupply",
+            "offset": 0,
+            "slot": "53",
+            "type": "t_uint256",
+            "contract": "ERC20Upgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol:44"
+          },
+          {
+            "label": "_name",
+            "offset": 0,
+            "slot": "54",
+            "type": "t_string_storage",
+            "contract": "ERC20Upgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol:46"
+          },
+          {
+            "label": "_symbol",
+            "offset": 0,
+            "slot": "55",
+            "type": "t_string_storage",
+            "contract": "ERC20Upgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol:47"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "56",
+            "type": "t_array(t_uint256)45_storage",
+            "contract": "ERC20Upgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol:376"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "101",
+            "type": "t_array(t_uint256)50_storage",
+            "contract": "ERC20BurnableUpgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol:51"
+          },
+          {
+            "label": "_owner",
+            "offset": 0,
+            "slot": "151",
+            "type": "t_address",
+            "contract": "OwnableUpgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:22"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "152",
+            "type": "t_array(t_uint256)49_storage",
+            "contract": "OwnableUpgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:94"
+          },
+          {
+            "label": "_paused",
+            "offset": 0,
+            "slot": "201",
+            "type": "t_bool",
+            "contract": "PausableUpgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol:29"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "202",
+            "type": "t_array(t_uint256)49_storage",
+            "contract": "PausableUpgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol:116"
+          },
+          {
+            "label": "_status",
+            "offset": 0,
+            "slot": "251",
+            "type": "t_uint256",
+            "contract": "ReentrancyGuardUpgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol:38"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "252",
+            "type": "t_array(t_uint256)49_storage",
+            "contract": "ReentrancyGuardUpgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol:88"
+          },
+          {
+            "label": "perp",
+            "offset": 0,
+            "slot": "301",
+            "type": "t_contract(IPerpetualTranche)2878",
+            "contract": "BillBroker",
+            "src": "contracts/BillBroker.sol:94"
+          },
+          {
+            "label": "usd",
+            "offset": 0,
+            "slot": "302",
+            "type": "t_contract(IERC20Upgradeable)5020",
+            "contract": "BillBroker",
+            "src": "contracts/BillBroker.sol:97"
+          },
+          {
+            "label": "usdUnitAmt",
+            "offset": 0,
+            "slot": "303",
+            "type": "t_uint256",
+            "contract": "BillBroker",
+            "src": "contracts/BillBroker.sol:100"
+          },
+          {
+            "label": "perpUnitAmt",
+            "offset": 0,
+            "slot": "304",
+            "type": "t_uint256",
+            "contract": "BillBroker",
+            "src": "contracts/BillBroker.sol:103"
+          },
+          {
+            "label": "keeper",
+            "offset": 0,
+            "slot": "305",
+            "type": "t_address",
+            "contract": "BillBroker",
+            "src": "contracts/BillBroker.sol:108"
+          },
+          {
+            "label": "oracle",
+            "offset": 0,
+            "slot": "306",
+            "type": "t_contract(IPerpPricer)13600",
+            "contract": "BillBroker",
+            "src": "contracts/BillBroker.sol:111"
+          },
+          {
+            "label": "fees",
+            "offset": 0,
+            "slot": "307",
+            "type": "t_struct(BillBrokerFees)13657_storage",
+            "contract": "BillBroker",
+            "src": "contracts/BillBroker.sol:114"
+          },
+          {
+            "label": "arHardBound",
+            "offset": 0,
+            "slot": "314",
+            "type": "t_struct(Range)13689_storage",
+            "contract": "BillBroker",
+            "src": "contracts/BillBroker.sol:117"
+          },
+          {
+            "label": "arSoftBound",
+            "offset": 0,
+            "slot": "316",
+            "type": "t_struct(Range)13689_storage",
+            "contract": "BillBroker",
+            "src": "contracts/BillBroker.sol:121"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_array(t_uint256)45_storage": {
+            "label": "uint256[45]",
+            "numberOfBytes": "1440"
+          },
+          "t_array(t_uint256)49_storage": {
+            "label": "uint256[49]",
+            "numberOfBytes": "1568"
+          },
+          "t_array(t_uint256)50_storage": {
+            "label": "uint256[50]",
+            "numberOfBytes": "1600"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_contract(IERC20Upgradeable)5020": {
+            "label": "contract IERC20Upgradeable",
+            "numberOfBytes": "20"
+          },
+          "t_contract(IPerpPricer)13600": {
+            "label": "contract IPerpPricer",
+            "numberOfBytes": "20"
+          },
+          "t_contract(IPerpetualTranche)2878": {
+            "label": "contract IPerpetualTranche",
+            "numberOfBytes": "20"
+          },
+          "t_mapping(t_address,t_mapping(t_address,t_uint256))": {
+            "label": "mapping(address => mapping(address => uint256))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_uint256)": {
+            "label": "mapping(address => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(BillBrokerFees)13657_storage": {
+            "label": "struct BillBrokerFees",
+            "members": [
+              {
+                "label": "mintFeePerc",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "burnFeePerc",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "perpToUSDSwapFeeFactors",
+                "type": "t_struct(Range)13689_storage",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "usdToPerpSwapFeeFactors",
+                "type": "t_struct(Range)13689_storage",
+                "offset": 0,
+                "slot": "4"
+              },
+              {
+                "label": "protocolSwapSharePerc",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "6"
+              }
+            ],
+            "numberOfBytes": "224"
+          },
+          "t_struct(Range)13689_storage": {
+            "label": "struct Range",
+            "members": [
+              {
+                "label": "lower",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "upper",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              }
+            ],
+            "numberOfBytes": "64"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint8": {
+            "label": "uint8",
+            "numberOfBytes": "1"
+          }
+        },
+        "namespaces": {}
+      }
     }
   }
 }

@@ -17,6 +17,36 @@ task("deploy:mocks").setAction(async function (args: TaskArguments, hre) {
   await cpiOracle.mockData("1200000000000000000", true);
 });
 
+task("deploy:MockSpotPricer")
+  .addParam(
+    "spot",
+    "the address of the testnet spot token",
+    undefined,
+    types.string,
+    false,
+  )
+  .addParam("verify", "flag to set false for local deployments", true, types.boolean)
+  .setAction(async function (args: TaskArguments, hre) {
+    const deployer = (await hre.ethers.getSigners())[0];
+    console.log("Signer", await deployer.getAddress());
+
+    const { spot } = args;
+
+    const MockSpotPricer = await hre.ethers.getContractFactory("MockSpotPricer");
+    const mockSpotPricer = await MockSpotPricer.deploy(spot);
+    console.log("spotPricer", mockSpotPricer.target);
+
+    if (args.verify) {
+      await sleep(30);
+      await hre.run("verify:contract", {
+        address: mockSpotPricer.target,
+        constructorArguments: [spot],
+      });
+    } else {
+      console.log("Skipping verification");
+    }
+  });
+
 task("deploy:SpotPricer")
   .addParam(
     "wethWamplPool",
