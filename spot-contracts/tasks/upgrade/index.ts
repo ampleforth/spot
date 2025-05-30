@@ -66,14 +66,58 @@ task("upgrade:testnet")
     console.log("Proxy", address);
     console.log("Current implementation", await getImplementationAddress(hre.ethers.provider, address));
 
-    const impl = await hre.upgrades.upgradeProxy(address, Factory, {
+    await hre.upgrades.upgradeProxy(address, Factory, {
       unsafeAllowRenames: true,
     });
-    await impl.deployed();
+    await sleep(30);
     const newImpl = await getImplementationAddress(hre.ethers.provider, address);
     console.log("Updated implementation", newImpl);
 
     await sleep(15);
+    await hre.run("verify:contract", {
+      address: newImpl,
+    });
+  });
+
+task("upgrade:testnet:RolloverVault")
+  .addPositionalParam("address", "the address of the deployed proxy contract", undefined, types.string, false)
+  .addParam("trancheManagerAddress", "the address of the linked tranche manager", "0x", types.string)
+  .addParam("fromIdx", "the index of sender", 0, types.int)
+  .setAction(async function (args: TaskArguments, hre) {
+    const signer = (await hre.ethers.getSigners())[args.fromIdx];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
+
+    let trancheManagerAddress = args.trancheManagerAddress;
+    if (trancheManagerAddress === "0x") {
+      const TrancheManager = await hre.ethers.getContractFactory("TrancheManager");
+      const trancheManager = await TrancheManager.deploy();
+      trancheManagerAddress = trancheManager.target;
+      console.log("Deploying linked library TrancheManager", trancheManagerAddress);
+    }
+    const Factory = await hre.ethers.getContractFactory("RolloverVault", {
+      libraries: {
+        TrancheManager: trancheManagerAddress,
+      },
+    });
+
+    const { address } = args;
+    console.log("Proxy", address);
+    console.log("Current implementation", await getImplementationAddress(hre.ethers.provider, address));
+
+    await hre.upgrades.upgradeProxy(address, Factory, {
+      unsafeAllowRenames: true,
+      unsafeAllowLinkedLibraries: true,
+    });
+    await sleep(30);
+    const newImpl = await getImplementationAddress(hre.ethers.provider, address);
+    console.log("Updated implementation", newImpl);
+
+    await sleep(30);
+    await hre.run("verify:contract", {
+      address: trancheManagerAddress,
+    });
+    await sleep(30);
     await hre.run("verify:contract", {
       address: newImpl,
     });
