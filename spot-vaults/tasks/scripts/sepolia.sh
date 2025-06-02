@@ -28,6 +28,14 @@ yarn hardhat --network sepolia ops:deposit \
 	--perp-amount 1000 \
 	--usd-amount 1000
 
+yarn hardhat --network sepolia ops:depositPerp \
+	--address "0xc3f6D1F1d253EdC8B34D78Bc6cDD2b3eEFAd76BD" \
+	--perp-amount 10
+
+yarn hardhat --network sepolia ops:depositUSD \
+	--address "0xc3f6D1F1d253EdC8B34D78Bc6cDD2b3eEFAd76BD" \
+	--usd-amount 10
+
 yarn hardhat --network sepolia ops:swapUSDForPerps \
 	--address "0xc3f6D1F1d253EdC8B34D78Bc6cDD2b3eEFAd76BD" \
 	--usd-amount 10

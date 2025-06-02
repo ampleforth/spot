@@ -113,6 +113,122 @@ task("ops:deposit", "Deposits perp and usd tokens to mint bb lp tokens")
     );
   });
 
+task("ops:depositPerp", "Deposits perp tokens to mint bb lp tokens")
+  .addParam(
+    "address",
+    "the address of the bill broker contract",
+    undefined,
+    types.string,
+    false,
+  )
+  .addParam(
+    "perpAmount",
+    "the total amount of usd tokens (in float) to deposit",
+    undefined,
+    types.string,
+    false,
+  )
+  .setAction(async function (args: TaskArguments, hre) {
+    const signer = (await hre.ethers.getSigners())[0];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
+
+    const { address, perpAmount } = args;
+    const billBroker = await hre.ethers.getContractAt("BillBroker", address);
+    const perp = await hre.ethers.getContractAt("ERC20", await billBroker.perp());
+    const perpFixedPtAmount = ethers.parseUnits(perpAmount, await perp.decimals());
+
+    console.log(
+      "Signer perp balance",
+      ethers.formatUnits(await perp.balanceOf(signerAddress), await perp.decimals()),
+    );
+
+    console.log("---------------------------------------------------------------");
+    console.log("Execution:");
+    console.log("Approving router to spend tokens:");
+    if ((await perp.allowance(signerAddress, billBroker.target)) < perpFixedPtAmount) {
+      const tx = await perp.connect(signer).approve(billBroker.target, perpFixedPtAmount);
+      await tx.wait();
+      console.log("Tx", tx.hash);
+    }
+
+    console.log("Deposit:");
+    const tx = await billBroker.connect(signer).depositPerp(perpFixedPtAmount, 0);
+    await tx.wait();
+    console.log("Tx", tx.hash);
+
+    console.log(
+      "Signer lp balance",
+      ethers.formatUnits(
+        await billBroker.balanceOf(signerAddress),
+        await billBroker.decimals(),
+      ),
+    );
+    console.log(
+      "Signer perp balance",
+      ethers.formatUnits(await perp.balanceOf(signerAddress), await perp.decimals()),
+    );
+  });
+
+task("ops:depositUSD", "Deposits usd tokens to mint bb lp tokens")
+  .addParam(
+    "address",
+    "the address of the bill broker contract",
+    undefined,
+    types.string,
+    false,
+  )
+  .addParam(
+    "usdAmount",
+    "the total amount of usd tokens (in float) to deposit",
+    undefined,
+    types.string,
+    false,
+  )
+  .setAction(async function (args: TaskArguments, hre) {
+    const signer = (await hre.ethers.getSigners())[0];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
+
+    const { address, usdAmount } = args;
+    const billBroker = await hre.ethers.getContractAt("BillBroker", address);
+    const usd = await hre.ethers.getContractAt("ERC20", await billBroker.usd());
+    const usdFixedPtAmount = ethers.parseUnits(usdAmount, await usd.decimals());
+
+    console.log(
+      "Signer usd balance",
+      ethers.formatUnits(await usd.balanceOf(signerAddress), await usd.decimals()),
+    );
+
+    console.log("---------------------------------------------------------------");
+    console.log("Execution:");
+    console.log("Approving router to spend tokens:");
+    if ((await usd.allowance(signerAddress, billBroker.target)) < usdFixedPtAmount) {
+      const tx = await usd.connect(signer).approve(billBroker.target, usdFixedPtAmount);
+      await tx.wait();
+      console.log("Tx", tx.hash);
+    }
+
+    console.log("Deposit:");
+    const tx = await billBroker
+      .connect(signer)
+      .depositUSD(usdFixedPtAmount, hre.ethers.MaxUint256);
+    await tx.wait();
+    console.log("Tx", tx.hash);
+
+    console.log(
+      "Signer lp balance",
+      ethers.formatUnits(
+        await billBroker.balanceOf(signerAddress),
+        await billBroker.decimals(),
+      ),
+    );
+    console.log(
+      "Signer usd balance",
+      ethers.formatUnits(await usd.balanceOf(signerAddress), await usd.decimals()),
+    );
+  });
+
 task("ops:redeem")
   .addParam(
     "address",
