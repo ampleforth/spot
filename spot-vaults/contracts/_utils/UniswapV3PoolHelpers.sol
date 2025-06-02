@@ -34,15 +34,18 @@ library UniswapV3PoolHelpers {
     /// @notice Retrieves the Time-Weighted Average Price (TWAP) tick from a Uniswap V3 pool over a given duration.
     /// @param pool The Uniswap V3 pool.
     /// @param twapDuration The TWAP duration.
-    /// @return The TWAP tick.
+    /// @return twapTick The TWAP tick.
     function getTwapTick(
         IUniswapV3Pool pool,
         uint32 twapDuration
-    ) internal view returns (int24) {
+    ) internal view returns (int24 twapTick) {
         uint32[] memory secondsAgo = new uint32[](2);
         secondsAgo[0] = twapDuration;
         secondsAgo[1] = 0;
         (int56[] memory tickCumulatives, ) = pool.observe(secondsAgo);
-        return int24((tickCumulatives[1] - tickCumulatives[0]) / twapDuration);
+        int56 tickCumulativesDelta = tickCumulatives[1] - tickCumulatives[0];
+        twapTick = int24(tickCumulativesDelta / twapDuration);
+        if (tickCumulativesDelta < 0 && (tickCumulativesDelta % twapDuration != 0))
+            twapTick--;
     }
 }
