@@ -175,9 +175,6 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
         // Expect DR to be non-decreasing, x1 <= x2
         bool validFees = ((feeFnDRDown_.x1 <= feeFnDRDown_.x2) && (feeFnDRUp_.x1 <= feeFnDRUp_.x2));
 
-        // Expect equilibrium zone to be valid
-        validFees = ((feeFnDRDown_.x2 <= ONE) && (feeFnDRUp_.x1 >= ONE)) && validFees;
-
         // Expect fees to be non-decreasing when dr moves away from 1.0
         validFees = ((feeFnDRDown_.y1 >= feeFnDRDown_.y2) && (feeFnDRUp_.y1 <= feeFnDRUp_.y2)) && validFees;
 

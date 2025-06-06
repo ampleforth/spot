@@ -148,20 +148,6 @@ describe("FeePolicy", function () {
         );
       });
 
-      it("equilibrium zone crosses 1.0", async function () {
-        const badDown = toLine("0.0", "1.0", "1.1", "0.0");
-        await expect(feePolicy.connect(deployer).updateFees(badDown, VALID_UP)).to.be.revertedWithCustomError(
-          feePolicy,
-          "InvalidFees",
-        );
-
-        const badUp = toLine("0.9", "0.0", "2.0", "1.0");
-        await expect(feePolicy.connect(deployer).updateFees(VALID_DOWN, badUp)).to.be.revertedWithCustomError(
-          feePolicy,
-          "InvalidFees",
-        );
-      });
-
       it("fees not monotonic wrt distance from 1.0", async function () {
         const badDown = toLine("0.0", "0.0", "1.0", "1.0");
         await expect(feePolicy.connect(deployer).updateFees(badDown, VALID_UP)).to.be.revertedWithCustomError(
