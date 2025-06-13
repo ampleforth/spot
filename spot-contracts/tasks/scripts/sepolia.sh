@@ -29,15 +29,13 @@ yarn hardhat --network sepolia ops:perp:updateTolerableTrancheMaturity \
   --minimum 600 \
   --maximum 3600
 
-yarn hardhat --network sepolia ops:fee:setSwapFees \
-  --address "0x2DdF288F26490D1147296cC0FA2B3c4da5E15f10" \
-  --fee-perc "0.05"
-
 ########################################################################
 ## OPS
 yarn hardhat --network sepolia ops:perp:info 0xdcCef9065876fD654bAddeBAa778FDA43E0bfC1F
 yarn hardhat --network sepolia ops:vault:info 0x107614c6602A8e602952Da107B8fE62b5Ab13b04
 yarn hardhat --network sepolia ops:perp:updateState 0xdcCef9065876fD654bAddeBAa778FDA43E0bfC1F
+yarn hardhat --network sepolia ops:vault:rebalance \
+  --vault-address 0x107614c6602A8e602952Da107B8fE62b5Ab13b04
 yarn hardhat --network sepolia ops:vault:recoverAndRedeploy \
   --vault-address 0x107614c6602A8e602952Da107B8fE62b5Ab13b04
 yarn hardhat --network sepolia ops:vault:deploy \
@@ -56,7 +54,6 @@ yarn hardhat --network sepolia ops:perp:trancheAndDeposit \
   --collateral-amount 250
 
 yarn hardhat --network sepolia ops:perp:redeem \
-  --router-address 0x5B59915E5754C62C40Ba5e7467382ced958F8559 \
   --perp-address 0xdcCef9065876fD654bAddeBAa778FDA43E0bfC1F \
   --amount 10
 
@@ -68,6 +65,14 @@ yarn hardhat --network sepolia ops:vault:deposit \
 yarn hardhat --network sepolia ops:vault:redeem \
   --vault-address 0x107614c6602A8e602952Da107B8fE62b5Ab13b04 \
   --amount "0.001"
+
+yarn hardhat --network sepolia ops:vault:mint2 \
+  --vault-address 0x107614c6602A8e602952Da107B8fE62b5Ab13b04 \
+  --underlying-amount 250
+
+yarn hardhat --network sepolia ops:vault:redeem2 \
+  --vault-address 0x107614c6602A8e602952Da107B8fE62b5Ab13b04 \
+  --perp-amount 250 --note-amount 1
 
 yarn hardhat --network sepolia ops:vault:swapUnderlyingForPerps \
   --vault-address 0x107614c6602A8e602952Da107B8fE62b5Ab13b04 \

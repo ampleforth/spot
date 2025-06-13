@@ -1,7 +1,7 @@
 import fs from "fs";
 import { task, types } from "hardhat/config";
 import { TaskArguments, HardhatRuntimeEnvironment } from "hardhat/types";
-import { constants, Contract, BigNumber, Signer } from "ethers";
+import { Contract, BigNumber, Signer, MaxUint256 } from "ethers";
 import { generateGnosisSafeBatchFile, ProposedTransaction } from "../helpers";
 
 async function matureBond(bond: Contract, signer: Signer) {
@@ -38,17 +38,17 @@ function computeProportionalBalances(balances: BigNumber[], ratios: BigNumber[])
   }
 
   const redeemableAmts: BigNumber[] = [];
-  let min = BigNumber.from(constants.MaxUint256);
-  for (let i = 0; i < balances.length && min.gt("0"); i++) {
-    const b = balances[i].sub(balances[i].mod(ratios[i]));
-    const d = b.mul("1000").div(ratios[i]);
-    if (d.lt(min)) {
+  let min = MaxUint256;
+  for (let i = 0; i < balances.length && min > 0n; i++) {
+    const b = balances[i] - (balances[i] % ratios[i]);
+    const d = (b * 1000n) / ratios[i];
+    if (d < min) {
       min = d;
     }
   }
 
   for (let i = 0; i < balances.length; i++) {
-    redeemableAmts[i] = ratios[i].mul(min).div("1000");
+    redeemableAmts[i] = (ratios[i] * min) / 1000n;
   }
   return redeemableAmts;
 }
@@ -102,7 +102,7 @@ task("ops:redeemTranches")
       if (isMature) {
         for (let j = 0; j < bt.length; j++) {
           const b = await bt[j][0].balanceOf(signerAddress);
-          if (b.gt(0)) {
+          if (b > 0n) {
             console.log("Redeeming mature tranche", bt[j][0].target);
             const tx = await bond.connect(signer).redeemMature(bt[j][0].target, b);
             await tx.wait();
@@ -111,7 +111,7 @@ task("ops:redeemTranches")
         }
       } else {
         const redemptionAmounts = await computeRedeemableTrancheAmounts(bt, signerAddress);
-        if (redemptionAmounts[0].gt("0")) {
+        if (redemptionAmounts[0] > 0n) {
           console.log(
             "Redeeming immature bond",
             redemptionAmounts.map(a => a.toString()),
@@ -144,7 +144,7 @@ task("ops:preview_tx:redeemTranches")
       if (isMature) {
         for (let j = 0; j < bt.length; j++) {
           const b = await bt[j][0].balanceOf(walletAddress);
-          if (b.gt(0)) {
+          if (b > 0n) {
             txs.push({
               contract: bond,
               method: "redeemMature",
@@ -154,7 +154,7 @@ task("ops:preview_tx:redeemTranches")
         }
       } else {
         const redemptionAmounts = await computeRedeemableTrancheAmounts(bt, walletAddress);
-        if (redemptionAmounts[0].gt("0")) {
+        if (redemptionAmounts[0] > 0n) {
           txs.push({
             contract: bond,
             method: "redeem",

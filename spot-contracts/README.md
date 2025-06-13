@@ -32,7 +32,7 @@ There is a testnet deployment on Sepolia.
 - Bond issuer: [0x3838C8d4D092d40Cb27DD22Dafc6E1A81ea2DB60](https://sepolia.etherscan.io//address/0x3838C8d4D092d40Cb27DD22Dafc6E1A81ea2DB60)
 - Router: [0xE5b53ee8182086790C1ab79cbf801F0c5EE241BF](https://sepolia.etherscan.io//address/0xE5b53ee8182086790C1ab79cbf801F0c5EE241BF)
 - RolloverVault: [0x107614c6602A8e602952Da107B8fE62b5Ab13b04](https://sepolia.etherscan.io//address/0x107614c6602A8e602952Da107B8fE62b5Ab13b04)
-- FeePolicy: [0x2DdF288F26490D1147296cC0FA2B3c4da5E15f10](https://sepolia.etherscan.io//address/0x2DdF288F26490D1147296cC0FA2B3c4da5E15f10)
+- FeePolicy: [0xd90FcB328D90B778D1f6719d781045bbbac8F251](https://sepolia.etherscan.io//address/0xd90FcB328D90B778D1f6719d781045bbbac8F251)
 
 ## Contribute
 

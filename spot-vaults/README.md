@@ -12,7 +12,7 @@ The official mainnet addresses are:
 The official testnet addresses are:
 
 - Bill Broker (SPOT-USDC): [0xc3f6D1F1d253EdC8B34D78Bc6cDD2b3eEFAd76BD](https://sepolia.etherscan.io/address/0xc3f6D1F1d253EdC8B34D78Bc6cDD2b3eEFAd76BD)
-- SpotAppraiser **(deprecated)**: [0x08c5b39F000705ebeC8427C1d64D6262392944EE](https://sepolia.etherscan.io/address/0x08c5b39F000705ebeC8427C1d64D6262392944EE)
+- SpotPricer: [0xc3B2C246b61123E7d18dc8d831A8314Eb038beE5](https://sepolia.etherscan.io/address/0xc3B2C246b61123E7d18dc8d831A8314Eb038beE5)
 
 ## Install
 
