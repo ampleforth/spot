@@ -252,6 +252,12 @@ type PerpetualTrancheDailyStat @entity {
 
   " the perp token supply on the given day "
   totalSupply: BigDecimal!
+
+  " the total amount of perp tokens paid as fees "
+  totalPerpFeeAmt: BigDecimal!
+
+  " the total underlying value of fees "
+  totalUnderlyingFeeValue: BigDecimal!
 }
 
 type RolloverVault @entity {
@@ -287,6 +293,12 @@ type RolloverVault @entity {
 
   " the price of each token "
   price: BigDecimal!
+
+  " the target system ratio "
+  targetSystemRatio: BigDecimal!
+
+  " the system deviation ratio "
+  deviationRatio: BigDecimal!
 
   " reference to the daily stats "
   dailyStats: [RolloverVaultDailyStat!]! @derivedFrom(field: "vault")
@@ -361,4 +373,10 @@ type RolloverVaultDailyStat @entity {
 
   " the total value of perp to underlying swaps on the given day "
   totalPerpToUnderlyingSwapValue: BigDecimal!
+
+  " the system deviation ratio "
+  deviationRatio: BigDecimal!
+
+  " the total underlying value of fees "
+  totalUnderlyingFeeValue: BigDecimal!
 }

@@ -16,6 +16,7 @@ import {
   refreshRolloverVaultDailyStat,
   fetchRolloverVaultAsset,
   fetchRolloverVaultDailyStat,
+  computeFeePerc,
 } from '../data/rolloverVault'
 import { fetchToken, refreshSupply } from '../data/token'
 import {
@@ -30,10 +31,14 @@ import {
 export function handleDeposit(call: DepositCall): void {
   log.debug('triggered deposit', [])
   let vault = fetchRolloverVault(call.to)
-  let vaultToken = fetchToken(stringToAddress(vault.token))
+  let vaultAddress = stringToAddress(vault.token)
+  let vaultToken = fetchToken(vaultAddress)
   refreshSupply(vaultToken)
   refreshRolloverVaultTVL(vault)
   refreshRolloverVaultRebaseMultiplier(vault)
+
+  let perp = fetchPerpetualTranche(stringToAddress(vault.perp))
+  refreshPerpetualTrancheTVL(perp)
 
   let underlyingToken = fetchToken(stringToAddress(vault.underlying))
   refreshSupply(underlyingToken)
@@ -63,16 +68,33 @@ export function handleDeposit(call: DepositCall): void {
   let dailyStat = fetchRolloverVaultDailyStat(vault, dayTimestamp(call.block.timestamp))
   dailyStat.totalMints = dailyStat.totalMints.plus(underlyingAmtIn.div(vault.price))
   dailyStat.totalMintValue = dailyStat.totalMintValue.plus(underlyingAmtIn)
+
+  let feePerc = computeFeePerc(
+    perp.tvl,
+    vault.tvl.minus(underlyingAmtIn),
+    perp.tvl,
+    vault.tvl,
+    vault.targetSystemRatio,
+    vaultAddress,
+  )
+  dailyStat.totalUnderlyingFeeValue = dailyStat.totalUnderlyingFeeValue.plus(
+    underlyingAmtIn.times(feePerc),
+  )
+
   dailyStat.save()
 }
 
 export function handleRedeem(call: RedeemCall): void {
   log.debug('triggered redeem', [])
   let vault = fetchRolloverVault(call.to)
-  let vaultToken = fetchToken(stringToAddress(vault.token))
+  let vaultAddress = stringToAddress(vault.token)
+  let vaultToken = fetchToken(vaultAddress)
   refreshSupply(vaultToken)
   refreshRolloverVaultTVL(vault)
   refreshRolloverVaultRebaseMultiplier(vault)
+
+  let perp = fetchPerpetualTranche(stringToAddress(vault.perp))
+  refreshPerpetualTrancheTVL(perp)
 
   let notesOut = formatBalance(call.inputs.notes, vaultToken.decimals)
   let scaledAmountOut = vault.totalScaledUnderlyingDeposited
@@ -95,6 +117,19 @@ export function handleRedeem(call: RedeemCall): void {
   let dailyStat = fetchRolloverVaultDailyStat(vault, dayTimestamp(call.block.timestamp))
   dailyStat.totalRedemptions = dailyStat.totalRedemptions.plus(notesOut)
   dailyStat.totalRedemptionValue = dailyStat.totalRedemptionValue.plus(notesOut.times(vault.price))
+
+  let feePerc = computeFeePerc(
+    perp.tvl,
+    vault.tvl.times(notesOut + vaultToken.totalSupply).div(vaultToken.totalSupply),
+    perp.tvl,
+    vault.tvl,
+    vault.targetSystemRatio,
+    vaultAddress,
+  )
+  dailyStat.totalUnderlyingFeeValue = dailyStat.totalUnderlyingFeeValue.plus(
+    notesOut.times(vault.price).times(feePerc),
+  )
+
   dailyStat.save()
 }
 
@@ -127,8 +162,12 @@ export function handleUnderlyingToPerpSwap(call: SwapUnderlyingForPerpsCall): vo
   log.debug('triggered UnderlyingToPerpSwap', [])
 
   let vault = fetchRolloverVault(call.to)
+  let vaultAddress = stringToAddress(vault.token)
   refreshRolloverVaultTVL(vault)
   refreshRolloverVaultRebaseMultiplier(vault)
+
+  let perp = fetchPerpetualTranche(stringToAddress(vault.perp))
+  refreshPerpetualTrancheTVL(perp)
 
   let underlyingToken = fetchToken(stringToAddress(vault.underlying))
   let underlyingAmtIn = formatBalance(call.inputs.underlyingAmtIn, underlyingToken.decimals)
@@ -138,6 +177,19 @@ export function handleUnderlyingToPerpSwap(call: SwapUnderlyingForPerpsCall): vo
   dailyStat.totalUnderlyingToPerpSwapValue = dailyStat.totalUnderlyingToPerpSwapValue.plus(
     underlyingAmtIn,
   )
+
+  let feePerc = computeFeePerc(
+    perp.tvl.minus(underlyingAmtIn),
+    vault.tvl,
+    perp.tvl,
+    vault.tvl,
+    vault.targetSystemRatio,
+    vaultAddress,
+  )
+  dailyStat.totalUnderlyingFeeValue = dailyStat.totalUnderlyingFeeValue.plus(
+    underlyingAmtIn.times(feePerc),
+  )
+
   dailyStat.save()
 }
 
@@ -145,6 +197,7 @@ export function handlePerpToUnderlyingSwap(call: SwapPerpsForUnderlyingCall): vo
   log.debug('triggered PerpToUnderlyingSwap', [])
 
   let vault = fetchRolloverVault(call.to)
+  let vaultAddress = stringToAddress(vault.token)
   refreshRolloverVaultTVL(vault)
   refreshRolloverVaultRebaseMultiplier(vault)
 
@@ -159,5 +212,18 @@ export function handlePerpToUnderlyingSwap(call: SwapPerpsForUnderlyingCall): vo
   dailyStat.totalPerpToUnderlyingSwapValue = dailyStat.totalPerpToUnderlyingSwapValue.plus(
     perpAmtIn.times(perp.price),
   )
+
+  let feePerc = computeFeePerc(
+    perp.tvl.plus(perpAmtIn.times(perp.price)),
+    vault.tvl,
+    perp.tvl,
+    vault.tvl,
+    vault.targetSystemRatio,
+    vaultAddress,
+  )
+  dailyStat.totalUnderlyingFeeValue = dailyStat.totalUnderlyingFeeValue.plus(
+    perpAmtIn.times(perp.price).times(feePerc),
+  )
+
   dailyStat.save()
 }

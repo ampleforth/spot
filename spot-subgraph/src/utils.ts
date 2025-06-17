@@ -9,6 +9,20 @@ export let BIGDECIMAL_ZERO = new BigDecimal(BIGINT_ZERO)
 export let BIGDECIMAL_ONE = new BigDecimal(BIGINT_ONE)
 export let ADDRESS_ZERO = Address.fromString('0x0000000000000000000000000000000000000000')
 
+export const formatDecimalBalance = (wei: BigDecimal, decimals: BigInt): BigInt => {
+  return toBigInt(
+    wei.div(
+      BigInt.fromI32(10)
+        .pow(decimals.toI32() as u8)
+        .toBigDecimal(),
+    ),
+  )
+}
+
+function toBigInt(n: BigDecimal): BigInt {
+  return BigInt.fromString(n.toString().split('.')[0])
+}
+
 export const formatBalance = (wei: BigInt, decimals: BigInt): BigDecimal => {
   return wei.toBigDecimal().div(
     BigInt.fromI32(10)

@@ -179,6 +179,8 @@ export function fetchPerpetualTrancheDailyStat(
     dailyStat.tvl = BIGDECIMAL_ZERO
     dailyStat.price = BIGDECIMAL_ZERO
     dailyStat.totalSupply = BIGDECIMAL_ZERO
+    dailyStat.totalPerpFeeAmt = BIGDECIMAL_ZERO
+    dailyStat.totalUnderlyingFeeValue = BIGDECIMAL_ZERO
   }
   return dailyStat as PerpetualTrancheDailyStat
 }

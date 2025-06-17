@@ -56,8 +56,9 @@ export function handleUpdatedDepositBond(event: UpdatedDepositBond): void {
   perp.save()
 }
 
-export function handleMint(event: Transfer): void {
+export function handleTransfer(event: Transfer): void {
   let from = event.params.from
+  let to = event.params.to
   if (from == ADDRESS_ZERO) {
     log.debug('triggered mint', [])
     let perpToken = fetchToken(event.address)
@@ -70,6 +71,19 @@ export function handleMint(event: Transfer): void {
     let dailyStat = fetchPerpetualTrancheDailyStat(perp, dayTimestamp(event.block.timestamp))
     dailyStat.totalMints = dailyStat.totalMints.plus(perpAmtMinted)
     dailyStat.totalMintValue = dailyStat.totalMintValue.plus(perpAmtMinted.times(perp.price))
+    dailyStat.save()
+  }
+
+  // Mint and burn fees are handled by sending perp tokens to the perp contract
+  if (to == event.address) {
+    let perpToken = fetchToken(event.address)
+    let perp = fetchPerpetualTranche(event.address)
+    let perpFeeAmt = formatBalance(event.params.value, perpToken.decimals)
+    let dailyStat = fetchPerpetualTrancheDailyStat(perp, dayTimestamp(event.block.timestamp))
+    dailyStat.totalPerpFeeAmt = dailyStat.totalPerpFeeAmt.plus(perpFeeAmt)
+    dailyStat.totalUnderlyingFeeValue = dailyStat.totalUnderlyingFeeValue.plus(
+      perpFeeAmt.times(perp.price),
+    )
     dailyStat.save()
   }
 }
