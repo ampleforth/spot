@@ -63,44 +63,28 @@ export function handleTransfer(event: Transfer): void {
     log.debug('triggered mint', [])
     let perpToken = fetchToken(event.address)
     refreshSupply(perpToken)
-
     let perp = fetchPerpetualTranche(event.address)
     refreshPerpetualTrancheTVL(perp)
+  }
 
-    let perpAmtMinted = formatBalance(event.params.value, perpToken.decimals)
-    let dailyStat = fetchPerpetualTrancheDailyStat(perp, dayTimestamp(event.block.timestamp))
-    dailyStat.totalMints = dailyStat.totalMints.plus(perpAmtMinted)
-    dailyStat.totalMintValue = dailyStat.totalMintValue.plus(perpAmtMinted.times(perp.price))
-    dailyStat.save()
+  if (to == ADDRESS_ZERO) {
+    log.debug('triggered burn', [])
+    let perpToken = fetchToken(event.address)
+    refreshSupply(perpToken)
+    let perp = fetchPerpetualTranche(event.address)
+    refreshPerpetualTrancheTVL(perp)
   }
 
   // Mint and burn fees are handled by sending perp tokens to the perp contract
   if (to == event.address) {
+    log.debug('perp fees paid', [])
     let perpToken = fetchToken(event.address)
     let perp = fetchPerpetualTranche(event.address)
     let perpFeeAmt = formatBalance(event.params.value, perpToken.decimals)
     let dailyStat = fetchPerpetualTrancheDailyStat(perp, dayTimestamp(event.block.timestamp))
-    dailyStat.totalPerpFeeAmt = dailyStat.totalPerpFeeAmt.plus(perpFeeAmt)
     dailyStat.totalUnderlyingFeeValue = dailyStat.totalUnderlyingFeeValue.plus(
       perpFeeAmt.times(perp.price),
     )
     dailyStat.save()
   }
-}
-
-export function handleRedeem(call: RedeemCall): void {
-  log.debug('triggered redeem', [])
-  let perpToken = fetchToken(call.to)
-  refreshSupply(perpToken)
-
-  let perp = fetchPerpetualTranche(call.to)
-  refreshPerpetualTrancheTVL(perp)
-
-  let perpAmtBurnt = formatBalance(call.inputs.perpAmtBurnt, perpToken.decimals)
-  let dailyStat = fetchPerpetualTrancheDailyStat(perp, dayTimestamp(call.block.timestamp))
-  dailyStat.totalRedemptions = dailyStat.totalRedemptions.plus(perpAmtBurnt)
-  dailyStat.totalRedemptionValue = dailyStat.totalRedemptionValue.plus(
-    perpAmtBurnt.times(perp.price),
-  )
-  dailyStat.save()
 }

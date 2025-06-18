@@ -172,14 +172,9 @@ export function fetchPerpetualTrancheDailyStat(
     dailyStat = new PerpetualTrancheDailyStat(id)
     dailyStat.perp = perp.id
     dailyStat.timestamp = timestamp
-    dailyStat.totalMints = BIGDECIMAL_ZERO
-    dailyStat.totalRedemptions = BIGDECIMAL_ZERO
-    dailyStat.totalMintValue = BIGDECIMAL_ZERO
-    dailyStat.totalRedemptionValue = BIGDECIMAL_ZERO
     dailyStat.tvl = BIGDECIMAL_ZERO
     dailyStat.price = BIGDECIMAL_ZERO
     dailyStat.totalSupply = BIGDECIMAL_ZERO
-    dailyStat.totalPerpFeeAmt = BIGDECIMAL_ZERO
     dailyStat.totalUnderlyingFeeValue = BIGDECIMAL_ZERO
   }
   return dailyStat as PerpetualTrancheDailyStat

@@ -149,9 +149,6 @@ dataSources:
           handler: handleUpdatedDepositBond
         - event: Transfer(indexed address,indexed address,uint256)
           handler: handleTransfer
-      callHandlers:
-        - function: redeem(uint256)
-          handler: handleRedeem
       file: ./src/mappings/perpetualTranche.ts
 
   - kind: ethereum/contract
@@ -172,6 +169,8 @@ dataSources:
           file: ../spot-contracts/exported-artifacts/RolloverVault.json
         - name: PerpetualTranche
           file: ../spot-contracts/exported-artifacts/PerpetualTranche.json
+        - name: PerpetualTrancheV1
+          file: ../spot-contracts/exported-artifacts/PerpetualTrancheV1.json
         - name: BondController
           file: ../spot-contracts/external-artifacts/BondController.json
         - name: Tranche
@@ -185,6 +184,8 @@ dataSources:
       eventHandlers:
         - event: AssetSynced(address,uint256)
           handler: handleAssetSynced
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransfer
       callHandlers:
         - function: deposit(uint256)
           handler: handleDeposit
@@ -274,6 +275,8 @@ templates:
           file: ../spot-contracts/external-artifacts/ERC20ABI.json
         - name: RebasingERC20
           file: ../spot-contracts/external-artifacts/RebasingERC20ABI.json
+        - name: FeePolicy
+          file: ../spot-contracts/exported-artifacts/FeePolicy.json
       eventHandlers:
         - event: Rebase(indexed uint256,uint256)
           handler: handleRebase

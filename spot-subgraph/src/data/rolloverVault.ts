@@ -2,7 +2,6 @@ import { log, BigDecimal, BigInt, Address, DataSourceContext } from '@graphproto
 import {
   RolloverVault,
   RolloverVaultAsset,
-  ScaledUnderlyingVaultDepositorBalance,
   RolloverVaultDailyStat,
   Tranche,
 } from '../../generated/schema'
@@ -173,7 +172,6 @@ export function fetchRolloverVault(address: Address): RolloverVault {
     vaultToken.save()
     vault = new RolloverVault(id)
     vault.token = vaultToken.id
-    vault.totalScaledUnderlyingDeposited = BIGDECIMAL_ZERO
     vault.activeReserves = []
     vault.tvl = BIGDECIMAL_ZERO
     vault.rebaseMultiplier = BIGDECIMAL_ONE
@@ -219,21 +217,6 @@ export function fetchRolloverVaultAsset(
   return assetToken as RolloverVaultAsset
 }
 
-export function fetchScaledUnderlyingVaultDepositorBalance(
-  vault: RolloverVault,
-  account: Address,
-): ScaledUnderlyingVaultDepositorBalance {
-  let id = vault.id.concat('-').concat(account.toHexString())
-  let balance = ScaledUnderlyingVaultDepositorBalance.load(id)
-  if (balance == null) {
-    balance = new ScaledUnderlyingVaultDepositorBalance(id)
-    balance.vault = vault.id
-    balance.account = account
-    balance.value = BIGDECIMAL_ZERO
-  }
-  return balance as ScaledUnderlyingVaultDepositorBalance
-}
-
 export function fetchRolloverVaultDailyStat(
   vault: RolloverVault,
   timestamp: BigInt,
@@ -244,17 +227,10 @@ export function fetchRolloverVaultDailyStat(
     dailyStat = new RolloverVaultDailyStat(id)
     dailyStat.vault = vault.id
     dailyStat.timestamp = timestamp
-    dailyStat.totalMints = BIGDECIMAL_ZERO
-    dailyStat.totalRedemptions = BIGDECIMAL_ZERO
-    dailyStat.totalMintValue = BIGDECIMAL_ZERO
-    dailyStat.totalRedemptionValue = BIGDECIMAL_ZERO
     dailyStat.tvl = BIGDECIMAL_ZERO
     dailyStat.rebaseMultiplier = BIGDECIMAL_ONE
     dailyStat.price = BIGDECIMAL_ZERO
     dailyStat.totalSupply = BIGDECIMAL_ZERO
-    dailyStat.totalSwapValue = BIGDECIMAL_ZERO
-    dailyStat.totalUnderlyingToPerpSwapValue = BIGDECIMAL_ZERO
-    dailyStat.totalPerpToUnderlyingSwapValue = BIGDECIMAL_ZERO
     dailyStat.deviationRatio = BIGDECIMAL_ZERO
     dailyStat.totalUnderlyingFeeValue = BIGDECIMAL_ZERO
   }
@@ -276,15 +252,16 @@ function fetchTargetSystemRatio(vaultAddress: Address): BigDecimal {
   let vaultContract = RolloverVaultABI.bind(vaultAddress)
   let r1 = vaultContract.try_feePolicy()
   if (r1.reverted) {
-    log.debug('fee policy not set', [])
+    log.error('fee policy not set', [])
     return SYSTEM_RATIO_START
   }
   let feePolicyContract = FeePolicyABI.bind(r1.value)
   let r2 = feePolicyContract.try_targetSystemRatio()
   if (r2.reverted) {
-    log.debug('fee policy version incorrect', [])
+    log.error('fee policy version incorrect', [])
     return SYSTEM_RATIO_START
   }
+  log.error('fee policy correct {}:{}', [r1.value.toHexString(), r2.value.toString()])
   return formatBalance(r2.value, BigInt.fromI32(feePolicyContract.decimals()))
 }
 
@@ -307,7 +284,7 @@ export function computeFeePerc(
   let vaultContract = RolloverVaultABI.bind(vaultAddress)
   let r1 = vaultContract.try_feePolicy()
   if (r1.reverted) {
-    log.debug('fee policy not set', [])
+    log.error('fee policy not set', [])
     return BIGDECIMAL_ZERO
   }
   let feePolicyContract = FeePolicyABI.bind(r1.value)
@@ -322,8 +299,13 @@ export function computeFeePerc(
   )
   let r2 = feePolicyContract.try_computeFeePerc(drPre, drPost)
   if (r2.reverted) {
-    log.debug('fee policy version incorrect', [])
+    log.error('fee policy version incorrect', [])
     return BIGDECIMAL_ZERO
   }
+  log.error('fee policy correct {}:{}:{}', [
+    r1.value.toHexString(),
+    drPre.toString(),
+    drPost.toString(),
+  ])
   return formatBalance(r2.value, feePolicyDecimals)
 }

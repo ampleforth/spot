@@ -232,18 +232,6 @@ type PerpetualTrancheDailyStat @entity {
   " the timestamp of the given day "
   timestamp: BigInt!
 
-  " the total perp tokens minted on the given day  "
-  totalMints: BigDecimal!
-
-  " the total perp tokens redeemed on the given day  "
-  totalRedemptions: BigDecimal!
-
-  " the total value of perp tokens minted on the given day  "
-  totalMintValue: BigDecimal!
-
-  " the total value of perp tokens redeemed on the given day  "
-  totalRedemptionValue: BigDecimal!
-
   " the tvl on the given day "
   tvl: BigDecimal!
 
@@ -252,9 +240,6 @@ type PerpetualTrancheDailyStat @entity {
 
   " the perp token supply on the given day "
   totalSupply: BigDecimal!
-
-  " the total amount of perp tokens paid as fees "
-  totalPerpFeeAmt: BigDecimal!
 
   " the total underlying value of fees "
   totalUnderlyingFeeValue: BigDecimal!
@@ -279,12 +264,6 @@ type RolloverVault @entity {
   " addresses of assets currently in the reserve "
   activeReserves: [RolloverVaultAsset!]!
 
-  " the total fixed mc share of underlying tokens deposited into the system "
-  totalScaledUnderlyingDeposited: BigDecimal!
-
-  " the total fixed mc share of underlying tokens deposited by each user "
-  scaledUnderlyingBalances: [ScaledUnderlyingVaultDepositorBalance!]! @derivedFrom(field: "vault")
-
   " the current tvl based on the active reserves "
   tvl: BigDecimal!
 
@@ -302,13 +281,6 @@ type RolloverVault @entity {
 
   " reference to the daily stats "
   dailyStats: [RolloverVaultDailyStat!]! @derivedFrom(field: "vault")
-}
-
-type ScaledUnderlyingVaultDepositorBalance @entity {
-  id: ID!
-  vault: RolloverVault!
-  account: Bytes!
-  value: BigDecimal!
 }
 
 type RolloverVaultAsset @entity {
@@ -341,18 +313,6 @@ type RolloverVaultDailyStat @entity {
   " the timestamp of the given day "
   timestamp: BigInt!
 
-  " the total vault notes minted on the given day  "
-  totalMints: BigDecimal!
-
-  " the total vault notes redeemed on the given day  "
-  totalRedemptions: BigDecimal!
-
-  " the total value of vault notes minted on the given day  "
-  totalMintValue: BigDecimal!
-
-  " the total value of vault notes redeemed on the given day  "
-  totalRedemptionValue: BigDecimal!
-
   " the tvl on the given day "
   tvl: BigDecimal!
 
@@ -364,15 +324,6 @@ type RolloverVaultDailyStat @entity {
 
   " the vault note supply on the given day "
   totalSupply: BigDecimal!
-
-  " the total value of swaps on the given day "
-  totalSwapValue: BigDecimal!
-
-  " the total value of underlying to perp swaps on the given day "
-  totalUnderlyingToPerpSwapValue: BigDecimal!
-
-  " the total value of perp to underlying swaps on the given day "
-  totalPerpToUnderlyingSwapValue: BigDecimal!
 
   " the system deviation ratio "
   deviationRatio: BigDecimal!
