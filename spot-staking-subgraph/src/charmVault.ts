@@ -59,7 +59,7 @@ export function fetchCharmVault(address: Address): CharmVault {
     vault.tvl = BIGDECIMAL_ZERO
     vault.price = BIGDECIMAL_ZERO
     vault.totalSupply = BIGDECIMAL_ZERO
-    
+
     let context = new DataSourceContext()
     context.setString('charmVault', id)
     RebasingERC20.createWithContext(getUnderlyingAddress(token1Address), context)
@@ -68,7 +68,10 @@ export function fetchCharmVault(address: Address): CharmVault {
   return vault as CharmVault
 }
 
-export function fetchCharmVaultDailyStat(vault: CharmVault, timestamp: BigInt): CharmVaultDailyStat {
+export function fetchCharmVaultDailyStat(
+  vault: CharmVault,
+  timestamp: BigInt,
+): CharmVaultDailyStat {
   let id = vault.id.concat('-').concat(timestamp.toString())
   let dailyStat = CharmVaultDailyStat.load(id)
   if (dailyStat === null) {
@@ -103,7 +106,9 @@ export function refreshCharmVaultStats(vault: CharmVault, dailyStat: CharmVaultD
   vault.token1Bal = formatBalance(tokenBals.value1, vault.token1Decimals)
   vault.token0Price = BIGDECIMAL_ONE
   vault.token1Price = prices[0]
-  vault.tvl = vault.token0Bal.times(vault.token0Price).plus(vault.token1Bal.times(vault.token1Price))
+  vault.tvl = vault.token0Bal
+    .times(vault.token0Price)
+    .plus(vault.token1Bal.times(vault.token1Price))
   vault.totalSupply = formatBalance(vaultContract.totalSupply(), vault.decimals)
   vault.price = vault.tvl.div(vault.totalSupply)
   vault.save()
@@ -145,9 +150,15 @@ export function handleFees(event: CollectFees): void {
   let dailyStat = fetchCharmVaultDailyStat(vault, dayTimestamp(event.block.timestamp))
   refreshCharmVaultStats(vault, dailyStat)
 
-  dailyStat.token0Fees = dailyStat.token0Fees.plus(formatBalance(event.params.feesToVault0, vault.token0Decimals))
-  dailyStat.token1Fees = dailyStat.token1Fees.plus(formatBalance(event.params.feesToVault1, vault.token1Decimals))
-  dailyStat.totalFeeVal = dailyStat.token1Fees.times(dailyStat.token1Price).plus(dailyStat.token0Fees.times(dailyStat.token0Price))
+  dailyStat.token0Fees = dailyStat.token0Fees.plus(
+    formatBalance(event.params.feesToVault0, vault.token0Decimals),
+  )
+  dailyStat.token1Fees = dailyStat.token1Fees.plus(
+    formatBalance(event.params.feesToVault1, vault.token1Decimals),
+  )
+  dailyStat.totalFeeVal = dailyStat.token1Fees
+    .times(dailyStat.token1Price)
+    .plus(dailyStat.token0Fees.times(dailyStat.token0Price))
   dailyStat.feeYield = dailyStat.totalFeeVal.div(dailyStat.tvl.minus(dailyStat.totalFeeVal))
   dailyStat.save()
 }
