@@ -38,8 +38,9 @@ export default {
       },
     },
     mainnet: {
-      // url: `https://mainnet.infura.io/v3/${process.env.INFURA_SECRET}`,
-      url: `https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_SECRET}`,
+      url: `https://mainnet.infura.io/v3/${process.env.INFURA_SECRET}`,
+      // url: `https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_SECRET}`,
+      // url: `https://virtual.mainnet.rpc.tenderly.co/f468fb75-ada0-4833-9f64-f71d51b71190`,
       accounts: {
         mnemonic: process.env.PROD_MNEMONIC || Wallet.createRandom().mnemonic.phrase,
       },

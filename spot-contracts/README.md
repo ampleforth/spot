@@ -8,7 +8,7 @@ The official mainnet addresses are:
 - Bond issuer: [0x5613Fc36A431c9c2746763B80C1DD89e03593871](https://etherscan.io/address/0x5613Fc36A431c9c2746763B80C1DD89e03593871)
 - Router: [0xCe2878d1f2901EFaF48cd456E586B470C145d1BC](https://etherscan.io/address/0xCe2878d1f2901EFaF48cd456E586B470C145d1BC)
 - RolloverVault: [0x82A91a0D599A45d8E9Af781D67f695d7C72869Bd](https://etherscan.io//address/0x82A91a0D599A45d8E9Af781D67f695d7C72869Bd)
-- FeePolicy: [0xE22977381506bF094CB3ed50CB8834E358F7ef6c](https://etherscan.io//address/0xE22977381506bF094CB3ed50CB8834E358F7ef6c)
+- FeePolicy: [0x8689Fa9991834Bcf0387b31b7986ac311bAb6ab5](https://etherscan.io//address/0x8689Fa9991834Bcf0387b31b7986ac311bAb6ab5)
 
 ## Install
 

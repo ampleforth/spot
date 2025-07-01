@@ -39,7 +39,8 @@ export default {
       gasMultiplier: 1.01,
     },
     mainnet: {
-      url: `https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_SECRET}`,
+      // url: `https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_SECRET}`,
+      url: `https://mainnet.infura.io/v3/${process.env.INFURA_SECRET}`,
       accounts: {
         mnemonic: process.env.PROD_MNEMONIC || Wallet.createRandom().mnemonic.phrase,
       },
