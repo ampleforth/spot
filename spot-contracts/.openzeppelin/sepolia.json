@@ -44,6 +44,21 @@
       "address": "0xd90FcB328D90B778D1f6719d781045bbbac8F251",
       "txHash": "0x8b29769272d41c1032345366209cdcddb8abda7b8c66bfba001162c14671855e",
       "kind": "transparent"
+    },
+    {
+      "address": "0x7f75A61c4475d32a50829710AA8d8aCDEbD2c0d4",
+      "txHash": "0x366889a82d52a5e9496b0c2f7d8becee5ab4d4611c0ddbe11b99124f983be136",
+      "kind": "transparent"
+    },
+    {
+      "address": "0xc6b4b85FB97695052CA2e6C6401C20a7Ba30605D",
+      "txHash": "0xb64e64b39d3296e9d6dc0d2098ddb6a97f8582dbfad0543d8ed364f6d8107abb",
+      "kind": "transparent"
+    },
+    {
+      "address": "0x6D6cBba605F4AF825F4997F1db74AF54e4F01c04",
+      "txHash": "0x6d23bda7a369524a4918846231c2c6646c092f39c23c823bcde50ee9e1a3d66b",
+      "kind": "transparent"
     }
   ],
   "impls": {
@@ -2687,6 +2702,219 @@
             "numberOfBytes": "128"
           },
           "t_struct(Range)3847_storage": {
+            "label": "struct Range",
+            "members": [
+              {
+                "label": "lower",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "upper",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              }
+            ],
+            "numberOfBytes": "64"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint8": {
+            "label": "uint8",
+            "numberOfBytes": "1"
+          }
+        },
+        "namespaces": {}
+      }
+    },
+    "907dd399d33e68e0a7c77c54e1886a30e59ec356c35a0f9c27e96d39644c64d6": {
+      "address": "0x058C0F40427A5bBb7eF7169FfF0A12d265317B15",
+      "txHash": "0x8909e28358b1ff3b70564f6e6e8d6708e21b718cb04056638b9ef9f3ec5dda78",
+      "layout": {
+        "solcVersion": "0.8.20",
+        "storage": [
+          {
+            "label": "_initialized",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint8",
+            "contract": "Initializable",
+            "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:62",
+            "retypedFrom": "bool"
+          },
+          {
+            "label": "_initializing",
+            "offset": 1,
+            "slot": "0",
+            "type": "t_bool",
+            "contract": "Initializable",
+            "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:67"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_array(t_uint256)50_storage",
+            "contract": "ContextUpgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol:36"
+          },
+          {
+            "label": "_owner",
+            "offset": 0,
+            "slot": "51",
+            "type": "t_address",
+            "contract": "OwnableUpgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:22"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "52",
+            "type": "t_array(t_uint256)49_storage",
+            "contract": "OwnableUpgradeable",
+            "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:94"
+          },
+          {
+            "label": "targetSystemRatio",
+            "offset": 0,
+            "slot": "101",
+            "type": "t_uint256",
+            "contract": "FeePolicy",
+            "src": "contracts/FeePolicy.sol:69"
+          },
+          {
+            "label": "equilibriumDR",
+            "offset": 0,
+            "slot": "102",
+            "type": "t_struct(Range)11656_storage",
+            "contract": "FeePolicy",
+            "src": "contracts/FeePolicy.sol:74"
+          },
+          {
+            "label": "feeFnDRDown",
+            "offset": 0,
+            "slot": "104",
+            "type": "t_struct(Line)11666_storage",
+            "contract": "FeePolicy",
+            "src": "contracts/FeePolicy.sol:80"
+          },
+          {
+            "label": "feeFnDRUp",
+            "offset": 0,
+            "slot": "108",
+            "type": "t_struct(Line)11666_storage",
+            "contract": "FeePolicy",
+            "src": "contracts/FeePolicy.sol:83"
+          },
+          {
+            "label": "perpDebasementLag",
+            "offset": 0,
+            "slot": "112",
+            "type": "t_uint256",
+            "contract": "FeePolicy",
+            "src": "contracts/FeePolicy.sol:89"
+          },
+          {
+            "label": "perpEnrichmentLag",
+            "offset": 0,
+            "slot": "113",
+            "type": "t_uint256",
+            "contract": "FeePolicy",
+            "src": "contracts/FeePolicy.sol:92"
+          },
+          {
+            "label": "perpDebasementPercLimits",
+            "offset": 0,
+            "slot": "114",
+            "type": "t_struct(Range)11656_storage",
+            "contract": "FeePolicy",
+            "src": "contracts/FeePolicy.sol:95"
+          },
+          {
+            "label": "perpEnrichmentPercLimits",
+            "offset": 0,
+            "slot": "116",
+            "type": "t_struct(Range)11656_storage",
+            "contract": "FeePolicy",
+            "src": "contracts/FeePolicy.sol:98"
+          },
+          {
+            "label": "rebalanceFreqSec",
+            "offset": 0,
+            "slot": "118",
+            "type": "t_uint256",
+            "contract": "FeePolicy",
+            "src": "contracts/FeePolicy.sol:101"
+          },
+          {
+            "label": "protocolSharePerc",
+            "offset": 0,
+            "slot": "119",
+            "type": "t_uint256",
+            "contract": "FeePolicy",
+            "src": "contracts/FeePolicy.sol:104"
+          },
+          {
+            "label": "protocolFeeCollector",
+            "offset": 0,
+            "slot": "120",
+            "type": "t_address",
+            "contract": "FeePolicy",
+            "src": "contracts/FeePolicy.sol:107"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_array(t_uint256)49_storage": {
+            "label": "uint256[49]",
+            "numberOfBytes": "1568"
+          },
+          "t_array(t_uint256)50_storage": {
+            "label": "uint256[50]",
+            "numberOfBytes": "1600"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(Line)11666_storage": {
+            "label": "struct Line",
+            "members": [
+              {
+                "label": "x1",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "y1",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "x2",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "y2",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "3"
+              }
+            ],
+            "numberOfBytes": "128"
+          },
+          "t_struct(Range)11656_storage": {
             "label": "struct Range",
             "members": [
               {

@@ -56,7 +56,7 @@ __metadata:
     eslint-plugin-promise: ^6.0.0
     eslint-plugin-unused-imports: ^3.0.0
     ethereum-waffle: latest
-    ethers: ^6.6.0
+    ethers: ^6.14.4
     ethers-v5: "npm:ethers@^5.7.0"
     ganache-cli: latest
     hardhat: ^2.23.0
@@ -6479,6 +6479,21 @@ __metadata:
     "@ethersproject/web": 5.8.0
     "@ethersproject/wordlists": 5.8.0
   checksum: fb107bf28dc3aedde4729f9553be066c699e0636346c095b4deeb5349a0c0c8538f48a58b5c8cbefced008706919739c5f7b8f4dd506bb471a31edee18cda228
+  languageName: node
+  linkType: hard
+
+"ethers@npm:^6.14.4":
+  version: 6.14.4
+  resolution: "ethers@npm:6.14.4"
+  dependencies:
+    "@adraffy/ens-normalize": 1.10.1
+    "@noble/curves": 1.2.0
+    "@noble/hashes": 1.3.2
+    "@types/node": 22.7.5
+    aes-js: 4.0.0-beta.5
+    tslib: 2.7.0
+    ws: 8.17.1
+  checksum: 9f7e651ef3ee8c158c5bfd067cb048b3b4367d2d68b575b8777e1cf1eb337a7487cd4e34925cfe421b9a28de12bbd062d08575c1f7b6b0601e32b98edc9c708e
   languageName: node
   linkType: hard
 
