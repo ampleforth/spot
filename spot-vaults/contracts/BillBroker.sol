@@ -84,7 +84,7 @@ contract BillBroker is
     uint256 public constant TWO = ONE * 2;
     uint256 private constant INITIAL_RATE = 1000000;
     uint256 public constant MINIMUM_LIQUIDITY = 10 ** 22;
-    uint256 public constant MAX_FEE_FACTOR = ((ONE * 6) / 5); // 1.2 or 20%
+    uint256 public constant MAX_FEE_FACTOR = (ONE * 2); // 2 or 100%
     uint256 public constant MAX_ASSET_RATIO = uint256(type(int256).max);
 
     //-------------------------------------------------------------------------
