@@ -1,12 +1,12 @@
-import { BigDecimal, BigInt, Address, DataSourceContext } from '@graphprotocol/graph-ts'
+import { log, BigDecimal, BigInt, Address, DataSourceContext } from '@graphprotocol/graph-ts'
 import {
   RolloverVault,
   RolloverVaultAsset,
-  ScaledUnderlyingVaultDepositorBalance,
   RolloverVaultDailyStat,
   Tranche,
 } from '../../generated/schema'
 import { RolloverVault as RolloverVaultABI } from '../../generated/RolloverVault/RolloverVault'
+import { FeePolicy as FeePolicyABI } from '../../generated/RolloverVault/FeePolicy'
 import { ERC20 as ERC20ABI } from '../../generated/BondFactory/ERC20'
 import { RebasingToken as RebasingTokenTemplate } from '../../generated/templates'
 import {
@@ -16,6 +16,7 @@ import {
   BIGDECIMAL_ONE,
   stringToAddress,
   formatBalance,
+  formatDecimalBalance,
   getTrancheCDRInfo,
 } from '../utils'
 import { fetchPerpetualTranche } from './perpetualTranche'
@@ -96,6 +97,8 @@ export function refreshRolloverVaultTVL(vault: RolloverVault): void {
   if (vaultToken.totalSupply.gt(BIGDECIMAL_ZERO)) {
     vault.price = vault.tvl.div(vaultToken.totalSupply)
   }
+  vault.targetSystemRatio = fetchTargetSystemRatio(vaultAddress)
+  vault.deviationRatio = fetchDeviationRatio(perpAddress, vaultAddress, vault.targetSystemRatio)
   vault.save()
 }
 
@@ -157,6 +160,7 @@ export function refreshRolloverVaultDailyStat(dailyStat: RolloverVaultDailyStat)
   dailyStat.rebaseMultiplier = vault.rebaseMultiplier
   dailyStat.price = vault.price
   dailyStat.totalSupply = vaultToken.totalSupply
+  dailyStat.deviationRatio = vault.deviationRatio
   dailyStat.save()
 }
 
@@ -168,11 +172,12 @@ export function fetchRolloverVault(address: Address): RolloverVault {
     vaultToken.save()
     vault = new RolloverVault(id)
     vault.token = vaultToken.id
-    vault.totalScaledUnderlyingDeposited = BIGDECIMAL_ZERO
     vault.activeReserves = []
     vault.tvl = BIGDECIMAL_ZERO
     vault.rebaseMultiplier = BIGDECIMAL_ONE
     vault.price = BIGDECIMAL_ZERO
+    vault.targetSystemRatio = BIGDECIMAL_ZERO
+    vault.deviationRatio = BIGDECIMAL_ZERO
     refreshRolloverVaultStore(vault as RolloverVault)
 
     let underlyingContext = new DataSourceContext()
@@ -212,21 +217,6 @@ export function fetchRolloverVaultAsset(
   return assetToken as RolloverVaultAsset
 }
 
-export function fetchScaledUnderlyingVaultDepositorBalance(
-  vault: RolloverVault,
-  account: Address,
-): ScaledUnderlyingVaultDepositorBalance {
-  let id = vault.id.concat('-').concat(account.toHexString())
-  let balance = ScaledUnderlyingVaultDepositorBalance.load(id)
-  if (balance == null) {
-    balance = new ScaledUnderlyingVaultDepositorBalance(id)
-    balance.vault = vault.id
-    balance.account = account
-    balance.value = BIGDECIMAL_ZERO
-  }
-  return balance as ScaledUnderlyingVaultDepositorBalance
-}
-
 export function fetchRolloverVaultDailyStat(
   vault: RolloverVault,
   timestamp: BigInt,
@@ -237,17 +227,85 @@ export function fetchRolloverVaultDailyStat(
     dailyStat = new RolloverVaultDailyStat(id)
     dailyStat.vault = vault.id
     dailyStat.timestamp = timestamp
-    dailyStat.totalMints = BIGDECIMAL_ZERO
-    dailyStat.totalRedemptions = BIGDECIMAL_ZERO
-    dailyStat.totalMintValue = BIGDECIMAL_ZERO
-    dailyStat.totalRedemptionValue = BIGDECIMAL_ZERO
     dailyStat.tvl = BIGDECIMAL_ZERO
     dailyStat.rebaseMultiplier = BIGDECIMAL_ONE
     dailyStat.price = BIGDECIMAL_ZERO
     dailyStat.totalSupply = BIGDECIMAL_ZERO
-    dailyStat.totalSwapValue = BIGDECIMAL_ZERO
-    dailyStat.totalUnderlyingToPerpSwapValue = BIGDECIMAL_ZERO
-    dailyStat.totalPerpToUnderlyingSwapValue = BIGDECIMAL_ZERO
+    dailyStat.deviationRatio = BIGDECIMAL_ZERO
+    dailyStat.totalUnderlyingFeeValue = BIGDECIMAL_ZERO
   }
   return dailyStat as RolloverVaultDailyStat
+}
+
+function fetchDeviationRatio(
+  perpAddress: Address,
+  vaultAddress: Address,
+  targetSystemRatio: BigDecimal,
+): BigDecimal {
+  let perp = fetchPerpetualTranche(perpAddress)
+  let vault = fetchRolloverVault(vaultAddress)
+  return calcDeviationRatio(perp.tvl, vault.tvl, targetSystemRatio)
+}
+
+function fetchTargetSystemRatio(vaultAddress: Address): BigDecimal {
+  let SYSTEM_RATIO_START = BigDecimal.fromString('3')
+  let vaultContract = RolloverVaultABI.bind(vaultAddress)
+  let r1 = vaultContract.try_feePolicy()
+  if (r1.reverted) {
+    log.error('fee policy not set', [])
+    return SYSTEM_RATIO_START
+  }
+  let feePolicyContract = FeePolicyABI.bind(r1.value)
+  let r2 = feePolicyContract.try_targetSystemRatio()
+  if (r2.reverted) {
+    log.error('fee policy version incorrect', [])
+    return SYSTEM_RATIO_START
+  }
+  log.error('fee policy correct {}:{}', [r1.value.toHexString(), r2.value.toString()])
+  return formatBalance(r2.value, BigInt.fromI32(feePolicyContract.decimals()))
+}
+
+function calcDeviationRatio(
+  perpTVL: BigDecimal,
+  vaultTVL: BigDecimal,
+  targetSystemRatio: BigDecimal,
+): BigDecimal {
+  return vaultTVL.div(perpTVL).div(targetSystemRatio)
+}
+
+export function computeFeePerc(
+  perpTVLPre: BigDecimal,
+  vaultTVLPre: BigDecimal,
+  perpTVLPost: BigDecimal,
+  vaultTVLPost: BigDecimal,
+  targetSystemRatio: BigDecimal,
+  vaultAddress: Address,
+): BigDecimal {
+  let vaultContract = RolloverVaultABI.bind(vaultAddress)
+  let r1 = vaultContract.try_feePolicy()
+  if (r1.reverted) {
+    log.error('fee policy not set', [])
+    return BIGDECIMAL_ZERO
+  }
+  let feePolicyContract = FeePolicyABI.bind(r1.value)
+  let feePolicyDecimals = BigInt.fromI32(feePolicyContract.decimals())
+  let drPre = formatDecimalBalance(
+    calcDeviationRatio(perpTVLPre, vaultTVLPre, targetSystemRatio),
+    feePolicyDecimals,
+  )
+  let drPost = formatDecimalBalance(
+    calcDeviationRatio(perpTVLPost, vaultTVLPost, targetSystemRatio),
+    feePolicyDecimals,
+  )
+  let r2 = feePolicyContract.try_computeFeePerc(drPre, drPost)
+  if (r2.reverted) {
+    log.error('fee policy version incorrect', [])
+    return BIGDECIMAL_ZERO
+  }
+  log.error('fee policy correct {}:{}:{}', [
+    r1.value.toHexString(),
+    drPre.toString(),
+    drPost.toString(),
+  ])
+  return formatBalance(r2.value, feePolicyDecimals)
 }
