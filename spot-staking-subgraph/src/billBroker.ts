@@ -18,6 +18,8 @@ import {
 import {
   BillBroker__computePerpToUSDSwapAmt1InputSStruct,
   BillBroker__computeUSDToPerpSwapAmtInputSStruct,
+  BillBroker__computeMintAmtWithUSD1InputSStruct,
+  BillBroker__computeMintAmtWithPerp1InputSStruct,
 } from '../generated/BillBroker/BillBroker'
 import { BillBroker as BillBrokerABI } from '../generated/BillBroker/BillBroker'
 import { ERC20 as ERC20ABI } from '../generated/BillBroker/ERC20'
@@ -74,7 +76,10 @@ export function fetchBillBroker(address: Address): BillBroker {
   return vault as BillBroker
 }
 
-export function fetchBillBrokerDailyStat(vault: BillBroker, timestamp: BigInt): BillBrokerDailyStat {
+export function fetchBillBrokerDailyStat(
+  vault: BillBroker,
+  timestamp: BigInt,
+): BillBrokerDailyStat {
   let id = vault.id.concat('-').concat(timestamp.toString())
   let dailyStat = BillBrokerDailyStat.load(id)
   if (dailyStat === null) {
@@ -86,10 +91,9 @@ export function fetchBillBrokerDailyStat(vault: BillBroker, timestamp: BigInt): 
     dailyStat.perpPrice = BIGDECIMAL_ZERO
     dailyStat.usdPrice = BIGDECIMAL_ZERO
     dailyStat.totalSupply = BIGDECIMAL_ZERO
-    dailyStat.usdSwapAmt = BIGDECIMAL_ZERO
-    dailyStat.perpSwapAmt = BIGDECIMAL_ZERO
-    dailyStat.usdFeeAmt = BIGDECIMAL_ZERO
-    dailyStat.perpFeeAmt = BIGDECIMAL_ZERO
+    dailyStat.swapValue = BIGDECIMAL_ZERO
+    dailyStat.feeValue = BIGDECIMAL_ZERO
+    dailyStat.feeYield = BIGDECIMAL_ZERO
     dailyStat.tvl = BIGDECIMAL_ZERO
     dailyStat.price = BIGDECIMAL_ZERO
     dailyStat.save()
@@ -106,7 +110,8 @@ function fetchBillBrokerSwap(vault: BillBroker, nonce: BigInt): BillBrokerSwap {
     swap.nonce = nonce
     swap.type = ''
     swap.swapAmt = BIGDECIMAL_ZERO
-    swap.feeAmt = BIGDECIMAL_ZERO
+    swap.swapValue = BIGDECIMAL_ZERO
+    swap.feeValue = BIGDECIMAL_ZERO
     swap.tx = '0x'
     swap.timestamp = BIGINT_ZERO
     swap.save()
@@ -152,6 +157,7 @@ export function handleSwapPerpsForUSD(event: SwapPerpsForUSD): void {
   vault.usdPrice = formatBalance(event.params.preOpState.usdPrice, vault.decimals)
   vault.tvl = vault.usdBal.times(vault.usdPrice).plus(vault.perpBal.times(vault.perpPrice))
   vault.price = vault.tvl.div(vault.totalSupply)
+  vault.swapNonce = vault.swapNonce.plus(BIGINT_ONE)
   vault.save()
 
   dailyStat.perpPrice = vault.perpPrice
@@ -162,6 +168,7 @@ export function handleSwapPerpsForUSD(event: SwapPerpsForUSD): void {
 
   swap.type = 'perps'
   swap.swapAmt = formatBalance(event.params.perpAmtIn, vault.perpDecimals)
+  swap.swapValue = swap.swapAmt.times(vault.perpPrice)
   swap.tx = event.transaction.hash.toHex()
   swap.timestamp = event.block.timestamp
   swap.save()
@@ -180,15 +187,16 @@ export function handleSwapPerpsForUSD(event: SwapPerpsForUSD): void {
   let r = vaultContract.try_computePerpToUSDSwapAmt1(event.params.perpAmtIn, reserveStateStruct)
   if (!r.reverted) {
     let swapAmts = r.value
-    dailyStat.perpSwapAmt = dailyStat.perpSwapAmt.plus(
-      formatBalance(event.params.perpAmtIn, vault.perpDecimals),
-    )
-    dailyStat.usdFeeAmt = dailyStat.usdFeeAmt.plus(
-      formatBalance(swapAmts.value1, vault.usdDecimals),
-    )
+    let perpAmtIn = swap.swapAmt
+    let usdAmtOut = formatBalance(swapAmts.value0, vault.usdDecimals)
+    let estUsdAmtOut = perpAmtIn.times(vault.perpPrice).div(vault.usdPrice)
+    let usdFeeAmt = estUsdAmtOut.minus(usdAmtOut)
+    let feeValue = usdFeeAmt.times(vault.usdPrice)
+    dailyStat.swapValue = dailyStat.swapValue.plus(swap.swapValue)
+    dailyStat.feeValue = dailyStat.feeValue.plus(feeValue)
+    dailyStat.feeYield = dailyStat.feeValue.div(dailyStat.tvl)
     dailyStat.save()
-
-    swap.feeAmt = dailyStat.usdFeeAmt
+    swap.feeValue = feeValue
     swap.save()
   }
 }
@@ -204,6 +212,7 @@ export function handleSwapUSDForPerps(event: SwapUSDForPerps): void {
   vault.usdPrice = formatBalance(event.params.preOpState.usdPrice, vault.decimals)
   vault.tvl = vault.usdBal.times(vault.usdPrice).plus(vault.perpBal.times(vault.perpPrice))
   vault.price = vault.tvl.div(vault.totalSupply)
+  vault.swapNonce = vault.swapNonce.plus(BIGINT_ONE)
   vault.save()
 
   dailyStat.perpPrice = vault.perpPrice
@@ -213,7 +222,8 @@ export function handleSwapUSDForPerps(event: SwapUSDForPerps): void {
   dailyStat.save()
 
   swap.type = 'usd'
-  swap.swapAmt = formatBalance(event.params.usdAmtIn, vault.perpDecimals)
+  swap.swapAmt = formatBalance(event.params.usdAmtIn, vault.usdDecimals)
+  swap.swapValue = swap.swapAmt.times(vault.usdPrice)
   swap.tx = event.transaction.hash.toHex()
   swap.timestamp = event.block.timestamp
   swap.save()
@@ -232,15 +242,16 @@ export function handleSwapUSDForPerps(event: SwapUSDForPerps): void {
   let r = vaultContract.try_computeUSDToPerpSwapAmt(event.params.usdAmtIn, reserveStateStruct)
   if (!r.reverted) {
     let swapAmts = r.value
-    dailyStat.usdSwapAmt = dailyStat.usdSwapAmt.plus(
-      formatBalance(event.params.usdAmtIn, vault.usdDecimals),
-    )
-    dailyStat.perpFeeAmt = dailyStat.perpFeeAmt.plus(
-      formatBalance(swapAmts.value1, vault.perpDecimals),
-    )
+    let usdAmtIn = swap.swapAmt
+    let perpAmtOut = formatBalance(swapAmts.value0, vault.perpDecimals)
+    let estPerpAmtOut = usdAmtIn.times(vault.usdPrice).div(vault.perpPrice)
+    let perpFeeAmt = estPerpAmtOut.minus(perpAmtOut)
+    let feeValue = perpFeeAmt.times(vault.perpPrice)
+    dailyStat.swapValue = dailyStat.swapValue.plus(swap.swapValue)
+    dailyStat.feeValue = dailyStat.feeValue.plus(feeValue)
+    dailyStat.feeYield = dailyStat.feeValue.div(dailyStat.tvl)
     dailyStat.save()
-
-    swap.feeAmt = dailyStat.perpFeeAmt
+    swap.feeValue = feeValue
     swap.save()
   }
 }
@@ -249,6 +260,7 @@ export function handleDepositUSD(event: DepositUSD): void {
   log.warning('triggered single sided deposit', [])
   let vault = fetchBillBroker(event.address)
   let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(event.block.timestamp))
+  let swap = fetchBillBrokerSwap(vault, vault.swapNonce.plus(BIGINT_ONE))
   refreshBillBrokerStats(vault, dailyStat)
 
   vault.perpPrice = formatBalance(event.params.preOpState.perpPrice, vault.decimals)
@@ -262,12 +274,55 @@ export function handleDepositUSD(event: DepositUSD): void {
   dailyStat.tvl = vault.tvl
   dailyStat.price = vault.price
   dailyStat.save()
+
+  let vaultContract = BillBrokerABI.bind(stringToAddress(vault.id))
+  let reserveStateValues: Array<ethereum.Value> = [
+    ethereum.Value.fromUnsignedBigInt(event.params.preOpState.usdBalance),
+    ethereum.Value.fromUnsignedBigInt(event.params.preOpState.perpBalance),
+    ethereum.Value.fromUnsignedBigInt(event.params.preOpState.usdPrice),
+    ethereum.Value.fromUnsignedBigInt(event.params.preOpState.perpPrice),
+  ]
+  let reserveStateTuple = changetype<ethereum.Tuple>(reserveStateValues)
+  let reserveStateStruct = changetype<BillBroker__computeMintAmtWithUSD1InputSStruct>(
+    reserveStateTuple,
+  )
+  let r = vaultContract.try_computeMintAmtWithUSD1(event.params.usdAmtIn, reserveStateStruct)
+  if (!r.reverted) {
+    let usdAmtIn = formatBalance(event.params.usdAmtIn, vault.usdDecimals)
+    let valueIn = usdAmtIn.times(vault.usdPrice)
+    let estMintAmt = formatBalance(r.value, vault.decimals)
+    let mintAmt = valueIn.div(vault.tvl).times(vault.totalSupply)
+    let feePerc = estMintAmt.minus(mintAmt).div(estMintAmt)
+
+    let usdClaimPost = vault.usdBal.times(estMintAmt).div(vault.totalSupply)
+    let swapAmt = usdAmtIn.minus(usdClaimPost)
+    let feeValue = swapAmt.times(feePerc)
+
+    vault.swapNonce = vault.swapNonce.plus(BIGINT_ONE)
+    vault.save()
+
+    swap.type = 'usd'
+    swap.swapAmt = swapAmt
+    swap.swapValue = swap.swapAmt.times(vault.usdPrice)
+    swap.tx = event.transaction.hash.toHex()
+    swap.timestamp = event.block.timestamp
+    swap.save()
+
+    dailyStat.swapValue = dailyStat.swapValue.plus(swap.swapValue)
+    dailyStat.feeValue = dailyStat.feeValue.plus(feeValue)
+    dailyStat.feeYield = dailyStat.feeValue.div(dailyStat.tvl)
+    dailyStat.save()
+
+    swap.feeValue = feeValue
+    swap.save()
+  }
 }
 
 export function handleDepositPerp(event: DepositPerp): void {
   log.warning('triggered single sided deposit', [])
   let vault = fetchBillBroker(event.address)
   let dailyStat = fetchBillBrokerDailyStat(vault, dayTimestamp(event.block.timestamp))
+  let swap = fetchBillBrokerSwap(vault, vault.swapNonce.plus(BIGINT_ONE))
   refreshBillBrokerStats(vault, dailyStat)
 
   vault.perpPrice = formatBalance(event.params.preOpState.perpPrice, vault.decimals)
@@ -281,4 +336,46 @@ export function handleDepositPerp(event: DepositPerp): void {
   dailyStat.tvl = vault.tvl
   dailyStat.price = vault.price
   dailyStat.save()
+
+  let vaultContract = BillBrokerABI.bind(stringToAddress(vault.id))
+  let reserveStateValues: Array<ethereum.Value> = [
+    ethereum.Value.fromUnsignedBigInt(event.params.preOpState.usdBalance),
+    ethereum.Value.fromUnsignedBigInt(event.params.preOpState.perpBalance),
+    ethereum.Value.fromUnsignedBigInt(event.params.preOpState.usdPrice),
+    ethereum.Value.fromUnsignedBigInt(event.params.preOpState.perpPrice),
+  ]
+  let reserveStateTuple = changetype<ethereum.Tuple>(reserveStateValues)
+  let reserveStateStruct = changetype<BillBroker__computeMintAmtWithPerp1InputSStruct>(
+    reserveStateTuple,
+  )
+  let r = vaultContract.try_computeMintAmtWithPerp1(event.params.perpAmtIn, reserveStateStruct)
+  if (!r.reverted) {
+    let perpAmtIn = formatBalance(event.params.perpAmtIn, vault.perpDecimals)
+    let valueIn = perpAmtIn.times(vault.perpPrice)
+    let estMintAmt = formatBalance(r.value, vault.decimals)
+    let mintAmt = valueIn.div(vault.tvl).times(vault.totalSupply)
+    let feePerc = estMintAmt.minus(mintAmt).div(estMintAmt)
+
+    let perpClaimPost = vault.perpBal.times(estMintAmt).div(vault.totalSupply)
+    let swapAmt = perpAmtIn.minus(perpClaimPost)
+    let feeValue = swapAmt.times(feePerc)
+
+    vault.swapNonce = vault.swapNonce.plus(BIGINT_ONE)
+    vault.save()
+
+    swap.type = 'perp'
+    swap.swapAmt = swapAmt
+    swap.swapValue = swap.swapAmt.times(vault.perpPrice)
+    swap.tx = event.transaction.hash.toHex()
+    swap.timestamp = event.block.timestamp
+    swap.save()
+
+    dailyStat.swapValue = dailyStat.swapValue.plus(swap.swapValue)
+    dailyStat.feeValue = dailyStat.feeValue.plus(feeValue)
+    dailyStat.feeYield = dailyStat.feeValue.div(dailyStat.tvl)
+    dailyStat.save()
+
+    swap.feeValue = feeValue
+    swap.save()
+  }
 }

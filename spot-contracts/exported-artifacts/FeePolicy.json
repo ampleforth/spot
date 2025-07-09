@@ -1,0 +1,582 @@
+[
+  {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidFees",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidPerc",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidRange",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "version",
+        "type": "uint8"
+      }
+    ],
+    "name": "Initialized",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousOwner",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "OwnershipTransferred",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "DECIMALS",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "ONE",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "perpTVL",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "vaultTVL",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct SystemTVL",
+        "name": "s",
+        "type": "tuple"
+      }
+    ],
+    "name": "computeDeviationRatio",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "drPre",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "drPost",
+        "type": "uint256"
+      }
+    ],
+    "name": "computeFeePerc",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "perpTVL",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "vaultTVL",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct SystemTVL",
+        "name": "s",
+        "type": "tuple"
+      }
+    ],
+    "name": "computeRebalanceAmount",
+    "outputs": [
+      {
+        "internalType": "int256",
+        "name": "underlyingAmtIntoPerp",
+        "type": "int256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "decimals",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "equilibriumDR",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "lower",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "upper",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "feeFnDRDown",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "x1",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "y1",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "x2",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "y2",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "feeFnDRUp",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "x1",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "y1",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "x2",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "y2",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "init",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "perpDebasementLag",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "perpDebasementPercLimits",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "lower",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "upper",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "perpEnrichmentLag",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "perpEnrichmentPercLimits",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "lower",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "upper",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "protocolFeeCollector",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "protocolSharePerc",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "rebalanceFreqSec",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "renounceOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "targetSystemRatio",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "transferOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "lower",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "upper",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct Range",
+        "name": "equilibriumDR_",
+        "type": "tuple"
+      }
+    ],
+    "name": "updateEquilibriumDR",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "x1",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "y1",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "x2",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "y2",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct Line",
+        "name": "feeFnDRDown_",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "x1",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "y1",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "x2",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "y2",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct Line",
+        "name": "feeFnDRUp_",
+        "type": "tuple"
+      }
+    ],
+    "name": "updateFees",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "protocolSharePerc_",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "protocolFeeCollector_",
+        "type": "address"
+      }
+    ],
+    "name": "updateProtocolFeeConfig",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "perpDebasementLag_",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "perpEnrichmentLag_",
+        "type": "uint256"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "lower",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "upper",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct Range",
+        "name": "perpDebasementPercLimits_",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "lower",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "upper",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct Range",
+        "name": "perpEnrichmentPercLimits_",
+        "type": "tuple"
+      },
+      {
+        "internalType": "uint256",
+        "name": "rebalanceFreqSec_",
+        "type": "uint256"
+      }
+    ],
+    "name": "updateRebalanceConfig",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "targetSystemRatio_",
+        "type": "uint256"
+      }
+    ],
+    "name": "updateTargetSystemRatio",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]
