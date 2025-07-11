@@ -16,6 +16,11 @@
   },
   {
     "inputs": [],
+    "name": "InvalidRange",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "SlippageTooHigh",
     "type": "error"
   },
@@ -31,12 +36,12 @@
   },
   {
     "inputs": [],
-    "name": "UnexpectedARDelta",
+    "name": "UnexpectedDecimals",
     "type": "error"
   },
   {
     "inputs": [],
-    "name": "UnexpectedDecimals",
+    "name": "UnexpectedRangeDelta",
     "type": "error"
   },
   {
@@ -331,6 +336,32 @@
   },
   {
     "inputs": [],
+    "name": "MAX_ASSET_RATIO",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "MAX_FEE_FACTOR",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "MINIMUM_LIQUIDITY",
     "outputs": [
       {
@@ -345,6 +376,19 @@
   {
     "inputs": [],
     "name": "ONE",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "TWO",
     "outputs": [
       {
         "internalType": "uint256",
@@ -627,7 +671,7 @@
     "outputs": [
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "mintAmt",
         "type": "uint256"
       }
     ],
@@ -692,7 +736,7 @@
     "outputs": [
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "mintAmt",
         "type": "uint256"
       }
     ],
@@ -762,11 +806,6 @@
       },
       {
         "internalType": "uint256",
-        "name": "lpFeeUsdAmt",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
         "name": "protocolFeeUsdAmt",
         "type": "uint256"
       }
@@ -787,7 +826,7 @@
         "type": "uint256"
       }
     ],
-    "name": "computePerpToUSDSwapFeePerc",
+    "name": "computePerpToUSDSwapFeeFactor",
     "outputs": [
       {
         "internalType": "uint256",
@@ -866,11 +905,6 @@
       },
       {
         "internalType": "uint256",
-        "name": "lpFeePerpAmt",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
         "name": "protocolFeePerpAmt",
         "type": "uint256"
       }
@@ -910,7 +944,7 @@
         "type": "uint256"
       }
     ],
-    "name": "computeUSDToPerpSwapFeePerc",
+    "name": "computeUSDToPerpSwapFeeFactor",
     "outputs": [
       {
         "internalType": "uint256",
@@ -1068,7 +1102,7 @@
           }
         ],
         "internalType": "struct Range",
-        "name": "perpToUSDSwapFeePercs",
+        "name": "perpToUSDSwapFeeFactors",
         "type": "tuple"
       },
       {
@@ -1085,7 +1119,7 @@
           }
         ],
         "internalType": "struct Range",
-        "name": "usdToPerpSwapFeePercs",
+        "name": "usdToPerpSwapFeeFactors",
         "type": "tuple"
       },
       {
@@ -1144,8 +1178,8 @@
         "type": "address"
       },
       {
-        "internalType": "contract ISpotPricingStrategy",
-        "name": "pricingStrategy_",
+        "internalType": "contract IPerpPricer",
+        "name": "oracle_",
         "type": "address"
       }
     ],
@@ -1175,6 +1209,19 @@
         "internalType": "string",
         "name": "",
         "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "oracle",
+    "outputs": [
+      {
+        "internalType": "contract IPerpPricer",
+        "name": "",
+        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -1260,19 +1307,6 @@
         "internalType": "uint256",
         "name": "",
         "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "pricingStrategy",
-    "outputs": [
-      {
-        "internalType": "contract ISpotPricingStrategy",
-        "name": "",
-        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -1574,7 +1608,7 @@
               }
             ],
             "internalType": "struct Range",
-            "name": "perpToUSDSwapFeePercs",
+            "name": "perpToUSDSwapFeeFactors",
             "type": "tuple"
           },
           {
@@ -1591,7 +1625,7 @@
               }
             ],
             "internalType": "struct Range",
-            "name": "usdToPerpSwapFeePercs",
+            "name": "usdToPerpSwapFeeFactors",
             "type": "tuple"
           },
           {
@@ -1626,12 +1660,12 @@
   {
     "inputs": [
       {
-        "internalType": "contract ISpotPricingStrategy",
-        "name": "pricingStrategy_",
+        "internalType": "contract IPerpPricer",
+        "name": "oracle_",
         "type": "address"
       }
     ],
-    "name": "updatePricingStrategy",
+    "name": "updateOracle",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
