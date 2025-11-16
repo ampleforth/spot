@@ -38,8 +38,8 @@ You should have your own Goldsky API key to use with the Goldsky CLI.
 Note you must set the (new) version to deploy to, and then update the tag separately.
 
 ```
-./scripts/deploy.sh sepolia <VERSION> ampleforth-spot-sepolia
-./scripts/deploy.sh mainnet <VERSION> ampleforth-spot
+./scripts/deploy.sh sepolia ampleforth-spot-sepolia <VERSION>
+./scripts/deploy.sh mainnet ampleforth-spot <VERSION>
 ```
 
 Once deployed, update the tag that frg-web-api looks for.
