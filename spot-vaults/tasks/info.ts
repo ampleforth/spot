@@ -159,7 +159,7 @@ task("info:BillBroker")
       console.log("tvl", tvl);
 
       console.log("---------------------------------------------------------------");
-      const swapAmts = [1n, 1000n, 10000n, 25000n, 50000n, 100000n];
+      const swapAmts = [1n, 1000n, 10000n, 15000n, 20000n, 25000n];
       for (let i = 0; i < swapAmts.length; i++) {
         const swapAmt = swapAmts[i];
         console.log(
@@ -186,7 +186,7 @@ task("info:BillBroker")
       }
       console.log("---------------------------------------------------------------");
     } catch (e) {
-      console.log(e);
+      // console.log(e);
       console.log("---------------------------------------------------------------");
     }
   });

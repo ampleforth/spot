@@ -21,7 +21,7 @@
     "@openzeppelin/contracts-upgradeable": "4.9.6",
     "@uniswap/v3-core": "^1.0.1",
     "ampleforth-contracts": "https://github.com/ampleforth/ampleforth-contracts#master",
-    "tranche": "https://github.com/buttonwood-protocol/tranche.git#main"
+    "tranche": "https://github.com/buttonwood-protocol/tranche/archive/main.tar.gz"
   },
   "devDependencies": {
     "@ethersproject/abi": "^5.6.4",
@@ -34,7 +34,7 @@
     "@nomicfoundation/hardhat-ignition-ethers": "^0.15.0",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
     "@nomicfoundation/hardhat-toolbox": "latest",
-    "@nomicfoundation/hardhat-verify": "latest",
+    "@nomicfoundation/hardhat-verify": "^2.0.0",
     "@nomiclabs/hardhat-waffle": "^2.0.6",
     "@openzeppelin/hardhat-upgrades": "^3.0.4",
     "@openzeppelin/upgrades-core": "latest",
