@@ -9,3 +9,6 @@ error LastRebalanceTooRecent();
 
 /// @notice Swap fee exceeded the maximum allowed percentage.
 error SlippageTooHigh();
+
+/// @notice Lag factor must be greater than zero.
+error InvalidLagFactor();

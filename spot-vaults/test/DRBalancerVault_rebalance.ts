@@ -59,7 +59,7 @@ describe("DRBalancerVault", function () {
     const { vault, perp } = fixtures;
 
     // Deposit 10000 AMPL
-    await vault.deposit(amplFP("10000"));
+    await vault.deposit(amplFP("10000"), 0, 0);
 
     // Mint 10000 perps to vault, with perpTVL = 10000, so perpPrice = 1
     await perp.mint(vault.target, perpFP("10000"));
@@ -71,7 +71,7 @@ describe("DRBalancerVault", function () {
   async function setupWithOnlyUnderlying() {
     const fixtures = await setupContracts();
     const { vault, perp, deployer } = fixtures;
-    await vault.deposit(amplFP("10000"));
+    await vault.deposit(amplFP("10000"), 0, 0);
     // Mint perps to deployer (not vault) so perpTotalSupply > 0 to avoid division by zero
     await perp.mint(await deployer.getAddress(), perpFP("10000"));
     return fixtures;
@@ -88,57 +88,38 @@ describe("DRBalancerVault", function () {
 
   describe("#computeRebalanceAmount", function () {
     // Test Matrix:
-    // - DR ranges: equilibrium (0.95-1.05), low (<0.95), high (>1.05)
-    // - Limiters: lag limiter, minAmt limiter, maxAmt limiter, overshoot protection
+    // - DR at target: returns 0
+    // - DR below target: perp -> underlying swap (isUnderlyingIntoPerp = false)
+    // - DR above target: underlying -> perp swap (isUnderlyingIntoPerp = true)
+    // - Caps: minRebalanceVal threshold, availableLiquidity cap, requiredChange cap
 
-    describe("DR in equilibrium zone (0.95 - 1.05)", function () {
-      it("should return 0 at DR = 1.0 (center)", async function () {
+    describe("DR at target", function () {
+      it("should return 0 at DR = 1.0", async function () {
         const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
         await rolloverVault.mockMethod("deviationRatio()", [drFP("1")]);
 
         const [amt, isUnderlyingIntoPerp] =
           await vault.computeRebalanceAmount.staticCall();
         expect(amt).to.eq(0n);
-        expect(isUnderlyingIntoPerp).to.eq(true);
-      });
-
-      it("should return 0 at DR = 0.95 (lower bound)", async function () {
-        const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
-        await rolloverVault.mockMethod("deviationRatio()", [drFP("0.95")]);
-
-        const [amt, isUnderlyingIntoPerp] =
-          await vault.computeRebalanceAmount.staticCall();
-        expect(amt).to.eq(0n);
-        expect(isUnderlyingIntoPerp).to.eq(true);
-      });
-
-      it("should return 0 at DR = 1.05 (upper bound)", async function () {
-        const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
-        await rolloverVault.mockMethod("deviationRatio()", [drFP("1.05")]);
-
-        const [amt, isUnderlyingIntoPerp] =
-          await vault.computeRebalanceAmount.staticCall();
-        expect(amt).to.eq(0n);
+        // When DR = targetDR, goes to else branch (dr >= targetDR), so isUnderlyingIntoPerp = true
         expect(isUnderlyingIntoPerp).to.eq(true);
       });
     });
 
-    describe("DR below equilibrium (perp -> underlying swap)", function () {
+    describe("DR below target (perp -> underlying swap)", function () {
       // When DR < target: redeem perps to decrease perpTVL
       // isUnderlyingIntoPerp = false
 
-      describe("lag limiter active", function () {
-        it("should use adjustedChange when within [minAmt, maxAmt]", async function () {
+      describe("basic rebalance", function () {
+        it("should compute adjustedChange correctly", async function () {
           const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
           await rolloverVault.mockMethod("deviationRatio()", [drFP("0.5")]);
 
           // drDelta = 1.0 - 0.5 = 0.5
           // requiredChange = perpTVL * drDelta = 10000 * 0.5 = 5000 AMPL
           // adjustedChange = 5000 / 3 (lagFactor) = 1666.666... AMPL
-          // availableLiquidity = perpValue = 10000 * 10000 / 10000 = 10000 AMPL
-          // minAmt = 10000 * 10% = 1000, maxAmt = 10000 * 50% = 5000
-          // 1000 < 1666 < 5000, so lag limiter is active
-          // 1666 < requiredChange (5000), no overshoot
+          // availableLiquidity = perpValue = 10000 AMPL
+          // adjustedChange < availableLiquidity, adjustedChange < requiredChange
           const [amt, isUnderlyingIntoPerp] =
             await vault.computeRebalanceAmount.staticCall();
           expect(amt).to.eq(amplFP("1666.666666666"));
@@ -146,89 +127,70 @@ describe("DRBalancerVault", function () {
         });
       });
 
-      describe("minAmt limiter active", function () {
-        it("should use minAmt when adjustedChange < minAmt", async function () {
+      describe("minRebalanceVal threshold", function () {
+        it("should return 0 when adjustedChange < minRebalanceVal", async function () {
           const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
+          // Set minRebalanceVal to 1000 AMPL (underlying denominated)
+          await vault.updateMinRebalanceAmt(amplFP("1000"));
           await rolloverVault.mockMethod("deviationRatio()", [drFP("0.8")]);
 
           // drDelta = 1.0 - 0.8 = 0.2
           // requiredChange = 10000 * 0.2 = 2000 AMPL
           // adjustedChange = 2000 / 3 = 666.666... AMPL
-          // availableLiquidity = 10000 AMPL
-          // minAmt = 1000, maxAmt = 5000
-          // 666 < minAmt (1000), so minAmt limiter is active
-          // minAmt (1000) < requiredChange (2000), no overshoot
+          // 666 < minRebalanceVal (1000), so return 0
           const [amt, isUnderlyingIntoPerp] =
             await vault.computeRebalanceAmount.staticCall();
-          expect(amt).to.eq(amplFP("1000"));
+          expect(amt).to.eq(0n);
+          expect(isUnderlyingIntoPerp).to.eq(false);
+        });
+
+        it("should proceed when adjustedChange >= minRebalanceVal", async function () {
+          const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
+          await vault.updateMinRebalanceAmt(amplFP("500"));
+          await rolloverVault.mockMethod("deviationRatio()", [drFP("0.8")]);
+
+          // adjustedChange = 666 >= minRebalanceVal (500)
+          const [amt, isUnderlyingIntoPerp] =
+            await vault.computeRebalanceAmount.staticCall();
+          expect(amt).to.eq(amplFP("666.666666666"));
           expect(isUnderlyingIntoPerp).to.eq(false);
         });
       });
 
-      describe("maxAmt limiter active", function () {
-        it("should use maxAmt when adjustedChange > maxAmt", async function () {
+      describe("availableLiquidity cap", function () {
+        it("should cap at availableLiquidity when adjustedChange > availableLiquidity", async function () {
           const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
           // Set lagFactor to 1 so adjustedChange = requiredChange
-          await vault.updateRebalanceConfigPerpToUnderlying(1, {
-            lower: ONE / 10n,
-            upper: ONE / 2n,
-          });
+          await vault.updateLagFactors(1, 1);
           await rolloverVault.mockMethod("deviationRatio()", [drFP("0.3")]);
 
           // drDelta = 1.0 - 0.3 = 0.7
           // requiredChange = 10000 * 0.7 = 7000 AMPL
           // adjustedChange = 7000 / 1 = 7000 AMPL
-          // availableLiquidity = 10000 AMPL
-          // minAmt = 1000, maxAmt = 5000
-          // 7000 > maxAmt (5000), so maxAmt limiter is active
-          // maxAmt (5000) < requiredChange (7000), no overshoot
+          // availableLiquidity = perpValue = 10000 AMPL
+          // 7000 < 10000, so no cap needed
           const [amt, isUnderlyingIntoPerp] =
             await vault.computeRebalanceAmount.staticCall();
-          expect(amt).to.eq(amplFP("5000"));
+          expect(amt).to.eq(amplFP("7000"));
           expect(isUnderlyingIntoPerp).to.eq(false);
         });
       });
 
-      describe("overshoot protection active", function () {
-        it("should cap at requiredChange when minAmt > requiredChange", async function () {
+      describe("requiredChange cap (overshoot protection)", function () {
+        it("should cap at requiredChange to prevent overshoot", async function () {
           const { vault, rolloverVault, perp } = await loadFixture(setupContracts);
-          // Large liquidity = high minAmt
-          await vault.deposit(amplFP("50000"));
+          await vault.deposit(amplFP("50000"), 0, 0);
           await perp.mint(vault.target, perpFP("50000"));
+          // Set lagFactor to 1 so adjustedChange = requiredChange
+          await vault.updateLagFactors(1, 1);
           await rolloverVault.mockMethod("deviationRatio()", [drFP("0.9")]);
 
           // drDelta = 1.0 - 0.9 = 0.1
           // requiredChange = 10000 * 0.1 = 1000 AMPL
-          // adjustedChange = 1000 / 3 = 333 AMPL
-          // availableLiquidity = 50000 * 10000 / 10000 = 50000 AMPL
-          // minAmt = 50000 * 10% = 5000, maxAmt = 25000
-          // 333 < minAmt, so would use 5000
-          // But 5000 > requiredChange (1000), so overshoot protection caps at 1000
-          const [amt, isUnderlyingIntoPerp] =
-            await vault.computeRebalanceAmount.staticCall();
-          expect(amt).to.eq(amplFP("1000"));
-          expect(isUnderlyingIntoPerp).to.eq(false);
-        });
-
-        it("should cap at requiredChange when maxAmt > requiredChange", async function () {
-          const { vault, rolloverVault, perp } = await loadFixture(setupContracts);
-          // Large liquidity with high max percentage
-          await vault.deposit(amplFP("50000"));
-          await perp.mint(vault.target, perpFP("50000"));
-          // Set min=1%, max=90%, lagFactor=1
-          await vault.updateRebalanceConfigPerpToUnderlying(1, {
-            lower: ONE / 100n,
-            upper: (ONE * 90n) / 100n,
-          });
-          await rolloverVault.mockMethod("deviationRatio()", [drFP("0.9")]);
-
-          // drDelta = 0.1
-          // requiredChange = 10000 * 0.1 = 1000 AMPL
           // adjustedChange = 1000 / 1 = 1000 AMPL
           // availableLiquidity = 50000 AMPL
-          // minAmt = 500, maxAmt = 45000
-          // 500 < 1000 < 45000, so lag limiter would give 1000
-          // 1000 = requiredChange, so no overshoot (boundary case)
+          // adjustedChange (1000) < availableLiquidity (50000)
+          // adjustedChange (1000) = requiredChange (1000), no overshoot
           const [amt, isUnderlyingIntoPerp] =
             await vault.computeRebalanceAmount.staticCall();
           expect(amt).to.eq(amplFP("1000"));
@@ -241,7 +203,7 @@ describe("DRBalancerVault", function () {
           const { vault, rolloverVault } = await loadFixture(setupWithOnlyUnderlying);
           await rolloverVault.mockMethod("deviationRatio()", [drFP("0.8")]);
 
-          // availableLiquidity = 0, minAmt = maxAmt = 0
+          // availableLiquidity = 0
           const [amt, isUnderlyingIntoPerp] =
             await vault.computeRebalanceAmount.staticCall();
           expect(amt).to.eq(0n);
@@ -250,12 +212,12 @@ describe("DRBalancerVault", function () {
       });
     });
 
-    describe("DR above equilibrium (underlying -> perp swap)", function () {
+    describe("DR above target (underlying -> perp swap)", function () {
       // When DR > target: mint perps to increase perpTVL
       // isUnderlyingIntoPerp = true
 
-      describe("lag limiter active", function () {
-        it("should use adjustedChange when within [minAmt, maxAmt]", async function () {
+      describe("basic rebalance", function () {
+        it("should compute adjustedChange correctly", async function () {
           const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
           await rolloverVault.mockMethod("deviationRatio()", [drFP("1.5")]);
 
@@ -263,8 +225,6 @@ describe("DRBalancerVault", function () {
           // requiredChange = 10000 * 0.5 = 5000 AMPL
           // adjustedChange = 5000 / 3 = 1666.666... AMPL
           // availableLiquidity = underlyingBalance = 10000 AMPL
-          // minAmt = 1000, maxAmt = 5000
-          // 1000 < 1666 < 5000, so lag limiter is active
           const [amt, isUnderlyingIntoPerp] =
             await vault.computeRebalanceAmount.staticCall();
           expect(amt).to.eq(amplFP("1666.666666666"));
@@ -272,62 +232,53 @@ describe("DRBalancerVault", function () {
         });
       });
 
-      describe("minAmt limiter active", function () {
-        it("should use minAmt when adjustedChange < minAmt", async function () {
+      describe("minRebalanceVal threshold", function () {
+        it("should return 0 when adjustedChange < minRebalanceVal", async function () {
           const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
+          await vault.updateMinRebalanceAmt(amplFP("1000"));
           await rolloverVault.mockMethod("deviationRatio()", [drFP("1.2")]);
 
           // drDelta = 1.2 - 1.0 = 0.2
           // requiredChange = 10000 * 0.2 = 2000 AMPL
           // adjustedChange = 2000 / 3 = 666.666... AMPL
-          // availableLiquidity = 10000 AMPL
-          // minAmt = 1000, maxAmt = 5000
-          // 666 < minAmt (1000), so minAmt limiter is active
+          // 666 < minRebalanceVal (1000), so return 0
           const [amt, isUnderlyingIntoPerp] =
             await vault.computeRebalanceAmount.staticCall();
-          expect(amt).to.eq(amplFP("1000"));
+          expect(amt).to.eq(0n);
           expect(isUnderlyingIntoPerp).to.eq(true);
         });
       });
 
-      describe("maxAmt limiter active", function () {
-        it("should use maxAmt when adjustedChange > maxAmt", async function () {
+      describe("availableLiquidity cap", function () {
+        it("should cap at availableLiquidity when adjustedChange > availableLiquidity", async function () {
           const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
-          // Set lagFactor to 1 so adjustedChange = requiredChange
-          await vault.updateRebalanceConfigUnderlyingToPerp(1, {
-            lower: ONE / 10n,
-            upper: ONE / 2n,
-          });
+          await vault.updateLagFactors(1, 1);
           await rolloverVault.mockMethod("deviationRatio()", [drFP("1.7")]);
 
           // drDelta = 1.7 - 1.0 = 0.7
           // requiredChange = 10000 * 0.7 = 7000 AMPL
           // adjustedChange = 7000 / 1 = 7000 AMPL
-          // availableLiquidity = 10000 AMPL
-          // minAmt = 1000, maxAmt = 5000
-          // 7000 > maxAmt (5000), so maxAmt limiter is active
+          // availableLiquidity = underlyingBalance = 10000 AMPL
+          // 7000 < 10000, so no cap needed
           const [amt, isUnderlyingIntoPerp] =
             await vault.computeRebalanceAmount.staticCall();
-          expect(amt).to.eq(amplFP("5000"));
+          expect(amt).to.eq(amplFP("7000"));
           expect(isUnderlyingIntoPerp).to.eq(true);
         });
       });
 
-      describe("overshoot protection active", function () {
-        it("should cap at requiredChange when minAmt > requiredChange", async function () {
+      describe("requiredChange cap (overshoot protection)", function () {
+        it("should cap at requiredChange to prevent overshoot", async function () {
           const { vault, rolloverVault, perp } = await loadFixture(setupContracts);
-          // Large liquidity = high minAmt
-          await vault.deposit(amplFP("50000"));
-          await perp.mint(vault.target, perpFP("10000")); // Need perps for perpTotalSupply
+          await vault.deposit(amplFP("50000"), 0, 0);
+          await perp.mint(vault.target, perpFP("10000"));
+          await vault.updateLagFactors(1, 1);
           await rolloverVault.mockMethod("deviationRatio()", [drFP("1.1")]);
 
           // drDelta = 1.1 - 1.0 = 0.1
           // requiredChange = 10000 * 0.1 = 1000 AMPL
-          // adjustedChange = 1000 / 3 = 333 AMPL
+          // adjustedChange = 1000 / 1 = 1000 AMPL
           // availableLiquidity = 50000 AMPL
-          // minAmt = 50000 * 10% = 5000, maxAmt = 25000
-          // 333 < minAmt, so would use 5000
-          // But 5000 > requiredChange (1000), so overshoot protection caps at 1000
           const [amt, isUnderlyingIntoPerp] =
             await vault.computeRebalanceAmount.staticCall();
           expect(amt).to.eq(amplFP("1000"));
@@ -340,7 +291,7 @@ describe("DRBalancerVault", function () {
           const { vault, rolloverVault } = await loadFixture(setupWithOnlyPerps);
           await rolloverVault.mockMethod("deviationRatio()", [drFP("1.2")]);
 
-          // availableLiquidity = 0, minAmt = maxAmt = 0
+          // availableLiquidity = 0
           const [amt, isUnderlyingIntoPerp] =
             await vault.computeRebalanceAmount.staticCall();
           expect(amt).to.eq(0n);
@@ -360,31 +311,7 @@ describe("DRBalancerVault", function () {
         const [amt, isUnderlyingIntoPerp] =
           await vault.computeRebalanceAmount.staticCall();
         expect(amt).to.eq(0n);
-        expect(isUnderlyingIntoPerp).to.eq(true);
-      });
-
-      it("should handle DR just outside equilibrium (0.9499...)", async function () {
-        const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
-        // DR = 0.94999999 (just below 0.95 equilibrium lower bound)
-        await rolloverVault.mockMethod("deviationRatio()", [drFP("0.94999999")]);
-
-        const [amt, isUnderlyingIntoPerp] =
-          await vault.computeRebalanceAmount.staticCall();
-        // Should trigger rebalance since outside equilibrium
-        expect(amt).to.be.gt(0n);
         expect(isUnderlyingIntoPerp).to.eq(false);
-      });
-
-      it("should handle DR just outside equilibrium (1.0500...)", async function () {
-        const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
-        // DR = 1.05000001 (just above 1.05 equilibrium upper bound)
-        await rolloverVault.mockMethod("deviationRatio()", [drFP("1.05000001")]);
-
-        const [amt, isUnderlyingIntoPerp] =
-          await vault.computeRebalanceAmount.staticCall();
-        // Should trigger rebalance since outside equilibrium
-        expect(amt).to.be.gt(0n);
-        expect(isUnderlyingIntoPerp).to.eq(true);
       });
     });
   });
@@ -417,18 +344,19 @@ describe("DRBalancerVault", function () {
         await vault.rebalance();
         await time.increase(DAY + 1);
         await expect(vault.rebalance())
-          .to.emit(vault, "Rebalance")
+          .to.emit(vault, "Rebalanced")
           .withArgs(drFP("1"), drFP("1"), 0n, true);
       });
     });
 
-    describe("when system DR is in equilibrium zone", function () {
-      it("should emit Rebalance event with zero swap amount", async function () {
+    describe("when system DR is at target", function () {
+      it("should emit Rebalanced event with zero swap amount", async function () {
         const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
         await rolloverVault.mockMethod("deviationRatio()", [drFP("1")]);
 
+        // When DR = targetDR, isUnderlyingIntoPerp = true (dr >= targetDR branch)
         await expect(vault.rebalance())
-          .to.emit(vault, "Rebalance")
+          .to.emit(vault, "Rebalanced")
           .withArgs(drFP("1"), drFP("1"), 0n, true);
       });
 
@@ -462,19 +390,16 @@ describe("DRBalancerVault", function () {
       it("should call swapUnderlyingForPerps with correct amount", async function () {
         const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
         await rolloverVault.mockMethod("deviationRatio()", [drFP("1.2")]);
-        // mockCall only returns value when called with exact parameters
-        // This verifies the contract passes amplFP("1000") to swapUnderlyingForPerps
+        // DR=1.2, drDelta=0.2, requiredChange=2000, adjustedChange=2000/3=666.666...
         await rolloverVault.mockCall(
           "swapUnderlyingForPerps(uint256)",
-          [amplFP("1000")],
-          [perpFP("1000")],
+          [amplFP("666.666666666")],
+          [perpFP("666.666666666")],
         );
 
-        // underlyingAmt = 1000 (see computeRebalanceAmount tests)
-        // isUnderlyingIntoPerp = true
         await expect(vault.rebalance())
-          .to.emit(vault, "Rebalance")
-          .withArgs(drFP("1.2"), drFP("1.2"), amplFP("1000"), true);
+          .to.emit(vault, "Rebalanced")
+          .withArgs(drFP("1.2"), drFP("1.2"), amplFP("666.666666666"), true);
       });
     });
 
@@ -482,21 +407,17 @@ describe("DRBalancerVault", function () {
       it("should call swapPerpsForUnderlying with correct amount", async function () {
         const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
         await rolloverVault.mockMethod("deviationRatio()", [drFP("0.8")]);
-        // underlyingValSwapped = 1000 AMPL
-        // perpAmtIn = underlyingValSwapped * perpTotalSupply / perpTVL
-        //           = 1000 * 10000 / 10000 = 1000 SPOT
-        // mockCall verifies the contract passes perpFP("1000") to swapPerpsForUnderlying
+        // DR=0.8, drDelta=0.2, requiredChange=2000, adjustedChange=2000/3=666.666...
+        // perpAmtIn = 666.666... * 10000 / 10000 = 666.666... SPOT
         await rolloverVault.mockCall(
           "swapPerpsForUnderlying(uint256)",
-          [perpFP("1000")],
-          [amplFP("1000")],
+          [perpFP("666.666666666")],
+          [amplFP("666.666666666")],
         );
 
-        // underlyingAmt = 1000 (see computeRebalanceAmount tests)
-        // isUnderlyingIntoPerp = false
         await expect(vault.rebalance())
-          .to.emit(vault, "Rebalance")
-          .withArgs(drFP("0.8"), drFP("0.8"), amplFP("1000"), false);
+          .to.emit(vault, "Rebalanced")
+          .withArgs(drFP("0.8"), drFP("0.8"), amplFP("666.666666666"), false);
       });
     });
 
@@ -506,12 +427,11 @@ describe("DRBalancerVault", function () {
           const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
           await rolloverVault.mockMethod("deviationRatio()", [drFP("1.2")]);
 
-          // Swap 1000 AMPL, return only 900 SPOT (10% fee when perpPrice = 1)
-          // feePerc = 1 - 900/1000 = 10%
+          // Swap 666.666... AMPL, return only 600 SPOT (10% fee when perpPrice = 1)
           await rolloverVault.mockCall(
             "swapUnderlyingForPerps(uint256)",
-            [amplFP("1000")],
-            [perpFP("900")],
+            [amplFP("666.666666666")],
+            [perpFP("600")],
           );
 
           // Default max fee is 1%
@@ -525,33 +445,33 @@ describe("DRBalancerVault", function () {
           const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
           await rolloverVault.mockMethod("deviationRatio()", [drFP("1.2")]);
 
-          // No fee: swap 1000 AMPL, return 1000 SPOT
+          // No fee
           await rolloverVault.mockCall(
             "swapUnderlyingForPerps(uint256)",
-            [amplFP("1000")],
-            [perpFP("1000")],
+            [amplFP("666.666666666")],
+            [perpFP("666.666666666")],
           );
 
           await expect(vault.rebalance())
-            .to.emit(vault, "Rebalance")
-            .withArgs(drFP("1.2"), drFP("1.2"), amplFP("1000"), true);
+            .to.emit(vault, "Rebalanced")
+            .withArgs(drFP("1.2"), drFP("1.2"), amplFP("666.666666666"), true);
         });
 
         it("should succeed when fee is within limit", async function () {
           const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
           await rolloverVault.mockMethod("deviationRatio()", [drFP("1.2")]);
 
-          // 0.5% fee: swap 1000 AMPL, return 995 SPOT
+          // ~0.5% fee
           await rolloverVault.mockCall(
             "swapUnderlyingForPerps(uint256)",
-            [amplFP("1000")],
-            [perpFP("995")],
+            [amplFP("666.666666666")],
+            [perpFP("663.333333333")],
           );
 
           // Default max fee is 1%
           await expect(vault.rebalance())
-            .to.emit(vault, "Rebalance")
-            .withArgs(drFP("1.2"), drFP("1.2"), amplFP("1000"), true);
+            .to.emit(vault, "Rebalanced")
+            .withArgs(drFP("1.2"), drFP("1.2"), amplFP("666.666666666"), true);
         });
 
         it("should succeed when fee equals max limit", async function () {
@@ -559,16 +479,16 @@ describe("DRBalancerVault", function () {
           await rolloverVault.mockMethod("deviationRatio()", [drFP("1.2")]);
           await vault.updateMaxSwapFeePerc(ONE / 20n); // 5%
 
-          // Exactly 5% fee: swap 1000 AMPL, return 950 SPOT
+          // Exactly 5% fee
           await rolloverVault.mockCall(
             "swapUnderlyingForPerps(uint256)",
-            [amplFP("1000")],
-            [perpFP("950")],
+            [amplFP("666.666666666")],
+            [perpFP("633.333333333")],
           );
 
           await expect(vault.rebalance())
-            .to.emit(vault, "Rebalance")
-            .withArgs(drFP("1.2"), drFP("1.2"), amplFP("1000"), true);
+            .to.emit(vault, "Rebalanced")
+            .withArgs(drFP("1.2"), drFP("1.2"), amplFP("666.666666666"), true);
         });
       });
 
@@ -577,11 +497,11 @@ describe("DRBalancerVault", function () {
           const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
           await rolloverVault.mockMethod("deviationRatio()", [drFP("0.8")]);
 
-          // Swap 1000 SPOT (perpAmtIn), return only 900 AMPL (10% fee)
+          // Swap 666.666... SPOT, return only 600 AMPL (10% fee)
           await rolloverVault.mockCall(
             "swapPerpsForUnderlying(uint256)",
-            [perpFP("1000")],
-            [amplFP("900")],
+            [perpFP("666.666666666")],
+            [amplFP("600")],
           );
 
           // Default max fee is 1%
@@ -595,32 +515,32 @@ describe("DRBalancerVault", function () {
           const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
           await rolloverVault.mockMethod("deviationRatio()", [drFP("0.8")]);
 
-          // No fee: swap 1000 SPOT, return 1000 AMPL
+          // No fee
           await rolloverVault.mockCall(
             "swapPerpsForUnderlying(uint256)",
-            [perpFP("1000")],
-            [amplFP("1000")],
+            [perpFP("666.666666666")],
+            [amplFP("666.666666666")],
           );
 
           await expect(vault.rebalance())
-            .to.emit(vault, "Rebalance")
-            .withArgs(drFP("0.8"), drFP("0.8"), amplFP("1000"), false);
+            .to.emit(vault, "Rebalanced")
+            .withArgs(drFP("0.8"), drFP("0.8"), amplFP("666.666666666"), false);
         });
 
         it("should succeed when fee is within limit", async function () {
           const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
           await rolloverVault.mockMethod("deviationRatio()", [drFP("0.8")]);
 
-          // 0.5% fee: swap 1000 SPOT, return 995 AMPL
+          // ~0.5% fee
           await rolloverVault.mockCall(
             "swapPerpsForUnderlying(uint256)",
-            [perpFP("1000")],
-            [amplFP("995")],
+            [perpFP("666.666666666")],
+            [amplFP("663.333333333")],
           );
 
           await expect(vault.rebalance())
-            .to.emit(vault, "Rebalance")
-            .withArgs(drFP("0.8"), drFP("0.8"), amplFP("1000"), false);
+            .to.emit(vault, "Rebalanced")
+            .withArgs(drFP("0.8"), drFP("0.8"), amplFP("666.666666666"), false);
         });
       });
     });
@@ -675,16 +595,6 @@ describe("DRBalancerVault", function () {
         const tvl = await vault.getTVL.staticCall();
         expect(tvl).to.eq(amplFP("10000"));
       });
-    });
-  });
-
-  describe("#getSystemDeviationRatio", function () {
-    it("should return DR from rollover vault", async function () {
-      const { vault, rolloverVault } = await loadFixture(setupContracts);
-      await rolloverVault.mockMethod("deviationRatio()", [drFP("0.95")]);
-
-      const dr = await vault.getSystemDeviationRatio.staticCall();
-      expect(dr).to.eq(drFP("0.95"));
     });
   });
 

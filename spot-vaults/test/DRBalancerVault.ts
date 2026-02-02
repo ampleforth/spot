@@ -67,7 +67,7 @@ describe("DRBalancerVault", function () {
 
       expect(await vault.underlying()).to.eq(underlying.target);
       expect(await vault.perp()).to.eq(perp.target);
-      expect(await vault.rolloverVault()).to.eq(rolloverVault.target);
+      expect(await vault.stampl()).to.eq(rolloverVault.target);
       expect(await vault.underlyingUnitAmt()).to.eq(amplFP("1"));
       expect(await vault.perpUnitAmt()).to.eq(perpFP("1"));
 
@@ -77,21 +77,9 @@ describe("DRBalancerVault", function () {
       // Target DR is 1.0 (system in balance) with 8 decimals
       expect(await vault.targetDR()).to.eq(DR_ONE);
 
-      // Equilibrium zone: 95% - 105% with 8 decimals
-      const equilibriumDR = await vault.equilibriumDR();
-      expect(equilibriumDR.lower).to.eq((DR_ONE * 95n) / 100n);
-      expect(equilibriumDR.upper).to.eq((DR_ONE * 105n) / 100n);
-
       expect(await vault.lagFactorUnderlyingToPerp()).to.eq(3);
       expect(await vault.lagFactorPerpToUnderlying()).to.eq(3);
-
-      const percLimitsU2P = await vault.rebalancePercLimitsUnderlyingToPerp();
-      expect(percLimitsU2P.lower).to.eq(ONE / 10n); // 10%
-      expect(percLimitsU2P.upper).to.eq(ONE / 2n); // 50%
-
-      const percLimitsP2U = await vault.rebalancePercLimitsPerpToUnderlying();
-      expect(percLimitsP2U.lower).to.eq(ONE / 10n); // 10%
-      expect(percLimitsP2U.upper).to.eq(ONE / 2n); // 50%
+      expect(await vault.minRebalanceVal()).to.eq(0);
 
       expect(await vault.rebalanceFreqSec()).to.eq(DAY);
       expect(await vault.maxSwapFeePerc()).to.eq(ONE / 100n); // 1% default
@@ -138,118 +126,63 @@ describe("DRBalancerVault", function () {
     });
   });
 
-  describe("#updateEquilibriumDR", function () {
+  describe("#updateLagFactors", function () {
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
         const { vault } = await loadFixture(setupContracts);
         await vault.renounceOwnership();
-        await expect(
-          vault.updateEquilibriumDR({ lower: DR_ONE / 2n, upper: DR_ONE }),
-        ).to.be.revertedWith("Ownable: caller is not the owner");
+        await expect(vault.updateLagFactors(5, 5)).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
       });
     });
 
-    describe("when lower > upper", function () {
+    describe("when lagFactorUnderlyingToPerp is zero", function () {
       it("should revert", async function () {
         const { vault } = await loadFixture(setupContracts);
-        await expect(
-          vault.updateEquilibriumDR({ lower: DR_ONE, upper: DR_ONE / 2n }),
-        ).to.be.revertedWithCustomError(vault, "InvalidDRBound");
+        await expect(vault.updateLagFactors(0, 5)).to.be.revertedWithCustomError(
+          vault,
+          "InvalidLagFactor",
+        );
+      });
+    });
+
+    describe("when lagFactorPerpToUnderlying is zero", function () {
+      it("should revert", async function () {
+        const { vault } = await loadFixture(setupContracts);
+        await expect(vault.updateLagFactors(5, 0)).to.be.revertedWithCustomError(
+          vault,
+          "InvalidLagFactor",
+        );
       });
     });
 
     describe("when valid", function () {
-      it("should update equilibrium DR", async function () {
+      it("should update lag factors", async function () {
         const { vault } = await loadFixture(setupContracts);
-        await vault.updateEquilibriumDR({
-          lower: (DR_ONE * 90n) / 100n,
-          upper: (DR_ONE * 110n) / 100n,
-        });
-        const eq = await vault.equilibriumDR();
-        expect(eq.lower).to.eq((DR_ONE * 90n) / 100n);
-        expect(eq.upper).to.eq((DR_ONE * 110n) / 100n);
-      });
-    });
-  });
-
-  describe("#updateRebalanceConfigUnderlyingToPerp", function () {
-    describe("when triggered by non-owner", function () {
-      it("should revert", async function () {
-        const { vault } = await loadFixture(setupContracts);
-        await vault.renounceOwnership();
-        await expect(
-          vault.updateRebalanceConfigUnderlyingToPerp(5, {
-            lower: ONE / 100n,
-            upper: ONE / 10n,
-          }),
-        ).to.be.revertedWith("Ownable: caller is not the owner");
-      });
-    });
-
-    describe("when perc limits lower > upper", function () {
-      it("should revert", async function () {
-        const { vault } = await loadFixture(setupContracts);
-        await expect(
-          vault.updateRebalanceConfigUnderlyingToPerp(5, {
-            lower: ONE / 10n,
-            upper: ONE / 100n,
-          }),
-        ).to.be.revertedWithCustomError(vault, "InvalidRange");
-      });
-    });
-
-    describe("when valid", function () {
-      it("should update config", async function () {
-        const { vault } = await loadFixture(setupContracts);
-        await vault.updateRebalanceConfigUnderlyingToPerp(5, {
-          lower: ONE / 100n,
-          upper: ONE / 10n,
-        });
+        await vault.updateLagFactors(5, 8);
         expect(await vault.lagFactorUnderlyingToPerp()).to.eq(5);
-        const limits = await vault.rebalancePercLimitsUnderlyingToPerp();
-        expect(limits.lower).to.eq(ONE / 100n);
-        expect(limits.upper).to.eq(ONE / 10n);
+        expect(await vault.lagFactorPerpToUnderlying()).to.eq(8);
       });
     });
   });
 
-  describe("#updateRebalanceConfigPerpToUnderlying", function () {
+  describe("#updateMinRebalanceAmt", function () {
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
         const { vault } = await loadFixture(setupContracts);
         await vault.renounceOwnership();
-        await expect(
-          vault.updateRebalanceConfigPerpToUnderlying(5, {
-            lower: ONE / 100n,
-            upper: ONE / 10n,
-          }),
-        ).to.be.revertedWith("Ownable: caller is not the owner");
-      });
-    });
-
-    describe("when perc limits lower > upper", function () {
-      it("should revert", async function () {
-        const { vault } = await loadFixture(setupContracts);
-        await expect(
-          vault.updateRebalanceConfigPerpToUnderlying(5, {
-            lower: ONE / 10n,
-            upper: ONE / 100n,
-          }),
-        ).to.be.revertedWithCustomError(vault, "InvalidRange");
+        await expect(vault.updateMinRebalanceAmt(amplFP("100"))).to.be.revertedWith(
+          "Ownable: caller is not the owner",
+        );
       });
     });
 
     describe("when valid", function () {
-      it("should update config", async function () {
+      it("should update min rebalance amount", async function () {
         const { vault } = await loadFixture(setupContracts);
-        await vault.updateRebalanceConfigPerpToUnderlying(8, {
-          lower: ONE / 50n,
-          upper: ONE / 5n,
-        });
-        expect(await vault.lagFactorPerpToUnderlying()).to.eq(8);
-        const limits = await vault.rebalancePercLimitsPerpToUnderlying();
-        expect(limits.lower).to.eq(ONE / 50n);
-        expect(limits.upper).to.eq(ONE / 5n);
+        await vault.updateMinRebalanceAmt(amplFP("100"));
+        expect(await vault.minRebalanceVal()).to.eq(amplFP("100"));
       });
     });
   });
