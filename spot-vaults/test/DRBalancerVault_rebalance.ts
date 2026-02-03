@@ -344,19 +344,19 @@ describe("DRBalancerVault", function () {
         await vault.rebalance();
         await time.increase(DAY + 1);
         await expect(vault.rebalance())
-          .to.emit(vault, "Rebalanced")
+          .to.emit(vault, "Rebalance")
           .withArgs(drFP("1"), drFP("1"), 0n, true);
       });
     });
 
     describe("when system DR is at target", function () {
-      it("should emit Rebalanced event with zero swap amount", async function () {
+      it("should emit Rebalance event with zero swap amount", async function () {
         const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
         await rolloverVault.mockMethod("deviationRatio()", [drFP("1")]);
 
         // When DR = targetDR, isUnderlyingIntoPerp = true (dr >= targetDR branch)
         await expect(vault.rebalance())
-          .to.emit(vault, "Rebalanced")
+          .to.emit(vault, "Rebalance")
           .withArgs(drFP("1"), drFP("1"), 0n, true);
       });
 
@@ -398,7 +398,7 @@ describe("DRBalancerVault", function () {
         );
 
         await expect(vault.rebalance())
-          .to.emit(vault, "Rebalanced")
+          .to.emit(vault, "Rebalance")
           .withArgs(drFP("1.2"), drFP("1.2"), amplFP("666.666666666"), true);
       });
     });
@@ -416,7 +416,7 @@ describe("DRBalancerVault", function () {
         );
 
         await expect(vault.rebalance())
-          .to.emit(vault, "Rebalanced")
+          .to.emit(vault, "Rebalance")
           .withArgs(drFP("0.8"), drFP("0.8"), amplFP("666.666666666"), false);
       });
     });
@@ -453,7 +453,7 @@ describe("DRBalancerVault", function () {
           );
 
           await expect(vault.rebalance())
-            .to.emit(vault, "Rebalanced")
+            .to.emit(vault, "Rebalance")
             .withArgs(drFP("1.2"), drFP("1.2"), amplFP("666.666666666"), true);
         });
 
@@ -470,7 +470,7 @@ describe("DRBalancerVault", function () {
 
           // Default max fee is 1%
           await expect(vault.rebalance())
-            .to.emit(vault, "Rebalanced")
+            .to.emit(vault, "Rebalance")
             .withArgs(drFP("1.2"), drFP("1.2"), amplFP("666.666666666"), true);
         });
 
@@ -487,7 +487,7 @@ describe("DRBalancerVault", function () {
           );
 
           await expect(vault.rebalance())
-            .to.emit(vault, "Rebalanced")
+            .to.emit(vault, "Rebalance")
             .withArgs(drFP("1.2"), drFP("1.2"), amplFP("666.666666666"), true);
         });
       });
@@ -523,7 +523,7 @@ describe("DRBalancerVault", function () {
           );
 
           await expect(vault.rebalance())
-            .to.emit(vault, "Rebalanced")
+            .to.emit(vault, "Rebalance")
             .withArgs(drFP("0.8"), drFP("0.8"), amplFP("666.666666666"), false);
         });
 
@@ -539,7 +539,7 @@ describe("DRBalancerVault", function () {
           );
 
           await expect(vault.rebalance())
-            .to.emit(vault, "Rebalanced")
+            .to.emit(vault, "Rebalance")
             .withArgs(drFP("0.8"), drFP("0.8"), amplFP("666.666666666"), false);
         });
       });

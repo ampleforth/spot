@@ -231,10 +231,10 @@ describe("DRBalancerVault", function () {
         expect(notesMinted).to.eq(noteFP("1000"));
       });
 
-      it("should emit Deposited event", async function () {
+      it("should emit Deposit event", async function () {
         const { deployer, vault } = await loadFixture(setupContracts);
         await expect(vault.deposit(amplFP("1000"), 0, 0))
-          .to.emit(vault, "Deposited")
+          .to.emit(vault, "Deposit")
           .withArgs(await deployer.getAddress(), amplFP("1000"), 0n, noteFP("1000"));
       });
     });
@@ -259,10 +259,10 @@ describe("DRBalancerVault", function () {
         expect(await vault.totalSupply()).to.eq(noteFP("500"));
       });
 
-      it("should emit Deposited event", async function () {
+      it("should emit Deposit event", async function () {
         const { deployer, vault } = await loadFixture(setupContracts);
         await expect(vault.deposit(0, perpFP("500"), 0))
-          .to.emit(vault, "Deposited")
+          .to.emit(vault, "Deposit")
           .withArgs(await deployer.getAddress(), 0n, perpFP("500"), noteFP("500"));
       });
     });
@@ -291,10 +291,10 @@ describe("DRBalancerVault", function () {
         expect(await vault.totalSupply()).to.eq(noteFP("1500"));
       });
 
-      it("should emit Deposited event", async function () {
+      it("should emit Deposit event", async function () {
         const { deployer, vault } = await loadFixture(setupContracts);
         await expect(vault.deposit(amplFP("1000"), perpFP("500"), 0))
-          .to.emit(vault, "Deposited")
+          .to.emit(vault, "Deposit")
           .withArgs(
             await deployer.getAddress(),
             amplFP("1000"),
@@ -341,11 +341,11 @@ describe("DRBalancerVault", function () {
         expect(notesMinted).to.eq(noteFP("500"));
       });
 
-      it("should emit Deposited event", async function () {
+      it("should emit Deposit event", async function () {
         const { vault, otherUser } = await loadFixture(setupContracts);
         await vault.deposit(amplFP("1000"), 0, 0);
         await expect(vault.connect(otherUser).deposit(amplFP("500"), 0, 0))
-          .to.emit(vault, "Deposited")
+          .to.emit(vault, "Deposit")
           .withArgs(await otherUser.getAddress(), amplFP("500"), 0n, noteFP("500"));
       });
     });
@@ -433,11 +433,11 @@ describe("DRBalancerVault", function () {
         ).to.changeTokenBalance(vault, otherUser, noteFP("300"));
       });
 
-      it("should emit Deposited event", async function () {
+      it("should emit Deposit event", async function () {
         const { vault, otherUser } = await loadFixture(setupContracts);
         await vault.deposit(amplFP("1000"), perpFP("500"), 0);
         await expect(vault.connect(otherUser).deposit(amplFP("200"), perpFP("200"), 0))
-          .to.emit(vault, "Deposited")
+          .to.emit(vault, "Deposit")
           .withArgs(
             await otherUser.getAddress(),
             amplFP("200"),
@@ -608,10 +608,10 @@ describe("DRBalancerVault", function () {
         expect(perpOut).to.eq(0n);
       });
 
-      it("should emit Redeemed event", async function () {
+      it("should emit Redeem event", async function () {
         const { deployer, vault } = await loadFixture(setupWithDeposited);
         await expect(vault.redeem(noteFP("400"), 0, 0))
-          .to.emit(vault, "Redeemed")
+          .to.emit(vault, "Redeem")
           .withArgs(await deployer.getAddress(), noteFP("400"), amplFP("400"), 0n);
       });
     });
@@ -648,10 +648,10 @@ describe("DRBalancerVault", function () {
         expect(perpOut).to.eq(0n);
       });
 
-      it("should emit Redeemed event", async function () {
+      it("should emit Redeem event", async function () {
         const { deployer, vault } = await loadFixture(setupWithDeposited);
         await expect(vault.redeem(noteFP("1000"), 0, 0))
-          .to.emit(vault, "Redeemed")
+          .to.emit(vault, "Redeem")
           .withArgs(await deployer.getAddress(), noteFP("1000"), amplFP("1000"), 0n);
       });
     });
@@ -696,10 +696,10 @@ describe("DRBalancerVault", function () {
         expect(perpOut).to.eq(perpFP("250"));
       });
 
-      it("should emit Redeemed event with both amounts", async function () {
+      it("should emit Redeem event with both amounts", async function () {
         const { deployer, vault } = await loadFixture(setupWithBothTokens);
         await expect(vault.redeem(noteFP("750"), 0, 0))
-          .to.emit(vault, "Redeemed")
+          .to.emit(vault, "Redeem")
           .withArgs(
             await deployer.getAddress(),
             noteFP("750"),

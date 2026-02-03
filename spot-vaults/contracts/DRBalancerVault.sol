@@ -121,7 +121,7 @@ contract DRBalancerVault is
     // Events
 
     /// @notice Emitted when a user deposits tokens.
-    event Deposited(
+    event Deposit(
         address indexed depositor,
         uint256 underlyingAmtIn,
         uint256 perpAmtIn,
@@ -129,7 +129,7 @@ contract DRBalancerVault is
     );
 
     /// @notice Emitted when a user redeems vault notes.
-    event Redeemed(
+    event Redeem(
         address indexed redeemer,
         uint256 notesBurnt,
         uint256 underlyingAmtOut,
@@ -141,7 +141,7 @@ contract DRBalancerVault is
     /// @param drAfter The system deviation ratio after rebalance.
     /// @param underlyingAmt The amount of underlying involved in the swap.
     /// @param isUnderlyingIntoPerp True if underlying was swapped for perps, false if perps were swapped for underlying.
-    event Rebalanced(
+    event Rebalance(
         uint256 drBefore,
         uint256 drAfter,
         uint256 underlyingAmt,
@@ -309,7 +309,7 @@ contract DRBalancerVault is
         // Mint vault notes to the user
         _mint(msg.sender, notesMinted);
 
-        emit Deposited(msg.sender, underlyingAmtIn, perpAmtIn, notesMinted);
+        emit Deposit(msg.sender, underlyingAmtIn, perpAmtIn, notesMinted);
     }
 
     /// @notice Burns vault notes and returns proportional underlying and perp tokens.
@@ -348,7 +348,7 @@ contract DRBalancerVault is
             perp.safeTransfer(msg.sender, perpAmtOut);
         }
 
-        emit Redeemed(msg.sender, notesAmt, underlyingAmtOut, perpAmtOut);
+        emit Redeem(msg.sender, notesAmt, underlyingAmtOut, perpAmtOut);
     }
 
     /// @notice Rebalances to help maintain the system's target deviation ratio.
@@ -372,7 +372,7 @@ contract DRBalancerVault is
 
         if (underlyingValSwapped <= 0) {
             lastRebalanceTimestampSec = block.timestamp;
-            emit Rebalanced(drBefore, drBefore, 0, isUnderlyingIntoPerp);
+            emit Rebalance(drBefore, drBefore, 0, isUnderlyingIntoPerp);
             return;
         }
 
@@ -406,7 +406,7 @@ contract DRBalancerVault is
         uint256 drAfter = stampl.deviationRatio();
         lastRebalanceTimestampSec = block.timestamp;
 
-        emit Rebalanced(drBefore, drAfter, underlyingValSwapped, isUnderlyingIntoPerp);
+        emit Rebalance(drBefore, drAfter, underlyingValSwapped, isUnderlyingIntoPerp);
     }
 
     //-----------------------------------------------------------------------------
