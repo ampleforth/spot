@@ -17,6 +17,7 @@ export const ethOracleFP = (a: string): BigInt => ethers.parseUnits(sciParseFloa
 export const amplOracleFP = (a: string): BigInt =>
   ethers.parseUnits(sciParseFloat(a), 18);
 export const drFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 8);
+export const noteFP = (a: string): BigInt => ethers.parseUnits(sciParseFloat(a), 18);
 
 export class DMock {
   private refArtifact: string;

@@ -23,3 +23,6 @@ artifacts
 #Generated files
 RolloverBatch.json
 RedeemBatch.json
+
+.claude
+CLAUDE.md
