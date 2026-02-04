@@ -89,6 +89,7 @@ describe("DRBalancerVault", function () {
   describe("#computeRebalanceAmount", function () {
     // Test Matrix:
     // - DR at target: returns 0
+    // - DR within equilibrium range: returns 0
     // - DR below target: perp -> underlying swap (isUnderlyingIntoPerp = false)
     // - DR above target: underlying -> perp swap (isUnderlyingIntoPerp = true)
     // - Caps: minRebalanceVal threshold, availableLiquidity cap, requiredChange cap
@@ -101,8 +102,8 @@ describe("DRBalancerVault", function () {
         const [amt, isUnderlyingIntoPerp] =
           await vault.computeRebalanceAmount.staticCall();
         expect(amt).to.eq(0n);
-        // When DR = targetDR, goes to else branch (dr >= targetDR), so isUnderlyingIntoPerp = true
-        expect(isUnderlyingIntoPerp).to.eq(true);
+        // When DR is within equilibrium range, no swap occurs and direction is false
+        expect(isUnderlyingIntoPerp).to.eq(false);
       });
     });
 
@@ -345,7 +346,7 @@ describe("DRBalancerVault", function () {
         await time.increase(DAY + 1);
         await expect(vault.rebalance())
           .to.emit(vault, "Rebalance")
-          .withArgs(drFP("1"), drFP("1"), 0n, true);
+          .withArgs(drFP("1"), drFP("1"), 0n, false);
       });
     });
 
@@ -354,10 +355,10 @@ describe("DRBalancerVault", function () {
         const { vault, rolloverVault } = await loadFixture(setupWithBalancedLiquidity);
         await rolloverVault.mockMethod("deviationRatio()", [drFP("1")]);
 
-        // When DR = targetDR, isUnderlyingIntoPerp = true (dr >= targetDR branch)
+        // When DR is within equilibrium range, no swap occurs and direction is false
         await expect(vault.rebalance())
           .to.emit(vault, "Rebalance")
-          .withArgs(drFP("1"), drFP("1"), 0n, true);
+          .withArgs(drFP("1"), drFP("1"), 0n, false);
       });
 
       it("should update lastRebalanceTimestampSec", async function () {

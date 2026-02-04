@@ -76,6 +76,9 @@ describe("DRBalancerVault", function () {
 
       // Target DR is 1.0 (system in balance) with 8 decimals
       expect(await vault.targetDR()).to.eq(DR_ONE);
+      const eqRange = await vault.equilibriumDR();
+      expect(eqRange[0]).to.eq(drFP("0.95"));
+      expect(eqRange[1]).to.eq(drFP("1.05"));
 
       expect(await vault.lagFactorUnderlyingToPerp()).to.eq(3);
       expect(await vault.lagFactorPerpToUnderlying()).to.eq(3);
@@ -106,22 +109,44 @@ describe("DRBalancerVault", function () {
     });
   });
 
-  describe("#updateTargetDR", function () {
+  describe("#updateTargetAndEquilibriumDR", function () {
     describe("when triggered by non-owner", function () {
       it("should revert", async function () {
         const { vault } = await loadFixture(setupContracts);
         await vault.renounceOwnership();
-        await expect(vault.updateTargetDR(DR_ONE)).to.be.revertedWith(
-          "Ownable: caller is not the owner",
-        );
+        await expect(
+          vault.updateTargetAndEquilibriumDR(DR_ONE, [drFP("0.9"), drFP("1.1")]),
+        ).to.be.revertedWith("Ownable: caller is not the owner");
+      });
+    });
+
+    describe("when target is outside range", function () {
+      it("should revert", async function () {
+        const { vault } = await loadFixture(setupContracts);
+        await expect(
+          vault.updateTargetAndEquilibriumDR(DR_ONE, [drFP("1.01"), drFP("1.1")]),
+        ).to.be.revertedWithCustomError(vault, "InvalidRange");
+      });
+    });
+
+    describe("when target equals a boundary", function () {
+      it("should revert", async function () {
+        const { vault } = await loadFixture(setupContracts);
+        await expect(
+          vault.updateTargetAndEquilibriumDR(DR_ONE, [DR_ONE, drFP("1.1")]),
+        ).to.be.revertedWithCustomError(vault, "InvalidRange");
       });
     });
 
     describe("when valid", function () {
-      it("should update target DR", async function () {
+      it("should update target DR and equilibrium range", async function () {
         const { vault } = await loadFixture(setupContracts);
-        await vault.updateTargetDR((DR_ONE * 110n) / 100n);
-        expect(await vault.targetDR()).to.eq((DR_ONE * 110n) / 100n);
+        const newTarget = drFP("1.02");
+        await vault.updateTargetAndEquilibriumDR(newTarget, [drFP("0.98"), drFP("1.1")]);
+        expect(await vault.targetDR()).to.eq(newTarget);
+        const r = await vault.equilibriumDR();
+        expect(r[0]).to.eq(drFP("0.98"));
+        expect(r[1]).to.eq(drFP("1.1"));
       });
     });
   });

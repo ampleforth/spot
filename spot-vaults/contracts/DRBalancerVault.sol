@@ -13,7 +13,8 @@ import { IERC20MetadataUpgradeable } from "@openzeppelin/contracts-upgradeable/t
 import { IPerpetualTranche } from "@ampleforthorg/spot-contracts/contracts/_interfaces/IPerpetualTranche.sol";
 import { IRolloverVault } from "@ampleforthorg/spot-contracts/contracts/_interfaces/IRolloverVault.sol";
 import { ERC20Helpers } from "@ampleforthorg/spot-contracts/contracts/_utils/ERC20Helpers.sol";
-import { UnauthorizedCall, InvalidPerc } from "./_interfaces/errors/CommonErrors.sol";
+import { UnauthorizedCall, InvalidPerc, InvalidRange } from "./_interfaces/errors/CommonErrors.sol";
+import { Range } from "@ampleforthorg/spot-contracts/contracts/_interfaces/CommonTypes.sol";
 import { LastRebalanceTooRecent, SlippageTooHigh, InvalidLagFactor } from "./_interfaces/errors/DRBalancerErrors.sol";
 
 /**
@@ -98,6 +99,10 @@ contract DRBalancerVault is
 
     /// @notice The target system deviation ratio (typically 1.0 = DR_ONE, using 8 decimals).
     uint256 public targetDR;
+
+    /// @notice The range of deviation ratios which define the equilibrium zone.
+    /// @dev When the system's dr is within the equilibrium zone, no value is transferred during rebalance.
+    Range public equilibriumDR;
 
     /// @notice The lag factor for underlying->perp swaps (when DR is high).
     uint256 public lagFactorUnderlyingToPerp;
@@ -198,6 +203,11 @@ contract DRBalancerVault is
         // Default configuration
         // Target DR is 1.0 (system in balance) with 8 decimals
         targetDR = DR_ONE;
+        // Equilibrium DR range (skip rebalances when DR is within this window)
+        equilibriumDR = Range({
+            lower: (DR_ONE * 95) / 100,
+            upper: (DR_ONE * 105) / 100
+        });
         // Default lag factors
         lagFactorUnderlyingToPerp = 3;
         lagFactorPerpToUnderlying = 3;
@@ -216,10 +226,22 @@ contract DRBalancerVault is
         keeper = keeper_;
     }
 
-    /// @notice Updates the target system deviation ratio.
+    /// @notice Updates the target system deviation ratio and equilibrium DR range together.
     /// @param targetDR_ The new target DR as a fixed point number with 8 decimals.
-    function updateTargetDR(uint256 targetDR_) external onlyOwner {
+    /// @param equilibriumDR_ The new equilibrium DR range as tuple of fixed-point numbers with {DR_DECIMALS} places.
+    function updateTargetAndEquilibriumDR(
+        uint256 targetDR_,
+        Range memory equilibriumDR_
+    ) external onlyOwner {
+        if (
+            equilibriumDR_.lower >= equilibriumDR_.upper ||
+            targetDR_ <= equilibriumDR_.lower ||
+            targetDR_ >= equilibriumDR_.upper
+        ) {
+            revert InvalidRange();
+        }
         targetDR = targetDR_;
+        equilibriumDR = equilibriumDR_;
     }
 
     /// @notice Updates the lag factors for rebalancing.
@@ -525,6 +547,11 @@ contract DRBalancerVault is
         uint256 perpTotalSupply
     ) private view returns (uint256 underlyingAmt, bool isUnderlyingIntoPerp) {
         if (perpTVL <= 0) {
+            return (0, false);
+        }
+
+        // Skip rebalancing if DR is within the equilibrium range.
+        if (dr >= equilibriumDR.lower && dr <= equilibriumDR.upper) {
             return (0, false);
         }
 
