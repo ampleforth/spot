@@ -102,6 +102,7 @@ contract DRBalancerVault is
 
     /// @notice The range of deviation ratios which define the equilibrium zone.
     /// @dev When the system's dr is within the equilibrium zone, no value is transferred during rebalance.
+    ///      A zero-size range is allowed and represents a single target value.
     Range public equilibriumDR;
 
     /// @notice The lag factor for underlying->perp swaps (when DR is high).
@@ -234,12 +235,13 @@ contract DRBalancerVault is
         Range memory equilibriumDR_
     ) external onlyOwner {
         if (
-            equilibriumDR_.lower >= equilibriumDR_.upper ||
-            targetDR_ <= equilibriumDR_.lower ||
-            targetDR_ >= equilibriumDR_.upper
+            equilibriumDR_.lower > equilibriumDR_.upper ||
+            targetDR_ < equilibriumDR_.lower ||
+            targetDR_ > equilibriumDR_.upper
         ) {
             revert InvalidRange();
         }
+
         targetDR = targetDR_;
         equilibriumDR = equilibriumDR_;
     }

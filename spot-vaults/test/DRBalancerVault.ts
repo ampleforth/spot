@@ -129,12 +129,25 @@ describe("DRBalancerVault", function () {
       });
     });
 
-    describe("when target equals a boundary", function () {
-      it("should revert", async function () {
+    describe("when target equals a boundary with non-zero range", function () {
+      it("should allow update", async function () {
         const { vault } = await loadFixture(setupContracts);
-        await expect(
-          vault.updateTargetAndEquilibriumDR(DR_ONE, [DR_ONE, drFP("1.1")]),
-        ).to.be.revertedWithCustomError(vault, "InvalidRange");
+        await vault.updateTargetAndEquilibriumDR(DR_ONE, [DR_ONE, drFP("1.1")]);
+        expect(await vault.targetDR()).to.eq(DR_ONE);
+        const r = await vault.equilibriumDR();
+        expect(r[0]).to.eq(DR_ONE);
+        expect(r[1]).to.eq(drFP("1.1"));
+      });
+    });
+
+    describe("when range size is zero at target", function () {
+      it("should allow update", async function () {
+        const { vault } = await loadFixture(setupContracts);
+        await vault.updateTargetAndEquilibriumDR(DR_ONE, [DR_ONE, DR_ONE]);
+        expect(await vault.targetDR()).to.eq(DR_ONE);
+        const r = await vault.equilibriumDR();
+        expect(r[0]).to.eq(DR_ONE);
+        expect(r[1]).to.eq(DR_ONE);
       });
     });
 
