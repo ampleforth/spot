@@ -1,13 +1,15 @@
 # spot-staking-subgraph
 
-Ancillary subgraphs to keep track of spot staking. 
+Ancillary subgraphs to keep track of spot staking.
 
+You should have your own Goldsky API key to use with the Goldsky CLI.
 
+Note you must set the (new) version to deploy to, and then update the tag separately.
 ```
-yarn codegen
+goldsky subgraph deploy spot-staking/<VERSION> --path .
+```
 
-yarn build
-
-export GRAPH_AUTH="SET_KEY"
-yarn deploy
+Once deployed, update the tag that frg-web-api looks for.
+```
+goldsky subgraph tag create spot-staking/<VERSION> --tag prod
 ```
