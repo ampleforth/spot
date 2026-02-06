@@ -4,7 +4,7 @@ The Graph is a tool for for indexing events emitted on the Ethereum blockchain. 
 
 ```
 Public graphql endpoint:
-https://api.thegraph.com/subgraphs/name/ampleforth/spot
+https://api.goldsky.com/api/public/project_cmgzjl03n004g5np20v5j3qpx/subgraphs/ampleforth-spot/prod/gn
 ```
 
 ## Getting started
@@ -26,13 +26,24 @@ Setup project:
 yarn
 ```
 
-To build and deploy the subgraph to the graph hosted service:
+To build and deploy the subgraph to the goldsky's hosted service:
 
 ```
 # local deployment
 ./scripts/deploy-local.sh sepolia ampleforth-spot-sepolia
 
 # prod deployment
-./scripts/deploy.sh sepolia ampleforth-spot-sepolia
-./scripts/deploy.sh mainnet ampleforth-spot
+
+You should have your own Goldsky API key to use with the Goldsky CLI.
+Note you must set the (new) version to deploy to, and then update the tag separately.
+
+```
+./scripts/deploy.sh sepolia ampleforth-spot-sepolia <VERSION>
+./scripts/deploy.sh mainnet ampleforth-spot <VERSION>
+```
+
+Once deployed, update the tag that frg-web-api looks for.
+
+```
+goldsky subgraph tag create <SUBGRAPH-NAME>/<VERSION> --tag prod
 ```
