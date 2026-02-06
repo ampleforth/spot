@@ -414,3 +414,231 @@ task("ops:swapPerpsForUSD")
       ethers.formatUnits(await perp.balanceOf(signerAddress), await perp.decimals()),
     );
   });
+
+task("ops:drVaultRebalance", "Calls rebalance on DRBalancerVault")
+  .addParam(
+    "address",
+    "the address of the DRBalancerVault contract",
+    undefined,
+    types.string,
+    false,
+  )
+  .setAction(async function (args: TaskArguments, hre) {
+    const signer = (await hre.ethers.getSigners())[0];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
+
+    const { address } = args;
+    const vault = await hre.ethers.getContractAt("DRBalancerVault", address);
+    const underlying = await hre.ethers.getContractAt("ERC20", await vault.underlying());
+    const perp = await hre.ethers.getContractAt("ERC20", await vault.perp());
+    const stampl = await hre.ethers.getContractAt("IRolloverVault", await vault.stampl());
+    const underlyingDecimals = await underlying.decimals();
+    const perpDecimals = await perp.decimals();
+    const drDecimals = await vault.DR_DECIMALS();
+
+    console.log("---------------------------------------------------------------");
+    console.log("State before rebalance:");
+    const drBefore = await stampl.deviationRatio.staticCall();
+    console.log("System DR:", ethers.formatUnits(drBefore, drDecimals));
+    console.log(
+      "Vault underlying balance:",
+      ethers.formatUnits(await vault.underlyingBalance(), underlyingDecimals),
+    );
+    console.log(
+      "Vault perp balance:",
+      ethers.formatUnits(await vault.perpBalance(), perpDecimals),
+    );
+
+    const lastRebalance = await vault.lastRebalanceTimestampSec();
+    const rebalanceFreq = await vault.rebalanceFreqSec();
+    const nextRebalanceTime = Number(lastRebalance) + Number(rebalanceFreq);
+    const now = Math.floor(Date.now() / 1000);
+    console.log(
+      "Last rebalance:",
+      lastRebalance > 0 ? new Date(Number(lastRebalance) * 1000).toISOString() : "never",
+    );
+    console.log("Rebalance frequency (sec):", rebalanceFreq.toString());
+    console.log(
+      "Can rebalance:",
+      now >= nextRebalanceTime ? "yes" : `no (wait ${nextRebalanceTime - now}s)`,
+    );
+
+    console.log("---------------------------------------------------------------");
+    console.log("Rebalance preview:");
+    try {
+      const [rebalanceAmt, isUnderlyingIntoPerp] =
+        await vault.computeRebalanceAmount.staticCall();
+      console.log(
+        "Rebalance amount:",
+        ethers.formatUnits(rebalanceAmt, underlyingDecimals),
+      );
+      console.log(
+        "Direction:",
+        isUnderlyingIntoPerp
+          ? "underlying -> perp (mint)"
+          : "perp -> underlying (redeem)",
+      );
+
+      if (rebalanceAmt === 0n) {
+        console.log(
+          "No rebalance needed (within equilibrium range or insufficient liquidity)",
+        );
+        return;
+      }
+    } catch (e) {
+      console.log("Unable to preview rebalance:", e.message);
+    }
+
+    console.log("---------------------------------------------------------------");
+    console.log("Execution:");
+    console.log("Calling rebalance...");
+    const tx = await vault.connect(signer).rebalance();
+    await tx.wait();
+    console.log("Tx", tx.hash);
+
+    console.log("---------------------------------------------------------------");
+    console.log("State after rebalance:");
+    const drAfter = await stampl.deviationRatio.staticCall();
+    console.log("System DR:", ethers.formatUnits(drAfter, drDecimals));
+    console.log(
+      "Vault underlying balance:",
+      ethers.formatUnits(await vault.underlyingBalance(), underlyingDecimals),
+    );
+    console.log(
+      "Vault perp balance:",
+      ethers.formatUnits(await vault.perpBalance(), perpDecimals),
+    );
+  });
+
+task("ops:drVaultDeposit", "Deposits underlying and perp tokens to DRBalancerVault")
+  .addParam(
+    "address",
+    "the address of the DRBalancerVault contract",
+    undefined,
+    types.string,
+    false,
+  )
+  .addParam(
+    "underlyingAmount",
+    "the amount of underlying tokens (in float) to deposit",
+    undefined,
+    types.string,
+    false,
+  )
+  .addParam(
+    "perpAmount",
+    "the amount of perp tokens (in float) to deposit",
+    undefined,
+    types.string,
+    false,
+  )
+  .setAction(async function (args: TaskArguments, hre) {
+    const signer = (await hre.ethers.getSigners())[0];
+    const signerAddress = await signer.getAddress();
+    console.log("Signer", signerAddress);
+
+    const { address, underlyingAmount, perpAmount } = args;
+    const vault = await hre.ethers.getContractAt("DRBalancerVault", address);
+    const underlying = await hre.ethers.getContractAt("ERC20", await vault.underlying());
+    const perp = await hre.ethers.getContractAt("ERC20", await vault.perp());
+    const underlyingDecimals = await underlying.decimals();
+    const perpDecimals = await perp.decimals();
+    const underlyingFixedPtAmount = ethers.parseUnits(
+      underlyingAmount,
+      underlyingDecimals,
+    );
+    const perpFixedPtAmount = ethers.parseUnits(perpAmount, perpDecimals);
+
+    console.log(
+      "Signer underlying balance",
+      ethers.formatUnits(await underlying.balanceOf(signerAddress), underlyingDecimals),
+    );
+    console.log(
+      "Signer perp balance",
+      ethers.formatUnits(await perp.balanceOf(signerAddress), perpDecimals),
+    );
+
+    console.log("---------------------------------------------------------------");
+    console.log("Preview deposit:");
+    const [expectedNotes, expectedUnderlying, expectedPerp] =
+      await vault.computeMintAmt.staticCall(underlyingFixedPtAmount, perpFixedPtAmount);
+    console.log(
+      "Expected notes:",
+      ethers.formatUnits(expectedNotes, await vault.decimals()),
+    );
+    console.log(
+      "Expected underlying in:",
+      ethers.formatUnits(expectedUnderlying, underlyingDecimals),
+    );
+    console.log("Expected perp in:", ethers.formatUnits(expectedPerp, perpDecimals));
+
+    console.log("---------------------------------------------------------------");
+    console.log("Execution:");
+    console.log("Approving vault to spend tokens:");
+    if (
+      (await underlying.allowance(signerAddress, vault.target)) < underlyingFixedPtAmount
+    ) {
+      const tx1 = await underlying
+        .connect(signer)
+        .approve(vault.target, underlyingFixedPtAmount);
+      await tx1.wait();
+      console.log("Tx", tx1.hash);
+    }
+    if ((await perp.allowance(signerAddress, vault.target)) < perpFixedPtAmount) {
+      const tx2 = await perp.connect(signer).approve(vault.target, perpFixedPtAmount);
+      await tx2.wait();
+      console.log("Tx", tx2.hash);
+    }
+
+    console.log("Deposit:");
+    const tx3 = await vault
+      .connect(signer)
+      .deposit(underlyingFixedPtAmount, perpFixedPtAmount, 0);
+    await tx3.wait();
+    console.log("Tx", tx3.hash);
+
+    console.log("---------------------------------------------------------------");
+    console.log(
+      "Signer vault notes balance",
+      ethers.formatUnits(await vault.balanceOf(signerAddress), await vault.decimals()),
+    );
+    console.log(
+      "Signer underlying balance",
+      ethers.formatUnits(await underlying.balanceOf(signerAddress), underlyingDecimals),
+    );
+    console.log(
+      "Signer perp balance",
+      ethers.formatUnits(await perp.balanceOf(signerAddress), perpDecimals),
+    );
+
+    console.log("---------------------------------------------------------------");
+    console.log("Rebalance status:");
+    const lastRebalance = await vault.lastRebalanceTimestampSec();
+    const rebalanceFreq = await vault.rebalanceFreqSec();
+    const nextRebalanceTime = Number(lastRebalance) + Number(rebalanceFreq);
+    const now = Math.floor(Date.now() / 1000);
+    const canRebalance = now >= nextRebalanceTime;
+    console.log(
+      "Can rebalance:",
+      canRebalance ? "yes" : `no (wait ${nextRebalanceTime - now}s)`,
+    );
+
+    try {
+      const [rebalanceAmt, isUnderlyingIntoPerp] =
+        await vault.computeRebalanceAmount.staticCall();
+      console.log(
+        "Rebalance amount:",
+        ethers.formatUnits(rebalanceAmt, underlyingDecimals),
+      );
+      console.log(
+        "Direction:",
+        isUnderlyingIntoPerp
+          ? "underlying -> perp (mint)"
+          : "perp -> underlying (redeem)",
+      );
+      console.log("Rebalance pokable:", canRebalance && rebalanceAmt > 0n ? "yes" : "no");
+    } catch (e) {
+      console.log("Unable to compute rebalance:", e.message);
+    }
+  });
