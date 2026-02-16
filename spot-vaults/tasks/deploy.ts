@@ -1,3 +1,4 @@
+import { getAdminAddress, getImplementationAddress } from "@openzeppelin/upgrades-core";
 import { task, types } from "hardhat/config";
 import { TaskArguments } from "hardhat/types";
 import { sleep } from "./tools";
@@ -165,4 +166,88 @@ task("deploy:CharmManager")
     } else {
       console.log("Skipping verification");
     }
+  });
+
+task("deploy:DRBalancerVault")
+  .addParam(
+    "name",
+    "the ERC20 name of the vault LP token",
+    undefined,
+    types.string,
+    false,
+  )
+  .addParam(
+    "symbol",
+    "the ERC20 symbol of the vault LP token",
+    undefined,
+    types.string,
+    false,
+  )
+  .addParam(
+    "underlying",
+    "the address of the underlying token",
+    undefined,
+    types.string,
+    false,
+  )
+  .addParam("perp", "the address of the perp token", undefined, types.string, false)
+  .addParam(
+    "rolloverVault",
+    "the address of the stAMPL rollover vault",
+    undefined,
+    types.string,
+    false,
+  )
+  .addParam("verify", "flag to set false for local deployments", true, types.boolean)
+  .setAction(async function (args: TaskArguments, hre) {
+    const deployer = (await hre.ethers.getSigners())[0];
+    const deployerAddress = await deployer.getAddress();
+    console.log("Deployer:", deployerAddress);
+
+    const { name, symbol, underlying, perp, rolloverVault, verify } = args;
+
+    // Deploy proxy
+    console.log("\n--- Deploying DRBalancerVault proxy ---");
+    const DRBalancerVault = await hre.ethers.getContractFactory("DRBalancerVault");
+    const vault = await hre.upgrades.deployProxy(
+      DRBalancerVault.connect(deployer),
+      [name, symbol, underlying, perp, rolloverVault],
+      {
+        initializer: "init(string,string,address,address,address)",
+      },
+    );
+    await vault.waitForDeployment();
+    const proxyAddress = vault.target;
+    console.log("DRBalancerVault proxy:", proxyAddress);
+
+    // Get proxy admin and implementation addresses
+    const proxyAdminAddress = await getAdminAddress(
+      hre.ethers.provider,
+      proxyAddress as string,
+    );
+    const implAddress = await getImplementationAddress(
+      hre.ethers.provider,
+      proxyAddress as string,
+    );
+    console.log("ProxyAdmin:", proxyAdminAddress);
+    console.log("Implementation:", implAddress);
+
+    // Verify contracts
+    if (verify) {
+      console.log("\n--- Verifying contracts ---");
+      await sleep(30);
+      try {
+        await hre.run("verify:contract", {
+          address: proxyAddress,
+        });
+      } catch (e) {
+        console.log("Verification failed (may already be verified):", e.message);
+      }
+    }
+
+    console.log("\n--- Deployment Summary ---");
+    console.log("DRBalancerVault proxy:", proxyAddress);
+    console.log("ProxyAdmin:", proxyAdminAddress);
+    console.log("Implementation:", implAddress);
+    console.log("Owner:", deployerAddress);
   });

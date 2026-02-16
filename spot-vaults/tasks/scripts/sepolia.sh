@@ -15,10 +15,18 @@ yarn hardhat --network sepolia deploy:BillBroker \
 	--perp "0xdcCef9065876fD654bAddeBAa778FDA43E0bfC1F" \
 	--pricing-strategy "0x08c5b39F000705ebeC8427C1d64D6262392944EE"
 
+yarn hardhat --network sepolia deploy:DRBalancerVault \
+	--name "DR Balancer Vault" \
+	--symbol "DR-VAULT" \
+	--underlying "0x251410f849ad67bebffdb5a549e5f02d5d9c25ba" \
+	--perp "0xdcCef9065876fD654bAddeBAa778FDA43E0bfC1F" \
+	--rollover-vault "0x107614c6602A8e602952Da107B8fE62b5Ab13b04"
+
 ########################################################################
 ## INFO
 
 yarn hardhat --network sepolia info:BillBroker "0xc3f6D1F1d253EdC8B34D78Bc6cDD2b3eEFAd76BD"
+yarn hardhat --network sepolia info:DRBalancerVault "0xB02114487836409136B0006A090995D63931C486"
 
 ########################################################################
 ## OPS
@@ -47,3 +55,11 @@ yarn hardhat --network sepolia ops:swapPerpsForUSD \
 yarn hardhat --network sepolia ops:redeem \
 	--address "0xc3f6D1F1d253EdC8B34D78Bc6cDD2b3eEFAd76BD" \
 	--amount 1000
+
+yarn hardhat --network sepolia ops:drVaultDeposit \
+	--address "0xB02114487836409136B0006A090995D63931C486" \
+	--underlying-amount 1000 \
+	--perp-amount 1000
+
+yarn hardhat --network sepolia ops:drVaultRebalance \
+	--address "0xB02114487836409136B0006A090995D63931C486"

@@ -191,6 +191,135 @@ task("info:BillBroker")
     }
   });
 
+task("info:DRBalancerVault")
+  .addPositionalParam(
+    "address",
+    "the address of the DR balancer vault contract",
+    undefined,
+    types.string,
+    false,
+  )
+  .setAction(async function (args: TaskArguments, hre) {
+    const { address } = args;
+
+    const vault = await hre.ethers.getContractAt("DRBalancerVault", address);
+    const vaultDecimals = await vault.DECIMALS();
+    const drDecimals = await vault.DR_DECIMALS();
+    const proxyAdminAddress = await getAdminAddress(hre.ethers.provider, address);
+    const implAddress = await getImplementationAddress(hre.ethers.provider, address);
+
+    const underlying = await hre.ethers.getContractAt("ERC20", await vault.underlying());
+    const underlyingDecimals = await underlying.decimals();
+    const perp = await hre.ethers.getContractAt("ERC20", await vault.perp());
+    const perpDecimals = await perp.decimals();
+    const stampl = await vault.stampl();
+
+    console.log("---------------------------------------------------------------");
+    console.log("DRBalancerVault:", vault.target);
+    console.log("owner:", await vault.owner());
+    console.log("keeper:", await vault.keeper());
+    console.log("proxyAdmin:", proxyAdminAddress);
+    console.log("implementation:", implAddress);
+    console.log("paused:", await vault.paused());
+
+    console.log("---------------------------------------------------------------");
+    console.log("Tokens:");
+    console.log("underlying:", underlying.target, `(${await underlying.symbol()})`);
+    console.log("perp:", perp.target, `(${await perp.symbol()})`);
+    console.log("stampl:", stampl);
+
+    console.log("---------------------------------------------------------------");
+    console.log("Configuration:");
+    const targetDR = await vault.targetDR();
+    const equilibriumDR = await vault.equilibriumDR();
+    console.table([
+      ["targetDR", pp(targetDR, drDecimals)],
+      ["equilibriumDR.lower", pp(equilibriumDR[0], drDecimals)],
+      ["equilibriumDR.upper", pp(equilibriumDR[1], drDecimals)],
+      ["lagFactorUnderlyingToPerp", (await vault.lagFactorUnderlyingToPerp()).toString()],
+      ["lagFactorPerpToUnderlying", (await vault.lagFactorPerpToUnderlying()).toString()],
+      ["minRebalanceVal", pp(await vault.minRebalanceVal(), underlyingDecimals)],
+      ["rebalanceFreqSec", (await vault.rebalanceFreqSec()).toString()],
+      ["maxSwapFeePerc", pp(await vault.maxSwapFeePerc(), vaultDecimals)],
+    ]);
+
+    console.log("---------------------------------------------------------------");
+    console.log("State:");
+    const underlyingBal = await vault.underlyingBalance();
+    const perpBal = await vault.perpBalance();
+    const totalSupply = await vault.totalSupply();
+    const lastRebalance = await vault.lastRebalanceTimestampSec();
+    const lastRebalanceDate =
+      lastRebalance > 0 ? new Date(Number(lastRebalance) * 1000).toISOString() : "never";
+
+    console.table([
+      ["underlyingBalance", pp(underlyingBal, underlyingDecimals)],
+      ["perpBalance", pp(perpBal, perpDecimals)],
+      ["totalSupply (notes)", pp(totalSupply, vaultDecimals)],
+      ["lastRebalanceTimestampSec", lastRebalance.toString()],
+      ["lastRebalanceDate", lastRebalanceDate],
+    ]);
+
+    try {
+      const tvl = await vault.getTVL.staticCall();
+      console.log("TVL (underlying denomination):", pp(tvl, underlyingDecimals));
+
+      const stamplContract = await hre.ethers.getContractAt("IRolloverVault", stampl);
+      const currentDR = await stamplContract.deviationRatio.staticCall();
+      console.log("Current system DR:", pp(currentDR, drDecimals));
+
+      const [rebalanceAmt, isUnderlyingIntoPerp] =
+        await vault.computeRebalanceAmount.staticCall();
+      console.log("---------------------------------------------------------------");
+      console.log("Rebalance Preview:");
+      console.log("rebalanceAmount:", pp(rebalanceAmt, underlyingDecimals));
+      console.log(
+        "direction:",
+        isUnderlyingIntoPerp
+          ? "underlying -> perp (mint)"
+          : "perp -> underlying (redeem)",
+      );
+
+      // Check if rebalance is pokable
+      console.log("---------------------------------------------------------------");
+      console.log("Rebalance Pokability:");
+
+      const currentTimestamp = Math.floor(Date.now() / 1000);
+      const rebalanceFreq = Number(await vault.rebalanceFreqSec());
+      const nextRebalanceTimestamp = Number(lastRebalance) + rebalanceFreq;
+      const timeElapsed = currentTimestamp >= nextRebalanceTimestamp;
+      const secondsUntilPokable = timeElapsed
+        ? 0
+        : nextRebalanceTimestamp - currentTimestamp;
+
+      const equilibriumDR = await vault.equilibriumDR();
+      const inEquilibriumZone =
+        currentDR >= equilibriumDR[0] && currentDR <= equilibriumDR[1];
+
+      console.table([
+        ["timeElapsed", timeElapsed],
+        ["secondsUntilPokable", secondsUntilPokable],
+        ["inEquilibriumZone", inEquilibriumZone],
+        ["hasRebalanceAmount", rebalanceAmt > 0n],
+      ]);
+
+      // Try static call to see if rebalance would succeed
+      let rebalanceExecutable = false;
+      try {
+        await vault.rebalance.staticCall();
+        rebalanceExecutable = true;
+      } catch (e) {
+        // rebalance not executable
+      }
+      console.log("rebalanceExecutable:", rebalanceExecutable);
+    } catch (e) {
+      console.log(e);
+      console.log("Unable to fetch dynamic state (TVL/DR/rebalance)");
+    }
+
+    console.log("---------------------------------------------------------------");
+  });
+
 task("info:WethWamplManager")
   .addPositionalParam(
     "address",
