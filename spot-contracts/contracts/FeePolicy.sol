@@ -314,6 +314,7 @@ contract FeePolicy is IFeePolicy, OwnableUpgradeable {
     /// @inheritdoc IFeePolicy
     function computeDeviationRatio(SystemTVL memory s) public view override returns (uint256) {
         // NOTE: We assume that perp's TVL and vault's TVL values have the same base denomination.
-        return s.vaultTVL.mulDiv(ONE, s.perpTVL).mulDiv(ONE, targetSystemRatio);
+        uint256 perpTVL = (s.perpTVL > 0) ? s.perpTVL : 0x1;
+        return s.vaultTVL.mulDiv(ONE, perpTVL).mulDiv(ONE, targetSystemRatio);
     }
 }
